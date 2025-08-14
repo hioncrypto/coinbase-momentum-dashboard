@@ -367,7 +367,6 @@ diag = {
     "active_ws_url": state.active_url,
     "debug_tail": list(state.debug)[-12:],
 }
-
     st.json(diag)
 
     if st.button("⚡ Force start stream thread (advanced)"):
