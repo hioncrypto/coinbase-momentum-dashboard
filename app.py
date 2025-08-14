@@ -297,26 +297,44 @@ for pid in products:
     if pid not in state.deques:
         state.deques[pid] = collections.deque(maxlen=5000)
 
-# -------------------- Start / Restart stream (robust) --------------------
+# -------------------- Start / Restart stream (robust + keep ref) --------------------
+import traceback
+
 if "ws_started_cloud" not in st.session_state:
     st.session_state["ws_started_cloud"] = False
+if "ws_thread" not in st.session_state:
+    st.session_state["ws_thread"] = None
 
-should_start = WEBSOCKETS_OK and not pause and (
-    not st.session_state["ws_started_cloud"] or restart_stream
-)
+# If user hit Restart, or there is no live thread, (re)start:
+need_restart = False
+thr = st.session_state["ws_thread"]
+if thr is None or not getattr(thr, "is_alive", lambda: False)():
+    need_restart = True
+
+should_start = WEBSOCKETS_OK and not pause and (need_restart or restart_stream)
 
 if should_start:
     try:
         dbg("starting worker thread")
-        t = threading.Thread(target=ws_worker, args=(products, channel, chunk_size), daemon=True)
-        t.start()
+        thr = threading.Thread(
+            target=ws_worker,
+            args=(products, channel, chunk_size),
+            daemon=True,
+            name="coinbase-ws-worker"
+        )
+        thr.start()
+        st.session_state["ws_thread"] = thr
         st.session_state["ws_started_cloud"] = True
-        st.toast("Streaming started ✅", icon="✅")
+        st.toast("Streaming thread started ✅", icon="✅")
+        dbg(f"thread started: alive={thr.is_alive()}")
     except Exception as e:
         st.session_state["ws_started_cloud"] = False
+        tb = traceback.format_exc()
         state.err = f"Could not start streaming: {e}"
         dbg(state.err)
+        dbg(tb.splitlines()[-1])
         st.error(state.err)
+
 
 # -------------------- Status Bar --------------------
 now_ts = time.time()
@@ -332,20 +350,24 @@ if state.err:
 # -------------------- Diagnostics & Force Start --------------------
 with st.expander("Diagnostics (temporary)"):
     ws_started_flag = st.session_state.get("ws_started_cloud", False)
-    diag = {
-        "WEBSOCKETS_OK": WEBSOCKETS_OK,
-        "ws_started_cloud": ws_started_flag,
-        "queue_size": state.rows_q.qsize(),
-        "state.connected": state.connected,
-        "state.last_msg_ts": state.last_msg_ts,
-        "state.err": state.err,
-        "channel": channel,
-        "chunk_size": chunk_size,
-        "products_first3": products[:3],
-        "products_count": len(products),
-        "active_ws_url": state.active_url,
-        "debug_tail": list(state.debug)[-8:],
-    }
+    thr = st.session_state.get("ws_thread")
+diag = {
+    "WEBSOCKETS_OK": WEBSOCKETS_OK,
+    "ws_started_cloud": ws_started_flag,
+    "thread_alive": (thr.is_alive() if thr else False),
+    "thread_repr": repr(thr),
+    "queue_size": state.rows_q.qsize(),
+    "state.connected": state.connected,
+    "state.last_msg_ts": state.last_msg_ts,
+    "state.err": state.err,
+    "channel": channel,
+    "chunk_size": chunk_size,
+    "products_first3": products[:3],
+    "products_count": len(products),
+    "active_ws_url": state.active_url,
+    "debug_tail": list(state.debug)[-12:],
+}
+
     st.json(diag)
 
     if st.button("⚡ Force start stream thread (advanced)"):
