@@ -300,7 +300,7 @@ while True:
             dq.append((ts, price, size))
             cutoff = ts - HISTORY_SECONDS
             while dq and dq[0][0] < cutoff:
-                dq.pop left()
+                dq.popleft()
     except queue.Empty:
         pass
     except Exception:
