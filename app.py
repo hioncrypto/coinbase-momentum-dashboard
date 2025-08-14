@@ -195,32 +195,61 @@ with st.sidebar:
     movers_rows = st.slider("Rows per movers panel", 3, 10, 5)
 
 # ---------- WebSocket Connectivity Test ----------
+# ---------- WebSocket Connectivity Test ----------
 st.markdown("### 🔌 Test Coinbase WebSocket")
+
 if not WEBSOCKETS_OK:
     st.warning("`websockets` installs from requirements.txt on first build. If test fails, try again after the app fully rebuilds.")
 else:
-    async def quick_test():
+    import contextlib
+
+    async def quick_test_once():
+        """
+        One quick attempt to open the Coinbase Advanced Trade WS and receive a ticker msg.
+        """
         try:
             import websockets
             async with websockets.connect(WS_URL, ping_interval=10) as ws:
-                await ws.send(json.dumps({"type":"subscribe","channel":"ticker","product_ids":["BTC-USD"]}))
-                try:
-                    await asyncio.wait_for(ws.recv(), timeout=10)
-                    return True, "Received a message."
-                except asyncio.TimeoutError:
-                    return False, "Connected but no data within 10s (try channel=ticker and a tiny watchlist)."
+                # subscribe to a single busy pair to maximize chance of a fast tick
+                await ws.send(json.dumps({
+                    "type": "subscribe",
+                    "channel": "ticker",
+                    "product_ids": ["BTC-USD"]
+                }))
+                # wait up to 10s for any message
+                msg = await asyncio.wait_for(ws.recv(), timeout=10)
+                return True, "Received a message."
+        except asyncio.TimeoutError:
+            return False, "Connected but no data within 10s (try Channel='ticker' and a tiny watchlist)."
         except Exception as e:
-            return False, f"Failed: {e}"
+            return False, f"{type(e).__name__}: {e}"
+
+    def quick_test_with_retries(max_tries: int = 3, delay_sec: float = 1.5):
+        """
+        Runs up to max_tries attempts; returns first success or last failure.
+        """
+        last = (False, "Not attempted")
+        for i in range(1, max_tries + 1):
+            try:
+                ok, info = asyncio.run(quick_test_once())
+            except Exception as e:
+                ok, info = False, f"Runner error: {e}"
+            # show per‑attempt status inline (non‑blocking)
+            st.caption(f"WS test attempt {i}/{max_tries}: {'✅ success' if ok else '❌ fail'} — {info}")
+            last = (ok, info)
+            if ok:
+                break
+            # small pause between attempts (don’t block Streamlit event loop)
+            with contextlib.suppress(Exception):
+                time.sleep(delay_sec)
+        return last
 
     if st.button("Run WebSocket connectivity test"):
-        try:
-            ok, info = asyncio.run(quick_test())
-            if ok:
-                st.success(f"CONNECTED ✅ — {info}")
-            else:
-                st.error(f"FAILED ❌ — {info}")
-        except Exception as e:
-            st.error(f"FAILED ❌ — {e}")
+        ok, info = quick_test_with_retries(max_tries=3, delay_sec=1.5)
+        if ok:
+            st.success(f"CONNECTED ✅ — {info}")
+        else:
+            st.error(f"FAILED ❌ — {info if info else 'No connection established'}")
 
 # ---------- Determine product list ----------
 if use_watchlist and watchlist.strip():
