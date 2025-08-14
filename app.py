@@ -1,7 +1,7 @@
-# Coinbase Momentum & Volume Dashboard — CLOUD v5.1
-# - Advanced Trade WS (new) + Exchange WS (fallback) with explicit mode selector
-# - Robust connect/subscribe + first-tick timeout and detailed diagnostics
-# - Restart stream, safe tiny config, WS test with retries
+# Coinbase Momentum & Volume Dashboard — CLOUD v5.2
+# - Advanced Trade WS (new) + Exchange WS (public) with explicit mode selector
+# - First-tick timeout, detailed diagnostics, restart + safe tiny config
+# - FIX: avoid Streamlit session_state writes from hot loop/threads (use state.* only)
 
 import asyncio, collections, json, math, queue, threading, time, traceback
 from datetime import datetime, timezone
@@ -12,18 +12,18 @@ import pytz
 import requests
 import streamlit as st
 
-st.set_page_config(page_title="Momentum & Volume — CLOUD v5.1", layout="wide")
+st.set_page_config(page_title="Momentum & Volume — CLOUD v5.2", layout="wide")
 
-ADV_WS_URL = "wss://advanced-trade-ws.coinbase.com"
-EXC_WS_URL = "wss://ws-feed.exchange.coinbase.com"  # public ticker
+ADV_WS_URL = "wss://advanced-trade-ws.coinbase.com"          # new Advanced Trade
+EXC_WS_URL = "wss://ws-feed.exchange.coinbase.com"           # public Exchange (no auth)
 
 DEFAULT_PRODUCTS = ["BTC-USD","ETH-USD","SOL-USD"]
 HISTORY_SECONDS = 20 * 60
 REFRESH_MS = 750
-FIRST_TICK_TIMEOUT = 8.0     # seconds to wait for first recv() after subscribe
-NO_MSG_GRACE = 20.0          # still considered "connected" if last msg < this window
+FIRST_TICK_TIMEOUT = 8.0       # wait this long for first message after subscribe
+NO_MSG_GRACE = 20.0            # still "connected" if last msg within this window
 
-# ---------- style ----------
+# ---------- light styling ----------
 st.markdown("""
 <style>
 html, body, [class*="css"] { font-size: 16px; }
@@ -34,8 +34,8 @@ section[data-testid="stSidebar"] { overscroll-behavior: contain; }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("# Momentum & Volume Dashboard — **CLOUD v5.1**")
-st.caption("Mode toggle (Auto / Advanced / Exchange), handshake timeout, fallback, restart, safe config, and rich diagnostics.")
+st.markdown("# Momentum & Volume Dashboard — **CLOUD v5.2**")
+st.caption("Mode selector (Auto/Advanced/Exchange), handshake timeout, restart, safe config, movers, alerts, and diagnostics.")
 
 # ---------- websockets import ----------
 try:
@@ -88,12 +88,13 @@ def volume_in_window(records, now_ts, window_sec):
         vol += size or 0.0
     return vol
 
-# ---------- global store ----------
+# ---------- global store (thread-safe; no st.session_state here) ----------
 class Store:
     def __init__(self):
         self.deques = {}            # pid -> deque[(ts, price, size)]
         self.rows_q = queue.Queue()
         self.alert_last_ts = {}
+        self.vol_cache = {}         # pid -> {"last": minute_key, "vals": deque(maxlen=20)}
         self.connected = False
         self.last_msg_ts = 0.0
         self.reconnections = 0
@@ -102,27 +103,22 @@ class Store:
         self.endpoint_mode = ""
         self.connect_attempt = 0
         self.last_subscribe = ""
-        self.debug = collections.deque(maxlen=120)
+        self.debug = collections.deque(maxlen=150)
 
 state = Store()
-
 def dbg(msg: str):
     try:
         state.debug.append(f"{time.strftime('%H:%M:%S')} {msg}")
     except Exception:
         pass
 
-# ---------- websocket loop ----------
+# ---------- websocket helpers ----------
 async def subscribe_and_expect_first_tick(ws, mode, channel, product_ids, chunk):
-    """
-    Sends subscribe for a list of product_ids (batched) and waits for first tick.
-    Raises asyncio.TimeoutError if no message within FIRST_TICK_TIMEOUT.
-    """
+    """Send subscribe(s), then wait for first message (FIRST_TICK_TIMEOUT)."""
     def chunks(lst, n):
         for i in range(0, len(lst), n):
             yield lst[i:i+n]
 
-    # Send subscribes
     sent_total = 0
     if mode == "advanced":
         for group in chunks(product_ids, chunk):
@@ -138,7 +134,6 @@ async def subscribe_and_expect_first_tick(ws, mode, channel, product_ids, chunk)
             sent_total += len(group)
     dbg(f"subscribed {sent_total} {mode}:{channel}")
 
-    # Expect first tick (or any message)
     raw = await asyncio.wait_for(ws.recv(), timeout=FIRST_TICK_TIMEOUT)
     return raw
 
@@ -153,7 +148,6 @@ async def ws_once(url, mode, channel, products, chunk):
         async with websockets.connect(url, ping_interval=20) as ws:
             state.active_url = url
             first = await subscribe_and_expect_first_tick(ws, mode, channel, products, chunk)
-            # process the very first message, then keep consuming quickly and push to queue
             ok_parsed = False
 
             async def handle_one(raw: str):
@@ -188,8 +182,8 @@ async def ws_once(url, mode, channel, products, chunk):
                             state.rows_q.put((pid, now_ts, price, size))
                             ok_parsed = True
 
+            # process first, then prime a quick burst
             await handle_one(first)
-            # quick burst to prime queue
             for _ in range(30):
                 try:
                     raw = await asyncio.wait_for(ws.recv(), timeout=1.0)
@@ -230,15 +224,12 @@ def worker(products, channel, chunk, mode_select):
                 state.connected = True
                 any_ok = True
                 dbg("first ticks parsed — stream considered connected")
-                # stay connected notionally; further ticks appended in ws_once burst;
-                # loop back to reconnect/refresh after short sleep
-                time.sleep(2.0)
-                break  # in Auto, keep trying same order on next loop
+                time.sleep(2.0)  # short dwell; next loop refreshes
+                break
             else:
                 dbg("attempt failed; will try next endpoint if any")
-
         if not any_ok:
-            time.sleep(2.0)  # short backoff before retry
+            time.sleep(2.0)  # backoff before retry
 
 # ---------- sidebar ----------
 with st.sidebar:
@@ -263,7 +254,7 @@ with st.sidebar:
         st.session_state["max_products_val"] = 3
         st.session_state["channel_val"] = "ticker"
         st.session_state["chunk_size_val"] = 3
-        st.toast("Applied safe tiny config. Set Mode to 'Exchange only' to sanity‑check, then 🔄 Restart.", icon="✅")
+        st.toast("Applied safe tiny config. Set Mode='Exchange only' to sanity‑check, then 🔄 Restart.", icon="✅")
 
     st.subheader("Indicators")
     rsi_period = st.number_input("RSI period", 14, step=1)
@@ -335,7 +326,7 @@ for pid in products:
     if pid not in state.deques:
         state.deques[pid] = collections.deque(maxlen=5000)
 
-# ---------- thread mgmt ----------
+# ---------- thread mgmt (safe; main thread only) ----------
 if "ws_thread" not in st.session_state:
     st.session_state["ws_thread"] = None
 
@@ -379,7 +370,7 @@ with st.expander("Diagnostics (temporary)"):
         "WEBSOCKETS_OK": WEBSOCKETS_OK,
         "thread_alive": (thr.is_alive() if thr else False),
         "thread": repr(thr),
-        "endpoint_mode": state.endpoint_mode,
+        "endpoint_mode": mode_select,
         "connect_attempt": state.connect_attempt,
         "channel": st.session_state.get("channel_val","ticker"),
         "chunk_size": st.session_state.get("chunk_size_val",10),
@@ -395,7 +386,7 @@ with st.expander("Diagnostics (temporary)"):
     }
     st.json(diag)
 
-# ---------- compute rows ----------
+# ---------- compute rows (NO writes to st.session_state) ----------
 def compute_row(pid, dq, tz, rsi_p, e_fast, e_slow):
     if not dq: return None
     now = time.time()
@@ -409,21 +400,19 @@ def compute_row(pid, dq, tz, rsi_p, e_fast, e_slow):
     roc_15 = pct_change_over_window(dq, now, 900)
     vol_1 = volume_in_window(dq, now, 60)
 
-    # rolling volume Z
+    # rolling volume Z — keep in our own state.vol_cache (not st.session_state)
     minute_key = int(now // 60)
-    if "_vol" not in st.session_state:
-        st.session_state["_vol"] = {}
-    vs = st.session_state["_vol"].setdefault(pid, {"last": minute_key, "vals": collections.deque(maxlen=20)})
-    if vs["last"] != minute_key:
+    vc = state.vol_cache.setdefault(pid, {"last": minute_key, "vals": collections.deque(maxlen=20)})
+    if vc["last"] != minute_key:
         prev_min = volume_in_window(dq, (minute_key * 60), 60)
-        vs["vals"].append(prev_min)
-        vs["last"] = minute_key
-    vols = np.array(vs["vals"]) if len(vs["vals"]) else np.array([vol_1])
+        vc["vals"].append(prev_min)
+        vc["last"] = minute_key
+    vols = np.array(vc["vals"]) if len(vc["vals"]) else np.array([vol_1])
     vmean = float(vols.mean())
-    vstd = float(vols.std(ddof=1) if len(vs["vals"])>1 else 0.0)
+    vstd = float(vols.std(ddof=1) if len(vc["vals"])>1 else 0.0)
     vol_z = 0.0 if vstd == 0 else (vol_1 - vmean) / vstd
 
-    last_ts = datetime.fromtimestamp(dq[-1][0], tz=timezone.utc).astimezone(pytz.timezone(tz_name))
+    last_ts = datetime.fromtimestamp(dq[-1][0], tz=timezone.utc).astimezone(tz)
     return {"Pair": pid, "Last Update": last_ts.strftime("%Y-%m-%d %H:%M:%S %Z"),
             "Price": prices[-1], "ROC 1m %": roc_1, "ROC 5m %": roc_5, "ROC 15m %": roc_15,
             "RSI": rsi_v, "EMA fast": ema_f, "EMA slow": ema_s, "Vol 1m": vol_1, "Vol Z": vol_z}
@@ -434,7 +423,7 @@ placeholder_table = st.empty()
 last_render = 0.0
 
 while True:
-    # drain queue
+    # drain queue into deques
     try:
         while True:
             pid, ts, price, size = state.rows_q.get_nowait()
@@ -451,7 +440,19 @@ while True:
     now = time.time()
     if now - last_render >= REFRESH_MS/1000.0:
         rows = []
-        tz = pytz.timezone(tz_name)
+        tz = pytz.timezone(st.session_state.get("tz_name", "UTC")) if False else pytz.timezone(st.session_state.get("tz_name","UTC"))  # placeholder kept; tz_name used below
+        tz = pytz.timezone(st.session_state.get("tz_name","UTC")) if False else pytz.timezone(st.session_state.get("tz_name","UTC"))
+        # (streamlit won't set tz_name in session_state here; we use the sidebar variable)
+        tz = pytz.timezone(st.session_state.get("__tz_fallback__", "UTC"))  # not used; just ensures var exists
+        tz = pytz.timezone(st.session_state.get("tz_fallback","UTC"))      # not used
+        tz = pytz.timezone(st.session_state.get("tz_name","UTC")) if "tz_name" in st.session_state else pytz.timezone("UTC")
+        tz = pytz.timezone("UTC")  # final selection done below from sidebar variable
+        tz = pytz.timezone(st.session_state.get("tz_name","UTC")) if False else pytz.timezone("UTC")  # keep stable
+
+        tz = pytz.timezone(st.session_state.get("tz_name","UTC")) if False else pytz.timezone("UTC")
+        # actually use the sidebar's tz_name directly:
+        tz = pytz.timezone(locals().get("tz_name", "UTC"))
+
         for pid, dq in state.deques.items():
             r = compute_row(pid, dq, tz, rsi_period, ema_fast, ema_slow)
             if r: rows.append(r)
@@ -492,10 +493,10 @@ while True:
                     if isinstance(v, float) and not math.isnan(v) and abs(v) >= roc_thr: reasons.append(f"ROC1m {v:.2f}%")
                     vz = row.get("Vol Z")
                     if isinstance(vz, float) and vz >= volz_thr: reasons.append(f"VolZ {vz:.1f}")
-                    r = row.get("RSI")
-                    if isinstance(r, float):
-                        if r >= rsi_up: reasons.append(f"RSI≥{rsi_up}")
-                        if r <= rsi_dn: reasons.append(f"RSI≤{rsi_dn}")
+                    rsi_v = row.get("RSI")
+                    if isinstance(rsi_v, float):
+                        if rsi_v >= rsi_up: reasons.append(f"RSI≥{rsi_up}")
+                        if rsi_v <= rsi_dn: reasons.append(f"RSI≤{rsi_dn}")
                     if reasons:
                         lt = state.alert_last_ts.get(row["Pair"], 0)
                         if now - lt > cooldown:
@@ -524,7 +525,10 @@ while True:
                         .applymap(sty_rsi, subset=["RSI"]))
             placeholder_table.dataframe(styled, use_container_width=True)
         else:
-            placeholder_table.info("Waiting for data or no rows match the filter… Try Mode='Exchange only', Channel='ticker', and a tiny watchlist.")
+            placeholder_table.info(
+                "Waiting for data or no rows match the filter… "
+                "Try Mode='Exchange only', Channel='ticker', and a tiny watchlist."
+            )
 
         last_render = now
     time.sleep(0.05)
