@@ -1,9 +1,10 @@
-# Coinbase Momentum & Volume Dashboard — CLOUD v5.6
+# Coinbase Momentum & Volume Dashboard — CLOUD v5.7
+# - Worker uses a dedicated asyncio loop (no asyncio.run in thread)
 # - Auto tries Exchange endpoints first, then Advanced
-# - Friendly WS handshake (headers) + 6s connect timeout + 12s per-attempt cap
-# - Tolerant subscribe/first-ticker logic
-# - Safe config overrides (no programmatic writes to st.session_state)
-# - Restart stream, Top Movers, RSI/EMA, alerts, diagnostics
+# - Friendly WS handshake headers + 6s connect timeout + 12s per-attempt cap
+# - Tolerant subscribe / first-ticker logic
+# - Safe config overrides (no writes into st.session_state)
+# - Restart stream, Top Movers, RSI/EMA, Alerts, Diagnostics
 
 import asyncio, collections, json, math, queue, threading, time, traceback
 from datetime import datetime, timezone
@@ -14,7 +15,7 @@ import pytz
 import requests
 import streamlit as st
 
-st.set_page_config(page_title="Momentum & Volume — CLOUD v5.6", layout="wide")
+st.set_page_config(page_title="Momentum & Volume — CLOUD v5.7", layout="wide")
 
 # -------------------- endpoints --------------------
 ADV_WS_URL = "wss://advanced-trade-ws.coinbase.com"
@@ -41,8 +42,8 @@ section[data-testid="stSidebar"] { overscroll-behavior: contain; }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("# Momentum & Volume Dashboard — **CLOUD v5.6**")
-st.caption("Auto prefers Exchange, tolerant subscribe, hard timeouts, restart, safe config, movers, alerts, diagnostics.")
+st.markdown("# Momentum & Volume Dashboard — **CLOUD v5.7**")
+st.caption("Exchange‑first, safer handshake, tolerant subscribe, restart, safe config, movers, alerts, diagnostics.")
 
 # -------------------- websockets import --------------------
 try:
@@ -145,7 +146,6 @@ async def subscribe_and_expect_first_tick(ws, mode, channel, product_ids, chunk)
             sent += len(group)
     else:
         for group in chunks(product_ids, chunk):
-            # grouped subscription (works on Exchange)
             payload = {"type": "subscribe", "channels": [{"name": channel, "product_ids": group}]}
             await ws.send(json.dumps(payload))
             state.last_subscribe = json.dumps(payload)
@@ -293,9 +293,15 @@ async def ws_once(url, mode, channel, products, chunk):
 def worker(products, channel, chunk, mode_select):
     """
     Auto tries Exchange URLs first (more reliable), then Advanced.
-    Always moves to next URL on failure.
+    Uses a dedicated event loop in this thread (no asyncio.run()).
+    Always moves to next URL on failure and logs breadcrumbs.
     """
     state.endpoint_mode = mode_select
+
+    # Create a private asyncio loop for this thread
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
     while True:
         if mode_select == "Advanced only":
             try_list = [(ADV_WS_URL, "advanced")]
@@ -305,16 +311,27 @@ def worker(products, channel, chunk, mode_select):
             try_list = [(u, "exchange") for u in EXC_WS_URLS] + [(ADV_WS_URL, "advanced")]
 
         any_ok = False
+
         for url, mode in try_list:
             state.connected = False
             state.err = ""
             state.active_url = url
-            ok = asyncio.run(ws_once(url, mode, channel, products, chunk))
+
+            dbg(f"attempting connect to {url} as {mode}")
+
+            try:
+                ok = loop.run_until_complete(ws_once(url, mode, channel, products, chunk))
+            except Exception as e:
+                ok = False
+                state.err = f"Runner error: {type(e).__name__}: {e}"
+                dbg(state.err)
+                dbg(traceback.format_exc().splitlines()[-1])
+
             if ok:
                 state.connected = True
                 any_ok = True
                 dbg("first ticks parsed — stream is connected")
-                time.sleep(2.0)
+                time.sleep(2.0)  # small settle
                 break
             else:
                 dbg("attempt failed; trying next endpoint")
