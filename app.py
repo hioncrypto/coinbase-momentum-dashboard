@@ -276,6 +276,36 @@ c1.metric("Connected", "Yes" if (state.connected and has_recent_msg) else "No")
 c2.metric("Reconnections", state.reconnections)
 c3.metric("Last message", "-" if not has_recent_msg else datetime.fromtimestamp(state.last_msg_ts, tz=timezone.utc).strftime("%H:%M:%S UTC"))
 c4.metric("Subscribed pairs", len(state.deques))
+# ---------- Diagnostics & Force Start (temporary) ----------
+with st.expander("Diagnostics (temporary)"):
+    ws_started_flag = st.session_state.get("ws_started_cloud", False)
+    diag = {
+        "WEBSOCKETS_OK": WEBSOCKETS_OK,
+        "ws_started_cloud": ws_started_flag,
+        "queue_size": state.rows_q.qsize(),
+        "state.connected": state.connected,
+        "state.last_msg_ts": state.last_msg_ts,
+        "state.err": state.err,
+        "channel": channel,
+        "chunk_size": chunk_size,
+        "products_first3": products[:3],
+        "products_count": len(products),
+    }
+    st.json(diag)
+
+    if st.button("⚡ Force start stream thread (advanced)"):
+        try:
+            t = threading.Thread(
+                target=ws_worker,
+                args=(products, channel, chunk_size),
+                daemon=True
+            )
+            t.start()
+            st.session_state["ws_started_cloud"] = True
+            st.toast("Force-started stream thread ✅", icon="✅")
+        except Exception as e:
+            st.error(f"Force start failed: {e}")
+
 if state.err:
     st.error(f"Last error: {state.err}")
 
