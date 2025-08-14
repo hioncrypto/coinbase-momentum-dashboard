@@ -1,5 +1,5 @@
-# Coinbase Momentum & Volume Dashboard — CLOUD v4.6
-# One-file Streamlit app for Coinbase Advanced Trade WS ticker stream.
+# Coinbase Momentum & Volume Dashboard — CLOUD v4.6.1
+# Streamlit app for Coinbase Advanced Trade WS ticker stream.
 # Deploy: app.py + requirements.txt in a GitHub repo → Streamlit Cloud (Advanced settings: Python 3.12)
 
 import asyncio, collections, json, math, queue, threading, time
@@ -21,7 +21,7 @@ HISTORY_SECONDS = 20 * 60
 REFRESH_MS = 750
 NO_MSG_GRACE = 20  # seconds since last msg to still consider connected
 
-st.set_page_config(page_title="Momentum & Volume — CLOUD v4.6", layout="wide")
+st.set_page_config(page_title="Momentum & Volume — CLOUD v4.6.1", layout="wide")
 
 # -------------------- Styling --------------------
 st.markdown("""
@@ -34,8 +34,8 @@ section[data-testid="stSidebar"] { overscroll-behavior: contain; }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("# Momentum & Volume Dashboard — **CLOUD v4.6**")
-st.caption("Status bar, mobile UI, Top Movers, WS test with retries, Restart stream, and a one‑click safe config.")
+st.markdown("# Momentum & Volume Dashboard — **CLOUD v4.6.1**")
+st.caption("Status bar, mobile UI, Top Movers, WS test with retries, Restart stream, one‑click safe config, and diagnostics.")
 
 # -------------------- Safe import of websockets --------------------
 try:
@@ -53,8 +53,7 @@ def discover_products(quote_filter="USD"):
         product_ids = []
         for it in resp.json():
             pid = it.get("id")
-            if not pid:
-                continue
+            if not pid: continue
             status = (it.get("status") or "").lower()
             if it.get("trading_disabled", False) or status not in ("online","active",""):
                 continue
@@ -76,8 +75,7 @@ def pct_change_over_window(records, now_ts, window_sec):
     target = now_ts - window_sec
     ref_price, last_price = None, None
     for ts, price, _ in reversed(records):
-        if last_price is None:
-            last_price = price
+        if last_price is None: last_price = price
         if ts <= target:
             ref_price = price
             break
@@ -89,8 +87,7 @@ def volume_in_window(records, now_ts, window_sec):
     cutoff = now_ts - window_sec
     vol = 0.0
     for ts, _, size in reversed(records):
-        if ts < cutoff:
-            break
+        if ts < cutoff: break
         vol += size or 0.0
     return vol
 
@@ -117,42 +114,35 @@ async def ws_loop(product_ids, channel, chunk_size):
         async with websockets.connect(WS_URL, ping_interval=20) as ws:
             state.connected = True
             state.err = ""
+            # Subscribe in chunks
             for group in chunks(product_ids, chunk_size):
                 await ws.send(json.dumps({"type":"subscribe","channel":channel,"product_ids":group}))
+            # Message loop (parse by channel + events[*].tickers[*])
             while True:
-    raw = await ws.recv()
-    msg = json.loads(raw)
-    now_ts = time.time()
-    state.last_msg_ts = now_ts
+                raw = await ws.recv()
+                msg = json.loads(raw)
+                now_ts = time.time()
+                state.last_msg_ts = now_ts
 
-    chan = msg.get("channel")
-    if chan in ("ticker", "ticker_batch"):
-        # Advanced Trade WS packs data under events[*].tickers[*]
-        events = msg.get("events") or []
-        for ev in events:
-            for tk in ev.get("tickers") or []:
-                pid  = tk.get("product_id")
-                # price can be string; last_size may be missing on snapshots
-                try:
-                    price = float(tk.get("price") or 0)
-                except Exception:
-                    price = 0.0
-                try:
-                    size = float(tk.get("last_size") or 0)
-                except Exception:
-                    size = 0.0
-                if pid in state.deques:
-                    state.rows_q.put((pid, now_ts, price, size))
-    else:
-        # ignore non‑market data messages
-        pass
-
-                elif mtype == "ticker":
-                    pid = msg.get("product_id")
-                    price = float(msg.get("price") or 0)
-                    size = float(msg.get("last_size") or 0)
-                    if pid in state.deques:
-                        state.rows_q.put((pid, now, price, size))
+                chan = msg.get("channel")
+                if chan in ("ticker", "ticker_batch"):
+                    events = msg.get("events") or []
+                    for ev in events:
+                        for tk in ev.get("tickers") or []:
+                            pid  = tk.get("product_id")
+                            try:
+                                price = float(tk.get("price") or 0)
+                            except Exception:
+                                price = 0.0
+                            try:
+                                size = float(tk.get("last_size") or 0)
+                            except Exception:
+                                size = 0.0
+                            if pid in state.deques:
+                                state.rows_q.put((pid, now_ts, price, size))
+                else:
+                    # ignore non‑market messages
+                    pass
     except Exception as e:
         state.connected = False
         state.err = str(e)
@@ -240,17 +230,14 @@ else:
                 ok, info = False, f"Runner error: {e}"
             st.caption(f"WS test attempt {i}/{max_tries}: {'✅ success' if ok else '❌ fail'} — {info}")
             last = (ok, info)
-            if ok:
-                break
+            if ok: break
             time.sleep(delay)
         return last
 
     if st.button("Run WebSocket connectivity test"):
         ok, info = quick_test_with_retries()
-        if ok:
-            st.success(f"CONNECTED ✅ — {info}")
-        else:
-            st.error(f"FAILED ❌ — {info if info else 'No connection established'}")
+        if ok: st.success(f"CONNECTED ✅ — {info}")
+        else:  st.error(f"FAILED ❌ — {info if info else 'No connection established'}")
 
 # -------------------- Build product list --------------------
 if use_watchlist and watchlist.strip():
@@ -290,7 +277,10 @@ c1.metric("Connected", "Yes" if (state.connected and has_recent_msg) else "No")
 c2.metric("Reconnections", state.reconnections)
 c3.metric("Last message", "-" if not has_recent_msg else datetime.fromtimestamp(state.last_msg_ts, tz=timezone.utc).strftime("%H:%M:%S UTC"))
 c4.metric("Subscribed pairs", len(state.deques))
-# ---------- Diagnostics & Force Start (temporary) ----------
+if state.err:
+    st.error(f"Last error: {state.err}")
+
+# -------------------- Diagnostics & Force Start (temporary) --------------------
 with st.expander("Diagnostics (temporary)"):
     ws_started_flag = st.session_state.get("ws_started_cloud", False)
     diag = {
@@ -320,14 +310,10 @@ with st.expander("Diagnostics (temporary)"):
         except Exception as e:
             st.error(f"Force start failed: {e}")
 
-if state.err:
-    st.error(f"Last error: {state.err}")
-
 # -------------------- Compute table rows --------------------
 def compute_row(pid, dq, tz, rsi_p, e_fast, e_slow):
     now = time.time()
-    if not dq:
-        return None
+    if not dq: return None
     prices = [p for _,p,_ in dq]
     s = pd.Series(prices)
     ema_f = s.ewm(span=e_fast, adjust=False).mean().iloc[-1]
@@ -350,7 +336,7 @@ def compute_row(pid, dq, tz, rsi_p, e_fast, e_slow):
         vs["last"] = minute_key
     vols = np.array(vs["vals"]) if len(vs["vals"]) else np.array([vol_1])
     vmean = float(vols.mean())
-    vstd = float(vols.std(ddof=1) if len(vols)>1 else 0.0)
+    vstd = float(vols.std(ddof=1) if len(vs["vals"])>1 else 0.0)
     vol_z = 0.0 if vstd == 0 else (vol_1 - vmean) / vstd
 
     last_ts = datetime.fromtimestamp(dq[-1][0], tz=timezone.utc).astimezone(pytz.timezone(tz_name))
@@ -363,7 +349,7 @@ def compute_row(pid, dq, tz, rsi_p, e_fast, e_slow):
         "ROC 15m %": roc_15,
         "RSI": rsi_v,
         "EMA fast": ema_f,
-        "EMA slow": ema_slow,
+        "EMA slow": ema_s,
         "Vol 1m": vol_1,
         "Vol Z": vol_z,
     }
@@ -378,10 +364,8 @@ while True:
     try:
         while True:
             pid, ts, price, size = state.rows_q.get_nowait()
-            if pause:
-                continue
-            if pid not in state.deques:
-                continue
+            if pause: continue
+            if pid not in state.deques: continue
             dq = state.deques[pid]
             dq.append((ts, price, size))
             cutoff = ts - HISTORY_SECONDS
