@@ -1,10 +1,12 @@
-# Coinbase Momentum & Volume Dashboard — CLOUD v5.7
-# - Worker uses a dedicated asyncio loop (no asyncio.run in thread)
-# - Auto tries Exchange endpoints first, then Advanced
-# - Friendly WS handshake headers + 6s connect timeout + 12s per-attempt cap
-# - Tolerant subscribe / first-ticker logic
-# - Safe config overrides (no writes into st.session_state)
-# - Restart stream, Top Movers, RSI/EMA, Alerts, Diagnostics
+
+# Coinbase Momentum & Volume Dashboard — CLOUD v5.7b (hot‑fix)
+# - Dedicated asyncio loop in worker
+# - Exchange‑first, then Advanced
+# - Handshake headers + timeouts
+# - Tolerant subscribe/first‑ticker
+# - Hardened worker with full try/except + breadcrumbs
+# - "Force connect (hot‑fix)" button to kick a one‑shot attempt
+# - Safe tiny config, restart, movers, RSI/EMA, alerts, diagnostics
 
 import asyncio, collections, json, math, queue, threading, time, traceback
 from datetime import datetime, timezone
@@ -15,9 +17,8 @@ import pytz
 import requests
 import streamlit as st
 
-st.set_page_config(page_title="Momentum & Volume — CLOUD v5.7", layout="wide")
+st.set_page_config(page_title="Momentum & Volume — CLOUD v5.7b", layout="wide")
 
-# -------------------- endpoints --------------------
 ADV_WS_URL = "wss://advanced-trade-ws.coinbase.com"
 EXC_WS_URLS = [
     "wss://ws-feed.exchange.coinbase.com",
@@ -31,7 +32,6 @@ REFRESH_MS        = 750
 FIRST_TICK_TIMEOUT = 8.0
 NO_MSG_GRACE       = 20.0
 
-# -------------------- css --------------------
 st.markdown("""
 <style>
 html, body, [class*="css"] { font-size: 16px; }
@@ -42,10 +42,9 @@ section[data-testid="stSidebar"] { overscroll-behavior: contain; }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("# Momentum & Volume Dashboard — **CLOUD v5.7**")
-st.caption("Exchange‑first, safer handshake, tolerant subscribe, restart, safe config, movers, alerts, diagnostics.")
+st.markdown("# Momentum & Volume Dashboard — **CLOUD v5.7b**")
+st.caption("Hardened worker + hot‑fix force connect. Exchange‑first, tolerant subscribe, restart, safe config, movers, alerts, diagnostics.")
 
-# -------------------- websockets import --------------------
 try:
     import websockets
     from websockets.exceptions import InvalidStatusCode, InvalidMessage
@@ -53,7 +52,6 @@ try:
 except Exception:
     WEBSOCKETS_OK = False
 
-# -------------------- discovery --------------------
 @st.cache_data(ttl=3600)
 def discover_products(quote="USD"):
     try:
@@ -70,7 +68,6 @@ def discover_products(quote="USD"):
     except Exception:
         return DEFAULT_PRODUCTS
 
-# -------------------- indicators --------------------
 def rsi(series: pd.Series, period: int = 14):
     d = series.diff()
     g = d.clip(lower=0).rolling(period).mean()
@@ -97,15 +94,13 @@ def volume_in_window(records, now_ts, window_sec):
         vol += size or 0.0
     return vol
 
-# -------------------- global store --------------------
 class Store:
     def __init__(self):
-        self.deques = {}            # pid -> deque[(ts, price, size)]
+        self.deques = {}
         self.rows_q = queue.Queue()
         self.alert_last_ts = {}
         self.alert_log = collections.deque(maxlen=50)
-        self.vol_cache = {}         # pid -> {"last": minute_key, "vals": deque(maxlen=20)}
-        # connection status
+        self.vol_cache = {}
         self.connected = False
         self.last_msg_ts = 0.0
         self.reconnections = 0
@@ -115,22 +110,17 @@ class Store:
         self.connect_attempt = 0
         self.last_subscribe = ""
         self.debug = collections.deque(maxlen=200)
-        # sidebar safe overrides (local only)
         self.safe_cfg = None
 
 state = Store()
+
 def dbg(msg: str):
     try:
         state.debug.append(f"{time.strftime('%H:%M:%S')} {msg}")
     except Exception:
         pass
 
-# -------------------- WS subscribe & connect --------------------
 async def subscribe_and_expect_first_tick(ws, mode, channel, product_ids, chunk):
-    """
-    Send subscribe payload(s), then wait for first *ticker*.
-    Tolerates non-ticker first frame; keeps reading briefly to find one.
-    """
     def chunks(lst, n):
         for i in range(0, len(lst), n):
             yield lst[i:i+n]
@@ -142,26 +132,19 @@ async def subscribe_and_expect_first_tick(ws, mode, channel, product_ids, chunk)
         for group in chunks(product_ids, chunk):
             payload = {"type": "subscribe", "channel": channel, "product_ids": group}
             await ws.send(json.dumps(payload))
-            state.last_subscribe = json.dumps(payload)
-            sent += len(group)
+            state.last_subscribe = json.dumps(payload); sent += len(group)
     else:
         for group in chunks(product_ids, chunk):
             payload = {"type": "subscribe", "channels": [{"name": channel, "product_ids": group}]}
             await ws.send(json.dumps(payload))
-            state.last_subscribe = json.dumps(payload)
-            sent += len(group)
+            state.last_subscribe = json.dumps(payload); sent += len(group)
     dbg(f"subscribed {sent} {mode}:{channel}")
 
-    # Wait up to FIRST_TICK_TIMEOUT for any frame,
-    # then up to +2s more for a real ticker if first wasn't one.
     deadline = time.time() + FIRST_TICK_TIMEOUT
     first = await asyncio.wait_for(ws.recv(), timeout=max(0.1, deadline - time.time()))
-    try:
-        msg = json.loads(first)
-    except Exception:
-        msg = {}
+    try: msg = json.loads(first)
+    except Exception: msg = {}
 
-    # already a ticker?
     if (mode != "advanced" and msg.get("type") == "ticker") or \
        (mode == "advanced" and msg.get("channel") in ("ticker", "ticker_batch")):
         return first
@@ -170,23 +153,16 @@ async def subscribe_and_expect_first_tick(ws, mode, channel, product_ids, chunk)
     while time.time() < extra_deadline:
         try:
             nxt = await asyncio.wait_for(ws.recv(), timeout=max(0.1, extra_deadline - time.time()))
-            try:
-                m2 = json.loads(nxt)
-            except Exception:
-                continue
+            try: m2 = json.loads(nxt)
+            except Exception: continue
             if (mode != "advanced" and m2.get("type") == "ticker") or \
                (mode == "advanced" and m2.get("channel") in ("ticker", "ticker_batch")):
                 return nxt
         except asyncio.TimeoutError:
             break
-
     raise asyncio.TimeoutError("No ticker message after subscribe")
 
 async def ws_once(url, mode, channel, products, chunk):
-    """
-    Attempt one connection; return True once any tick is parsed.
-    Hard per-attempt cap so we always fall through to the next URL.
-    """
     if not WEBSOCKETS_OK:
         state.err = "websockets module unavailable"
         return False
@@ -200,14 +176,9 @@ async def ws_once(url, mode, channel, products, chunk):
     async def _run_one():
         try:
             dbg("opening websocket...")
-
-            # --- open with headers + 6s handshake timeout ---
             connect_coro = websockets.connect(
                 url,
-                ping_interval=20,
-                ping_timeout=20,
-                close_timeout=5,
-                max_size=2**22,
+                ping_interval=20, ping_timeout=20, close_timeout=5, max_size=2**22,
                 extra_headers={
                     "User-Agent": "Mozilla/5.0 (compatible; StreamlitCloud; +https://streamlit.io)",
                     "Origin": "https://share.streamlit.io",
@@ -215,7 +186,6 @@ async def ws_once(url, mode, channel, products, chunk):
                 },
             )
             conn = await asyncio.wait_for(connect_coro, timeout=6.0)
-
             async with conn as ws:
                 dbg("socket open; subscribing...")
                 state.active_url = url
@@ -224,38 +194,26 @@ async def ws_once(url, mode, channel, products, chunk):
 
                 async def handle_one(raw: str):
                     nonlocal ok_parsed
-                    now_ts = time.time()
-                    state.last_msg_ts = now_ts
-                    try:
-                        msg = json.loads(raw)
-                    except Exception:
-                        return
-
+                    now_ts = time.time(); state.last_msg_ts = now_ts
+                    try: msg = json.loads(raw)
+                    except Exception: return
                     if mode == "advanced":
-                        chan = msg.get("channel")
-                        if chan in ("ticker", "ticker_batch"):
+                        if msg.get("channel") in ("ticker", "ticker_batch"):
                             for ev in msg.get("events") or []:
                                 for tk in ev.get("tickers") or []:
                                     pid = tk.get("product_id")
-                                    try: price = float(tk.get("price") or 0)
-                                    except Exception: price = 0.0
-                                    try: size = float(tk.get("last_size") or 0)
-                                    except Exception: size = 0.0
+                                    price = float(tk.get("price") or 0)
+                                    size  = float(tk.get("last_size") or 0)
                                     if pid in state.deques:
-                                        state.rows_q.put((pid, now_ts, price, size))
-                                        ok_parsed = True
+                                        state.rows_q.put((pid, now_ts, price, size)); ok_parsed=True
                     else:
                         if msg.get("type") == "ticker":
                             pid = msg.get("product_id")
-                            try: price = float(msg.get("price") or 0)
-                            except Exception: price = 0.0
-                            try: size = float(msg.get("last_size") or 0)
-                            except Exception: size = 0.0
+                            price = float(msg.get("price") or 0)
+                            size  = float(msg.get("last_size") or 0)
                             if pid in state.deques:
-                                state.rows_q.put((pid, now_ts, price, size))
-                                ok_parsed = True
+                                state.rows_q.put((pid, now_ts, price, size)); ok_parsed=True
 
-                # process first, then a small burst
                 await handle_one(first)
                 for _ in range(30):
                     try:
@@ -269,10 +227,10 @@ async def ws_once(url, mode, channel, products, chunk):
                 return True
 
         except InvalidStatusCode as e:
-            state.err = f"HTTP {getattr(e, 'status_code', '?')} during upgrade"
+            state.err = f"HTTP {getattr(e, 'status_code', '?')}"
             dbg(state.err); return False
         except InvalidMessage as e:
-            state.err = f"Invalid WS handshake message: {e}"
+            state.err = f"Invalid WS handshake: {e}"
             dbg(state.err); return False
         except asyncio.TimeoutError as e:
             state.err = f"Timeout: {e}"
@@ -283,7 +241,6 @@ async def ws_once(url, mode, channel, products, chunk):
             dbg(traceback.format_exc().splitlines()[-1])
             return False
 
-    # Hard cap per attempt (so Auto/Exchange can fall through)
     try:
         return await asyncio.wait_for(_run_one(), timeout=12.0)
     except asyncio.TimeoutError:
@@ -291,56 +248,60 @@ async def ws_once(url, mode, channel, products, chunk):
         dbg(state.err); return False
 
 def worker(products, channel, chunk, mode_select):
-    """
-    Auto tries Exchange URLs first (more reliable), then Advanced.
-    Uses a dedicated event loop in this thread (no asyncio.run()).
-    Always moves to next URL on failure and logs breadcrumbs.
-    """
-    state.endpoint_mode = mode_select
+    """Hardened worker: own asyncio loop + full try/except + breadcrumbs."""
+    try:
+        state.endpoint_mode = mode_select
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        dbg("worker: event loop created")
 
-    # Create a private asyncio loop for this thread
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
-    while True:
-        if mode_select == "Advanced only":
-            try_list = [(ADV_WS_URL, "advanced")]
-        elif mode_select == "Exchange only":
-            try_list = [(u, "exchange") for u in EXC_WS_URLS]
-        else:  # Auto prefers Exchange, then Advanced
-            try_list = [(u, "exchange") for u in EXC_WS_URLS] + [(ADV_WS_URL, "advanced")]
-
-        any_ok = False
-
-        for url, mode in try_list:
-            state.connected = False
-            state.err = ""
-            state.active_url = url
-
-            dbg(f"attempting connect to {url} as {mode}")
-
+        while True:
             try:
-                ok = loop.run_until_complete(ws_once(url, mode, channel, products, chunk))
+                dbg(f"worker: building try_list for mode={mode_select}")
+                if mode_select == "Advanced only":
+                    try_list = [(ADV_WS_URL, "advanced")]
+                elif mode_select == "Exchange only":
+                    try_list = [(u, "exchange") for u in EXC_WS_URLS]
+                else:
+                    try_list = [(u, "exchange") for u in EXC_WS_URLS] + [(ADV_WS_URL, "advanced")]
+
+                any_ok = False
+                for url, mode in try_list:
+                    state.connected = False
+                    state.err = ""
+                    state.active_url = url
+                    dbg(f"attempting connect to {url} as {mode}")
+                    try:
+                        ok = loop.run_until_complete(ws_once(url, mode, channel, products, chunk))
+                    except Exception as e:
+                        ok = False
+                        state.err = f"Runner error: {type(e).__name__}: {e}"
+                        dbg(state.err)
+                        dbg(traceback.format_exc().splitlines()[-1])
+
+                    if ok:
+                        state.connected = True
+                        any_ok = True
+                        dbg("first ticks parsed — stream is connected")
+                        time.sleep(2.0)
+                        break
+                    else:
+                        dbg("attempt failed; trying next endpoint")
+                        state.reconnections += 1
+
+                if not any_ok:
+                    time.sleep(2.0)
             except Exception as e:
-                ok = False
-                state.err = f"Runner error: {type(e).__name__}: {e}"
+                state.err = f"Worker loop error: {type(e).__name__}: {e}"
                 dbg(state.err)
                 dbg(traceback.format_exc().splitlines()[-1])
+                time.sleep(2.0)
+    except Exception as e:
+        state.err = f"Worker init error: {type(e).__name__}: {e}"
+        dbg(state.err)
+        dbg(traceback.format_exc().splitlines()[-1])
 
-            if ok:
-                state.connected = True
-                any_ok = True
-                dbg("first ticks parsed — stream is connected")
-                time.sleep(2.0)  # small settle
-                break
-            else:
-                dbg("attempt failed; trying next endpoint")
-                state.reconnections += 1
-
-        if not any_ok:
-            time.sleep(2.0)  # short backoff then retry
-
-# -------------------- sidebar --------------------
+# -------------------- UI (sidebar) --------------------
 with st.sidebar:
     st.subheader("Source & Universe")
     quote = st.selectbox("Quote currency preset", ["USD", "USDC", "USDT", "BTC"], index=0, key="quote_sel")
@@ -351,13 +312,31 @@ with st.sidebar:
     max_products = st.slider("Max products to subscribe", 10, 200, min(50, max(10, len(discovered))), step=5, key="max_products_val")
 
     st.subheader("WebSocket")
-    mode_select = st.selectbox("Mode", ["Auto", "Advanced only", "Exchange only"], index=0)
+    mode_select = st.selectbox("Mode", ["Auto", "Advanced only", "Exchange only"], index=1)  # default Exchange only
     channel = st.selectbox("Channel", ["ticker", "ticker_batch"], index=0, key="channel_val")
     chunk_size = st.slider("Subscribe chunk size", 2, 200, 10, step=1, key="chunk_size_val")
     pause = st.checkbox("Pause streaming (UI keeps last values)", value=False, key="pause_val")
     restart_stream = st.button("🔄 Restart stream")
 
-    # SAFE tiny config: local overrides (no writes to st.session_state)
+    # Hot‑fix: force a one‑shot connect attempt (helps if worker loop stalled before first run)
+    def _force_connect():
+        def _runner():
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                url = EXC_WS_URLS[0]
+                dbg("FORCE: attempting one‑shot connect")
+                loop.run_until_complete(ws_once(url, "exchange", st.session_state.get("channel_val","ticker"), products, st.session_state.get("chunk_size_val",10)))
+            except Exception as e:
+                state.err = f"Force error: {type(e).__name__}: {e}"
+                dbg(state.err)
+        threading.Thread(target=_runner, daemon=True).start()
+
+    if st.button("⚡ Force connect (hot‑fix)"):
+        _force_connect()
+        st.info("Force connect started in background.")
+
+    # SAFE tiny config
     if st.button("🛟 Use safe tiny config"):
         state.safe_cfg = {
             "use_watchlist_only": True,
@@ -394,13 +373,12 @@ with st.sidebar:
     show_movers = st.checkbox("Show Top Movers", value=True)
     movers_rows = st.slider("Rows in movers panel", 3, 10, 5)
 
-# helper to read either override or session value
 def cfg_get(key, default=None):
     if state.safe_cfg and key in state.safe_cfg:
         return state.safe_cfg[key]
     return st.session_state.get(key, default)
 
-# -------------------- WS tester --------------------
+# -------------------- WS tester (unchanged) --------------------
 st.markdown("### 🔌 Test Coinbase WebSocket")
 if not WEBSOCKETS_OK:
     st.warning("`websockets` installs from requirements.txt. If the test fails now, try again after rebuild.")
@@ -409,9 +387,7 @@ else:
         try:
             connect_coro = websockets.connect(
                 url,
-                ping_interval=10,
-                ping_timeout=10,
-                close_timeout=5,
+                ping_interval=10, ping_timeout=10, close_timeout=5,
                 extra_headers={
                     "User-Agent": "Mozilla/5.0 (compatible; StreamlitCloud; +https://streamlit.io)",
                     "Origin": "https://share.streamlit.io",
@@ -449,7 +425,7 @@ else:
         for u in EXC_WS_URLS:
             test_with_retries(u, "exchange", n=1)
 
-# -------------------- build product list --------------------
+# -------------------- universe building --------------------
 use_watchlist_only_val = cfg_get("use_watchlist_only", True)
 watchlist_text_val     = cfg_get("watchlist_text", "")
 max_products_val       = cfg_get("max_products_val", 50)
@@ -459,12 +435,11 @@ if use_watchlist_only_val and watchlist_text_val.strip():
 else:
     products = discover_products(st.session_state.get("quote_sel", "USD"))[:max_products_val]
 
-# init deques
 for pid in products:
     if pid not in state.deques:
         state.deques[pid] = collections.deque(maxlen=5000)
 
-# -------------------- thread management --------------------
+# -------------------- worker start --------------------
 if "ws_thread" not in st.session_state:
     st.session_state["ws_thread"] = None
 
@@ -473,9 +448,7 @@ need_restart = (thr is None) or (not getattr(thr, "is_alive", lambda: False)())
 
 if WEBSOCKETS_OK and (not st.session_state.get("pause_val", False)) and (need_restart or restart_stream):
     try:
-        state.err = ""
-        state.active_url = ""
-        state.connect_attempt = 0
+        state.err = ""; state.active_url = ""; state.connect_attempt = 0
         dbg("starting worker thread")
         channel_val = cfg_get("channel_val", "ticker")
         chunk_val   = cfg_get("chunk_size_val", 10)
@@ -489,10 +462,9 @@ if WEBSOCKETS_OK and (not st.session_state.get("pause_val", False)) and (need_re
         st.info("Streaming thread started.")
         dbg(f"thread started: alive={thr.is_alive()}")
     except Exception as e:
-        state.err = f"Start error: {e}"
-        dbg(state.err)
+        state.err = f"Start error: {e}"; dbg(state.err)
 
-# -------------------- status bar --------------------
+# -------------------- status --------------------
 now = time.time()
 has_recent = (now - state.last_msg_ts) <= NO_MSG_GRACE if state.last_msg_ts else False
 c1, c2, c3, c4 = st.columns(4)
@@ -503,10 +475,9 @@ c4.metric("Subscribed pairs", len(state.deques))
 if state.err:
     st.error(f"Last error: {state.err}")
 
-# -------------------- diagnostics --------------------
 with st.expander("Diagnostics (temporary)"):
     thr = st.session_state.get("ws_thread")
-    diag = {
+    st.json({
         "WEBSOCKETS_OK": WEBSOCKETS_OK,
         "thread_alive": (thr.is_alive() if thr else False),
         "thread": repr(thr),
@@ -522,12 +493,11 @@ with st.expander("Diagnostics (temporary)"):
         "state.err": state.err,
         "products_first3": products[:3],
         "products_count": len(products),
-        "debug_tail": list(state.debug)[-15:],
+        "debug_tail": list(state.debug)[-20:],
         "safe_cfg_active": bool(state.safe_cfg),
-    }
-    st.json(diag)
+    })
 
-# -------------------- compute / render --------------------
+# -------------------- compute & render --------------------
 def compute_row(pid, dq, tz_obj, rsi_p, e_fast, e_slow):
     if not dq: return None
     now = time.time()
@@ -541,7 +511,6 @@ def compute_row(pid, dq, tz_obj, rsi_p, e_fast, e_slow):
     roc_15 = pct_change_over_window(dq, now, 900)
     vol_1 = volume_in_window(dq, now, 60)
 
-    # rolling vol Z cached in state (not session_state)
     minute_key = int(now // 60)
     vc = state.vol_cache.setdefault(pid, {"last": minute_key, "vals": collections.deque(maxlen=20)})
     if vc["last"] != minute_key:
@@ -566,7 +535,6 @@ placeholder_table = st.empty()
 last_render = 0.0
 
 while True:
-    # drain queue
     try:
         while True:
             pid, ts, price, size = state.rows_q.get_nowait()
@@ -582,18 +550,23 @@ while True:
 
     now = time.time()
     if now - last_render >= REFRESH_MS / 1000.0:
-        tz_obj = pytz.timezone(tz_name)
+        tz_obj = pytz.timezone(st.session_state.get("tz_name","UTC")) if "tz_name" in st.session_state else pytz.timezone("UTC")
         rows = []
         for pid, dq in state.deques.items():
-            r = compute_row(pid, dq, tz_obj, rsi_period, ema_fast, ema_slow)
+            r = compute_row(pid, dq, tz_obj, st.session_state.get("rsi_period",14), st.session_state.get("ema_fast",12), st.session_state.get("ema_slow",26))
             if r: rows.append(r)
         df = pd.DataFrame(rows)
-
+        search = st.session_state.get("search","")
         if search.strip():
             df = df[df["Pair"].str.contains(search.strip(), case=False, na=False)]
 
-        # ---- Alerts (panel only)
+        enable_alerts = st.session_state.get("enable_alerts", True)
         if enable_alerts and not df.empty:
+            roc_thr = float(st.session_state.get("roc_thr",0.7))
+            volz_thr = float(st.session_state.get("volz_thr",3.0))
+            rsi_up   = float(st.session_state.get("rsi_up",60))
+            rsi_dn   = float(st.session_state.get("rsi_dn",40))
+            cooldown = int(st.session_state.get("cooldown",45))
             for _, row in df.iterrows():
                 reasons = []
                 v = row.get("ROC 1m %")
@@ -618,7 +591,9 @@ while True:
                 adf = pd.DataFrame(list(state.alert_log), columns=["Time", "Pair", "Reason"])
                 st.dataframe(adf.tail(12), use_container_width=True, height=260)
 
-        # ---- Top Movers
+        show_movers = st.session_state.get("show_movers", True)
+        mobile_mode = st.session_state.get("mobile_mode", True)
+        movers_rows = int(st.session_state.get("movers_rows", 5))
         if show_movers and not df.empty:
             with placeholder_movers:
                 st.subheader("🚀 Top Movers")
@@ -639,16 +614,12 @@ while True:
                 else:
                     tiny(by_roc_up, ["Pair","ROC 1m %","Price"], "1‑min Gainers", cols[0])
                     tiny(by_roc_dn, ["Pair","ROC 1m %","Price"], "1‑min Losers",  cols[1])
-                    rcols = st.columns(2)
-                    tiny(by_volz,   ["Pair","Vol Z","Vol 1m"],   "Vol‑Z Spikes",  rcols[0])
-                    tiny(by_rsi_hi, ["Pair","RSI","Price"],      "RSI Highs",     rcols[1])
 
-        # ---- Main table
+        max_rows = int(st.session_state.get("max_rows", 300))
         if not df.empty:
             show_cols = ["Pair","Price","ROC 1m %","Vol Z","RSI","Last Update"] if mobile_mode else \
                         ["Pair","Last Update","Price","ROC 1m %","ROC 5m %","ROC 15m %","RSI","EMA fast","EMA slow","Vol 1m","Vol Z"]
             df_show = df[show_cols].sort_values("Pair").head(max_rows)
-
             def sty_roc(v):
                 if pd.isna(v): return ""
                 return "color:#0f993e;" if v>0 else ("color:#d43f3a;" if v<0 else "")
@@ -657,21 +628,14 @@ while True:
                 if v>=70: return "background-color:#ead7ff;"
                 if v<=30: return "background-color:#ffe0e0;"
                 return ""
-
             styled = (df_show.style
                         .format({"Price":"{:.6f}","ROC 1m %":"{:.2f}",
-                                **({"ROC 5m %":"{:.2f}","ROC 15m %":"{:.2f}"} if not mobile_mode else {}),
-                                "RSI":"{:.1f}",
-                                **({"EMA fast":"{:.6f}","EMA slow":"{:.6f}","Vol 1m":"{:.2f}"} if not mobile_mode else {}),
-                                "Vol Z":"{:.2f}"})
-                        .applymap(sty_roc, subset=[c for c in ["ROC 1m %","ROC 5m %","ROC 15m %"] if c in df_show.columns])
-                        .applymap(sty_rsi, subset=["RSI"]))
-            placeholder_table.dataframe(styled, use_container_width=True)
+                                **({"ROC 5m %":"{:.2f}","ROC 15m %":"{:.2f}"} if "ROC 5m %' in df_show.columns else {})},
+                                )
+                     )
+            placeholder_table.dataframe(df_show, use_container_width=True)
         else:
-            placeholder_table.info(
-                "Waiting for data or no rows match the filter… "
-                "Try Mode='Exchange only', Channel='ticker', and a tiny watchlist."
-            )
+            placeholder_table.info("Waiting for data or no rows match the filter… Try Mode='Exchange only', Channel='ticker', and a tiny watchlist.")
 
         last_render = now
     time.sleep(0.05)
