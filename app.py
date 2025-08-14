@@ -191,26 +191,35 @@ with st.sidebar:
     show_movers = st.checkbox("Show Top Movers strip", value=True)
     movers_rows = st.slider("Rows per movers panel", 3, 10, 5)
 
-# ---------- WS Test ----------
+# ---------- WebSocket Connectivity Test ----------
 st.markdown("### 🔌 Test Coinbase WebSocket")
 if not WEBSOCKETS_OK:
     st.warning("`websockets` installs from requirements.txt on first build. If test fails, try again after the app fully rebuilds.")
 else:
+    # Build the short test on-demand so import websockets is guaranteed
+    async def quick_test():
+        try:
+            import websockets
+            async with websockets.connect(WS_URL, ping_interval=10) as ws:
+                await ws.send(json.dumps({"type":"subscribe","channel":"ticker","product_ids":["BTC-USD"]}))
+                try:
+                    await asyncio.wait_for(ws.recv(), timeout=10)
+                    return True, "Received a message."
+                except asyncio.TimeoutError:
+                    return False, "Connected but no data within 10s (try channel=ticker and a tiny watchlist)."
+        except Exception as e:
+            return False, f"Failed: {e}"
+
+    # Safe result rendering (no ternary write)
     if st.button("Run WebSocket connectivity test"):
-        async def quick_test():
-            try:
-                import websockets
-                async with websockets.connect(WS_URL, ping_interval=10) as ws:
-                    await ws.send(json.dumps({"type":"subscribe","channel":"ticker","product_ids":["BTC-USD"]}))
-                    try:
-                        await asyncio.wait_for(ws.recv(), timeout=10)
-                        return True, "Received a message."
-                    except asyncio.TimeoutError:
-                        return False, "Connected but no data within 10s (try channel=ticker and a tiny watchlist)."
-            except Exception as e:
-                return False, f"Failed: {e}"
-        ok, info = asyncio.run(quick_test())
-        st.success(f"CONNECTED ✅ — {info}") if ok else st.error(f"FAILED ❌ — {info}")
+        try:
+            ok, info = asyncio.run(quick_test())
+            if ok:
+                st.success(f"CONNECTED ✅ — {info}")
+            else:
+                st.error(f"FAILED ❌ — {info}")
+        except Exception as e:
+            st.error(f"FAILED ❌ — {e}")
 
 # ---------- Determine product list ----------
 if use_watchlist and watchlist.strip():
