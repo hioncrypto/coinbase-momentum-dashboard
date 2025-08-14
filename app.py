@@ -1,8 +1,6 @@
-# Coinbase Momentum & Volume Dashboard — CLOUD v4.7.1
-# Streamlit app with robust Coinbase WS:
-#  - Advanced Trade WS (primary) + automatic fallback to Coinbase Exchange WS
-#  - Correct parsing for each feed
-#  - Restart stream button, WS test with retries, Safe tiny config, Diagnostics
+# Coinbase Momentum & Volume Dashboard — CLOUD v5.0
+# Uses Coinbase Advanced Trade WebSocket (new) with robust threading & diagnostics.
+# Deploy: app.py + requirements.txt → Streamlit Cloud (Advanced settings: Python 3.12)
 
 import asyncio, collections, json, math, queue, threading, time, traceback
 from datetime import datetime, timezone
@@ -13,24 +11,23 @@ import pytz
 import requests
 import streamlit as st
 
-st.set_page_config(page_title="Momentum & Volume — CLOUD v4.7.1", layout="wide")
+st.set_page_config(page_title="Momentum & Volume — CLOUD v5.0", layout="wide")
 
-# -------------------- WS Endpoints (primary + fallback) --------------------
-WS_ENDPOINTS = [
-    {"url": "wss://advanced-trade-ws.coinbase.com", "mode": "advanced"},  # preferred
-    {"url": "wss://ws-feed.exchange.coinbase.com",  "mode": "exchange"},  # fallback
-]
+# -------------------- WebSocket endpoint (Advanced Trade) --------------------
+ADV_WS_URL = "wss://advanced-trade-ws.coinbase.com"  # NEW Coinbase WS (preferred)
+FALLBACK_WS_URL = "wss://ws-feed.exchange.coinbase.com"  # old Exchange (public ticker)
 
 DEFAULT_PRODUCTS = [
     "BTC-USD","ETH-USD","SOL-USD","ADA-USD","AVAX-USD","LINK-USD","DOGE-USD",
     "XRP-USD","LTC-USD","BCH-USD","MATIC-USD","ATOM-USD","AAVE-USD","UNI-USD"
 ]
+
 HISTORY_SECONDS = 20 * 60
 REFRESH_MS = 750
-NO_MSG_GRACE = 20            # seconds after last tick still considered "connected"
-NO_MSG_RECONNECT = 12        # if no ticks this long after connect, hop endpoint
+NO_MSG_GRACE = 20          # still considered connected if last msg within this many seconds
+NO_MSG_RECONNECT = 12      # if no ticks for this long after connect, switch/fallback
 
-# -------------------- Styling --------------------
+# -------------------- Minimal styling --------------------
 st.markdown("""
 <style>
 html, body, [class*="css"] { font-size: 16px; }
@@ -41,33 +38,32 @@ section[data-testid="stSidebar"] { overscroll-behavior: contain; }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("# Momentum & Volume Dashboard — **CLOUD v4.7.1**")
-st.caption("Advanced Trade WS + Exchange WS fallback, robust parsing, WS test w/ retries, Restart, one‑click safe config, and diagnostics.")
+st.markdown("# Momentum & Volume Dashboard — **CLOUD v5.0**")
+st.caption("Advanced Trade WS, Restart stream, WS test with retries, one‑click safe config, and Diagnostics (JSON).")
 
-# -------------------- websockets import --------------------
+# -------------------- Safe import of websockets --------------------
 try:
     import websockets
     WEBSOCKETS_OK = True
 except Exception:
     WEBSOCKETS_OK = False
 
-# -------------------- Discovery --------------------
+# -------------------- Product discovery --------------------
 @st.cache_data(ttl=3600)
 def discover_products(quote_filter="USD"):
     try:
         resp = requests.get("https://api.exchange.coinbase.com/products", timeout=10)
         resp.raise_for_status()
-        product_ids = []
+        out = []
         for it in resp.json():
             pid = it.get("id")
-            if not pid:
-                continue
+            if not pid: continue
             status = (it.get("status") or "").lower()
             if it.get("trading_disabled", False) or status not in ("online","active",""):
                 continue
             if pid.endswith(f"-{quote_filter}"):
-                product_ids.append(pid)
-        return sorted(set(product_ids)) or sorted(DEFAULT_PRODUCTS)
+                out.append(pid)
+        return sorted(set(out)) or sorted(DEFAULT_PRODUCTS)
     except Exception:
         return sorted(DEFAULT_PRODUCTS)
 
@@ -83,8 +79,7 @@ def pct_change_over_window(records, now_ts, window_sec):
     target = now_ts - window_sec
     ref_price, last_price = None, None
     for ts, price, _ in reversed(records):
-        if last_price is None:
-            last_price = price
+        if last_price is None: last_price = price
         if ts <= target:
             ref_price = price
             break
@@ -96,12 +91,11 @@ def volume_in_window(records, now_ts, window_sec):
     cutoff = now_ts - window_sec
     vol = 0.0
     for ts, _, size in reversed(records):
-        if ts < cutoff:
-            break
+        if ts < cutoff: break
         vol += size or 0.0
     return vol
 
-# -------------------- Global Store --------------------
+# -------------------- Global store --------------------
 class Store:
     def __init__(self):
         self.deques = {}            # pid -> deque[(ts, price, size)]
@@ -112,7 +106,7 @@ class Store:
         self.err = ""
         self.rows_q = queue.Queue()
         self.active_url = ""
-        self.debug = collections.deque(maxlen=80)  # rolling debug notes
+        self.debug = collections.deque(maxlen=80)  # debug trail
 
 state = Store()
 def dbg(msg: str):
@@ -121,9 +115,12 @@ def dbg(msg: str):
     except Exception:
         pass
 
-# -------------------- WS workers --------------------
+# -------------------- WebSocket worker --------------------
 async def ws_loop_for_url(url, mode, product_ids, channel, chunk_size):
-    """One connection attempt to a given websocket URL, returns when socket closes."""
+    """
+    One connection attempt to a given websocket URL, returns when socket closes.
+    mode: "advanced" for Advanced Trade, "exchange" for old Exchange feed.
+    """
     import websockets
     def chunks(lst, n):
         for i in range(0, len(lst), n):
@@ -167,32 +164,24 @@ async def ws_loop_for_url(url, mode, product_ids, channel, chunk_size):
                         for ev in msg.get("events") or []:
                             for tk in ev.get("tickers") or []:
                                 pid  = tk.get("product_id")
-                                try:
-                                    price = float(tk.get("price") or 0)
-                                except Exception:
-                                    price = 0.0
-                                try:
-                                    size = float(tk.get("last_size") or 0)
-                                except Exception:
-                                    size = 0.0
+                                try: price = float(tk.get("price") or 0)
+                                except Exception: price = 0.0
+                                try: size = float(tk.get("last_size") or 0)
+                                except Exception: size = 0.0
                                 if pid in state.deques:
                                     state.rows_q.put((pid, now_ts, price, size))
                 else:
                     # Exchange: top-level "type":"ticker"
                     if msg.get("type") == "ticker":
                         pid = msg.get("product_id")
-                        try:
-                            price = float(msg.get("price") or 0)
-                        except Exception:
-                            price = 0.0
-                        try:
-                            size = float(msg.get("last_size") or 0)
-                        except Exception:
-                            size = 0.0
+                        try: price = float(msg.get("price") or 0)
+                        except Exception: price = 0.0
+                        try: size = float(msg.get("last_size") or 0)
+                        except Exception: size = 0.0
                         if pid in state.deques:
                             state.rows_q.put((pid, now_ts, price, size))
 
-                # If we connected but still haven’t seen any parsable ticks after a while, break to try fallback
+                # If no ticks after a while, reconnect/fallback
                 if (now_ts - start_ts) > NO_MSG_RECONNECT and state.rows_q.qsize() == 0:
                     dbg(f"no ticks within {NO_MSG_RECONNECT}s — will reconnect/fallback")
                     break
@@ -204,10 +193,16 @@ async def ws_loop_for_url(url, mode, product_ids, channel, chunk_size):
         dbg(f"ws err: {state.err}")
 
 def ws_worker(product_ids, channel, chunk_size):
+    """
+    Rotates endpoints: first Advanced Trade, then old Exchange (fallback), repeat.
+    """
+    endpoints = [
+        (ADV_WS_URL, "advanced"),
+        (FALLBACK_WS_URL, "exchange"),
+    ]
     i = 0
     while True:
-        url = WS_ENDPOINTS[i % len(WS_ENDPOINTS)]["url"]
-        mode = WS_ENDPOINTS[i % len(WS_ENDPOINTS)]["mode"]
+        url, mode = endpoints[i % len(endpoints)]
         try:
             asyncio.run(ws_loop_for_url(url, mode, product_ids, channel, chunk_size))
         except Exception as e:
@@ -215,7 +210,7 @@ def ws_worker(product_ids, channel, chunk_size):
             dbg(f"worker error: {e}")
             dbg(traceback.format_exc().splitlines()[-1])
         i += 1
-        time.sleep(1.5)  # brief pause before next attempt
+        time.sleep(1.5)
 
 # -------------------- Sidebar --------------------
 with st.sidebar:
@@ -225,7 +220,7 @@ with st.sidebar:
     st.caption(f"Discovered {len(discovered)} products ending with -{quote}")
     use_watchlist = st.checkbox("Use watchlist only (ignore discovery)", value=True, key="use_watchlist_only")
     watchlist = st.text_area("Watchlist (comma-separated)", value="BTC-USD, ETH-USD, SOL-USD", key="watchlist_text")
-    max_products = st.slider("Max products to subscribe", 10, 1000, min(50, max(10,len(discovered))), step=5, key="max_products_val")
+    max_products = st.slider("Max products to subscribe", 10, 200, min(50, max(10, len(discovered))), step=5, key="max_products_val")
 
     st.subheader("WebSocket")
     channel = st.selectbox("Channel", ["ticker","ticker_batch"], index=0, key="channel_val")
@@ -273,7 +268,7 @@ else:
     async def quick_test_once():
         try:
             import websockets
-            async with websockets.connect(WS_ENDPOINTS[0]["url"], ping_interval=10) as ws:
+            async with websockets.connect(ADV_WS_URL, ping_interval=10) as ws:
                 await ws.send(json.dumps({"type":"subscribe","channel":"ticker","product_ids":["BTC-USD"]}))
                 await asyncio.wait_for(ws.recv(), timeout=10)
                 return True, "Advanced Trade WS responded."
@@ -291,17 +286,14 @@ else:
                 ok, info = False, f"Runner error: {e}"
             st.caption(f"WS test attempt {i}/{max_tries}: {'✅ success' if ok else '❌ fail'} — {info}")
             last = (ok, info)
-            if ok:
-                break
+            if ok: break
             time.sleep(delay)
         return last
 
     if st.button("Run WebSocket connectivity test"):
         ok, info = quick_test_with_retries()
-        if ok:
-            st.success(f"CONNECTED ✅ — {info}")
-        else:
-            st.error(f"FAILED ❌ — {info if info else 'No connection established'}")
+        if ok: st.success(f"CONNECTED ✅ — {info}")
+        else:  st.error(f"FAILED ❌ — {info if info else 'No connection established'}")
 
 # -------------------- Build product list --------------------
 if st.session_state.get("use_watchlist_only", True) and st.session_state.get("watchlist_text", "").strip():
@@ -314,7 +306,7 @@ for pid in products:
     if pid not in state.deques:
         state.deques[pid] = collections.deque(maxlen=5000)
 
-# -------------------- Start / Restart stream (robust + keep ref) --------------------
+# -------------------- Start / Restart stream (keeps thread ref) --------------------
 if "ws_started_cloud" not in st.session_state:
     st.session_state["ws_started_cloud"] = False
 if "ws_thread" not in st.session_state:
@@ -359,7 +351,7 @@ c4.metric("Subscribed pairs", len(state.deques))
 if state.err:
     st.error(f"Last error: {state.err}")
 
-# -------------------- Diagnostics & Force Start --------------------
+# -------------------- Diagnostics (JSON) & Force Start --------------------
 with st.expander("Diagnostics (temporary)"):
     thr = st.session_state.get("ws_thread")
     diag = {
@@ -400,15 +392,14 @@ with st.expander("Diagnostics (temporary)"):
 # -------------------- Compute table rows --------------------
 def compute_row(pid, dq, tz, rsi_p, e_fast, e_slow):
     now = time.time()
-    if not dq:
-        return None
+    if not dq: return None
     prices = [p for _,p,_ in dq]
     s = pd.Series(prices)
     ema_f = s.ewm(span=e_fast, adjust=False).mean().iloc[-1]
     ema_s = s.ewm(span=e_slow, adjust=False).mean().iloc[-1]
     rsi_v = rsi(s, rsi_p).iloc[-1]
 
-    def pctwin(w):
+    def pctwin(w): 
         return pct_change_over_window(dq, now, w)
     roc_1 = pctwin(60); roc_5 = pctwin(300); roc_15 = pctwin(900)
 
@@ -451,9 +442,9 @@ while True:
     try:
         while True:
             pid, ts, price, size = state.rows_q.get_nowait()
-            if st.session_state.get("pause_val", False):
+            if st.session_state.get("pause_val", False): 
                 continue
-            if pid not in state.deques:
+            if pid not in state.deques: 
                 continue
             dq = state.deques[pid]
             dq.append((ts, price, size))
@@ -469,29 +460,25 @@ while True:
         rows = []
         for pid, dq in state.deques.items():
             r = compute_row(pid, dq, tz, rsi_period, ema_fast, ema_slow)
-            if r:
-                rows.append(r)
+            if r: rows.append(r)
 
         df = pd.DataFrame(rows)
         if search.strip():
             df = df[df["Pair"].str.contains(search.strip(), case=False, na=False)]
 
-        # ---- Top Movers ----
+        # ---- Top Movers (optional) ----
         if show_movers and not df.empty:
             with placeholder_movers:
                 st.subheader("🚀 Top Movers (live)")
                 mcols = st.columns(4) if not mobile_mode else st.columns(2)
-
                 def tiny(tbl, cols_keep, title, col):
                     t = tbl[cols_keep].head(movers_rows).reset_index(drop=True)
                     col.markdown(f"**{title}**")
                     col.dataframe(t.style.hide(axis='index'), use_container_width=True, height=200)
-
                 by_roc1_up   = df.sort_values("ROC 1m %", ascending=False)
                 by_roc1_down = df.sort_values("ROC 1m %", ascending=True)
                 by_volz      = df.sort_values("Vol Z", ascending=False)
                 by_rsi_high  = df.sort_values("RSI", ascending=False)
-
                 if not mobile_mode:
                     tiny(by_roc1_up,   ["Pair","ROC 1m %","Price"], "1‑min Gainers", mcols[0])
                     tiny(by_roc1_down, ["Pair","ROC 1m %","Price"], "1‑min Losers",  mcols[1])
@@ -511,17 +498,15 @@ while True:
             # Alerts
             if enable_alerts:
                 for _, row in df.iterrows():
-                    pid = row["Pair"]; reasons = []
-                    v = row.get("ROC 1m %")
-                    if isinstance(v, float) and not math.isnan(v) and abs(v) >= roc_thr:
-                        reasons.append(f"ROC1m {v:.2f}%")
-                    vz = row.get("Vol Z")
-                    if isinstance(vz, float) and vz >= volz_thr:
-                        reasons.append(f"VolZ {vz:.1f}")
-                    rsi_val = row.get("RSI")
-                    if isinstance(rsi_val, float):
-                        if rsi_val >= rsi_up: reasons.append(f"RSI≥{rsi_up}")
-                        if rsi_val <= rsi_dn: reasons.append(f"RSI≤{rsi_dn}")
+                    pid = row["Pair"]; reasons=[]
+                    v=row.get("ROC 1m %")
+                    if isinstance(v,float) and not math.isnan(v) and abs(v)>=roc_thr: reasons.append(f"ROC1m {v:.2f}%")
+                    vz=row.get("Vol Z")
+                    if isinstance(vz,float) and vz>=volz_thr: reasons.append(f"VolZ {vz:.1f}")
+                    rsi_val=row.get("RSI")
+                    if isinstance(rsi_val,float):
+                        if rsi_val>=rsi_up: reasons.append(f"RSI≥{rsi_up}")
+                        if rsi_val<=rsi_dn: reasons.append(f"RSI≤{rsi_dn}")
                     if reasons:
                         lt = state.alert_last_ts.get(pid, 0)
                         if now - lt > cooldown:
@@ -537,11 +522,11 @@ while True:
 
             def sty_roc(v):
                 if pd.isna(v): return ""
-                return "color:#0f993e;" if v > 0 else ("color:#d43f3a;" if v < 0 else "")
+                return "color:#0f993e;" if v>0 else ("color:#d43f3a;" if v<0 else "")
             def sty_rsi(v):
                 if pd.isna(v): return ""
-                if v >= 70: return "background-color:#ead7ff;"
-                if v <= 30: return "background-color:#ffe0e0;"
+                if v>=70: return "background-color:#ead7ff;"
+                if v<=30: return "background-color:#ffe0e0;"
                 return ""
 
             styled = (df_show.style
@@ -562,4 +547,3 @@ while True:
 
         last_render = now
     time.sleep(0.05)
-
