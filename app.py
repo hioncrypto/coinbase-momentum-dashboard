@@ -1,6 +1,6 @@
-# Coinbase Momentum & Volume Dashboard — CLOUD v4.3 (mobile-friendly)
-# Deploy: put app.py + requirements.txt + README.md in a GitHub repo, then deploy on Streamlit Cloud.
-# Tip: In Advanced settings during deploy, set Python version to 3.12.
+# Coinbase Momentum & Volume Dashboard — CLOUD v4.4 (mobile + Top Movers)
+# Deploy: app.py + requirements.txt + README.md in a GitHub repo → Streamlit Cloud.
+# Cloud tip: in Deploy → Advanced settings, set Python version to 3.12.
 
 import asyncio, collections, json, math, queue, threading, time, os
 from datetime import datetime, timezone
@@ -11,7 +11,7 @@ import pytz
 import requests
 import streamlit as st
 
-# Try to import websockets (installed via requirements.txt on Cloud)
+# Try to import websockets (installed from requirements.txt on Cloud)
 try:
     import websockets
     WEBSOCKETS_OK = True
@@ -27,26 +27,21 @@ DEFAULT_PRODUCTS = [
 HISTORY_SECONDS = 20 * 60
 REFRESH_MS = 750
 
-st.set_page_config(
-    page_title="Momentum & Volume — CLOUD v4.3",
-    layout="wide"
-)
+st.set_page_config(page_title="Momentum & Volume — CLOUD v4.4", layout="wide")
 
-# Light CSS tweaks for mobile
+# Light CSS for better mobile usability
 st.markdown("""
 <style>
-/* bump base font for better tap targets on phones */
-html, body, [class*="css"]  { font-size: 16px; }
+html, body, [class*="css"] { font-size: 16px; }
 div[data-testid="stMetricValue"] { font-size: 18px !important; }
-/* tighter top/bottom padding on dataframe for small screens */
 div[data-testid="stDataFrame"] { padding-top: 0.25rem; }
-/* make sidebar scroll nicer on phones */
 section[data-testid="stSidebar"] { overscroll-behavior: contain; }
+.small-table td, .small-table th { padding: 0.25rem 0.5rem !important; font-size: 14px; }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("# Momentum & Volume Dashboard — **CLOUD v4.3**")
-st.caption("Mobile-friendly build with status bar, sidebar controls, and a WebSocket connectivity test.")
+st.markdown("# Momentum & Volume Dashboard — **CLOUD v4.4**")
+st.caption("Mobile‑friendly build with status bar, sidebar controls, WebSocket test, and a Top Movers strip.")
 
 # ---------- Discovery ----------
 @st.cache_data(ttl=3600)
@@ -60,7 +55,7 @@ def discover_products(quote_filter="USD"):
             if not pid:
                 continue
             status = (it.get("status") or "").lower()
-            if it.get("trading_disabled", False) or status not in ("online", "active", ""):
+            if it.get("trading_disabled", False) or status not in ("online","active",""):
                 continue
             if pid.endswith(f"-{quote_filter}"):
                 product_ids.append(pid)
@@ -89,7 +84,7 @@ def pct_change_over_window(records, now_ts, window_sec):
         if ts <= target:
             ref_price = price
             break
-    if not ref_price or not last_price or ref_price == 0:
+    if ref_price is None or last_price is None or ref_price == 0:
         return np.nan
     return (last_price - ref_price) / ref_price * 100.0
 
@@ -118,7 +113,6 @@ state = Store()
 # ---------- WebSocket worker ----------
 async def ws_loop(product_ids, channel, chunk_size):
     import websockets  # ensure present at runtime
-    # chunk subscription to avoid huge payloads
     def chunks(lst, n):
         for i in range(0, len(lst), n):
             yield lst[i:i+n]
@@ -127,7 +121,7 @@ async def ws_loop(product_ids, channel, chunk_size):
             state.connected = True
             state.err = ""
             for group in chunks(product_ids, chunk_size):
-                await ws.send(json.dumps({"type": "subscribe", "channel": channel, "product_ids": group}))
+                await ws.send(json.dumps({"type":"subscribe","channel":channel,"product_ids":group}))
             while True:
                 raw = await ws.recv()
                 msg = json.loads(raw)
@@ -159,7 +153,7 @@ def ws_worker(product_ids, channel, chunk_size):
             state.err = f"Worker error: {e}"
         time.sleep(2)
 
-# ---------- Sidebar Controls ----------
+# ---------- Sidebar ----------
 with st.sidebar:
     st.subheader("Source & Universe")
     quote = st.selectbox("Quote currency preset", ["USD","USDC","USDT","BTC"], index=0)
@@ -193,10 +187,14 @@ with st.sidebar:
     search = st.text_input("Search filter (e.g., BTC or -USD)", value="")
     mobile_mode = st.checkbox("📱 Mobile mode (compact view)", value=True)
 
-# ---------- WebSocket Connectivity Test ----------
+    st.subheader("Top Movers")
+    show_movers = st.checkbox("Show Top Movers strip", value=True)
+    movers_rows = st.slider("Rows per movers panel", 3, 10, 5)
+
+# ---------- WS Test ----------
 st.markdown("### 🔌 Test Coinbase WebSocket")
 if not WEBSOCKETS_OK:
-    st.warning("`websockets` will be installed from requirements.txt on first build. If test fails, try after the app fully rebuilds.")
+    st.warning("`websockets` installs from requirements.txt on first build. If test fails, try again after the app fully rebuilds.")
 else:
     if st.button("Run WebSocket connectivity test"):
         async def quick_test():
@@ -208,7 +206,7 @@ else:
                         await asyncio.wait_for(ws.recv(), timeout=10)
                         return True, "Received a message."
                     except asyncio.TimeoutError:
-                        return False, "Connected but received no data within 10s (try channel=ticker and a tiny watchlist)."
+                        return False, "Connected but no data within 10s (try channel=ticker and a tiny watchlist)."
             except Exception as e:
                 return False, f"Failed: {e}"
         ok, info = asyncio.run(quick_test())
@@ -240,7 +238,7 @@ c4.metric("Subscribed pairs", len(state.deques))
 if state.err:
     st.error(f"Last error: {state.err}")
 
-# ---------- Main Table ----------
+# ---------- Row computation ----------
 def compute_row(pid, dq, tz, rsi_p, e_fast, e_slow):
     now = time.time()
     if not dq:
@@ -285,8 +283,11 @@ def compute_row(pid, dq, tz, rsi_p, e_fast, e_slow):
         "Vol Z": vol_z,
     }
 
-placeholder = st.empty()
+# ---------- Main loop ----------
+placeholder_movers = st.container()
+placeholder_table = st.empty()
 last_render = 0
+
 while True:
     # drain queue
     try:
@@ -303,16 +304,6 @@ while True:
                 dq.popleft()
     except queue.Empty:
         pass
-    except Exception:
-        # in case dq.pop left() typo occurs; keep loop robust
-        try:
-            # correct pruning if typo branch hit (shouldn't normally)
-            if pid in state.deques:
-                dq = state.deques[pid]
-                while dq and dq[0][0] < (time.time() - HISTORY_SECONDS):
-                    dq.popleft()
-        except Exception:
-            pass
 
     now = time.time()
     if now - last_render >= REFRESH_MS/1000.0:
@@ -326,6 +317,37 @@ while True:
         if search.strip():
             df = df[df["Pair"].str.contains(search.strip(), case=False, na=False)]
 
+        # ---- Top Movers strip (compact, above table) ----
+        if show_movers and not df.empty:
+            with placeholder_movers:
+                st.subheader("🚀 Top Movers (live)")
+                mcols = st.columns(4) if not mobile_mode else st.columns(2)
+
+                def tiny(tbl, cols_keep, title, col):
+                    t = tbl[cols_keep].head(movers_rows).reset_index(drop=True)
+                    col.markdown(f"**{title}**")
+                    col.dataframe(t.style.hide(axis='index'), use_container_width=True, height=200)
+
+                by_roc1_up   = df.sort_values("ROC 1m %", ascending=False)
+                by_roc1_down = df.sort_values("ROC 1m %", ascending=True)
+                by_volz      = df.sort_values("Vol Z", ascending=False)
+                by_rsi_high  = df.sort_values("RSI", ascending=False)
+
+                if not mobile_mode:
+                    tiny(by_roc1_up,   ["Pair","ROC 1m %","Price"], "1‑min Gainers", mcols[0])
+                    tiny(by_roc1_down, ["Pair","ROC 1m %","Price"], "1‑min Losers",  mcols[1])
+                    tiny(by_volz,      ["Pair","Vol Z","Vol 1m"],   "Vol‑Z Spikes",  mcols[2])
+                    tiny(by_rsi_high,  ["Pair","RSI","Price"],      "RSI Highs",     mcols[3])
+                else:
+                    tiny(by_roc1_up,   ["Pair","ROC 1m %","Price"], "1‑min Gainers", mcols[0])
+                    tiny(by_roc1_down, ["Pair","ROC 1m %","Price"], "1‑min Losers",  mcols[1])
+                    mcols2 = st.columns(2)
+                    tiny(by_volz,      ["Pair","Vol Z","Vol 1m"],   "Vol‑Z Spikes",  mcols2[0])
+                    tiny(by_rsi_high,  ["Pair","RSI","Price"],      "RSI Highs",     mcols2[1])
+        else:
+            placeholder_movers.empty()
+
+        # ---- Main table ----
         if not df.empty:
             # Alerts
             if enable_alerts:
@@ -345,15 +367,13 @@ while True:
                             st.toast(f"⚡ {pid}: " + ", ".join(reasons), icon="🔥")
                             state.alert_last_ts[pid] = now
 
-            # choose column set based on mobile_mode
             if mobile_mode:
                 cols = ["Pair","Price","ROC 1m %","Vol Z","RSI","Last Update"]
             else:
                 cols = ["Pair","Last Update","Price","ROC 1m %","ROC 5m %","ROC 15m %","RSI","EMA fast","EMA slow","Vol 1m","Vol Z"]
 
-            df = df[cols].sort_values("Pair").head(max_rows)
+            df_show = df[cols].sort_values("Pair").head(max_rows)
 
-            # styling
             def sty_roc(v):
                 if pd.isna(v): return ""
                 return "color:#0f993e;" if v>0 else ("color:#d43f3a;" if v<0 else "")
@@ -363,7 +383,7 @@ while True:
                 if v<=30: return "background-color:#ffe0e0;"
                 return ""
 
-            styled = (df.style
+            styled = (df_show.style
                         .format({
                             "Price":"{:.6f}",
                             "ROC 1m %":"{:.2f}",
@@ -372,12 +392,13 @@ while True:
                             **({"EMA fast":"{:.6f}","EMA slow":"{:.6f}","Vol 1m":"{:.2f}"} if not mobile_mode else {}),
                             "Vol Z":"{:.2f}"
                         })
-                        .applymap(sty_roc, subset=[c for c in ["ROC 1m %","ROC 5m %","ROC 15m %"] if c in df.columns])
+                        .applymap(sty_roc, subset=[c for c in ["ROC 1m %","ROC 5m %","ROC 15m %"] if c in df_show.columns])
                         .applymap(sty_rsi, subset=["RSI"])
                      )
-            placeholder.dataframe(styled, use_container_width=True)
+            placeholder_table.dataframe(styled, use_container_width=True)
         else:
-            placeholder.info("Waiting for data or no rows match the filter… Try Channel='ticker' and a small watchlist if needed.")
+            placeholder_table.info("Waiting for data or no rows match the filter… Try Channel='ticker' and a small watchlist if needed.")
+
         last_render = now
 
     time.sleep(0.05)
