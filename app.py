@@ -120,19 +120,33 @@ async def ws_loop(product_ids, channel, chunk_size):
             for group in chunks(product_ids, chunk_size):
                 await ws.send(json.dumps({"type":"subscribe","channel":channel,"product_ids":group}))
             while True:
-                raw = await ws.recv()
-                msg = json.loads(raw)
-                now = time.time()
-                state.last_msg_ts = now
-                mtype = msg.get("type")
-                if mtype == "ticker_batch":
-                    for ev in msg.get("events") or []:
-                        for tk in ev.get("tickers") or []:
-                            pid = tk.get("product_id")
-                            price = float(tk.get("price") or 0)
-                            size = float(tk.get("last_size") or 0)
-                            if pid in state.deques:
-                                state.rows_q.put((pid, now, price, size))
+    raw = await ws.recv()
+    msg = json.loads(raw)
+    now_ts = time.time()
+    state.last_msg_ts = now_ts
+
+    chan = msg.get("channel")
+    if chan in ("ticker", "ticker_batch"):
+        # Advanced Trade WS packs data under events[*].tickers[*]
+        events = msg.get("events") or []
+        for ev in events:
+            for tk in ev.get("tickers") or []:
+                pid  = tk.get("product_id")
+                # price can be string; last_size may be missing on snapshots
+                try:
+                    price = float(tk.get("price") or 0)
+                except Exception:
+                    price = 0.0
+                try:
+                    size = float(tk.get("last_size") or 0)
+                except Exception:
+                    size = 0.0
+                if pid in state.deques:
+                    state.rows_q.put((pid, now_ts, price, size))
+    else:
+        # ignore non‑market data messages
+        pass
+
                 elif mtype == "ticker":
                     pid = msg.get("product_id")
                     price = float(msg.get("price") or 0)
