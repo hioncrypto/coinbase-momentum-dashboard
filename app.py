@@ -193,8 +193,7 @@ with st.sidebar:
     st.subheader("Top Movers")
     show_movers = st.checkbox("Show Top Movers strip", value=True)
     movers_rows = st.slider("Rows per movers panel", 3, 10, 5)
-
-# ---------- WebSocket Connectivity Test ----------
+    
 # ---------- WebSocket Connectivity Test ----------
 st.markdown("### 🔌 Test Coinbase WebSocket")
 
