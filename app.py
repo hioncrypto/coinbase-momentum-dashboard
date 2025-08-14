@@ -1,4 +1,4 @@
-# Coinbase Momentum & Volume Dashboard — CLOUD v4.4 (mobile + Top Movers)
+# Coinbase Momentum & Volume Dashboard — CLOUD v4.5 (mobile + Top Movers + Restart stream)
 # Deploy: app.py + requirements.txt + README.md in a GitHub repo → Streamlit Cloud.
 # Cloud tip: in Deploy → Advanced settings, set Python version to 3.12.
 
@@ -26,8 +26,9 @@ DEFAULT_PRODUCTS = [
 
 HISTORY_SECONDS = 20 * 60
 REFRESH_MS = 750
+NO_MSG_GRACE = 20  # seconds without messages before we display '-' and allow restart
 
-st.set_page_config(page_title="Momentum & Volume — CLOUD v4.4", layout="wide")
+st.set_page_config(page_title="Momentum & Volume — CLOUD v4.5", layout="wide")
 
 # Light CSS for better mobile usability
 st.markdown("""
@@ -40,8 +41,8 @@ section[data-testid="stSidebar"] { overscroll-behavior: contain; }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("# Momentum & Volume Dashboard — **CLOUD v4.4**")
-st.caption("Mobile‑friendly build with status bar, sidebar controls, WebSocket test, and a Top Movers strip.")
+st.markdown("# Momentum & Volume Dashboard — **CLOUD v4.5**")
+st.caption("Mobile‑friendly build with status bar, sidebar controls, WebSocket test, Top Movers, and a Restart stream button.")
 
 # ---------- Discovery ----------
 @st.cache_data(ttl=3600)
@@ -167,6 +168,8 @@ with st.sidebar:
     channel = st.selectbox("Channel", ["ticker_batch","ticker"], index=0)
     chunk_size = st.slider("Subscribe chunk size", 25, 500, 150, step=25)
     pause = st.checkbox("Pause streaming (UI keeps last values)", value=False)
+    # NEW: manual restart
+    restart_stream = st.button("🔄 Restart stream")
 
     st.subheader("Indicators")
     rsi_period = st.number_input("RSI period", value=14, step=1)
@@ -196,7 +199,6 @@ st.markdown("### 🔌 Test Coinbase WebSocket")
 if not WEBSOCKETS_OK:
     st.warning("`websockets` installs from requirements.txt on first build. If test fails, try again after the app fully rebuilds.")
 else:
-    # Build the short test on-demand so import websockets is guaranteed
     async def quick_test():
         try:
             import websockets
@@ -210,7 +212,6 @@ else:
         except Exception as e:
             return False, f"Failed: {e}"
 
-    # Safe result rendering (no ternary write)
     if st.button("Run WebSocket connectivity test"):
         try:
             ok, info = asyncio.run(quick_test())
@@ -232,17 +233,31 @@ for pid in products:
     if pid not in state.deques:
         state.deques[pid] = collections.deque(maxlen=5000)
 
-# ---------- Start WS thread ----------
-if "ws_started_cloud" not in st.session_state and not pause and WEBSOCKETS_OK:
-    t = threading.Thread(target=ws_worker, args=(products, channel, chunk_size), daemon=True)
-    t.start()
-    st.session_state["ws_started_cloud"] = True
+# ---------- Start / Restart WS thread (robust) ----------
+if "ws_started_cloud" not in st.session_state:
+    st.session_state["ws_started_cloud"] = False
+
+should_start = WEBSOCKETS_OK and not pause and (
+    not st.session_state["ws_started_cloud"] or restart_stream
+)
+
+if should_start:
+    try:
+        t = threading.Thread(target=ws_worker, args=(products, channel, chunk_size), daemon=True)
+        t.start()
+        st.session_state["ws_started_cloud"] = True
+        st.toast("Streaming started ✅", icon="✅")
+    except Exception as e:
+        st.session_state["ws_started_cloud"] = False
+        st.error(f"Could not start streaming: {e}")
 
 # ---------- Status Bar ----------
+now_ts = time.time()
+has_recent_msg = (now_ts - state.last_msg_ts) <= NO_MSG_GRACE if state.last_msg_ts else False
 c1,c2,c3,c4 = st.columns(4)
-c1.metric("Connected", "Yes" if state.connected else "No")
+c1.metric("Connected", "Yes" if (state.connected and has_recent_msg) else "No")
 c2.metric("Reconnections", state.reconnections)
-c3.metric("Last message", "-" if state.last_msg_ts==0 else datetime.fromtimestamp(state.last_msg_ts, tz=timezone.utc).strftime("%H:%M:%S UTC"))
+c3.metric("Last message", "-" if not has_recent_msg else datetime.fromtimestamp(state.last_msg_ts, tz=timezone.utc).strftime("%H:%M:%S UTC"))
 c4.metric("Subscribed pairs", len(state.deques))
 if state.err:
     st.error(f"Last error: {state.err}")
@@ -379,7 +394,7 @@ while True:
             if mobile_mode:
                 cols = ["Pair","Price","ROC 1m %","Vol Z","RSI","Last Update"]
             else:
-                cols = ["Pair","Last Update","Price","ROC 1m %","ROC 5m %","ROC 15m %","RSI","EMA fast","EMA slow","Vol 1m","Vol Z"]
+                cols = ["Pair","Last Update","Price","ROC 5m %","ROC 15m %","ROC 1m %","RSI","EMA fast","EMA slow","Vol 1m","Vol Z"]
 
             df_show = df[cols].sort_values("Pair").head(max_rows)
 
