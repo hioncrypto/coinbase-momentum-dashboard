@@ -1,34 +1,16 @@
-# app.py — Coinbase Movers (Top-10 Spike Mode, one file)
-# - Minimal columns: Pair | Price | % Change | TF
-# - "Top 10 Mover" section: only pairs that meet ALL spike gates:
-#     Price Spike  ∧  RSI Spike  ∧  MACD Spike  ∧  Volume Spike  ∧  Momentum Spike
-# - Those ALL-TRUE rows are the ONLY ones tinted green in the main table
-# - US timezone display, auto-refresh slider, WebSocket+REST hybrid
-# - Email/Webhook/Pushover alerts + Test Alert
+# app.py — Coinbase Movers (Top-10 Spike, gated, single file)
+# Minimal table: Pair | Price | % Change | TF
+# Spike Gates panel with checkboxes; Top-10 & green tint only for rows passing ALL enabled gates.
+# Alerts: Email / Webhook / Pushover + browser chime; "Send TEST alert" verifies end-to-end.
 #
-# Quick start:
-#   streamlit run app.py
-#
-# Optional Streamlit Cloud secrets (Settings → Secrets):
-# [smtp]
-# host = "smtp.example.com"
-# port = 465
-# user = "user"
-# password = "pass"
-# sender = "alerts@example.com"
-# alert_email = "you@example.com"         # convenience default (optional)
-# webhook_url = "https://discord.com/api/webhooks/..."  # optional
-# pushover_token = ""
-# pushover_user  = ""
-#
-# Requirements (requirements.txt):
+# requirements.txt:
 # streamlit>=1.33
 # pandas>=2.2
 # numpy>=1.26
 # requests>=2.32
 # websocket-client>=1.8
 
-import os, json, time, threading, queue, datetime as dt, base64, ssl
+import os, json, time, threading, queue, datetime as dt, base64, ssl, smtplib
 import pandas as pd
 import numpy as np
 import requests
@@ -46,7 +28,7 @@ except Exception:
 CB_REST = "https://api.exchange.coinbase.com"
 CB_WS   = "wss://ws-feed.exchange.coinbase.com"
 
-# ---------------- Safe session-state helpers ----------------
+# ---------------- Session-state helpers -------------------
 def init_state():
     ss = st.session_state
     ss.setdefault("products_all", [])
@@ -58,7 +40,7 @@ def init_state():
     ss.setdefault("ws_thread", None)
     ss.setdefault("ws_alive", False)
     ss.setdefault("last_alert_hashes", set())
-    ss.setdefault("did_test_alert", False)
+    ss.setdefault("test_requested", False)
 init_state()
 
 def ss_get(key, default):
@@ -66,7 +48,7 @@ def ss_get(key, default):
         st.session_state[key] = default() if callable(default) else default
     return st.session_state[key]
 
-# ---------------- Timeframes / constants -------------------
+# ---------------- Timeframes ------------------------------
 TFS = {
     "15s": 15, "30s": 30, "1m": 60, "3m": 180, "5m": 300, "15m": 900, "30m": 1800,
     "1h": 3600, "4h": 14400,  # synth from 1h
@@ -76,12 +58,12 @@ TFS = {
 }
 REST_GRANS = {60,300,900,3600,21600,86400}
 
-# ---------------- Math/indicator utilities ----------------
+# ---------------- Maths / indicators ----------------------
 def pct(a, b):
     if b is None or a is None or b == 0: return np.nan
     return (a/b - 1.0)*100.0
 
-def ema(series, span): return series.ewm(span=span, adjust=False).mean()
+def ema(x, span): return x.ewm(span=span, adjust=False).mean()
 
 def rsi(close, length=14):
     delta = close.diff()
@@ -136,7 +118,6 @@ def fetch_candles(pair, granularity_sec):
 def on_tick(pid, price, size, t_unix, bid=None, ask=None):
     ss_get("last_tick", dict)
     st.session_state["last_tick"][pid] = {"price":price,"size":size,"time":t_unix,"bid":bid,"ask":ask}
-    # maintain bars for short TFs + 1h (for 4h/12h synth)
     base_tfs = ["15s","30s","1m","3m","5m","15m","30m","1h"]
     ss_get("bars", dict)
     st.session_state["bars"].setdefault(pid, {})
@@ -212,75 +193,62 @@ def get_bars_df(pid, tf):
         return out.tail(200)
     return pd.DataFrame()
 
-# ---------------- Spike logic (ALL gates) -----------------
+# ---------------- Spike evaluation -----------------------
 def compute_row(pid, tf, cfg):
     """
-    Minimal row + 'all_spikes' boolean flag when ALL spike gates pass.
-    Gates:
-      - Price % |Δ| >= cfg.price_thresh[tf]
-      - Volume multiple >= cfg.vol_mult[tf]
-      - RSI spike: |RSI(t) - RSI(t-N)| >= cfg.rsi_vel[tf]  (N=3)
-      - MACD spike: |MACD hist z-score| >= cfg.macdh_z[tf]
-      - Momentum spike: |ROC%| >= cfg.roc_pct[tf]
+    Returns minimal row and 'all_ok' flag (ALL enabled gates must pass).
     """
     last_price = float(ss_get("last_tick", dict).get(pid, {}).get("price", np.nan))
     df = get_bars_df(pid, tf)
     if df is None or df.empty or len(df)<30:
-        return {"Pair": pid, "Price": last_price, "Change%": np.nan, "TF": tf, "all_spikes": False}
+        return {"Pair": pid, "Price": last_price, "Change%": np.nan, "TF": tf, "all_ok": False}
 
     close = df["c"].astype(float)
     vol   = df["v"].astype(float)
 
-    # Δ% reference distance
     n_back = 1 if tf in ("15s","30s","1m") else 2 if tf in ("3m","5m") else 3
     ref = close.iloc[-1-n_back] if len(close)>n_back else close.iloc[0]
     change = pct(close.iloc[-1], ref)
     price = float(close.iloc[-1]) if np.isfinite(close.iloc[-1]) else last_price
 
-    # Volume x
+    # Gates (compute metrics)
     base = vol.rolling(20, min_periods=5).mean().iloc[-1]
     volx = float(vol.iloc[-1] / (base + 1e-9))
 
-    # RSI velocity
-    rsi_len = cfg["rsi_len"]
-    rsi_vals = rsi(close, rsi_len)
-    N = 3
+    rsi_vals = rsi(close, cfg["rsi_len"])
+    N=3
     rsi_vel = float(rsi_vals.iloc[-1] - rsi_vals.iloc[-1-N]) if len(rsi_vals)>N else 0.0
 
-    # MACD histogram z-score
-    macd_f, macd_s, macd_sig = cfg["macd"]
-    _, _, hist = macd(close, macd_f, macd_s, macd_sig)
+    _, _, hist = macd(close, *cfg["macd"])
     macdh = hist.iloc[-20:]
     macdh_z = 0.0
     if macdh.std(ddof=0)>0:
         macdh_z = float((macdh.iloc[-1] - macdh.mean()) / (macdh.std(ddof=0)+1e-9))
 
-    # Momentum ROC%
     roc = pct(close.iloc[-1], close.iloc[-1-n_back]) if len(close)>n_back else 0.0
 
-    # Gates
-    price_ok = abs(change) >= cfg["price_thresh"].get(tf, 9e9)
-    vol_ok   = volx >= cfg["vol_mult"].get(tf, 9e9)
-    rsi_ok   = abs(rsi_vel) >= cfg["rsi_vel"].get(tf, 9e9)
-    macd_ok  = abs(macdh_z) >= cfg["macdh_z"].get(tf, 9e9)
-    mom_ok   = abs(roc) >= cfg["roc_pct"].get(tf, 9e9)
+    # Evaluate ONLY enabled gates
+    checks=[]
+    if cfg["use_price"]:  checks.append(abs(change) >= cfg["price_thresh"].get(tf, 9e9))
+    if cfg["use_vol"]:    checks.append(volx >= cfg["vol_mult"].get(tf, 9e9))
+    if cfg["use_rsi"]:    checks.append(abs(rsi_vel) >= cfg["rsi_vel"].get(tf, 9e9))
+    if cfg["use_macd"]:   checks.append(abs(macdh_z) >= cfg["macdh_z"].get(tf, 9e9))
+    if cfg["use_mom"]:    checks.append(abs(roc) >= cfg["roc_pct"].get(tf, 9e9))
 
-    all_spikes = bool(price_ok and vol_ok and rsi_ok and macd_ok and mom_ok)
+    all_ok = (len(checks)==0) or all(checks) if cfg["apply_gates"] else False
 
     return {
         "Pair": pid, "Price": price, "Change%": float(change) if np.isfinite(change) else np.nan,
-        "TF": tf, "all_spikes": all_spikes
+        "TF": tf, "all_ok": bool(all_ok)
     }
 
 def build_table(pairs, tf, cfg):
     rows=[compute_row(pid, tf, cfg) for pid in pairs]
-    df=pd.DataFrame(rows)
-    return df
+    return pd.DataFrame(rows)
 
 # ---------------- Alerts ----------------------------------
 def _smtp_cfg():
-    if "smtp" not in st.secrets: return None
-    return st.secrets["smtp"]
+    return st.secrets.get("smtp")
 
 def send_email_alert(subject, body, recipient):
     cfg=_smtp_cfg()
@@ -288,10 +256,9 @@ def send_email_alert(subject, body, recipient):
     try:
         msg=MIMEMultipart(); msg["From"]=cfg["sender"]; msg["To"]=recipient; msg["Subject"]=subject
         msg.attach(MIMEText(body,"plain"))
-        import smtplib
-        with ssl.create_default_context() as ctx:
-            with smtplib.SMTP_SSL(cfg["host"], int(cfg.get("port",465)), context=ctx) as s:
-                s.login(cfg["user"], cfg["password"]); s.sendmail(cfg["sender"], recipient, msg.as_string())
+        ctx = ssl.create_default_context()   # FIX: no 'with' here
+        with smtplib.SMTP_SSL(cfg["host"], int(cfg.get("port",465)), context=ctx) as s:
+            s.login(cfg["user"], cfg["password"]); s.sendmail(cfg["sender"], recipient, msg.as_string())
         return True, "Sent"
     except Exception as e:
         return False, f"Email error: {e}"
@@ -315,7 +282,7 @@ def pushover_send(token, user, title, message):
 
 def fanout_alert(lines, email_to="", webhook_url="", po_token="", po_user=""):
     errs=[]
-    sub="[Coinbase Movers] Top-10 spike"
+    sub="[Coinbase Movers] Spike notification"
     body="\n".join(lines)
     if email_to:
         ok,info=send_email_alert(sub, body, email_to); 
@@ -328,9 +295,37 @@ def fanout_alert(lines, email_to="", webhook_url="", po_token="", po_user=""):
         if not ok: errs.append(f"Pushover: {info}")
     return errs
 
+# ---------------- Browser chime ---------------------------
+BEEP_WAV = base64.b64encode(
+    requests.get("https://cdn.jsdelivr.net/gh/anars/blank-audio/1-second-of-silence.wav", timeout=15).content
+).decode()
+
+def audible_bridge():
+    st.markdown(f"""
+    <audio id="beeper" src="data:audio/wav;base64,{BEEP_WAV}"></audio>
+    <script>
+      const audio = document.getElementById('beeper');
+      const tick = () => {{
+        const tag = window.localStorage.getItem('mustBeep');
+        if (tag === '1') {{
+          audio.volume = 1.0;
+          audio.play().catch(()=>{{}});
+          window.localStorage.setItem('mustBeep','0');
+        }}
+        requestAnimationFrame(tick);
+      }};
+      requestAnimationFrame(tick);
+    </script>
+    """, unsafe_allow_html=True)
+
+def trigger_beep():
+    st.markdown("<script>window.localStorage.setItem('mustBeep','1');</script>", unsafe_allow_html=True)
+
 # ---------------- UI -------------------------------------
-st.set_page_config(page_title="Coinbase Movers — Top-10 Spike", layout="wide")
-st.title("Coinbase Movers — Minimal Ranking (ALL‑gates Spike Mode)")
+st.set_page_config(page_title="Coinbase Movers — Top‑10 Spikes", layout="wide")
+st.title("Coinbase Movers — Top‑10 Spikes (ALL‑gates)")
+
+audible_bridge()
 
 with st.sidebar:
     st.subheader("Data")
@@ -362,15 +357,53 @@ with st.sidebar:
     tf_choice = st.selectbox("Rank TF", ["15s","30s","1m","3m","5m","15m","30m","1h","4h","6h","12h","1d"], index=2)
 
     st.subheader("Spike Gates (ALL must pass)")
-    st.caption("Set per‑TF thresholds. Rows turn green & enter Top‑10 only if every gate is true.")
-    # Sensible defaults (tune as you like)
-    def_map = lambda **kw: kw
-    price_thresh = def_map(**{"15s":0.35,"1m":0.8,"5m":2.5,"15m":4.0,"1h":6.0,"4h":10.0,"6h":8.0,"12h":12.0,"1d":15.0})
-    vol_mult     = def_map(**{"1m":3.0,"5m":2.5,"15m":2.0,"1h":1.8,"4h":1.8,"6h":1.8,"12h":1.6,"1d":1.5})
-    rsi_vel      = def_map(**{"1m":8.0,"5m":10.0,"15m":12.0,"1h":12.0,"4h":14.0,"6h":14.0,"12h":16.0,"1d":18.0})
-    macdh_z      = def_map(**{"1m":2.0,"5m":2.0,"15m":2.2,"1h":2.2,"4h":2.2,"6h":2.2,"12h":2.4,"1d":2.5})
-    roc_pct      = def_map(**{"1m":0.8,"5m":2.0,"15m":3.5,"1h":5.0,"4h":6.5,"6h":6.0,"12h":7.5,"1d":9.0})
+    apply_gates = st.checkbox("Apply gates (Top‑10 & green tint use ALL enabled)", value=True)
+    # Enable/disable individual gates
+    c1,c2 = st.columns(2)
+    with c1:
+        use_price = st.checkbox("Price Δ%", True)
+        use_vol   = st.checkbox("Volume ×", True)
+        use_rsi   = st.checkbox("RSI velocity", True)
+    with c2:
+        use_macd  = st.checkbox("MACD hist z‑score", True)
+        use_mom   = st.checkbox("Momentum ROC%", True)
 
+    st.caption("Per‑TF thresholds (leave blank to ignore TF).")
+    # Reasonable defaults:
+    def_map = lambda **kw: kw
+    def_price = def_map(**{"15s":0.35,"1m":0.8,"5m":2.5,"15m":4.0,"1h":6.0,"4h":10.0,"6h":8.0,"12h":12.0,"1d":15.0})
+    def_volx  = def_map(**{"1m":3.0,"5m":2.5,"15m":2.0,"1h":1.8,"4h":1.8,"6h":1.8,"12h":1.6,"1d":1.5})
+    def_rsiv  = def_map(**{"1m":8.0,"5m":10.0,"15m":12.0,"1h":12.0,"4h":14.0,"6h":14.0,"12h":16.0,"1d":18.0})
+    def_macdz = def_map(**{"1m":2.0,"5m":2.0,"15m":2.2,"1h":2.2,"4h":2.2,"6h":2.2,"12h":2.4,"1d":2.5})
+    def_rocp  = def_map(**{"1m":0.8,"5m":2.0,"15m":3.5,"1h":5.0,"4h":6.5,"6h":6.0,"12h":7.5,"1d":9.0})
+
+    price_thresh = {}
+    vol_mult = {}
+    rsi_vel = {}
+    macdh_z = {}
+    roc_pct = {}
+
+    cols = st.columns(5)
+    all_tfs = ["15s","30s","1m","3m","5m","15m","30m","1h","4h","6h","12h","1d"]
+    for tf in all_tfs:
+        with cols[all_tfs.index(tf)%5]:
+            p = st.text_input(f"Δ% {tf}", value=str(def_price.get(tf,"")), key=f"pt_{tf}")
+            v = st.text_input(f"Vol× {tf}", value=str(def_volx.get(tf,"")), key=f"vx_{tf}")
+            rv= st.text_input(f"RSIΔ {tf}", value=str(def_rsiv.get(tf,"")), key=f"rv_{tf}")
+            mz= st.text_input(f"MACDz {tf}", value=str(def_macdz.get(tf,"")), key=f"mz_{tf}")
+            rp= st.text_input(f"ROC% {tf}", value=str(def_rocp.get(tf,"")), key=f"rp_{tf}")
+        try: price_thresh[tf] = float(p) if p.strip()!="" else 9e9
+        except: price_thresh[tf] = 9e9
+        try: vol_mult[tf] = float(v) if v.strip()!="" else 9e9
+        except: vol_mult[tf] = 9e9
+        try: rsi_vel[tf] = float(rv) if rv.strip()!="" else 9e9
+        except: rsi_vel[tf] = 9e9
+        try: macdh_z[tf] = float(mz) if mz.strip()!="" else 9e9
+        except: macdh_z[tf] = 9e9
+        try: roc_pct[tf] = float(rp) if rp.strip()!="" else 9e9
+        except: roc_pct[tf] = 9e9
+
+    st.subheader("Indicators")
     rsi_len = st.number_input("RSI length", 5, 50, 14, 1)
     macd_fast = st.number_input("MACD fast", 3, 50, 12, 1)
     macd_slow = st.number_input("MACD slow", 5, 100, 26, 1)
@@ -379,7 +412,7 @@ with st.sidebar:
     st.subheader("Rows")
     top_n = st.slider("Show top N", 5, 300, 80, 5)
 
-    st.subheader("Timezone (USA)")
+    st.subheader("US Timezone")
     tz_choice = st.selectbox("Display timezone", [
         "America/New_York","America/Chicago","America/Denver","America/Los_Angeles"
     ], index=0)
@@ -389,29 +422,33 @@ with st.sidebar:
     webhook_url = st.text_input("Webhook (optional)", st.secrets.get("webhook_url",""))
     pushover_token = st.text_input("Pushover token (optional)", st.secrets.get("pushover_token",""))
     pushover_user  = st.text_input("Pushover user (optional)", st.secrets.get("pushover_user",""))
-    st.button("Send TEST alert", on_click=lambda: st.session_state.update({"did_test_alert": True}))
+    if st.button("Send TEST alert"):
+        st.session_state["test_requested"] = True
 
-# Build universe
+# Universe
 pairs_all = [p for p in st.session_state.get("products_all", []) if p.endswith(f"-{quote}")]
 if base_choice != "All Bases":
     pairs_all = [p for p in pairs_all if p.split("-")[0] == base_choice]
-
 if not pairs_all:
     st.info("No pairs match filters. Click **Discover products**.")
     st.stop()
 
-# WS start / pump
-diag={"WS":WS_AVAILABLE,"alive":False}
+# WS start/pump
 if mode.startswith("WebSocket") and WS_AVAILABLE:
     if not st.session_state["ws_alive"]:
         pick=pairs_all[:min(250,len(pairs_all))]
         t=threading.Thread(target=ws_worker, args=(pick,), daemon=True)
         t.start(); time.sleep(0.2)
-    diag["alive"]=bool(st.session_state["ws_alive"])
     ws_ingest_pump()
 
-# Config bag for compute_row
+# Config
 cfg = {
+    "apply_gates": bool(apply_gates),
+    "use_price": bool(use_price),
+    "use_vol": bool(use_vol),
+    "use_rsi": bool(use_rsi),
+    "use_macd": bool(use_macd),
+    "use_mom": bool(use_mom),
     "price_thresh": price_thresh,
     "vol_mult": vol_mult,
     "rsi_vel": rsi_vel,
@@ -421,31 +458,16 @@ cfg = {
     "macd": [int(macd_fast), int(macd_slow), int(macd_sig)],
 }
 
-# Build table + spike flags
+# Build
 df = build_table(pairs_all, tf_choice, cfg)
 if df.empty:
-    st.info("Not enough data yet for the chosen timeframe.")
+    st.info("Not enough data for chosen timeframe.")
     st.stop()
 
-# Prepare Top 10 Mover (ALL gates true), sorted by Change%
-spike_df = df[df["all_spikes"]].sort_values("Change%", ascending=False, na_position="last").head(10)
+# Top 10 (all enabled gates must pass)
+spike_df = df[df["all_ok"]].sort_values("Change%", ascending=False, na_position="last").head(10)
 
-# Minimal columns + green tint only for ALL-TRUE rows
-def style_df(d, green_mask):
-    d2 = d[["Pair","Price","Change%","TF"]].copy()
-    def colorize(v, row_ok):
-        try:
-            return "background-color: rgba(16,185,129,0.18)" if row_ok else ""
-        except Exception:
-            return ""
-    styles = pd.DataFrame("", index=d2.index, columns=d2.columns)
-    for idx, ok in green_mask.items():
-        if ok:
-            styles.loc[idx,:] = "background-color: rgba(16,185,129,0.18)"
-    return d2.style.format({"Price":"{:.6f}","Change%":"{:+.2f}%"}).set_table_styles([]).apply(lambda _: styles, axis=None)
-
-# ---- Top-10 table
-st.subheader("Top 10 Mover (ALL spike gates true)")
+st.subheader("Top 10 Mover (ALL enabled gates true)")
 if spike_df.empty:
     st.write("—")
 else:
@@ -454,13 +476,19 @@ else:
         use_container_width=True
     )
 
-# ---- Main table (only green where all_spikes==True)
+# Main table (green only where all_ok==True)
 df_sorted = df.sort_values("Change%", ascending=False, na_position="last").head(top_n)
-styled = style_df(df_sorted, df_sorted["all_spikes"])
+def style_df(d):
+    d2 = d[["Pair","Price","Change%","TF"]].copy()
+    styles = pd.DataFrame("", index=d2.index, columns=d2.columns)
+    for idx, ok in d["all_ok"].items():
+        if ok:
+            styles.loc[idx,:] = "background-color: rgba(16,185,129,0.18)"
+    return d2.style.format({"Price":"{:.6f}","Change%":"{:+.2f}%"}).apply(lambda _: styles, axis=None)
 st.subheader("All pairs ranked")
-st.dataframe(styled, use_container_width=True)
+st.dataframe(style_df(df_sorted), use_container_width=True)
 
-# ---- Alerts: only for NEW all-true spikes appearing in the Top-10 table
+# Alerts: new all_ok in Top-10
 new_lines=[]
 if not spike_df.empty:
     for _, r in spike_df.iterrows():
@@ -469,12 +497,15 @@ if not spike_df.empty:
             new_lines.append(f"{r['Pair']}: {float(r['Change%']):+.2f}% on {tf_choice}")
             st.session_state["last_alert_hashes"].add(key)
 
-# Test alert
-if st.session_state.pop("did_test_alert", False):
+# Test alert: beep + fanout (even if no destinations set)
+if st.session_state.pop("test_requested", False):
+    trigger_beep()
     errs = fanout_alert(["TEST: Coinbase Movers alert ✅"], email_to, webhook_url, pushover_token, pushover_user)
-    st.success("Test alert sent." if not errs else "Test alert issues: " + "; ".join(errs))
+    if errs: st.warning("Test alert issues: " + "; ".join(errs))
+    else: st.success("Test alert sent (and chime played).")
 
 if new_lines and (email_to or webhook_url or (pushover_token and pushover_user)):
+    trigger_beep()
     errs = fanout_alert(new_lines, email_to, webhook_url, pushover_token, pushover_user)
     if errs: st.warning("; ".join(errs))
 
@@ -484,11 +515,9 @@ try:
 except Exception:
     tz=None
 now_local = dt.datetime.now(tz) if tz else dt.datetime.now()
-st.caption(f"Updated: {now_local.strftime('%Y-%m-%d %H:%M:%S %Z')} • Pairs: {len(pairs_all)} • TF: {tf_choice} • WS alive: {diag['alive']}")
+st.caption(f"Updated: {now_local.strftime('%Y-%m-%d %H:%M:%S %Z')} • Pairs: {len(pairs_all)} • TF: {tf_choice} • WS alive: {bool(st.session_state.get('ws_alive'))}")
 
 # Auto-refresh
-auto = bool(auto_refresh)
-if auto:
+if auto_refresh:
     time.sleep(max(1, int(refresh_secs)))
-    st.rerun()
-
+    st.rerun()  # FIX: modern rerun
