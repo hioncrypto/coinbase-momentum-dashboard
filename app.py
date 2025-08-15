@@ -427,7 +427,7 @@ with st.sidebar:
 
     st.subheader("Timeframes & Change Window")
     pick_tfs = st.multiselect("Select timeframes (≥1)", list(TFS.keys()),
-                              default=["1m","5m","15m","1h","6h","1d"])
+                              default=["1m","5m","15m","1h","4h","6h","1d"])
     sort_tf = st.selectbox("Primary timeframe to rank by", pick_tfs, index=0)
     sort_desc = st.checkbox("Sort descending (largest first)", value=True)
     bars_back = st.slider("Bars back (global default)", 1, 20, 1, 1,
