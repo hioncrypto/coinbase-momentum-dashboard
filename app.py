@@ -1,4 +1,11 @@
-# app.py — Coinbase Fast Movers — Pro (4h support, heatmap fallback, test alerts)
+# app.py — Coinbase Fast Movers — Pro (stable build)
+# - 4h timeframe (synthetic via 4×1h resample)
+# - Heatmap with matplotlib OR CSS fallback (guarded)
+# - Safe styled table fallback (no blank/dim screen)
+# - Universe size counters (see if filters exclude everything)
+# - Test Alert button + Email/Webhook/Pushover/Telegram
+# - Top 10 Movers, quiet hours, history log
+# - Auto‑refresh (module or JS)
 
 import os, json, time, threading, queue, ssl, datetime as dt
 from email.mime.text import MIMEText
@@ -133,8 +140,8 @@ def atr(df, length=14):
 # ----- Coinbase REST + helpers
 CB_BASE = "https://api.exchange.coinbase.com"
 
-# Coinbase-native granularities: 60, 300, 900, 3600, 21600, 86400
-# We add synthetic 4h (14400) via 4×1h
+# Native granularities: 60, 300, 900, 3600, 21600, 86400
+# Synthetic 4h (14400) via 4×1h
 TFS = {"1m":60, "5m":300, "15m":900, "1h":3600, "4h":14400, "6h":21600, "1d":86400}
 
 @st.cache_data(show_spinner=False, ttl=300)
@@ -587,7 +594,12 @@ if min_24h_usd > 0:
 if enable_topn and pairs_all:
     pairs_all = top_n_by_24h_volume_usd(pairs_all, n=topn)
 
+# Universe counts (debug visibility)
+counts = {"After quote/base/exclude": len(pairs_all)}
+st.caption("Universe sizes → " + " • ".join([f"{k}: {v}" for k, v in counts.items()]))
+
 if not pairs_all:
+    st.info("No pairs left after filters. Try disabling Top‑N/min volume/excludes.")
     st.stop()
 
 pairs = pairs_all[:max_pairs]
@@ -646,24 +658,28 @@ if sort_col in view.columns:
 else:
     st.warning(f"Sort column {sort_col} missing.")
 
-# ----- Heatmap (optional)
+# ----- Heatmap (guarded)
 if show_heatmap:
-    hm = view[["Pair"] + [f"% {tf}" for tf in pick_tfs if f"% {tf}" in view.columns]].set_index("Pair")
-    st.subheader("Heatmap — % Change by Timeframe")
-    if HAS_MPL:
-        st.dataframe(hm.style.background_gradient(axis=None), use_container_width=True)
-    else:
-        vals = hm.astype(float).values
-        try:
-            vmin = np.nanmin(vals); vmax = np.nanmax(vals)
-        except ValueError:
-            vmin = vmax = 0.0
-        def shade(v):
-            if pd.isna(v) or vmax == vmin: return ""
-            n = (float(v) - vmin) / (vmax - vmin)
-            alpha = 0.15 + 0.35 * max(0.0, min(1.0, n))
-            return f"background-color: rgba(0, 255, 0, {alpha:.2f});"
-        st.dataframe(hm.style.applymap(shade), use_container_width=True)
+    try:
+        hm = view[["Pair"] + [f"% {tf}" for tf in pick_tfs if f"% {tf}" in view.columns]].set_index("Pair")
+        st.subheader("Heatmap — % Change by Timeframe")
+        if HAS_MPL:
+            st.dataframe(hm.style.background_gradient(axis=None), use_container_width=True)
+        else:
+            hm_num = hm.apply(pd.to_numeric, errors="coerce")
+            vals = hm_num.values
+            try:
+                vmin = np.nanmin(vals); vmax = np.nanmax(vals)
+            except ValueError:
+                vmin = vmax = 0.0
+            def shade(v):
+                if pd.isna(v) or vmax == vmin: return ""
+                n = (float(v) - vmin) / (vmax - vmin)
+                alpha = 0.15 + 0.35 * max(0.0, min(1.0, n))
+                return f"background-color: rgba(0, 255, 0, {alpha:.2f});"
+            st.dataframe(hm_num.style.applymap(shade), use_container_width=True)
+    except Exception as e:
+        st.warning(f"Heatmap disabled due to: {e}")
 
 # ----- Spike highlight + Top 10
 spike_mask, styled = highlight_spikes(
@@ -696,8 +712,12 @@ with colR:
         [c for c in view.columns if c.startswith("MACDh ")] + \
         [c for c in view.columns if c.startswith("ATR ")]
     display_cols = [c for c in display_cols if c in view.columns]
-    styled = styled.set_properties(subset=["Chart"], **{"text-align":"center"})
-    st.dataframe(styled, use_container_width=True)
+    try:
+        styled = styled.set_properties(subset=["Chart"], **{"text-align":"center"})
+        st.dataframe(styled, use_container_width=True)
+    except Exception as e:
+        st.warning(f"Styled table failed, showing plain table. Reason: {e}")
+        st.dataframe(view[display_cols], use_container_width=True)
 
 # ----- Utilities
 def within_quiet_hours(now_utc, tzname, start_t: dt.time, end_t: dt.time):
