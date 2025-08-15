@@ -1,238 +1,228 @@
+# app.py — Coinbase Movers (REST-first, Multi-timeframe)
+# Dependencies for requirements.txt: streamlit pandas numpy requests
 
-# app.py — Coinbase Movers (REST-first + optional WebSocket), multi-timeframe % change,
-# RSI / MACD / Volume Z-score, top spikes, alerts, and row highlighting.
-import os
 import time
-import json
 import math
-import threading
-from datetime import datetime, timezone, timedelta
-from typing import Dict, List, Tuple, Optional
+import smtplib
+import hashlib
+import textwrap
+from email.message import EmailMessage
+from datetime import datetime, timedelta, timezone
 
+import requests
 import numpy as np
 import pandas as pd
-import requests
 import streamlit as st
-from pytz import timezone as tz
 
-# ---------- Optional WebSocket import (safe) ----------
-HAS_WS = False
-try:
-    import websocket  # provided by 'websocket-client'
-    HAS_WS = True
-except Exception:
-    HAS_WS = False
-
-# -------------------------- UI / Page setup --------------------------
-st.set_page_config(page_title="Coinbase Movers — Multi‑Timeframe", layout="wide")
-st.markdown(
-    """
-    <style>
-      /* Allow adjustable font size via a CSS var we set below */
-      :root { --table-font-size: 14px; }
-      .stDataFrame, .stTable, .dataframe { font-size: var(--table-font-size) !important; }
-      .top-spikes .stTable { font-size: calc(var(--table-font-size) + 2px) !important; }
-    </style>
-    """,
-    unsafe_allow_html=True,
+# ------------------------------
+# Config & helpers
+# ------------------------------
+st.set_page_config(
+    page_title="Coinbase Movers — Multi‑Timeframe",
+    layout="wide",
 )
 
-# -------------------------- Constants --------------------------
-CBX = "https://api.exchange.coinbase.com"  # Coinbase Exchange (public)
-DEFAULT_HEADERS = {"User-Agent": "movers/1.0 (streamlit)"}
+COINBASE_PRODUCTS_URL = "https://api.exchange.coinbase.com/products"
+COINBASE_CANDLES_URL = "https://api.exchange.coinbase.com/products/{pid}/candles"
 
-SUPPORTED_FRAMES = {
-    # name : (seconds, built_in_granularity, needs_aggregation)
-    "1m":   (60,    60,    False),
-    "5m":   (300,   300,   False),
-    "15m":  (900,   900,   False),
-    "1h":   (3600,  3600,  False),
-    "4h":   (14400, 3600,  True),   # aggregate 1h → 4h
-    "6h":   (21600, 21600, False),
-    "12h":  (43200, 3600,  True),   # aggregate 1h → 12h
-    "1d":   (86400, 86400, False),
+# Supported granularities by Coinbase: 60, 300, 900, 3600, 21600, 86400
+# We'll derive 4h/12h from 1h candles when needed.
+TF_TO_SECONDS = {
+    "1m":   60,
+    "5m":   300,
+    "15m":  900,
+    "1h":   3600,
+    "4h":   3600 * 4,   # derived from 1h
+    "6h":   21600,
+    "12h":  3600 * 12,  # derived from 1h
+    "1d":   86400,
 }
 
-# how many candles we fetch for indicators (EMA/RSI/MACD need some history)
-FRAME_FETCH_BARS = 210
+SUPPORTED_SERVER_GRAN = {60, 300, 900, 3600, 21600, 86400}
 
-# ------------------------------------------------ Utility ----------
-def safe_get(url: str, params: Optional[dict] = None, timeout: int = 15) -> Optional[requests.Response]:
-    try:
-        r = requests.get(url, params=params or {}, headers=DEFAULT_HEADERS, timeout=timeout)
-        if r.status_code == 200:
-            return r
-        return None
-    except Exception:
-        return None
+HEADERS = {
+    "User-Agent": "streamlit-coinbase-movers",
+    "Accept": "application/json",
+}
 
-
-def get_products(quote_ccy: str = "USD", use_watchlist_only: bool = False, watchlist: Optional[List[str]] = None) -> List[str]:
-    """Return list of product_ids (like BTC-USD) that end with selected quote currency."""
-    resp = safe_get(f"{CBX}/products")
-    if not resp:
-        return watchlist or []
-    prods = resp.json()
-    all_pairs = []
-    for p in prods:
-        pid = p.get("id")
-        if pid and pid.endswith(f"-{quote_ccy}"):
-            all_pairs.append(pid)
-    if use_watchlist_only:
-        watchlist = watchlist or []
-        wl = [w.strip().upper() for w in watchlist if w.strip()]
-        return [p for p in all_pairs if p in wl]
-    return all_pairs
-
-
-def get_candles(product_id: str, frame: str, bars: int = FRAME_FETCH_BARS) -> Optional[pd.DataFrame]:
-    """Fetch candles for a product and timeframe; aggregate if needed."""
-    if frame not in SUPPORTED_FRAMES:
-        return None
-    seconds, base_gran, needs_agg = SUPPORTED_FRAMES[frame]
-
-    # If aggregation needed (4h or 12h), fetch at 1h and resample
-    gran = base_gran
-    fetch_gran = gran
-    if needs_agg:
-        fetch_gran = 3600  # fetch hourly; we'll resample to 4h/12h
-
-    # coinbase exchange supports start/end params, but easiest is to fetch sufficient recent bars
-    # We'll just call once; API returns recent candles (latest first).
-    url = f"{CBX}/products/{product_id}/candles"
-    r = safe_get(url, params={"granularity": fetch_gran})
-    if not r:
-        return None
-
+@st.cache_data(ttl=300)
+def fetch_products() -> pd.DataFrame:
+    r = requests.get(COINBASE_PRODUCTS_URL, headers=HEADERS, timeout=20)
+    r.raise_for_status()
     data = r.json()
-    # data rows: [time, low, high, open, close, volume] latest-first
-    if not isinstance(data, list) or len(data) == 0:
-        return None
-    df = pd.DataFrame(data, columns=["ts", "low", "high", "open", "close", "volume"])
-    df["dt"] = pd.to_datetime(df["ts"], unit="s", utc=True)
-    df = df.sort_values("dt").reset_index(drop=True)
-    if needs_agg:
-        # resample to desired seconds (4h or 12h)
-        df = df.set_index("dt")
-        rule = f"{seconds}s"
-        agg = {
-            "open": "first",
-            "high": "max",
-            "low": "min",
-            "close": "last",
-            "volume": "sum",
-            "ts": "last",
-        }
-        df = df.resample(rule, label="right", closed="right").agg(agg).dropna().reset_index()
-    # keep only last N bars for performance
-    if len(df) > bars:
-        df = df.iloc[-bars:].reset_index(drop=True)
+    # Normalize to DataFrame
+    df = pd.DataFrame(data)
+    # Ensure typical fields exist
+    for c in ["id", "display_name", "base_currency", "quote_currency", "status"]:
+        if c not in df.columns:
+            df[c] = np.nan
     return df
 
+@st.cache_data(ttl=120)
+def fetch_candles(pid: str, granularity: int, start: datetime | None = None, end: datetime | None = None) -> pd.DataFrame:
+    """Fetch candles for product id at granularity. Returns oldest..newest (ascending) DataFrame."""
+    params = {"granularity": granularity}
+    # If you pass start/end, Coinbase expects UNIX times in seconds
+    if start and end:
+        params["start"] = int(start.replace(tzinfo=timezone.utc).timestamp())
+        params["end"] = int(end.replace(tzinfo=timezone.utc).timestamp())
 
-# ---------------------- Indicators ----------------------
-def ema(series: pd.Series, span: int) -> pd.Series:
-    return series.ewm(span=span, adjust=False).mean()
+    url = COINBASE_CANDLES_URL.format(pid=pid)
+    r = requests.get(url, headers=HEADERS, params=params, timeout=20)
+    r.raise_for_status()
+    arr = r.json()
 
-def rsi(series: pd.Series, period: int = 14) -> pd.Series:
+    # API returns [ time, low, high, open, close, volume ] newest-first
+    cols = ["time", "low", "high", "open", "close", "volume"]
+    df = pd.DataFrame(arr, columns=cols)
+    if df.empty:
+        return df
+    df["time"] = pd.to_datetime(df["time"], unit="s", utc=True)
+    df = df.sort_values("time").reset_index(drop=True)
+    return df
+
+def derive_from_1h(df_1h: pd.DataFrame, hours: int) -> pd.DataFrame:
+    """Aggregate 1h candles to N-hour OHLCV. E.g., 4h/12h."""
+    if df_1h.empty:
+        return df_1h
+    # Group by blocks of N hours
+    # Align on last timestamp block boundary
+    g = df_1h.copy()
+    # Create block id by integer division of unix hour
+    block = (g["time"].view("int64") // 10**9) // 3600 // hours
+    g["block"] = block
+    agg = (
+        g.groupby("block", as_index=False)
+         .agg(
+            time=("time", "last"),
+            open=("open", "first"),
+            high=("high", "max"),
+            low=("low", "min"),
+            close=("close", "last"),
+            volume=("volume", "sum"),
+        )
+    )
+    return agg.drop(columns=["block"], errors="ignore")
+
+def pct_change_from_series(close_series: pd.Series, periods_back: int) -> float | None:
+    """Return percentage change from last close to N periods back (close)."""
+    if len(close_series) <= periods_back:
+        return None
+    curr = close_series.iloc[-1]
+    prev = close_series.iloc[-1 - periods_back]
+    if prev == 0 or pd.isna(prev) or pd.isna(curr):
+        return None
+    return (curr - prev) / prev * 100.0
+
+def compute_RSI(series: pd.Series, length: int = 14) -> float | None:
+    if len(series) < length + 1:
+        return None
     delta = series.diff()
     up = np.where(delta > 0, delta, 0.0)
     down = np.where(delta < 0, -delta, 0.0)
-    roll_up = pd.Series(up).ewm(alpha=1/period, adjust=False).mean()
-    roll_down = pd.Series(down).ewm(alpha=1/period, adjust=False).mean()
-    rs = roll_up / (roll_down + 1e-12)
-    return 100.0 - (100.0 / (1.0 + rs))
+    roll_up = pd.Series(up).rolling(length).mean()
+    roll_down = pd.Series(down).rolling(length).mean()
+    rs = roll_up.iloc[-1] / (roll_down.iloc[-1] + 1e-12)
+    rsi = 100.0 - (100.0 / (1.0 + rs))
+    return float(rsi)
 
-def macd(series: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> Tuple[pd.Series, pd.Series, pd.Series]:
-    macd_line = ema(series, fast) - ema(series, slow)
-    signal_line = ema(macd_line, signal)
-    hist = macd_line - signal_line
-    return macd_line, signal_line, hist
+def compute_MACD(series: pd.Series, fast=12, slow=26, signal=9) -> float | None:
+    if len(series) < slow + signal + 1:
+        return None
+    ema_fast = series.ewm(span=fast, adjust=False).mean()
+    ema_slow = series.ewm(span=slow, adjust=False).mean()
+    macd = ema_fast - ema_slow
+    sig = macd.ewm(span=signal, adjust=False).mean()
+    hist = macd - sig
+    return float(hist.iloc[-1])
 
-def vol_zscore(volume: pd.Series, window: int = 50) -> pd.Series:
-    m = volume.rolling(window).mean()
-    s = volume.rolling(window).std(ddof=0)
-    z = (volume - m) / (s + 1e-9)
-    return z
+def safe_format_table(view: pd.DataFrame) -> pd.DataFrame:
+    """Elementwise format for percent & numeric — safe for multi-column slices."""
+    df = view.copy()
+    pct_cols = [c for c in df.columns if c.startswith("%_")]
+    # Other numeric columns to format lightly (exclude price for better precision)
+    num_cols = [c for c in df.columns if c not in pct_cols and pd.api.types.is_numeric_dtype(df[c])]
 
-# ---------------------- Alerts (email via SMTP) ----------------------
-def try_send_email(to_addr: str, subject: str, body: str, host: str, port: int, user: str, pwd: str) -> Tuple[bool, str]:
-    """Minimal SMTP send (optional)."""
-    try:
-        import smtplib
-        from email.mime.text import MIMEText
-        msg = MIMEText(body)
-        msg["Subject"] = subject
-        msg["From"] = user
-        msg["To"] = to_addr
-        with smtplib.SMTP(host, port, timeout=10) as s:
-            s.starttls()
-            s.login(user, pwd)
-            s.sendmail(user, [to_addr], msg.as_string())
-        return True, "sent"
-    except Exception as e:
-        return False, f"{type(e).__name__}: {e}"
+    _fmt_pct = lambda v: f"{v:.2f}%" if pd.notna(v) else "–"
+    _fmt_num = lambda v: f"{v:.4f}" if pd.notna(v) else "–"
 
-# ---------------------- Sidebar ----------------------
+    if pct_cols:
+        df[pct_cols] = df[pct_cols].applymap(_fmt_pct)
+    # Lightly format some columns; price we keep 6 decimals for small coins
+    if "last_price" in df.columns:
+        df["last_price"] = df["last_price"].apply(lambda v: f"{v:.6f}" if pd.notna(v) else "–")
+    if num_cols:
+        tmp = [c for c in num_cols if c not in ["last_price"]]
+        if tmp:
+            df[tmp] = df[tmp].applymap(_fmt_num)
+    return df
+
+def send_email_alert(smtp_host, smtp_port, smtp_user, smtp_pass, to_addr, subject, body):
+    msg = EmailMessage()
+    msg["From"] = smtp_user or to_addr
+    msg["To"] = to_addr
+    msg["Subject"] = subject
+    msg.set_content(body)
+
+    with smtplib.SMTP_SSL(smtp_host, int(smtp_port)) as s:
+        if smtp_user and smtp_pass:
+            s.login(smtp_user, smtp_pass)
+        s.send_message(msg)
+
+# ------------------------------
+# Sidebar controls
+# ------------------------------
 st.sidebar.header("Mode")
-data_src = st.sidebar.radio("Data source", ["REST only", "WebSocket + REST (hybrid)"])
-st.sidebar.header("Universe")
-quote = st.sidebar.selectbox("Quote currency", ["USD", "USDC"], index=0)
-use_watch = st.sidebar.checkbox("Use watchlist only (ignore discovery)", value=False)
-watch_raw = st.sidebar.text_area("Watchlist (comma-separated)", value="BTC-USD, ETH-USD, SOL-USD")
-watchlist = [w.strip().upper() for w in watch_raw.split(",") if w.strip()]
+mode = st.sidebar.radio("Data source", ["REST only", "WebSocket + REST (hybrid)"], index=0)
+st.sidebar.caption("WebSocket is optional — this app uses REST for reliability. Hybrid toggle is for future use.")
 
-max_pairs = st.sidebar.slider("Max pairs to include", 10, 1000, 200, step=10)
+st.sidebar.header("Universe")
+quote = st.sidebar.selectbox("Quote currency", ["USD", "USDC", "USDT"], index=0)
+use_watchlist_only = st.sidebar.checkbox("Use watchlist only (ignore discovery)", value=True)
+watchlist = st.sidebar.text_area("Watchlist (comma‑separated)", value="BTC-USD, ETH-USD, SOL-USD")
+max_pairs = st.sidebar.slider("Max pairs to include", 5, 500, 200, step=5)
 
 st.sidebar.header("Timeframes (for % change)")
-# pick at least one
-chosen_frames = st.sidebar.multiselect(
-    "Select timeframes (pick ≥1)",
-    list(SUPPORTED_FRAMES.keys()),
-    default=["1m", "5m", "15m", "1h", "4h", "6h", "12h", "1d"]
-)
-if not chosen_frames:
-    st.sidebar.warning("Select at least one timeframe.")
-    st.stop()
+tf_choices = ["1m", "5m", "15m", "1h", "4h", "6h", "12h", "1d"]
+selected_tfs = st.sidebar.multiselect("Select timeframes (pick ≥1)", tf_choices, default=["1m", "5m", "15m", "1h"])
 
 st.sidebar.header("Ranking / sort")
-rank_by = st.sidebar.selectbox("Rank by", options=["% 1m", "% 5m", "% 15m", "% 1h", "% 4h", "% 6h", "% 12h", "% 1d", "% ALL max_abs", "% ALL avg"], index=0)
+sort_tf = st.sidebar.selectbox("Rank by timeframe", options=selected_tfs if selected_tfs else tf_choices, index=0)
 sort_desc = st.sidebar.checkbox("Sort descending (largest first)", value=True)
 
 st.sidebar.header("WebSocket")
-chunk = st.sidebar.slider("Subscribe chunk size", 2, 200, 10)
-safe_cfg = st.sidebar.checkbox("Safe tiny config (lower load)", value=False)
-restart_btn = st.sidebar.button("🔁 Restart stream")
+sub_chunk = st.sidebar.slider("Subscribe chunk size", 2, 200, 10)
+st.sidebar.caption("For REST mode this is unused, but kept for consistency.")
 
 st.sidebar.header("Display")
-tz_name = st.sidebar.selectbox("Time zone", ["UTC", "US/Eastern", "US/Pacific", "Europe/London", "Asia/Tokyo"], index=0)
-top_n_rows = st.sidebar.slider("Show top rows", 10, 5000, 1000, step=10)
-filter_text = st.sidebar.text_input("Filter (e.g., 'BTC' or '-USD')", value="")
-font_size = st.sidebar.slider("Table font size (px)", 10, 22, 14)
+tz_opt = st.sidebar.selectbox("Time zone", ["UTC"], index=0)
+top_rows = st.sidebar.slider("Show top rows", 10, 5000, 1000, step=10)
+filter_text = st.sidebar.text_input("Filter (e.g., 'BTC' or '-USD')", "")
 
 st.sidebar.header("Spikes & Alerts")
-spike_thresh = st.sidebar.slider("Highlight rows with max |% change| ≥", 0.0, 30.0, 5.0, step=0.5)
-show_top_spikes = st.sidebar.checkbox("Show Top Spike List", value=True)
-top_spike_size = st.sidebar.slider("Top Spike List size", 3, 50, 10)
+spike_pct = st.sidebar.slider("Spike threshold (abs %)", 0.5, 20.0, 3.0, step=0.5)
+vol_spike_ratio = st.sidebar.slider("Volume spike ratio (vs avg)", 1.0, 10.0, 2.0, step=0.1)
+font_px = st.sidebar.slider("Table font size (px)", 10, 24, 14)
+st.sidebar.divider()
+enable_email = st.sidebar.checkbox("Enable email alerts", value=False)
+to_email = st.sidebar.text_input("Alert to (email)", "", placeholder="you@example.com", disabled=not enable_email)
+smtp_host = st.sidebar.text_input("SMTP host", "smtp.gmail.com", disabled=not enable_email)
+smtp_port = st.sidebar.text_input("SMTP port", "465", disabled=not enable_email)
+smtp_user = st.sidebar.text_input("SMTP user", "", disabled=not enable_email)
+smtp_pass = st.sidebar.text_input("SMTP password (app password)", "", type="password", disabled=not enable_email)
 
-notify_method = st.sidebar.selectbox("Notification method", ["None", "Email (SMTP)"], index=0)
-email_to = email_host = email_user = email_pwd = ""
-email_port = 587
-if notify_method == "Email (SMTP)":
-    st.sidebar.caption("Tip: put credentials in st.secrets for safety.")
-    email_to = st.sidebar.text_input("To address", value=st.secrets.get("EMAIL_TO", ""))
-    email_host = st.sidebar.text_input("SMTP host", value=st.secrets.get("SMTP_HOST", ""))
-    email_port = st.sidebar.number_input("SMTP port", min_value=1, max_value=65535, value=int(st.secrets.get("SMTP_PORT", 587)))
-    email_user = st.sidebar.text_input("SMTP user", value=st.secrets.get("SMTP_USER", ""))
-    email_pwd = st.sidebar.text_input("SMTP password", value=st.secrets.get("SMTP_PASSWORD", ""), type="password")
-    if st.sidebar.button("Send test email"):
-        ok, info = try_send_email(email_to, "Coinbase Movers test", "Hello from Streamlit!", email_host, int(email_port), email_user, email_pwd)
-        st.sidebar.success(f"Email: {info}") if ok else st.sidebar.error(f"Email failed: {info}")
+col_btn1, col_btn2 = st.sidebar.columns(2)
+with col_btn1:
+    test_email = st.button("Test email", disabled=not enable_email)
+with col_btn2:
+    auto_refresh_sec = st.number_input("Auto refresh (sec)", min_value=0, max_value=3600, value=0, step=5)
 
-# set table font via CSS var
-st.markdown(f"<style>:root {{ --table-font-size: {font_size}px; }}</style>", unsafe_allow_html=True)
+# ------------------------------
+# Title & diagnostics
+# ------------------------------
+st.title("Coinbase Movers — Multi‑Timeframe")
+st.caption("REST‑first scanning of % change across timeframes + RSI / MACD / Volume spike. Top spikes highlighted. Exchange feed only (no auth).")
 
-# ---------------------- Diagnostics box ----------------------
 diag = {
     "WS_OK": False,
     "thread_alive": False,
@@ -240,261 +230,276 @@ diag = {
     "active_ws_url": "",
     "last_subscribe": "",
     "queue_size": 0,
-    "state.connected": False,
-    "state.last_msg_ts": 0,
-    "state.err": "",
+    "state_connected": False,
+    "state_last_msg_ts": 0,
+    "state_err": "",
     "products_first3": [],
+    "history_seconds": int(sum(TF_TO_SECONDS[tf] for tf in selected_tfs)) if selected_tfs else 0,
+    "debug_tail": [],
 }
-dbg_tail: List[str] = []
 
-def dbg(msg: str):
-    if len(dbg_tail) > 200:
-        dbg_tail.pop(0)
-    dbg_tail.append(f"{datetime.utcnow().strftime('%H:%M:%S')} {msg}")
-
-# ---------------------- WebSocket (optional) ----------------------
-class WSState:
-    def __init__(self):
-        self.connected = False
-        self.last_ts = 0
-        self.err = ""
-        self.thread: Optional[threading.Thread] = None
-        self.stop_flag = threading.Event()
-
-ws_state = WSState()
-
-def ws_worker(products: List[str], channel: str = "ticker", endpoint_mode: str = "auto"):
-    """Minimal streaming of tickers — diagnostics only; REST remains primary for table."""
-    if not HAS_WS:
-        diag["state.err"] = "websocket-client not installed. Add 'websocket-client' to requirements.txt"
-        dbg("websocket-client not installed.")
-        return
-
-    # Exchange-only feed (public)
-    url = "wss://ws-feed.exchange.coinbase.com"
-    diag["active_ws_url"] = url
-    dbg(f"connect -> {url}")
-
-    try:
-        ws = websocket.WebSocket()
-        ws.settimeout(10)
-        ws.connect(url)
-        ws_state.connected = True
-        diag["state.connected"] = True
-        dbg("ws connected")
-
-        # subscribe in small chunks
-        subs = []
-        chunked = [products[i:i+chunk] for i in range(0, len(products), chunk)]
-        for grp in chunked:
-            sub = {"type": "subscribe", "channels": [{"name": channel, "product_ids": grp}]}
-            ws.send(json.dumps(sub))
-            subs.append(grp)
-            diag["last_subscribe"] = f"{len(grp)} ids"
-            time.sleep(0.15)
-
-        while not ws_state.stop_flag.is_set():
-            try:
-                msg = ws.recv()
-                if not msg:
-                    continue
-                diag["state.last_msg_ts"] = int(time.time())
-            except Exception:
-                # we keep diagnostics only; REST does the heavy lifting
-                time.sleep(0.2)
-                continue
-    except Exception as e:
-        ws_state.err = f"{type(e).__name__}: {e}"
-        diag["state.err"] = ws_state.err
-        ws_state.connected = False
-        diag["state.connected"] = False
-        dbg(f"ws error: {ws_state.err}")
-    finally:
-        try:
-            ws.close()
-        except Exception:
-            pass
-
-# --------------- Data assembly (REST) ----------------
-def percent_change(series: pd.Series, lookback_bars: int = 1) -> float:
-    if len(series) <= lookback_bars or series.iloc[-lookback_bars] == 0:
-        return np.nan
-    return (series.iloc[-1] / series.iloc[-lookback_bars] - 1.0) * 100.0
-
-def compute_row(product_id: str, frames: List[str]) -> Optional[Dict]:
-    """Fetch & compute metrics for one product."""
-    row: Dict[str, float] = {"Pair": product_id}
-    base_for_ind = frames[0]  # use the first chosen timeframe for indicators
-    dfind = get_candles(product_id, base_for_ind)
-    if dfind is None or dfind.empty or len(dfind) < 35:
-        return None
-
-    # indicators from the base frame
-    close = dfind["close"].astype(float)
-    volume = dfind["volume"].astype(float)
-    rsi_series = rsi(close, 14)
-    macd_line, macd_signal, macd_hist = macd(close, 12, 26, 9)
-    volz = vol_zscore(volume, 50)
-
-    row["Last price"] = float(close.iloc[-1])
-    row["RSI"] = float(rsi_series.iloc[-1])
-    row["MACD"] = float(macd_line.iloc[-1])
-    row["MACD_Signal"] = float(macd_signal.iloc[-1])
-    row["MACD_Hist"] = float(macd_hist.iloc[-1])
-    row["VolZ"] = float(volz.iloc[-1])
-
-    # Percent change columns (one-bar change in each timeframe)
-    all_pc = []
-    for fr in frames:
-        df_fr = dfind if fr == base_for_ind else get_candles(product_id, fr)
-        if df_fr is None or len(df_fr) < 2:
-            pc = np.nan
-        else:
-            pc = percent_change(df_fr["close"].astype(float), 1)
-        col = f"% {fr}"
-        row[col] = float(pc) if not pd.isna(pc) else np.nan
-        all_pc.append(row[col])
-
-    # aggregate helpers
-    good = [abs(v) for v in all_pc if not pd.isna(v)]
-    row["% ALL max_abs"] = max(good) if good else np.nan
-    row["% ALL avg"] = float(np.mean(good)) if good else np.nan
-    return row
-
-
-def gather_table(products: List[str], frames: List[str], max_rows: int) -> pd.DataFrame:
-    rows: List[Dict] = []
-    for pid in products[:max_rows]:
-        r = compute_row(pid, frames)
-        if r is not None:
-            rows.append(r)
-    if not rows:
-        return pd.DataFrame()
-    df = pd.DataFrame(rows)
-    # enforce numeric
-    num_cols = [c for c in df.columns if c not in ["Pair"]]
-    df[num_cols] = df[num_cols].apply(pd.to_numeric, errors="coerce")
-    return df
-
-
-# ---------------------- Main UI ----------------------
-st.title("Coinbase Movers — Multi‑Timeframe")
-st.caption("REST-first (hybrid WS optional). Percent change across timeframes + RSI / MACD / VolZ. Top spikes highlighted.")
-
-# Start WebSocket diagnostics thread only if requested
-if data_src.startswith("WebSocket") and HAS_WS:
-    products_full = get_products(quote, use_watch, watchlist)
-    if not products_full:
-        st.error("No products discovered.")
-        st.stop()
-    if ws_state.thread and ws_state.thread.is_alive():
-        if restart_btn:
-            ws_state.stop_flag.set()
-            time.sleep(0.5)
-            ws_state = WSState()
-    if not (ws_state.thread and ws_state.thread.is_alive()):
-        ws_state.stop_flag.clear()
-        ws_state.thread = threading.Thread(
-            target=ws_worker, args=(products_full[:min(len(products_full), 5*chunk)], "ticker", "exchange only"), daemon=True
-        )
-        ws_state.thread.start()
-        dbg("starting ws thread")
-else:
-    if data_src.startswith("WebSocket") and not HAS_WS:
-        diag["state.err"] = "websocket-client not installed. Add 'websocket-client' to requirements.txt"
-        dbg("websocket-client not installed.")
-
-# Diagnostics
-diag["WS_OK"] = HAS_WS
-diag["thread_alive"] = bool(ws_state.thread and ws_state.thread.is_alive())
-diag["products_first3"] = (watchlist or [])[:3]
-diag["history_seconds"] = sum(SUPPORTED_FRAMES[f][0] for f in chosen_frames)
-diag["debug_tail"] = dbg_tail[-5:]
-
-with st.expander("Diagnostics"):
+with st.expander("Diagnostics", expanded=False):
     st.json(diag)
 
-# Build universe
-universe = get_products(quote, use_watch, watchlist)
-if not universe:
-    st.warning("No products found for your settings.")
+if auto_refresh_sec > 0:
+    st.experimental_singleton.clear()  # no-op on new Streamlit versions, safe
+    st.experimental_rerun  # to hint IDE; real refresh below
+    st.experimental_set_query_params(_=int(time.time()))
+    st.autorefresh(interval=auto_refresh_sec * 1000, key="auto_refresh_key")
+
+# ------------------------------
+# Load universe
+# ------------------------------
+df_products = fetch_products()
+
+if use_watchlist_only:
+    wl = [w.strip() for w in watchlist.split(",") if w.strip()]
+    products = [p for p in wl if p.endswith(f"-{quote}")]
+else:
+    products = (
+        df_products.loc[df_products["quote_currency"] == quote, "id"]
+                   .dropna().tolist()
+    )
+
+# De-dup + limit
+seen = set()
+uniq = []
+for p in products:
+    if p not in seen:
+        uniq.append(p)
+        seen.add(p)
+products = uniq[:max_pairs]
+
+# Useful preview in diagnostics
+diag_preview = products[:3]
+with st.expander("Universe preview", expanded=False):
+    st.write(f"{len(products)} products (first 10):", products[:10])
+
+if test_email and enable_email and to_email:
+    try:
+        send_email_alert(
+            smtp_host, smtp_port, smtp_user, smtp_pass, to_email,
+            "Coinbase Movers — Test alert",
+            "This is a test email from your Streamlit dashboard.",
+        )
+        st.success("Test email sent.")
+    except Exception as e:
+        st.error(f"Email failed: {e}")
+
+# ------------------------------
+# Scan function (REST)
+# ------------------------------
+@st.cache_data(ttl=30, show_spinner=False)
+def scan_once(product_ids: list[str], tfs: list[str]) -> pd.DataFrame:
+    rows = []
+    now = datetime.now(timezone.utc)
+    need_1h_for = []
+    for tf in tfs:
+        sec = TF_TO_SECONDS[tf]
+        if sec not in SUPPORTED_SERVER_GRAN and tf in {"4h", "12h"}:
+            need_1h_for.append(tf)
+
+    for pid in product_ids:
+        tf_to_close = {}
+        tf_to_vol = {}
+
+        # Fetch individual granularities we can request directly
+        fetched = {}
+        for tf in tfs:
+            sec = TF_TO_SECONDS[tf]
+            if sec in SUPPORTED_SERVER_GRAN:
+                # Fetch enough candles to compute a change (we need last 2)
+                gran = sec
+                # Pull ~200 candles for robust RSI/MACD on fastest tf hit among selected
+                limit_look = 200
+                start = now - timedelta(seconds=limit_look * gran + gran * 5)
+                df = fetch_candles(pid, gran, start=start, end=now)
+                fetched[tf] = df
+
+        # If we need 1h base for 4h/12h, fetch 1h once and derive
+        if need_1h_for:
+            start_1h = now - timedelta(hours=200 + 5)
+            df1h = fetch_candles(pid, 3600, start=start_1h, end=now)
+            for tf in need_1h_for:
+                h = 4 if tf == "4h" else 12
+                agg = derive_from_1h(df1h, hours=h)
+                fetched[tf] = agg
+
+        # Compute last price (prefer 1m, else any tf fetched)
+        last_price = None
+        for pref in ["1m", "5m", "15m", "1h", "4h", "6h", "12h", "1d"]:
+            if pref in fetched and not fetched[pref].empty:
+                last_price = float(fetched[pref]["close"].iloc[-1])
+                break
+
+        # If nothing fetched, skip
+        if last_price is None:
+            continue
+
+        # Percent changes
+        pct_cols = {}
+        for tf in tfs:
+            df = fetched.get(tf, pd.DataFrame())
+            if df.empty:
+                pct_cols[f"%_{tf}"] = None
+                tf_to_close[tf] = None
+                tf_to_vol[tf] = None
+                continue
+            closes = df["close"]
+            vols = df["volume"]
+            # One period back at this granularity means 1 candle
+            pct = pct_change_from_series(closes, 1)
+            pct_cols[f"%_{tf}"] = pct
+            tf_to_close[tf] = float(closes.iloc[-1])
+            tf_to_vol[tf] = float(vols.iloc[-1])
+
+        # RSI & MACD on the fastest selected tf that we have
+        rsi_val = None
+        macd_hist = None
+        for tf in ["1m", "5m", "15m", "1h"]:
+            if tf in tfs and not fetched.get(tf, pd.DataFrame()).empty:
+                closes = fetched[tf]["close"]
+                rsi_val = compute_RSI(closes, length=14)
+                macd_hist = compute_MACD(closes, 12, 26, 9)
+                break
+
+        # Volume spike — compare last vol to rolling avg on the fastest tf
+        vol_ratio = None
+        for tf in ["1m", "5m", "15m", "1h"]:
+            df = fetched.get(tf, pd.DataFrame())
+            if not df.empty and len(df) >= 30:
+                last_vol = df["volume"].iloc[-1]
+                avg_vol = df["volume"].rolling(30).mean().iloc[-1]
+                if avg_vol and not pd.isna(avg_vol) and avg_vol > 0:
+                    vol_ratio = float(last_vol / avg_vol)
+                break
+
+        rows.append(
+            {
+                "pair": pid,
+                "last_price": last_price,
+                "RSI14": rsi_val,
+                "MACD_hist": macd_hist,
+                "Vol_ratio": vol_ratio,
+                **pct_cols,
+            }
+        )
+
+    df = pd.DataFrame(rows)
+    # Sort columns nicely
+    pct_order = [f"%_{tf}" for tf in tfs]
+    other_cols = ["pair", "last_price", "RSI14", "MACD_hist", "Vol_ratio"]
+    final_cols = other_cols + pct_order
+    df = df.reindex(columns=[c for c in final_cols if c in df.columns])
+    return df
+
+# ------------------------------
+# Run scan
+# ------------------------------
+if not selected_tfs:
+    st.warning("Pick at least one timeframe.")
     st.stop()
 
-# REST table build
-st.info("Streaming thread started." if data_src.startswith("WebSocket") else "REST mode")
-pairs = universe[:max_pairs]
+run_btn = st.button("Run scan / refresh", type="primary")
+if run_btn:
+    st.session_state["_force_run"] = True
 
-df = gather_table(pairs, chosen_frames, max_pairs)
-if df.empty:
-    st.warning("Waiting for data… Try a small watchlist and chunk≃3–10.")
+if st.session_state.get("_force_run") or auto_refresh_sec > 0:
+    with st.spinner("Scanning…"):
+        base_df = scan_once(products, selected_tfs)
+else:
+    base_df = pd.DataFrame()
+
+if base_df.empty:
+    st.info("Waiting for data… Try a small watchlist and 1–2 timeframes.")
     st.stop()
 
-# Ranking & sorting
-if rank_by not in df.columns and rank_by.startswith("% "):
-    st.warning(f"{rank_by} not present; using % ALL max_abs")
-    rank_by = "% ALL max_abs"
-
-df = df.sort_values(by=rank_by if rank_by in df.columns else "% ALL max_abs", ascending=not sort_desc, na_position="last")
+# Optional filter
 if filter_text.strip():
-    ft = filter_text.strip().upper()
-    if ft.startswith("-"):
-        df = df[~df["Pair"].str.contains(ft[1:], case=False, na=False)]
-    else:
-        df = df[df["Pair"].str.contains(ft, case=False, na=False)]
+    mask = base_df["pair"].str.contains(filter_text.strip(), case=False, na=False)
+    base_df = base_df.loc[mask].copy()
 
-# Top spike list (safe Arrow types + st.table)
-if show_top_spikes:
-    spike_df = df.copy()
-    by_col = rank_by if rank_by in spike_df.columns else "% ALL max_abs"
-    spike_df = spike_df.sort_values(by=by_col, ascending=False, na_position="last").head(top_spike_size)
-    cols_to_show = ["Pair", "Last price", "VolZ", "RSI", "MACD_Hist", "% ALL max_abs", "% ALL avg"] + [c for c in df.columns if c.startswith("% ")]
-    cols_to_show = [c for c in cols_to_show if c in spike_df.columns]
+# Build spike mask (any selected timeframe hitting threshold, or vol spike)
+pct_cols = [c for c in base_df.columns if c.startswith("%_")]
+def is_spike_row(row) -> bool:
+    spike = False
+    for c in pct_cols:
+        v = row.get(c, None)
+        if v is not None and not pd.isna(v) and abs(v) >= spike_pct:
+            spike = True
+            break
+    if not spike and row.get("Vol_ratio") is not None and not pd.isna(row["Vol_ratio"]):
+        if row["Vol_ratio"] >= vol_spike_ratio:
+            spike = True
+    return spike
 
-    view = spike_df[cols_to_show].copy()
-    for c in view.columns:
-        if c.startswith("% ") or c in ["% ALL max_abs", "% ALL avg"]:
-            view[c] = view[c].apply(lambda v: f"{v:.2f}%" if pd.notna(v) else "—")
-        elif c in ["Last price", "VolZ", "RSI", "MACD", "MACD_Signal", "MACD_Hist"]:
-            view[c] = view[c].apply(lambda v: f"{v:.6g}" if pd.notna(v) else "—")
-        else:
-            view[c] = view[c].astype(str)
+base_df["_is_spike"] = base_df.apply(is_spike_row, axis=1)
 
-    st.subheader("🔥 Top Spikes")
-    with st.container():
-        st.markdown('<div class="top-spikes">', unsafe_allow_html=True)
-        st.table(view)
-        st.markdown('</div>', unsafe_allow_html=True)
+# Top strip (up to 6)
+top_view = base_df.sort_values(by=f"%_{sort_tf}", ascending=not sort_desc, na_position="last")
+top_n = top_view.loc[top_view["_is_spike"]].head(6)
 
-# Row highlighting for spikes
-def row_style(r: pd.Series) -> List[str]:
-    v = r.get("% ALL max_abs", np.nan)
-    if pd.notna(v) and abs(v) >= spike_thresh:
-        # green highlight for spikes
-        return ["background-color: #0b5; color: white;"] * len(r)
-    return [""] * len(r)
+st.subheader("Top Spikes")
+if top_n.empty:
+    st.caption("No rows exceeded the spike thresholds yet.")
+else:
+    mcols = st.columns(min(6, len(top_n)))
+    for i, (_, r) in enumerate(top_n.iterrows()):
+        txt = f"{r['pair']}"
+        sub = f"Last: {r['last_price']:.6f}"
+        sub2 = ", ".join(
+            f"{c[2:]}: {r[c]:+.2f}%"
+            for c in pct_cols if isinstance(r[c], (int, float, np.floating))
+        )
+        mcols[i].metric(txt, sub, sub2)
 
-# Final table
-display_cols = ["Pair", "Last price", "VolZ", "RSI", "MACD_Hist", "% ALL max_abs", "% ALL avg"] + [c for c in df.columns if c.startswith("% ")]
-display_cols = [c for c in display_cols if c in df.columns]
-styled = df[display_cols].head(top_n_rows).style.apply(row_style, axis=1).format(
-    {c: "{:.2f}%" for c in display_cols if c.startswith("% ") or c in ["% ALL max_abs", "% ALL avg"]} |
-    {"Last price": "{:.6g}", "VolZ": "{:.2f}", "RSI": "{:.1f}", "MACD_Hist": "{:.4f}"}
+# Sort table
+sort_col = f"%_{sort_tf}"
+if sort_col not in base_df.columns:
+    sort_col = pct_cols[0] if pct_cols else "last_price"
+
+table_df = base_df.sort_values(by=sort_col, ascending=not sort_desc, na_position="last").reset_index(drop=True)
+table_df = table_df.head(top_rows)
+
+# Email alerts (send for new spikes only)
+if enable_email and to_email:
+    spikes_only = table_df.loc[table_df["_is_spike"]].copy()
+    if not spikes_only.empty:
+        # Build a stable hash of pair+timeframe values to dedupe sends
+        payload = spikes_only[["pair"] + pct_cols].fillna(0).to_string(index=False)
+        digest = hashlib.sha256(payload.encode()).hexdigest()
+        last_digest = st.session_state.get("last_alert_hash")
+        if digest != last_digest:
+            try:
+                body = "Top spike rows:\n\n" + spikes_only.to_string(index=False)
+                send_email_alert(
+                    smtp_host, smtp_port, smtp_user, smtp_pass, to_email,
+                    "Coinbase Movers — Spike Alert", body
+                )
+                st.success("Alert email sent.")
+                st.session_state["last_alert_hash"] = digest
+            except Exception as e:
+                st.error(f"Email failed: {e}")
+
+# Format table for display (safe elementwise)
+display_df = table_df.drop(columns=["_is_spike"]).copy()
+fmt_df = safe_format_table(display_df)
+
+# Row highlight style
+def highlight_spikes(row):
+    if "_is_spike" in table_df.columns:
+        idx = row.name
+        if bool(table_df.loc[idx, "_is_spike"]):
+            return ["background-color: rgba(0, 200, 100, 0.15)"] * len(row)
+    return [""] * len(row)
+
+st.subheader("All pairs ranked by movement")
+st.caption("Green rows meet the spike thresholds. Use the sidebar to adjust thresholds, sorting, and columns.")
+
+# Apply style & show
+styled = fmt_df.style.apply(highlight_spikes, axis=1)
+st.write(
+    f"<style>div[data-testid='stDataFrame'] table{{font-size:{font_px}px;}}</style>",
+    unsafe_allow_html=True,
 )
 st.dataframe(styled, use_container_width=True)
-
-# Optional: send email alerts for current run (rows exceeding spike threshold)
-if notify_method == "Email (SMTP)" and email_to and email_host and email_user and email_pwd:
-    alerts = df[df["% ALL max_abs"].abs() >= spike_thresh].copy()
-    if not alerts.empty:
-        sample = alerts.sort_values(by="% ALL max_abs", ascending=False).head(10)
-        lines = [f"{r.Pair}: {r['% ALL max_abs']:.2f}% (last={r['Last price']:.6g})" for _, r in sample.iterrows()]
-        ok, info = try_send_email(
-            email_to,
-            "Coinbase Movers – spike alert",
-            "Top spikes:\n" + "\n".join(lines),
-            email_host, int(email_port), email_user, email_pwd
-        )
-        st.success("Alert email sent.") if ok else st.warning(f"Email not sent: {info}")
-
-# Footer / note
-st.caption("Note: For stability the table uses REST. WebSocket mode is diagnostics‑only unless you install 'websocket-client'.")
