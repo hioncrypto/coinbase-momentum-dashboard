@@ -490,4 +490,5 @@ st.caption(f"Updated: {now_local.strftime('%Y-%m-%d %H:%M:%S %Z')} • Pairs: {l
 auto = bool(auto_refresh)
 if auto:
     time.sleep(max(1, int(refresh_secs)))
-    st.experimental_rerun()
+    st.rerun()
+
