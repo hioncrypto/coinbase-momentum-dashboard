@@ -1,6 +1,2 @@
-streamlit
-pandas
-numpy
-requests
-websocket-client
+streamlit run app.py
 
