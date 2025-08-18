@@ -1,10 +1,9 @@
-# app.py — Movers (Signed % change, rally gates) + Pinned Top-10 + Trend Breaks + Recent-High + ATH/ATL
-# Key points:
-# - Sort by true signed % change (descending) so biggest gainers sit on top; losers sink.
-# - Gates still catch only rallies: price % >= threshold (not abs), and Volume× (if required).
-# - % column shows the timeframe explicitly: "% change (1h)".
-# - Rows that pass gates turn green (in main table and Top-10).
-# - Trend breaks via adjustable pivot span; recent-high metrics; ATH/ATL; alerts; hourly/daily/weekly history.
+# app.py — Movers (Signed % change) + Volume & Indicator Gates (RSI / MACD / ATR) + Trend Breaks
+# Row color: green = all enabled gates pass; yellow = partial pass; none = default.
+# Top-10 panel shows only rows that pass ALL enabled gates. Sorting by signed % change (desc).
+# % column header displays timeframe (e.g., "% change (1h)").
+# History depth caps: Hours ≤ 72, Days ≤ 365, Weeks ≤ 52.
+# Alerts fire on NEW trend breaks and NEW Top-10 entries. "Test Alerts" button included.
 #
 # SMTP example (.streamlit/secrets.toml):
 # [smtp]
@@ -27,7 +26,7 @@ import streamlit as st
 # ---------------- WebSocket (Coinbase optional) ----------------
 WS_AVAILABLE = True
 try:
-    import websocket
+    import websocket  # pip install websocket-client
 except Exception:
     WS_AVAILABLE = False
 
@@ -93,10 +92,38 @@ def audible_bridge():
 def trigger_beep():
     st.markdown("<script>localStorage.setItem('mustBeep','1');</script>", unsafe_allow_html=True)
 
-# ---------------- Helpers ----------------
+# ---------------- Indicators ----------------
 def ema(s: pd.Series, span: int) -> pd.Series:
     return s.ewm(span=span, adjust=False).mean()
 
+def rsi(series: pd.Series, length: int = 14) -> pd.Series:
+    delta = series.diff()
+    up = delta.clip(lower=0)
+    down = (-delta).clip(lower=0)
+    roll_up = up.ewm(alpha=1/length, adjust=False).mean()
+    roll_down = down.ewm(alpha=1/length, adjust=False).mean()
+    rs = roll_up / (roll_down + 1e-12)
+    return 100 - (100 / (1 + rs))
+
+def macd(series: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> Tuple[pd.Series, pd.Series, pd.Series]:
+    macd_line = ema(series, fast) - ema(series, slow)
+    signal_line = ema(macd_line, signal)
+    hist = macd_line - signal_line
+    return macd_line, signal_line, hist
+
+def atr(df: pd.DataFrame, length: int = 14) -> pd.Series:
+    high, low, close = df["high"], df["low"], df["close"]
+    prev_close = close.shift(1)
+    tr = pd.concat([
+        (high - low),
+        (high - prev_close).abs(),
+        (low - prev_close).abs()
+    ], axis=1).max(axis=1)
+    # Wilder ATR via RMA
+    atr = tr.ewm(alpha=1/length, adjust=False).mean()
+    return atr
+
+# ---------------- Exchanges / Timeframes ----------------
 CB_BASE = "https://api.exchange.coinbase.com"
 BN_BASE = "https://api.binance.com"
 
@@ -138,6 +165,7 @@ def list_products(exchange: str, quote: str) -> List[str]:
     if exchange=="Binance":  return binance_list_products(quote)
     return []
 
+# ---------------- Candles & Resampling ----------------
 def fetch_candles(exchange: str, pair_dash: str, granularity_sec: int,
                   start: Optional[dt.datetime]=None, end: Optional[dt.datetime]=None) -> Optional[pd.DataFrame]:
     if exchange=="Coinbase":
@@ -148,7 +176,7 @@ def fetch_candles(exchange: str, pair_dash: str, granularity_sec: int,
         try:
             r=requests.get(url, params=params, timeout=20)
             if r.status_code!=200: return None
-            arr=r.json(); 
+            arr=r.json()
             if not arr: return None
             df=pd.DataFrame(arr, columns=["ts","low","high","open","close","volume"])
             df["ts"]=pd.to_datetime(df["ts"], unit="s", utc=True)
@@ -172,8 +200,12 @@ def fetch_candles(exchange: str, pair_dash: str, granularity_sec: int,
                 rows.append({"ts":pd.to_datetime(a[0],unit="ms",utc=True),
                              "open":float(a[1]),"high":float(a[2]),
                              "low":float(a[3]),"close":float(a[4]),
-                             "volume":float(a[5])})
-            return pd.DataFrame(rows).sort_values("ts").reset_index(drop=True)
+                             "volume":float(a[5]),
+                             "quote_volume": float(a[7]) if len(a)>7 else None})
+            df = pd.DataFrame(rows).sort_values("ts").reset_index(drop=True)
+            if "quote_volume" not in df:
+                df["quote_volume"] = np.nan
+            return df
         except Exception:
             return None
     return None
@@ -182,6 +214,8 @@ def resample_ohlcv(df: pd.DataFrame, target_sec: int) -> Optional[pd.DataFrame]:
     if df is None or df.empty: return None
     d=df.set_index(pd.DatetimeIndex(df["ts"]))
     agg={"open":"first","high":"max","low":"min","close":"last","volume":"sum"}
+    if "quote_volume" in df.columns:
+        agg["quote_volume"] = "sum"
     out=d.resample(f"{target_sec}s", label="right", closed="right").agg(agg).dropna()
     return out.reset_index().rename(columns={"index":"ts"})
 
@@ -202,15 +236,18 @@ def get_df_for_tf(exchange: str, pair: str, tf: str,
         return resample_ohlcv(d1, 7*86400) if d1 is not None else None
     return None
 
-# ---------------- History (Hourly/Daily/Weekly) ----------------
+# ---------------- History (capped) ----------------
 @st.cache_data(ttl=6*3600, show_spinner=False)
 def get_hist(exchange: str, pair: str, basis: str, amount: int) -> Optional[pd.DataFrame]:
     end = dt.datetime.utcnow().replace(tzinfo=dt.timezone.utc)
     if basis=="Hourly":
+        amount = min(max(1, amount), 72)
         gran=3600; start_cutoff=end - dt.timedelta(hours=amount)
     elif basis=="Daily":
+        amount = min(max(1, amount), 365)
         gran=86400; start_cutoff=end - dt.timedelta(days=amount)
     else:
+        amount = min(max(1, amount), 52)
         gran=86400; start_cutoff=end - dt.timedelta(weeks=amount)
     out=[]; step=300; cursor_end=end
     while True:
@@ -224,6 +261,8 @@ def get_hist(exchange: str, pair: str, basis: str, amount: int) -> Optional[pd.D
     if not out: return None
     hist=pd.concat(out, ignore_index=True).drop_duplicates(subset=["ts"]).sort_values("ts").reset_index(drop=True)
     if basis=="Weekly": hist=resample_ohlcv(hist, 7*86400)
+    if "quote_volume" not in hist.columns:
+        hist["quote_volume"] = hist["close"] * hist["volume"]
     return hist
 
 def ath_atl_info(hist: pd.DataFrame) -> dict:
@@ -259,7 +298,7 @@ def recent_high_metrics(df: pd.DataFrame, span: int=3) -> Tuple[float, str]:
         if float(df["close"].iloc[j]) < level:
             cross_idx=j; break
     if cross_idx is None:
-        return max((last/level - 1.0)*100.0, 0.0), "—"  # still above: show 0% drop
+        return max((last/level - 1.0)*100.0, 0.0), "—"
     drop_pct=max((last/level - 1.0)*100.0, 0.0)
     dur=(last_ts - pd.to_datetime(df["ts"].iloc[cross_idx])).total_seconds()
     return drop_pct, pretty_duration(dur)
@@ -364,56 +403,156 @@ def drain_ws_queue():
     if err: st.session_state["diag"]["ws_error"]=err
 
 # ---------------- View building ----------------
-def compute_view(exchange: str, pairs: List[str], timeframes: List[str]) -> pd.DataFrame:
+def compute_view(exchange: str, pairs: List[str], timeframes: List[str], sort_tf: str,
+                 rsi_len:int, macd_fast:int, macd_slow:int, macd_sig:int, atr_len:int) -> pd.DataFrame:
     rows=[]; cache_1m={}; cache_1h={}
     for pid in pairs:
         rec={"Pair": pid}; last_close=None
         for tf in timeframes:
             df=get_df_for_tf(exchange, pid, tf, cache_1m, cache_1h)
-            if df is None or len(df)<30:
+            if df is None or len(df)<(max(30, atr_len+macd_slow+macd_sig+5)):
                 for c in [f"% {tf}", f"Vol x {tf}", f"Price {tf}"]:
                     rec[c]=np.nan
+                if tf==sort_tf:
+                    # placeholders for indicator gates
+                    rec[f"RSI {tf}"]=np.nan; rec[f"MACDh {tf}"]=np.nan; rec[f"MACDcross {tf}"]=False; rec[f"ATR% {tf}"]=np.nan
+                    rec[f"QuoteVol {tf}"]=np.nan; rec[f"BaseVol {tf}"]=np.nan
                 continue
-            df=df.tail(200).copy()
+            df=df.tail(400).copy()
+            # ensure quote volume
+            if "quote_volume" not in df.columns:
+                df["quote_volume"] = df["close"] * df["volume"]
+
             last_close=float(df["close"].iloc[-1]); first_close=float(df["close"].iloc[0])
-            rec[f"% {tf}"]=(last_close/first_close - 1.0)*100.0        # keep signed % change
+            rec[f"% {tf}"]=(last_close/first_close - 1.0)*100.0  # signed
             rec[f"Vol x {tf}"]=float(df["volume"].iloc[-1] / (df["volume"].rolling(20).mean().iloc[-1] + 1e-9))
             rec[f"Price {tf}"]=last_close
+
+            # Indicators only for the sort TF (used by gates)
+            if tf==sort_tf:
+                # RSI
+                rs = rsi(df["close"], rsi_len)
+                rec[f"RSI {tf}"] = float(rs.iloc[-1])
+
+                # MACD
+                macd_line, signal_line, hist = macd(df["close"], macd_fast, macd_slow, macd_sig)
+                rec[f"MACDh {tf}"] = float(hist.iloc[-1])
+                # Detect fresh bull cross in last N bars (here N=3)
+                N=3
+                cross = False
+                for i in range(1, min(N+1, len(macd_line))):
+                    if (macd_line.iloc[-i-1] <= signal_line.iloc[-i-1]) and (macd_line.iloc[-i] > signal_line.iloc[-i]):
+                        cross = True; break
+                rec[f"MACDcross {tf}"] = bool(cross)
+
+                # ATR % of price
+                a = atr(df, atr_len)
+                rec[f"ATR% {tf}"] = float((a.iloc[-1] / (df["close"].iloc[-1] + 1e-12)) * 100.0)
+
+                # Volume (latest candle)
+                rec[f"QuoteVol {tf}"] = float(df["quote_volume"].iloc[-1])
+                rec[f"BaseVol {tf}"]  = float(df["volume"].iloc[-1])
+
         rec["Last"]=last_close if last_close is not None else np.nan
         rows.append(rec)
     return pd.DataFrame(rows)
 
-def build_spike_mask(df: pd.DataFrame, sort_tf: str, pct_thresh: float, vol_mult: float, require_both: bool) -> pd.Series:
-    pt_col=f"% {sort_tf}"; vs_col=f"Vol x {sort_tf}"
-    # Rally-only gate: positive % must exceed threshold
-    m_price = df[pt_col].fillna(-1) >= pct_thresh
-    m_vol   = df[vs_col].fillna(0)  >= vol_mult
-    return (m_price & m_vol) if require_both else (m_price | m_vol)
+def build_gate_mask(view_idxed: pd.DataFrame, sort_tf: str,
+                    pct_thresh: float,
+                    use_quote: bool, min_quote: float,
+                    use_base: bool,  min_base: float,
+                    use_spike: bool, vol_mult: float,
+                    gate_logic_all: bool,
+                    use_trend: bool, trend_required: str,
+                    use_rsi: bool, rsi_min: float,
+                    use_macd: bool, macd_hist_nonneg: bool, macd_need_cross: bool,
+                    use_atr: bool, atrp_min: float) -> Tuple[pd.Series, pd.Series]:
+    # Build individual boolean masks
+    def col(name): return view_idxed.get(name)
 
-def style_spikes(df: pd.DataFrame, spike_mask: pd.Series, pct_col: str):
+    mlist = []
+
+    # Price % gate (rally-only)
+    m_pct = (col(f"% {sort_tf}").fillna(-1) >= pct_thresh)
+    mlist.append(m_pct)
+
+    # Volume gates
+    if use_quote:
+        m_quote = (col(f"QuoteVol {sort_tf}").fillna(0) >= min_quote)
+        mlist.append(m_quote)
+    if use_base:
+        m_base = (col(f"BaseVol {sort_tf}").fillna(0) >= min_base)
+        mlist.append(m_base)
+    if use_spike:
+        m_spike = (col(f"Vol x {sort_tf}").fillna(0) >= vol_mult)
+        mlist.append(m_spike)
+
+    # Trend break gate
+    if use_trend:
+        tb = col("Trend broken?")
+        if trend_required == "Any":
+            m_trend = tb.isin(["Yes ↑","Yes ↓"])
+        elif trend_required == "Breakout ↑":
+            m_trend = tb.eq("Yes ↑")
+        else:
+            m_trend = tb.eq("Yes ↓")
+        mlist.append(m_trend.fillna(False))
+
+    # RSI gate
+    if use_rsi:
+        m_rsi = (col(f"RSI {sort_tf}").fillna(0) >= rsi_min)
+        mlist.append(m_rsi)
+
+    # MACD gate
+    if use_macd:
+        m_macd = pd.Series(True, index=view_idxed.index)
+        if macd_hist_nonneg:
+            m_macd = m_macd & (col(f"MACDh {sort_tf}").fillna(-1) >= 0)
+        if macd_need_cross:
+            m_macd = m_macd & col(f"MACDcross {sort_tf}").fillna(False)
+        mlist.append(m_macd)
+
+    # ATR% gate
+    if use_atr:
+        m_atr = (col(f"ATR% {sort_tf}").fillna(0) >= atrp_min)
+        mlist.append(m_atr)
+
+    if not mlist:
+        # No gates enabled → nothing passes or everything? We default to "no gating": pass nothing (so no green/yellow).
+        m_all = pd.Series(False, index=view_idxed.index)
+        m_any = pd.Series(False, index=view_idxed.index)
+        return m_all, m_any
+
+    m_all = mlist[0].copy()
+    m_any = mlist[0].copy()
+    for m in mlist[1:]:
+        m_all = m_all & m
+        m_any = m_any | m
+
+    green_mask = m_all if gate_logic_all else m_any
+    yellow_mask = (~green_mask) & m_any  # partial pass
+    return green_mask, yellow_mask
+
+def style_rows(df: pd.DataFrame, green_mask: pd.Series, yellow_mask: pd.Series, pct_col: str):
     def _row_style(r):
-        green = (spike_mask.loc[r.name])
-        cells = []
-        for c in df.columns:
-            if green and (c == pct_col or c == "Pair"):  # pop the % and name cells most
-                cells.append("background-color: rgba(0,255,0,0.18); font-weight:700;")
-            elif green:
-                cells.append("background-color: rgba(0,255,0,0.12); font-weight:600;")
-            else:
-                cells.append("")
-        return cells
+        if green_mask.loc[r.name]:
+            return ["background-color: rgba(0,255,0,0.18); font-weight:600;" for _ in r]
+        if yellow_mask.loc[r.name]:
+            return ["background-color: rgba(255,215,0,0.18); font-weight:600;" for _ in r]
+        return ["" for _ in r]
     return df.style.apply(_row_style, axis=1)
 
 # ---------------- Streamlit UI ----------------
-st.set_page_config(page_title="Movers — Signed % (Rally Gates)", layout="wide")
-st.title("Movers — Signed % (Rally Gates)")
+st.set_page_config(page_title="Movers — Volume & Indicator Gates", layout="wide")
+st.title("Movers — Volume & Indicator Gates")
 
 with st.sidebar:
     with st.expander("Market", expanded=False):
-        exchange=st.selectbox("Exchange", EXCHANGES, index=0)
+        exchange=st.selectbox("Exchange", ["Coinbase","Binance","Kraken (coming soon)","KuCoin (coming soon)","OKX (coming soon)","Bitstamp (coming soon)","Gemini (coming soon)","Bybit (coming soon)"], index=0)
         effective_exchange="Coinbase" if "(coming soon)" in exchange else exchange
         if "(coming soon)" in exchange:
             st.info("This exchange is coming soon. Please use Coinbase or Binance for now.")
+
         quote=st.selectbox("Quote currency", QUOTES, index=0)
         use_watch=st.checkbox("Use watchlist only", value=False)
         watchlist=st.text_area("Watchlist (comma-separated)", "BTC-USD, ETH-USD, SOL-USD")
@@ -421,32 +560,68 @@ with st.sidebar:
 
     with st.expander("Timeframes", expanded=False):
         pick_tfs=st.multiselect("Select timeframes", DEFAULT_TFS + ["1w"], default=DEFAULT_TFS)
-        # Default Sort Timeframe = 1h if available
         default_idx = pick_tfs.index("1h") if "1h" in pick_tfs else 0
         sort_tf=st.selectbox("Primary sort timeframe", pick_tfs, index=default_idx)
         sort_desc=st.checkbox("Sort descending (largest first)", value=True)
 
     with st.expander("Gates", expanded=False):
+        # Top-level logic choice: ALL vs ANY of enabled gates
+        gate_logic_all = st.radio("Gate logic for enabled filters", ["ALL", "ANY"], index=0) == "ALL"
+
+        st.markdown("**Price gate**")
         pct_thresh=st.slider("Min +% change (Sort Timeframe)", 0.1, 20.0, 1.0, 0.1)
-        vol_mult=st.slider("Min Volume× (vs 20-SMA)", 1.0, 10.0, 1.2, 0.1)
-        require_both=st.checkbox("Require BOTH % and Vol×", value=True)
-        st.markdown("<div class='hint'>If nothing appears: lower +% (e.g., 0.5), lower Vol× (e.g., 1.1), or uncheck “Require BOTH”.</div>", unsafe_allow_html=True)
+
+        st.markdown("**Volume gates**")
+        colv1, colv2, colv3 = st.columns(3)
+        with colv1:
+            use_quote = st.checkbox("Use Quote $", value=True, help="Dollar notional in latest candle")
+            min_quote = st.number_input("Min Quote $", min_value=0.0, value=1_000_000.0, step=100_000.0, format="%.0f")
+        with colv2:
+            use_base  = st.checkbox("Use Base units", value=False, help="Raw base-asset units in latest candle")
+            min_base  = st.number_input("Min Base units", min_value=0.0, value=0.0, step=100.0, format="%.0f")
+        with colv3:
+            use_spike = st.checkbox("Use Volume spike (SMA×)", value=True, help="Latest volume vs 20-SMA")
+            vol_mult  = st.slider("Min SMA×", 1.0, 10.0, 1.2, 0.1)
+
+        st.markdown("**Trend gates**")
+        use_trend = st.checkbox("Require trend break", value=False)
+        trend_required = st.selectbox("Break type", ["Any","Breakout ↑","Breakdown ↓"], index=0)
+
+        st.markdown("**Indicator gates**")
+        colind1, colind2, colind3 = st.columns(3)
+        with colind1:
+            use_rsi = st.checkbox("RSI ≥", value=False)
+            rsi_min = st.slider("RSI min", 0, 100, 55, 1)
+        with colind2:
+            use_macd = st.checkbox("MACD", value=False)
+            macd_hist_nonneg = st.checkbox("Hist ≥ 0", value=True, help="MACD histogram ≥ 0")
+            macd_need_cross  = st.checkbox("Fresh bull cross (≤3 bars)", value=False)
+        with colind3:
+            use_atr = st.checkbox("ATR% ≥", value=False, help="ATR as % of price")
+            atrp_min = st.slider("ATR% min", 0.0, 10.0, 0.5, 0.1)
+
+        st.markdown("<div class='hint'>If too few names pass: lower % or Quote $, turn off Spike, switch logic to ANY, or disable some gates.</div>", unsafe_allow_html=True)
 
     with st.expander("History depth", expanded=False):
         basis=st.selectbox("Basis for ATH/ATL & recent-high", ["Hourly","Daily","Weekly"], index=1)
         if basis=="Hourly":
-            amount=st.slider("Hours to fetch", 1, 24*90, 24, 1)
+            amount=st.slider("Hours to fetch (≤72)", 1, 72, 24, 1)
         elif basis=="Daily":
-            amount=st.slider("Days to fetch", 1, 3650, 365, 1)
+            amount=st.slider("Days to fetch (≤365)", 1, 365, 90, 1)
         else:
-            amount=st.slider("Weeks to fetch", 1, 520, 104, 1)
+            amount=st.slider("Weeks to fetch (≤52)", 1, 52, 12, 1)
 
-    with st.expander("Trend Break Settings", expanded=False):
+    with st.expander("Trend Settings", expanded=False):
         pivot_span=st.slider("Pivot lookback span (bars)", 2, 10, 3, 1)
+        rsi_len=st.slider("RSI length", 5, 50, 14, 1)
+        macd_fast=st.slider("MACD fast", 3, 50, 12, 1)
+        macd_slow=st.slider("MACD slow", 5, 100, 26, 1)
+        macd_sig =st.slider("MACD signal", 3, 50, 9, 1)
+        atr_len =st.slider("ATR length", 5, 50, 14, 1)
 
     with st.expander("Notifications", expanded=False):
         enable_sound=st.checkbox("Audible chime (browser)", value=True)
-        st.caption("Tip: click once in the page to enable audio if your browser blocks autoplay.")
+        st.caption("Tip: click once in the page to enable audio if blocked.")
         email_to=st.text_input("Email recipient (optional)", "")
         webhook_url=st.text_input("Webhook URL (optional)", "", help="Discord/Slack/Telegram/Pushover/ntfy, etc.")
         if st.button("Test Alerts"):
@@ -498,14 +673,17 @@ if mode.startswith("WebSocket") and WS_AVAILABLE and effective_exchange=="Coinba
 diag["ws_alive"]=bool(st.session_state["ws_alive"])
 st.session_state["diag"]=diag
 
-# Build view (ensure we compute the chosen sort timeframe)
-needed_tfs = sorted(set([sort_tf] + pick_tfs))
-base=compute_view(effective_exchange, pairs, needed_tfs)
+# Build view (ensure indicators on sort TF)
+needed_tfs = sorted(set([sort_tf] + DEFAULT_TFS))
+base=compute_view(
+    effective_exchange, pairs, needed_tfs, sort_tf,
+    rsi_len, macd_fast, macd_slow, macd_sig, atr_len
+)
 if base.empty:
     st.info("No data returned. Try fewer pairs or different Timeframes.")
     st.stop()
 
-# ATH/ATL & pivot-based metrics (computed on the selected sort timeframe)
+# ATH/ATL, recent-high, trend-break (computed from sort_tf)
 extras=[]
 for pid in pairs:
     h=get_hist(effective_exchange, pid, basis, amount)
@@ -547,45 +725,55 @@ disp = disp[["Pair"]].assign(
     }
 )
 
-# Sort by signed % (descending → biggest gainers first)
+# Sort by signed % (descending)
 disp = disp.sort_values(pct_label, ascending=not sort_desc, na_position="last").reset_index(drop=True)
 disp.insert(0, "#", disp.index + 1)
 
-# Rally-only gate mask (positive % >= threshold, and Vol× if required)
-spike_mask = build_spike_mask(
-    df=view.set_index("Pair"),
-    sort_tf=sort_tf,
-    pct_thresh=pct_thresh,
-    vol_mult=vol_mult,
-    require_both=require_both
-).reindex(disp["Pair"].values).reset_index(drop=True)
+# Build green/yellow masks from gates
+view_idxed = view.set_index("Pair")
+green_mask, yellow_mask = build_gate_mask(
+    view_idxed, sort_tf,
+    pct_thresh,
+    use_quote, min_quote,
+    use_base,  min_base,
+    use_spike, vol_mult,
+    gate_logic_all,
+    use_trend, trend_required,
+    use_rsi, rsi_min,
+    use_macd, macd_hist_nonneg, macd_need_cross,
+    use_atr, atrp_min
+)
+green_mask = green_mask.reindex(disp["Pair"].values).reset_index(drop=True)
+yellow_mask = yellow_mask.reindex(disp["Pair"].values).reset_index(drop=True)
 
-# ---------- Top area with pinned Top-10 ----------
+# ---------- Top area with pinned Top-10 (ALL gates) ----------
 st.markdown("<div class='sticky-top'></div>", unsafe_allow_html=True)
 c1, c2 = st.columns([1, 3], gap="large")
 
 with c1:
-    st.subheader("Top-10 (meets gates)")
-    top_now = disp.loc[spike_mask].copy()
+    st.subheader("Top-10 (meets ALL enabled gates)")
+    top_now = disp.loc[green_mask].copy()
     top_now = top_now.sort_values(pct_label, ascending=not sort_desc, na_position="last").head(10)
     if top_now.empty:
         st.write("—")
-        st.caption("Tip: lower +% or Vol× thresholds or uncheck “Require BOTH”.")
+        st.caption("Tip: lower +%, lower Quote $, disable Spike, or switch gate logic to ANY.")
     else:
         st.dataframe(
-            style_spikes(top_now.reset_index(drop=True),
-                         pd.Series([True]*len(top_now)), pct_label),
+            style_rows(top_now.reset_index(drop=True),
+                       pd.Series([True]*len(top_now)),
+                       pd.Series([False]*len(top_now)),
+                       pct_label),
             use_container_width=True,
         )
 
 with c2:
     st.subheader("All pairs (ranked by % change)")
     st.dataframe(
-        style_spikes(disp, spike_mask, pct_label),
+        style_rows(disp, green_mask, yellow_mask, pct_label),
         use_container_width=True, height=720
     )
 
-# Quick TradingView links
+# TradingView links for visible rows
 def tv_symbol(exchange: str, pair: str) -> Optional[str]:
     base, quote = pair.split("-")
     if exchange=="Coinbase":
@@ -601,7 +789,7 @@ with st.expander("Open charts for visible pairs", expanded=False):
            for _, row in disp.iterrows()]
     st.markdown("\n".join(links))
 
-# Alerts: Top-10 entries
+# Alerts: Top-10 entries (ALL gates)
 new_spikes=[]
 if not top_now.empty:
     for _, r in top_now.iterrows():
@@ -638,23 +826,27 @@ if (new_spikes or trend_triggers) and (email_to or webhook_url):
         ok, info=post_webhook(webhook_url, {"title": sub, "lines": lines})
         if not ok: st.warning(f"Webhook error: {info}")
 
-# Footer control bar (quick duplicates)
+# Sticky bottom quick controls (so you don’t need to scroll)
 st.markdown("<div class='sticky-bottom'></div>", unsafe_allow_html=True)
 with st.container():
     st.write("---")
-    colA, colB, colC, colD, colE = st.columns([1.2,1.2,1.2,1.2,2.4])
+    colA, colB, colC, colD, colE = st.columns([1.2,1.2,1.4,1.2,1.4])
     with colA:
         st.caption("Quick controls")
-        # mirror current sort tf
-        _ = st.selectbox("Sort Timeframe", DEFAULT_TFS + ["1w"], index=(DEFAULT_TFS + ["1w"]).index("1h"), key="quick_tf", disabled=True)
+        st.write(f"Sort TF: **{sort_tf}**")
     with colB:
         pct_thresh = st.slider("Min +%", 0.1, 20.0, pct_thresh, 0.1, key="quick_pct")
     with colC:
-        vol_mult = st.slider("Min Vol×", 1.0, 10.0, vol_mult, 0.1, key="quick_vol")
+        min_quote = st.number_input("Min Quote $", min_value=0.0, value=min_quote, step=100_000.0, format="%.0f", key="quick_qv")
     with colD:
-        require_both = st.checkbox("Require BOTH", value=require_both, key="quick_both")
+        gate_logic_all = st.radio("Logic", ["ALL","ANY"], index=0 if gate_logic_all else 1, horizontal=True, key="quick_logic")=="ALL"
     with colE:
-        st.markdown("[Back to top](#movers--signed---rally-gates)")
+        if st.button("Test Alerts (quick)"):
+            trigger_beep()
+            if email_to:
+                ok, info=send_email_alert("[Movers] Test alert", "Quick test", email_to)
+                st.success("Test email sent") if ok else st.warning(info)
 
 st.caption(f"Pairs: {len(disp)} • Exchange: {effective_exchange} • Quote: {quote} • Sort Timeframe: {sort_tf} • "
-           f"Gates: {'BOTH' if require_both else 'Any'} (+%≥{pct_thresh} & Vol×≥{vol_mult}) • Mode: {mode}")
+           f"Gates: {'ALL' if gate_logic_all else 'ANY'} • Mode: {mode}")
+
