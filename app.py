@@ -1,30 +1,30 @@
-# app.py — Crypto Tracker (sellable build, fixed)
-# - Fixed: Coinbase fetch_candles SyntaxError (no one-line "arr=r.json(); if not arr")
-# - Semi-restrictive defaults (shows results, not noisy)
-# - Collapse-all button for sidebar expanders
-# - Top scrollbar fully synced with table
-# - Click headers to sort ASC/DESC (client-side)
-# - Green row = all gates pass; Yellow row = partial pass (true yellow)
-# - Pair hover + in-app TradingView modal (iframe, CSP-safe)
-# - Audible (Arm/Test), Email, Webhook alerts
-# - Inline UI hints AND code comments on how to loosen gates
+# app.py — Crypto Tracker (in‑app charts, auto‑refresh, manual row expand)
+# - Removed Quick Controls & Quick tidy
+# - Sidebar auto-refresh (On/Off + interval)
+# - Manual per-row expansion (click ⤢ in first column)
+# - Sorting on all columns (ASC/DESC)
+# - Top scrollbar synced to table
+# - Timeframe label outside table
+# - Hover preview + modal chart (Lightweight Charts); no external redirect
+# - Alerts preserved (audio / email / webhook) + Test beep
+# - Inline hints under every gate; semi‑restrictive defaults
+#
+# Drop this file in and run:  streamlit run app.py
 
 import json, time, threading, queue, ssl, smtplib, datetime as dt, html, uuid
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
 import requests
 import streamlit as st
 
-# =========================
-#  GLOBAL / WS STATE
-# =========================
+# ---------------- State
 WS_AVAILABLE = True
 try:
-    import websocket  # pip install websocket-client
+    import websocket  # websocket-client
 except Exception:
     WS_AVAILABLE = False
 
@@ -37,14 +37,13 @@ def init_state():
     ss.setdefault("last_alert_hashes", set())
     ss.setdefault("trend_alerted", set())
     ss.setdefault("diag", {})
-    ss.setdefault("expander_keys", {})
+    ss.setdefault("collapse_all_now", False)
+    ss.setdefault("alert_log", [])
 init_state()
 
-APP_VERSION = "v1.5.1"
+APP_VERSION = "v1.7.0"
 
-# =========================
-#  CSS / AUDIO
-# =========================
+# ---------------- CSS/JS helpers
 def inject_css(display_wrap: bool, col_min_px: int, font_scale: float):
     nowrap = "normal" if display_wrap else "nowrap"
     st.markdown(f"""
@@ -54,6 +53,7 @@ def inject_css(display_wrap: bool, col_min_px: int, font_scale: float):
 
       .hint {{ color:#9aa3ab; font-size:0.92em; }}
 
+      /* Modal */
       .tv-modal-backdrop {{
         position: fixed; inset: 0; background: rgba(0,0,0,0.65);
         display: none; align-items: center; justify-content: center; z-index: 99999;
@@ -63,20 +63,30 @@ def inject_css(display_wrap: bool, col_min_px: int, font_scale: float):
         background: var(--background-color); border-radius: 12px;
         box-shadow: 0 8px 28px rgba(0,0,0,0.45); overflow: hidden; position: relative;
       }}
-      .tv-modal-header {{
-        display:flex; align-items:center; justify-content:space-between;
-        padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,0.08);
-      }}
-      .tv-modal-title {{ font-weight: 700; font-size: 1.05rem; }}
+      .tv-modal-header {{ display:flex; align-items:center; justify-content:space-between; padding:8px 12px; border-bottom:1px solid rgba(255,255,255,0.08); }}
+      .tv-modal-title {{ font-weight:700; font-size:1.05rem; }}
       .tv-close {{ cursor:pointer; border:0; background:transparent; font-size:1.3rem; opacity:.8; }}
       .tv-modal-body {{ width:100%; height:calc(100% - 44px); }}
 
+      /* Lightweight preview (floating) */
+      .lw-preview {{
+        position: fixed; pointer-events:none; z-index: 99998;
+        width: 420px; height: 280px; background: #111; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; overflow: hidden; display:none;
+      }}
+
+      /* Top scrollbar */
       .top-scrollbar {{ width:100%; overflow-x:auto; overflow-y:hidden; height:16px; }}
       .top-scrollbar .spacer {{ height:1px; }}
 
-      .row-green  {{ background: rgba(0,255,0,0.20); font-weight:600; }}
-      .row-yellow {{ background: rgba(255,255,0,0.35); font-weight:600; }}
+      /* Row colors */
+      .row-green  {{ background: rgba(0,255,0,0.22); font-weight:600; }}
+      .row-yellow {{ background: rgba(255,255,0,0.50); font-weight:600; }}
 
+      /* Manual row expansion */
+      table.mv-table tr.row-expanded td {{ white-space: normal !important; height:auto !important; }}
+      .expand-btn {{ cursor:pointer; margin-right:8px; opacity:.8; }}
+
+      /* Table */
       table.mv-table {{ width: max(1200px, 100%); border-collapse: collapse; table-layout: fixed; }}
       table.mv-table th, table.mv-table td {{
         padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,0.06);
@@ -89,7 +99,7 @@ def inject_css(display_wrap: bool, col_min_px: int, font_scale: float):
       table.mv-table th .sort-ind {{ opacity:.6; margin-left:6px; }}
 
       a.mv-pair {{ color: var(--text-color); text-decoration: underline; cursor: pointer; }}
-      a.mv-pair:hover::after {{ content: "  (click to view chart)"; opacity:.55; font-size:.92em; }}
+      a.mv-pair:hover::after {{ content:"  (view chart)"; opacity:.55; font-size:.92em; }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -99,6 +109,13 @@ def audible_js():
       <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAAAAP8AAP//AAD//wAA//8AAP//AAD//wAA" type="audio/wav">
     </audio>
     <script>
+      // Lightweight Charts
+      (function addLw(){ if(window.LightweightCharts) return;
+        var s=document.createElement('script'); s.src='https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js';
+        document.head.appendChild(s);
+      })();
+
+      // Audio
       window._mv_audio_ctx = window._mv_audio_ctx || null;
       function mvEnsureCtx() {
         if (!window._mv_audio_ctx) {
@@ -132,16 +149,161 @@ def audible_js():
       };
       requestAnimationFrame(tick);
       window.addEventListener('click', mvEnsureCtx, { once:true });
-      window.mvArmAudio = mvEnsureCtx;
+      window.mvArmAudio  = mvEnsureCtx;
+      window.mvTestBeep  = () => { mvEnsureCtx(); localStorage.setItem('mustBeep','1'); };
+
+      // Modal + preview using LW charts
+      function ensurePreview(){
+        if (document.getElementById('lw-preview')) return document.getElementById('lw-preview');
+        const box=document.createElement('div'); box.id='lw-preview'; box.className='lw-preview';
+        const inner=document.createElement('div'); inner.id='lw-preview-inner'; inner.style.width='100%'; inner.style.height='100%';
+        box.appendChild(inner); document.body.appendChild(box);
+        return box;
+      }
+
+      function buildChart(container, seriesData){
+        const c = LightweightCharts.createChart(container, {layout:{background:{type:'solid', color:'#111'}, textColor:'#DDD'},
+          grid:{vertLines:{color:'#222'}, horzLines:{color:'#222'}}, timeScale:{timeVisible:true, secondsVisible:false}});
+        const s = c.addCandlestickSeries();
+        s.setData(seriesData);
+        return {c,s};
+      }
+
+      window.mvOpenChart = (symbol, title) => {
+        const data = (window._mvCandleCache||{})[symbol] || [];
+        const backdrop=document.getElementById('mv-tv-backdrop');
+        const modal=document.getElementById('mv-tv-modal');
+        const body=document.getElementById('mv-tv-body');
+        document.getElementById('mv-tv-title').textContent = title || symbol;
+        // wipe & build LW chart
+        body.innerHTML = '<div id="lw-modal" style="width:100%;height:100%"></div>';
+        const wait = ()=> {
+          if (!window.LightweightCharts){ setTimeout(wait,80); return; }
+          buildChart(document.getElementById('lw-modal'), data);
+        };
+        wait();
+        backdrop.style.display='flex'; modal.style.display='block';
+        document.onkeydown=(e)=>{ if(e.key==='Escape') mvCloseChart(); };
+      };
+
+      window.mvCloseChart = () => {
+        document.getElementById('mv-tv-backdrop').style.display='none';
+        const modal=document.getElementById('mv-tv-modal'); modal.style.display='none';
+        const body=document.getElementById('mv-tv-body'); body.innerHTML='';
+        document.onkeydown=null;
+      };
+
+      window.mvMakeSortable = (tableId) => {
+        const tbl=document.getElementById(tableId); if(!tbl) return;
+        const thead=tbl.querySelector('thead'); const tbody=tbl.querySelector('tbody');
+        if(!thead || !tbody) return;
+        const ths=[...thead.querySelectorAll('th')];
+        ths.forEach((th, idx)=>{
+          th.addEventListener('click', ()=>{
+            const asc = !(th.dataset.asc === 'true');
+            ths.forEach(t=>{ t.dataset.asc=''; const s=t.querySelector('.sort-ind'); if(s) s.textContent=''; });
+            th.dataset.asc = asc ? 'true':'false';
+            const rows=[...tbody.querySelectorAll('tr')];
+
+            const parseVal=(td)=>{
+              const raw=td.textContent.trim();
+              // date?
+              const d=Date.parse(raw);
+              if (!isNaN(d) && raw.includes('-')) return d;
+              const t=raw.replace('%','').replace('$','').replaceAll(',','');
+              const n=parseFloat(t);
+              return isNaN(n) ? raw.toLowerCase() : n;
+            };
+            rows.sort((a,b)=>{
+              const va=parseVal(a.children[idx]); const vb=parseVal(b.children[idx]);
+              if(va<vb) return asc?-1:1;
+              if(va>vb) return asc?1:-1;
+              return 0;
+            });
+            rows.forEach(r=>tbody.appendChild(r));
+            const ind=th.querySelector('.sort-ind') || Object.assign(document.createElement('span'),{className:'sort-ind'});
+            if(!th.querySelector('.sort-ind')) th.appendChild(ind);
+            ind.textContent = asc ? '▲' : '▼';
+          });
+        });
+      };
+
+      window.mvInitTopScroll = (topId, wrapId, tableId) => {
+        const top=document.getElementById(topId);
+        const wrap=document.getElementById(wrapId);
+        const tbl=document.getElementById(tableId);
+        if(!top || !wrap || !tbl) return;
+
+        function size(){
+          const w = tbl.scrollWidth;
+          const sp = top.querySelector('.spacer');
+          if(sp) sp.style.width = Math.max(w, wrap.clientWidth) + 'px';
+        }
+        size(); setTimeout(size, 120); setTimeout(size, 500);
+        new ResizeObserver(size).observe(wrap);
+        new ResizeObserver(size).observe(tbl);
+
+        top.addEventListener('scroll', ()=>{ wrap.scrollLeft = top.scrollLeft; });
+        wrap.addEventListener('scroll', ()=>{ top.scrollLeft = wrap.scrollLeft; });
+      };
+
+      window.mvBindRowExtras = (tableId) => {
+        const tbl=document.getElementById(tableId); if(!tbl) return;
+        const links=[...tbl.querySelectorAll('a.mv-pair-link')];
+        const preview=ensurePreview();
+        const inner=preview.querySelector('#lw-preview-inner');
+        let chart=null, series=null;
+
+        function ensureChart(){
+          if (!window.LightweightCharts) return false;
+          if (inner.childElementCount===0){
+            const built = (function(){
+              const c = LightweightCharts.createChart(inner, {{ layout:{{background:{{type:'solid', color:'#111'}}, textColor:'#DDD'}},
+                grid:{{vertLines:{{color:'#222'}}, horzLines:{{color:'#222'}}}}, timeScale:{{timeVisible:true}} }});
+              const s = c.addCandlestickSeries();
+              return {{c,s}};
+            }());
+            chart=built.c; series=built.s;
+          }
+          return true;
+        }
+
+        links.forEach(el=>{
+          el.addEventListener('mouseenter', (e)=>{
+            const sym=el.dataset.tvSymbol;
+            const data=(window._mvCandleCache||{{}})[sym]||[];
+            if (!ensureChart()) return;
+            series.setData(data);
+            preview.style.display='block';
+          });
+          el.addEventListener('mousemove', (e)=>{
+            preview.style.left=(e.clientX+16)+'px';
+            preview.style.top =(e.clientY+16)+'px';
+          });
+          el.addEventListener('mouseleave', ()=>{
+            preview.style.display='none';
+          });
+        });
+
+        // expand buttons
+        const exps=[...tbl.querySelectorAll('.expand-btn')];
+        exps.forEach(btn=>{
+          btn.addEventListener('click', (e)=>{
+            e.preventDefault(); e.stopPropagation();
+            const tr=btn.closest('tr');
+            if(tr) tr.classList.toggle('row-expanded');
+          });
+        });
+      };
+
+      window.mvBeepNow = () => {{ localStorage.setItem('mustBeep','1'); }};
     </script>
     """, unsafe_allow_html=True)
 
 def trigger_beep():
     st.markdown("<script>localStorage.setItem('mustBeep','1');</script>", unsafe_allow_html=True)
 
-# =========================
-#  INDICATORS
-# =========================
+# ---------------- Indicators
 def ema(s: pd.Series, span: int) -> pd.Series:
     return s.ewm(span=span, adjust=False).mean()
 
@@ -160,9 +322,7 @@ def atr(df: pd.DataFrame, length=14):
     tr = pd.concat([(h-l),(h-pc).abs(),(l-pc).abs()], axis=1).max(axis=1)
     return tr.ewm(alpha=1/length, adjust=False).mean()
 
-# =========================
-#  EXCHANGES / PRODUCTS
-# =========================
+# ---------------- Exchanges / products
 CB_BASE = "https://api.exchange.coinbase.com"
 BN_BASE = "https://api.binance.com"
 
@@ -172,11 +332,7 @@ NATIVE_BINANCE  = {60:"1m",300:"5m",900:"15m",1800:"30m",3600:"1h",14400:"4h",21
 ALL_TFS = {"1m":60,"5m":300,"15m":900,"30m":1800,"1h":3600,"4h":14400,"6h":21600,"12h":43200,"1d":86400,"1w":604800}
 DEFAULT_TFS = ["1m","5m","15m","30m","1h","4h","6h","12h","1d"]
 QUOTES = ["USD","USDC","USDT","BTC","ETH","BUSD","EUR"]
-EXCHANGES = [
-    "Coinbase","Binance",
-    "Kraken (coming soon)","KuCoin (coming soon)","OKX (coming soon)",
-    "Bitstamp (coming soon)","Gemini (coming soon)","Bybit (coming soon)"
-]
+EXCHANGES = ["Coinbase","Binance","Kraken (coming soon)","KuCoin (coming soon)","OKX (coming soon)","Bitstamp (coming soon)","Gemini (coming soon)","Bybit (coming soon)"]
 
 def coinbase_list_products(quote: str) -> List[str]:
     try:
@@ -204,9 +360,7 @@ def list_products(exchange: str, quote: str) -> List[str]:
     if exchange=="Binance":  return binance_list_products(quote)
     return []
 
-# =========================
-#  CANDLES / RESAMPLING
-# =========================
+# ---------------- Candles
 def fetch_candles(exchange: str, pair_dash: str, granularity_sec: int,
                   start: Optional[dt.datetime]=None, end: Optional[dt.datetime]=None) -> Optional[pd.DataFrame]:
     if exchange=="Coinbase":
@@ -272,9 +426,7 @@ def get_df_for_tf(exchange: str, pair: str, tf: str,
         return resample_ohlcv(d1, 7*86400) if d1 is not None else None
     return None
 
-# =========================
-#  HISTORY / ATH-ATL
-# =========================
+# ---------------- History / ATH-ATL
 @st.cache_data(ttl=6*3600, show_spinner=False)
 def get_hist(exchange: str, pair: str, basis: str, amount: int) -> Optional[pd.DataFrame]:
     end = dt.datetime.utcnow().replace(tzinfo=dt.timezone.utc)
@@ -304,9 +456,7 @@ def ath_atl_info(hist: pd.DataFrame) -> dict:
     return {"From ATH %": (last/ath-1)*100 if ath>0 else np.nan, "ATH date": d_ath,
             "From ATL %": (last/atl-1)*100 if atl>0 else np.nan, "ATL date": d_atl}
 
-# =========================
-#  PIVOTS / TREND
-# =========================
+# ---------------- Pivots / Trend
 def find_pivots(close: pd.Series, span=3):
     n=len(close); highs=[]; lows=[]; v=close.values
     for i in range(span, n-span):
@@ -316,7 +466,7 @@ def find_pivots(close: pd.Series, span=3):
 
 def recent_high_metrics(df: pd.DataFrame, span=3):
     if df is None or df.empty or len(df)<(span*2+5): return np.nan, "—"
-    highs,_=find_pivots(df["close"], span); 
+    highs,_=find_pivots(df["close"], span)
     if len(highs)==0: return np.nan, "—"
     idx=int(highs[-1]); level=float(df["close"].iloc[idx])
     last=float(df["close"].iloc[-1]); last_ts=pd.to_datetime(df["ts"].iloc[-1])
@@ -361,9 +511,7 @@ def pretty_duration(sec):
     if m and not d: out.append(f"{m}m")
     return " ".join(out) if out else "0m"
 
-# =========================
-#  ALERTS
-# =========================
+# ---------------- Alerts
 def send_email_alert(subject, body, recipient):
     try: cfg=st.secrets["smtp"]
     except Exception: return False, "SMTP not configured in st.secrets"
@@ -384,9 +532,7 @@ def post_webhook(url, payload):
     except Exception as e:
         return False, str(e)
 
-# =========================
-#  WEBSOCKET (Coinbase)
-# =========================
+# ---------------- WebSocket (Coinbase)
 def ws_worker(product_ids, channel="ticker", endpoint="wss://ws-feed.exchange.coinbase.com"):
     ss=st.session_state
     try:
@@ -425,9 +571,7 @@ def drain_ws_queue():
             err=payload
     if err: st.session_state["diag"]["ws_error"]=err
 
-# =========================
-#  CORE VIEW
-# =========================
+# ---------------- View
 def compute_view(exchange: str, pairs: List[str], timeframes: List[str], sort_tf: str,
                  rsi_len:int, macd_fast:int, macd_slow:int, macd_sig:int, atr_len:int) -> pd.DataFrame:
     rows=[]; cache_1m={}; cache_1h={}
@@ -463,9 +607,7 @@ def compute_view(exchange: str, pairs: List[str], timeframes: List[str], sort_tf
         rows.append(rec)
     return pd.DataFrame(rows)
 
-# =========================
-#  GATE MASKS
-# =========================
+# ---------------- Gates
 def build_gate_mask(view_idxed: pd.DataFrame, sort_tf: str,
                     pct_thresh: float,
                     use_quote: bool, min_quote: float,
@@ -476,8 +618,6 @@ def build_gate_mask(view_idxed: pd.DataFrame, sort_tf: str,
                     use_rsi: bool, rsi_min: float,
                     use_macd: bool, macd_hist_nonneg: bool, macd_need_cross: bool,
                     use_atr: bool, atrp_min: float):
-    # 💡 Too restrictive? Lower pct_thresh / min_quote / min_base / vol_mult,
-    #    disable extra gates (RSI/MACD/ATR) or switch logic to ANY.
     def col(name): return view_idxed.get(name)
 
     mlist=[]
@@ -509,9 +649,7 @@ def build_gate_mask(view_idxed: pd.DataFrame, sort_tf: str,
     yellow = (~green) & m_any
     return green, yellow
 
-# =========================
-#  TV MODAL + TABLE (TOP SCROLL FIXED)
-# =========================
+# ---------------- TV/LW widgets & table
 def tv_symbol(exchange: str, pair: str) -> Optional[str]:
     base, quote = pair.split("-")
     if exchange=="Coinbase":
@@ -533,83 +671,8 @@ def inject_chart_modal_and_helpers():
         <div class="tv-modal-title" id="mv-tv-title">Chart</div>
         <button class="tv-close" onclick="mvCloseChart()">✕</button>
       </div>
-      <div class="tv-modal-body">
-        <iframe id="mv-tv-iframe" style="width:100%;height:100%;border:0;" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
-      </div>
+      <div class="tv-modal-body" id="mv-tv-body"></div>
     </div>
-
-    <script>
-      function mvOpenChart(symbol, interval, title){
-        document.getElementById('mv-tv-backdrop').style.display='flex';
-        const modal=document.getElementById('mv-tv-modal'); modal.style.display='block';
-        document.getElementById('mv-tv-title').textContent = title || symbol;
-        const iframe=document.getElementById('mv-tv-iframe');
-        const p=new URLSearchParams({symbol, interval, theme:'dark', style:'1', timezone:'Etc/UTC',
-                                     hide_top_toolbar:'0', hide_side_toolbar:'0',
-                                     allow_symbol_change:'0', withdateranges:'1', details:'1',
-                                     studies:'', hideideas:'1', locale:'en'});
-        iframe.src='https://s.tradingview.com/widgetembed/?'+p.toString();
-        document.onkeydown=(e)=>{ if(e.key==='Escape') mvCloseChart(); };
-      }
-      function mvCloseChart(){
-        document.getElementById('mv-tv-backdrop').style.display='none';
-        const modal=document.getElementById('mv-tv-modal'); modal.style.display='none';
-        const iframe=document.getElementById('mv-tv-iframe'); iframe.src='about:blank';
-        document.onkeydown=null;
-      }
-
-      function mvMakeSortable(tableId){
-        const tbl=document.getElementById(tableId); if(!tbl) return;
-        const thead=tbl.querySelector('thead'); const tbody=tbl.querySelector('tbody');
-        if(!thead || !tbody) return;
-        const ths=[...thead.querySelectorAll('th')];
-        ths.forEach((th, idx)=>{
-          th.addEventListener('click', ()=>{
-            const asc = !(th.dataset.asc === 'true');
-            ths.forEach(t=>{ t.dataset.asc=''; const s=t.querySelector('.sort-ind'); if(s) s.textContent=''; });
-            th.dataset.asc = asc ? 'true':'false';
-            const rows=[...tbody.querySelectorAll('tr')];
-            const parseVal=(td)=>{
-              const t=td.textContent.trim().replace('%','').replace('$','').replaceAll(',','');
-              const n=parseFloat(t);
-              return isNaN(n) ? t.toLowerCase() : n;
-            };
-            rows.sort((a,b)=>{
-              const va=parseVal(a.children[idx]); const vb=parseVal(b.children[idx]);
-              if(va<vb) return asc?-1:1;
-              if(va>vb) return asc?1:-1;
-              return 0;
-            });
-            rows.forEach(r=>tbody.appendChild(r));
-            const ind=th.querySelector('.sort-ind') || Object.assign(document.createElement('span'),{className:'sort-ind'});
-            if(!th.querySelector('.sort-ind')) th.appendChild(ind);
-            ind.textContent = asc ? '▲' : '▼';
-          });
-        });
-      }
-
-      // FIXED: size spacer from table.scrollWidth; sync both directions
-      function mvInitTopScroll(topId, wrapId, tableId){
-        const top=document.getElementById(topId);
-        const wrap=document.getElementById(wrapId);
-        const tbl=document.getElementById(tableId);
-        if(!top || !wrap || !tbl) return;
-
-        function size(){
-          const w = tbl.scrollWidth;
-          const sp = top.querySelector('.spacer');
-          if(sp) sp.style.width = Math.max(w, wrap.clientWidth) + 'px';
-        }
-        size(); setTimeout(size, 120); setTimeout(size, 500);
-        new ResizeObserver(size).observe(wrap);
-        new ResizeObserver(size).observe(tbl);
-
-        top.addEventListener('scroll', ()=>{ wrap.scrollLeft = top.scrollLeft; });
-        wrap.addEventListener('scroll', ()=>{ top.scrollLeft = wrap.scrollLeft; });
-      }
-      window.mvMakeSortable = mvMakeSortable;
-      window.mvInitTopScroll = mvInitTopScroll;
-    </script>
     """, unsafe_allow_html=True)
 
 def render_html_table(df: pd.DataFrame, green_mask: pd.Series, yellow_mask: pd.Series,
@@ -627,7 +690,12 @@ def render_html_table(df: pd.DataFrame, green_mask: pd.Series, yellow_mask: pd.S
         sym  = tv_symbol(exchange, pair) or ""
         interval = tv_interval(sort_tf)
         title = f"{pair} • {sort_tf}"
-        pair_html = f'<a class="mv-pair" title="Click to view chart" href="#" onclick="mvOpenChart(\'{sym}\', \'{interval}\', \'{html.escape(title)}\');return false;">{html.escape(pair)}</a>'
+        pair_html = (
+            f'<span class="expand-btn" title="Expand/Collapse row">⤢</span>'
+            f'<a class="mv-pair mv-pair-link" data-tv-symbol="{sym}" data-tv-interval="{interval}" '
+            f'title="Click to view chart" href="#" onclick="mvOpenChart(\'{sym}\', \'{html.escape(title)}\');return false;">'
+            f'{html.escape(pair)}</a>'
+        )
         cls = "row-green" if bool(green_mask.iloc[i]) else ("row-yellow" if bool(yellow_mask.iloc[i]) else "")
         tds=[]
         for c in cols:
@@ -652,161 +720,159 @@ def render_html_table(df: pd.DataFrame, green_mask: pd.Series, yellow_mask: pd.S
     <script>
       mvMakeSortable("{table_id}");
       mvInitTopScroll("{top_id}", "{wrap_id}", "{table_id}");
+      mvBindRowExtras("{table_id}");
     </script>
     """
     st.markdown(html_block, unsafe_allow_html=True)
 
-# =========================
-#  UI
-# =========================
+# ---------------- UI
 st.set_page_config(page_title="Crypto Tracker", layout="wide")
 st.title(f"Crypto Tracker — {APP_VERSION}")
 
+# Collapse-all button
 with st.sidebar:
-    colA, colB = st.columns([1.2, 1])
-    with colA:
-        if st.button("Collapse all open menu tabs"):
-            st.session_state["collapse_all"] = True
-            st.rerun()
-    with colB:
-        st.caption("Quick tidy")
+    if st.button("Collapse all open menu tabs"):
+        st.session_state["collapse_all_now"] = True
+        st.rerun()
+
+def expander(title, key):
+    opened = not st.session_state.get("collapse_all_now", False)
+    return st.expander(title, expanded=opened, key=key)
 
 with st.sidebar:
-    exp_market = st.expander("Market", expanded=not st.session_state.get("collapse_all", False))
-    with exp_market:
-        exchange=st.selectbox("Exchange", EXCHANGES, index=0, help="💡 Use Coinbase or Binance now; others are 'coming soon'.")
+    with expander("Market", "exp_market"):
+        exchange=st.selectbox("Exchange", EXCHANGES, index=0, help="💡 Use Coinbase or Binance now; others show 'coming soon'.", key="sel_exch")
         effective_exchange="Coinbase" if "(coming soon)" in exchange else exchange
         if "(coming soon)" in exchange: st.info("This exchange is coming soon. Please use Coinbase or Binance for now.")
-        quote=st.selectbox("Quote currency", QUOTES, index=0)
-        use_watch=st.checkbox("Use watchlist only", value=False)
-        watchlist=st.text_area("Watchlist (comma-separated)", "BTC-USD, ETH-USD, SOL-USD")
-        max_pairs=st.slider("Max pairs", 10, 1000, 200, 10)
+        quote=st.selectbox("Quote currency", QUOTES, index=0, key="sel_quote")
+        use_watch=st.checkbox("Use watchlist only", value=False, key="watch_only")
+        watchlist=st.text_area("Watchlist (comma-separated)", "BTC-USD, ETH-USD, SOL-USD", key="watch_text")
+        max_pairs=st.slider("Max pairs", 10, 1000, 200, 10, key="max_pairs")
 
 with st.sidebar:
-    exp_tf = st.expander("Timeframes", expanded=not st.session_state.get("collapse_all", False))
-    with exp_tf:
-        pick_tfs=st.multiselect("Select timeframes", DEFAULT_TFS + ["1w"], default=DEFAULT_TFS,
+    with expander("Timeframes", "exp_tf"):
+        pick_tfs=st.multiselect("Select timeframes", DEFAULT_TFS + ["1w"], default=DEFAULT_TFS, key="pick_tfs",
                                 help="💡 Choose windows to calculate % change. 1w is resampled from daily.")
         default_idx = pick_tfs.index("1h") if "1h" in pick_tfs else 0
-        sort_tf=st.selectbox("Primary sort timeframe", pick_tfs, index=default_idx,
+        sort_tf=st.selectbox("Primary sort timeframe", pick_tfs, index=default_idx, key="sort_tf",
                              help="💡 This timeframe drives % change ranking and most gates.")
-        sort_desc=st.checkbox("Sort descending (largest first)", value=True)
+        sort_desc=st.checkbox("Sort descending (largest first)", value=True, key="sort_desc")
 
 with st.sidebar:
-    exp_gates = st.expander("Gates", expanded=not st.session_state.get("collapse_all", False))
-    with exp_gates:
-        gate_logic_all = st.radio("Gate logic for enabled filters", ["ALL", "ANY"], index=0) == "ALL"
+    with expander("Gates", "exp_gates"):
+        gate_logic_all = st.radio("Gate logic for enabled filters", ["ALL", "ANY"], index=0, key="gate_logic") == "ALL"
         st.caption("💡 If nothing shows up, switch to ANY or loosen thresholds below.")
 
         st.markdown("**Price gate**")
-        pct_thresh=st.slider("Min +% change (Sort TF)", 0.0, 20.0, 1.0, 0.1,
+        pct_thresh=st.slider("Min +% change (Sort TF)", 0.0, 20.0, 0.3, 0.1, key="pct_gate",
                              help="💡 Lower this % if no pairs are appearing. Set to 0 to disable.")
+        st.caption("💡 Lower this if the page looks empty.")
         st.divider()
 
         st.markdown("**Volume gates**")
         colv1, colv2, colv3 = st.columns(3)
         with colv1:
-            use_quote = st.checkbox("Use Quote $", value=True, help="💡 Uncheck to disable this gate.")
-            min_quote = st.number_input("Min Quote $", min_value=0.0, value=500_000.0, step=50_000.0, format="%.0f",
+            use_quote = st.checkbox("Use Quote $", value=True, key="use_quote", help="💡 Uncheck to disable this gate.")
+            min_quote = st.number_input("Min Quote $", min_value=0.0, value=100_000.0, step=50_000.0, format="%.0f", key="min_quote",
                                         help="💡 Lower this $ to include smaller names.")
+            st.caption("💡 Try 50k or 0 to disable.")
         with colv2:
-            use_base  = st.checkbox("Use Base units", value=False, help="💡 Rarely needed; uncheck to disable.")
-            min_base  = st.number_input("Min Base units", min_value=0.0, value=0.0, step=100.0, format="%.0f",
+            use_base  = st.checkbox("Use Base units", value=False, key="use_base", help="💡 Rarely needed; uncheck to disable.")
+            min_base  = st.number_input("Min Base units", min_value=0.0, value=0.0, step=100.0, format="%.0f", key="min_base",
                                         help="💡 Lower this to include more pairs.")
+            st.caption("💡 Set 0 to disable.")
         with colv3:
-            use_spike = st.checkbox("Use Volume spike (SMA×)", value=True, help="💡 Uncheck to disable spike filter.")
-            vol_mult  = st.slider("Min SMA×", 1.0, 10.0, 1.2, 0.1,
-                                  help="💡 Reduce from 1.5× → 1.1× if too few pass.")
+            use_spike = st.checkbox("Use Volume spike (SMA×)", value=True, key="use_spike", help="💡 Uncheck to disable spike filter.")
+            vol_mult  = st.slider("Min SMA×", 1.0, 10.0, 1.05, 0.05, key="vol_mult",
+                                  help="💡 Reduce from 1.5× → 1.05× if too few pass.")
+            st.caption("💡 Lower = more names.")
         st.divider()
 
         st.markdown("**Trend gate**")
-        use_trend = st.checkbox("Require trend break", value=False, help="💡 Turn off to include names that haven't broken trend yet.")
-        trend_required = st.selectbox("Break type", ["Any","Breakout ↑","Breakdown ↓"], index=0,
+        use_trend = st.checkbox("Require trend break", value=False, key="use_trend", help="💡 Turn off to include names that haven't broken trend yet.")
+        trend_required = st.selectbox("Break type", ["Any","Breakout ↑","Breakdown ↓"], index=0, key="trend_req",
                                       help="💡 'Any' is least restrictive.")
+        st.caption("💡 Turn OFF if nothing passes.")
         st.divider()
 
         st.markdown("**Indicator gates (optional)**")
         colind1, colind2, colind3 = st.columns(3)
         with colind1:
-            use_rsi = st.checkbox("RSI ≥", value=False, help="💡 Uncheck to disable.")
-            rsi_min = st.slider("RSI min", 0, 100, 55, 1, help="💡 Lower to include more.")
+            use_rsi = st.checkbox("RSI ≥", value=False, key="use_rsi", help="💡 Uncheck to disable.")
+            rsi_min = st.slider("RSI min", 0, 100, 55, 1, key="rsi_min", help="💡 Lower to include more.")
         with colind2:
-            use_macd = st.checkbox("MACD", value=False, help="💡 Uncheck to disable MACD gate.")
-            macd_hist_nonneg = st.checkbox("Hist ≥ 0", value=True, help="💡 Makes MACD gate stricter.")
-            macd_need_cross  = st.checkbox("Fresh bull cross (≤3 bars)", value=False, help="💡 Very restrictive when on.")
+            use_macd = st.checkbox("MACD", value=False, key="use_macd", help="💡 Uncheck to disable MACD gate.")
+            macd_hist_nonneg = st.checkbox("Hist ≥ 0", value=True, key="macd_hist", help="💡 Makes MACD gate stricter.")
+            macd_need_cross  = st.checkbox("Fresh bull cross (≤3 bars)", value=False, key="macd_cross", help="💡 Very restrictive when on.")
         with colind3:
-            use_atr = st.checkbox("ATR% ≥", value=False, help="💡 Uncheck to disable ATR gate.")
-            atrp_min = st.slider("ATR% min", 0.0, 10.0, 0.5, 0.1, help="💡 Lower to include more.")
+            use_atr = st.checkbox("ATR% ≥", value=False, key="use_atr", help="💡 Uncheck to disable ATR gate.")
+            atrp_min = st.slider("ATR% min", 0.0, 10.0, 0.5, 0.1, key="atr_min", help="💡 Lower to include more.")
 
 with st.sidebar:
-    exp_hist = st.expander("History depth", expanded=not st.session_state.get("collapse_all", False))
-    with exp_hist:
-        basis=st.selectbox("Basis for ATH/ATL & recent-high", ["Hourly","Daily","Weekly"], index=1,
+    with expander("History depth", "exp_hist"):
+        basis=st.selectbox("Basis for ATH/ATL & recent-high", ["Hourly","Daily","Weekly"], index=1, key="basis",
                            help="💡 Shorter windows run faster; extend if ATH/ATL dates look too recent.")
         if basis=="Hourly":
-            amount=st.slider("Hours to fetch (≤72)", 1, 72, 24, 1)
+            amount=st.slider("Hours to fetch (≤72)", 1, 72, 24, 1, key="amt_hour")
         elif basis=="Daily":
-            amount=st.slider("Days to fetch (≤365)", 1, 365, 90, 1)
+            amount=st.slider("Days to fetch (≤365)", 1, 365, 90, 1, key="amt_day")
         else:
-            amount=st.slider("Weeks to fetch (≤52)", 1, 52, 12, 1)
+            amount=st.slider("Weeks to fetch (≤52)", 1, 52, 12, 1, key="amt_week")
 
 with st.sidebar:
-    exp_len = st.expander("Trend/Indicator lengths", expanded=not st.session_state.get("collapse_all", False))
-    with exp_len:
-        pivot_span=st.slider("Pivot lookback span (bars)", 2, 10, 5, 1,
+    with expander("Trend/Indicator lengths", "exp_len"):
+        pivot_span=st.slider("Pivot lookback span (bars)", 2, 10, 5, 1, key="pivot_span",
                              help="💡 Increase to smooth noise; decrease for earlier (noisier) signals.")
-        rsi_len=st.slider("RSI length", 5, 50, 14, 1)
-        macd_fast=st.slider("MACD fast", 3, 50, 12, 1)
-        macd_slow=st.slider("MACD slow", 5, 100, 26, 1)
-        macd_sig =st.slider("MACD signal", 3, 50, 9, 1)
-        atr_len =st.slider("ATR length", 5, 50, 14, 1)
+        rsi_len=st.slider("RSI length", 5, 50, 14, 1, key="rsi_len")
+        macd_fast=st.slider("MACD fast", 3, 50, 12, 1, key="macd_fast")
+        macd_slow=st.slider("MACD slow", 5, 100, 26, 1, key="macd_slow")
+        macd_sig =st.slider("MACD signal", 3, 50, 9, 1, key="macd_sig")
+        atr_len =st.slider("ATR length", 5, 50, 14, 1, key="atr_len")
 
 with st.sidebar:
-    exp_disp = st.expander("Display", expanded=not st.session_state.get("collapse_all", False))
-    with exp_disp:
-        display_wrap = st.checkbox("Wrap text (show full cell text)", value=False)
-        col_min_px   = st.slider("Column min width (px)", 120, 360, 160, 10)
-        font_scale   = st.slider("Font scale", 0.8, 1.6, 1.0, 0.05)
+    with expander("Display", "exp_disp"):
+        display_wrap = st.checkbox("Wrap text (show full cell text)", value=False, key="wrap")
+        col_min_px   = st.slider("Column min width (px)", 120, 360, 160, 10, key="col_min")
+        font_scale   = st.slider("Font scale", 0.8, 1.6, 1.0, 0.05, key="font_scale")
 
 with st.sidebar:
-    exp_notif = st.expander("Notifications", expanded=not st.session_state.get("collapse_all", False))
-    with exp_notif:
-        enable_sound=st.checkbox("Audible chime (browser)", value=True)
-        st.caption("Click **Arm audio** once if your browser blocks sound. 💡 If no alerts, loosen gates above.")
+    with expander("Notifications", "exp_notif"):
+        enable_sound=st.checkbox("Audible chime (browser)", value=True, key="audio")
         colA, colB = st.columns([1, 1.4])
         with colA:
             if st.button("🔊 Arm audio"): st.markdown("<script>window.mvArmAudio && window.mvArmAudio();</script>", unsafe_allow_html=True)
         with colB:
-            if st.button("Test beep"): st.markdown("<script>localStorage.setItem('mustBeep','1');</script>", unsafe_allow_html=True)
-        email_to=st.text_input("Email recipient (optional)", "")
-        webhook_url=st.text_input("Webhook URL (optional)", "", help="Discord/Slack/Telegram/Pushover/ntfy, etc.")
+            if st.button("Test beep"): st.markdown("<script>window.mvTestBeep && window.mvTestBeep();</script>", unsafe_allow_html=True)
+        st.caption("💡 If you hear nothing, click once anywhere to allow audio.")
+        email_to=st.text_input("Email recipient (optional)", "", key="email_to")
+        webhook_url=st.text_input("Webhook URL (optional)", "", key="webhook", help="Discord/Slack/Telegram/Pushover/ntfy, etc.")
 
 with st.sidebar:
-    exp_adv = st.expander("Advanced", expanded=not st.session_state.get("collapse_all", False))
-    with exp_adv:
-        mode=st.radio("Data source mode", ["REST only", "WebSocket + REST (hybrid)"], index=0)
-        chunk=st.slider("Coinbase WebSocket subscribe chunk", 2, 200, 10, 1)
+    with expander("Auto-refresh", "exp_refresh"):
+        auto_refresh = st.checkbox("Enable auto-refresh", value=False, key="auto_ref")
+        refresh_sec  = st.slider("Interval (seconds)", 5, 120, 30, 1, key="ref_int")
+        # JS-based refresh to avoid extra dependency; paused automatically if toggle off
+        if auto_refresh:
+            st.markdown(f"<script>window._mv_autoref && clearInterval(window._mv_autoref); window._mv_autoref=setInterval(()=>window.location.reload(), {refresh_sec*1000});</script>", unsafe_allow_html=True)
+        else:
+            st.markdown("<script>if(window._mv_autoref){clearInterval(window._mv_autoref); window._mv_autoref=null;}</script>", unsafe_allow_html=True)
+
+with st.sidebar:
+    with expander("Advanced", "exp_adv"):
+        mode=st.radio("Data source mode", ["REST only", "WebSocket + REST (hybrid)"], index=0, key="mode")
+        chunk=st.slider("Coinbase WebSocket subscribe chunk", 2, 200, 10, 1, key="ws_chunk")
         if st.button("Restart stream"): st.session_state["ws_alive"]=False; time.sleep(0.2); st.rerun()
 
-st.session_state["collapse_all"] = False
+# clear collapse flag after first render
+st.session_state["collapse_all_now"] = False
 
+# Bootstraps
 inject_css(display_wrap, col_min_px, font_scale)
 audible_js()
 inject_chart_modal_and_helpers()
 
-st.markdown("### 🔧 Quick Controls")
-col1, col2, col3, col4 = st.columns([1.1, 1.2, 1.3, 1.0])
-with col1: st.write(f"**Sort TF:** {sort_tf}")
-with col2: pct_thresh = st.slider("Min +% change", 0.0, 20.0, pct_thresh, 0.1, key="qc_pct")
-with col3: min_quote  = st.number_input("Min Quote $", min_value=0.0, value=min_quote, step=50_000.0, format="%.0f", key="qc_qv")
-with col4:
-    if st.button("🔔 Test alert"):
-        if enable_sound: trigger_beep()
-        if email_to:
-            ok, info=send_email_alert("[Crypto Tracker] Test alert", "Quick test", email_to); st.success("Email OK") if ok else st.warning(info)
-        if webhook_url:
-            ok, info=post_webhook(webhook_url, {"title":"[Crypto Tracker] Test alert","lines":["Quick test"]}); st.success("Webhook OK") if ok else st.warning(f"Webhook error: {info}")
-st.divider()
+# Header + timeframe label
+st.subheader(f"Timeframe: {st.session_state['sort_tf']}")
 
 # Discover pairs
 if use_watch and watchlist.strip():
@@ -838,22 +904,26 @@ base=compute_view(effective_exchange, pairs, needed_tfs, sort_tf, rsi_len, macd_
 if base.empty:
     st.info("No data returned. Try fewer pairs or different Timeframes."); st.stop()
 
-# Enrich with ATH/ATL + trend/recent-high
+# Enrich rows
 def recent_high_metrics_safe(df_prices: pd.DataFrame, span: int):
-    try:
-        return recent_high_metrics(df_prices, span)
-    except Exception:
-        return np.nan, "—"
+    try: return recent_high_metrics(df_prices, span)
+    except Exception: return np.nan, "—"
 
 extras=[]
+candles_for_js={}  # for LW charts {symbol: [{time,open,high,low,close}, ...]}
 for pid in pairs:
     h=get_hist(effective_exchange, pid, basis, amount)
-    if h is not None and len(h)>=10: info=ath_atl_info(h)
-    else: info={"From ATH %": np.nan, "ATH date":"—", "From ATL %": np.nan, "ATL date":"—"}
+    info={"From ATH %": np.nan, "ATH date":"—", "From ATL %": np.nan, "ATL date":"—"} if (h is None or len(h)<10) else ath_atl_info(h)
     dft=get_df_for_tf(effective_exchange, pid, sort_tf, {}, {})
     if dft is not None and len(dft)>=max(50, pivot_span*4+10):
         pct_since_high, since_high = recent_high_metrics_safe(dft[["ts","close"]], span=pivot_span)
         tb, since_break = trend_breakout_info(dft[["ts","close"]], span=pivot_span)
+        # Build LW chart data (last 150 bars)
+        lite = dft.tail(150)
+        arr = [{"time": int(pd.to_datetime(t).timestamp()), "open": float(o), "high": float(hh), "low": float(ll), "close": float(c)}
+               for t,o,hh,ll,c in zip(lite["ts"], lite["open"], lite["high"], lite["low"], lite["close"])]
+        sym = tv_symbol(effective_exchange, pid)
+        if sym: candles_for_js[sym]=arr
     else:
         pct_since_high, since_high, tb, since_break = np.nan, "—", "—", "—"
     extras.append({"Pair": pid,
@@ -864,7 +934,10 @@ for pid in pairs:
                    **info})
 view=base.merge(pd.DataFrame(extras), on="Pair", how="left")
 
-# Display table
+# Push candle cache to JS (for preview + modal)
+st.markdown(f"<script>window._mvCandleCache = {json.dumps(candles_for_js)}</script>", unsafe_allow_html=True)
+
+# Display table build
 price_col=f"Price {sort_tf}" if f"Price {sort_tf}" in view.columns else "Last"
 pct_col=f"% {sort_tf}"; pct_label=f"% change ({sort_tf})"
 disp=view.copy()
@@ -883,24 +956,24 @@ disp = disp[["Pair"]].assign(
 disp = disp.sort_values(pct_label, ascending=not sort_desc, na_position="last").reset_index(drop=True)
 disp.insert(0, "#", disp.index + 1)
 
-# Gates
+# Masks
 view_idxed = view.set_index("Pair")
 green_mask, yellow_mask = build_gate_mask(
     view_idxed, sort_tf,
-    pct_thresh,
-    use_quote, min_quote,
-    use_base,  min_base,
-    use_spike, vol_mult,
-    gate_logic_all,
-    use_trend, trend_required,
-    use_rsi, rsi_min,
-    use_macd, macd_hist_nonneg, macd_need_cross,
-    use_atr, atrp_min
+    st.session_state["pct_gate"],
+    st.session_state["use_quote"], st.session_state["min_quote"],
+    st.session_state["use_base"],  st.session_state["min_base"],
+    st.session_state["use_spike"], st.session_state["vol_mult"],
+    st.session_state["gate_logic"],
+    st.session_state["use_trend"], st.session_state["trend_req"],
+    st.session_state["use_rsi"],   st.session_state["rsi_min"],
+    st.session_state["use_macd"],  st.session_state["macd_hist"], st.session_state["macd_cross"],
+    st.session_state["use_atr"],   st.session_state["atr_min"]
 )
 green_mask = green_mask.reindex(disp["Pair"].values).reset_index(drop=True)
 yellow_mask = yellow_mask.reindex(disp["Pair"].values).reset_index(drop=True)
 
-# Top‑10 (ALL gates)
+# Top 10 (ALL gates)
 st.subheader("📌 Top‑10 (meets ALL enabled gates)")
 top_now = disp.loc[green_mask].copy()
 top_now = top_now.sort_values(pct_label, ascending=not sort_desc, na_position="last").head(10)
@@ -914,7 +987,7 @@ else:
 st.subheader("📑 All pairs (ranked by % change)")
 render_html_table(disp, green_mask, yellow_mask, effective_exchange, sort_tf, table_key="main")
 
-# Alerts
+# Alerts + log
 new_spikes=[]
 if not top_now.empty:
     for _, r in top_now.iterrows():
@@ -932,22 +1005,29 @@ for _, r in disp.iterrows():
             trend_triggers.append((r["Pair"], tb, r["Broken since"]))
             st.session_state["trend_alerted"].add(tkey)
 
-if enable_sound and (new_spikes or trend_triggers): trigger_beep()
-if (new_spikes or trend_triggers) and (email_to or webhook_url):
-    lines=[]
-    if new_spikes:
-        lines.append(f"Top-10 entries on {sort_tf}:")
-        for p, pct in new_spikes: lines.append(f" • {p}: {pct:+.2f}%")
-    if trend_triggers:
-        lines.append("Trend breaks:")
-        for p, tb, since in trend_triggers: lines.append(f" • {p}: {tb} (since {since})")
+log_lines=[]
+if new_spikes:
+    log_lines.append(f"Top‑10 entries on {sort_tf}:")
+    for p, pct in new_spikes: log_lines.append(f" • {p}: {pct:+.2f}%")
+if trend_triggers:
+    log_lines.append("Trend breaks:")
+    for p, tb, since in trend_triggers: log_lines.append(f" • {p}: {tb} (since {since})")
+
+if (new_spikes or trend_triggers):
+    if enable_sound: trigger_beep()
     sub=f"[{effective_exchange}] Crypto Tracker alerts"
     if email_to:
-        ok, info=send_email_alert(sub, "\n".join(lines), email_to); 
+        ok, info=send_email_alert(sub, "\n".join(log_lines), email_to)
         if not ok: st.warning(info)
     if webhook_url:
-        ok, info=post_webhook(webhook_url, {"title": sub, "lines": lines});
+        ok, info=post_webhook(webhook_url, {"title": sub, "lines": log_lines})
         if not ok: st.warning(f"Webhook error: {info}")
+    st.session_state["alert_log"] = (st.session_state.get("alert_log", []) + [sub] + log_lines)[-30:]
+
+if st.session_state.get("alert_log"):
+    with st.expander("Alert log (last 30)"):
+        for line in st.session_state["alert_log"]:
+            st.write(line)
 
 st.caption(f"Pairs: {len(disp)} • Exchange: {effective_exchange} • Quote: {quote} • Sort TF: {sort_tf} • "
-           f"Gates: {'ALL' if gate_logic_all else 'ANY'} • Mode: {mode}")
+           f"Gates: {'ALL' if st.session_state['gate_logic'] else 'ANY'} • Mode: {mode}")
