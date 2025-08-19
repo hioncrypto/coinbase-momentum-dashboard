@@ -735,9 +735,10 @@ with st.sidebar:
         st.session_state["collapse_all_now"] = True
         st.rerun()
 
-def expander(title, key):
+def expander(title, key=None):
     opened = not st.session_state.get("collapse_all_now", False)
-    return st.expander(title, expanded=opened, key=key)
+    # Your Streamlit build doesn't support key= on st.expander, so we ignore it
+    return st.expander(label=title, expanded=opened)
 
 with st.sidebar:
     with expander("Market", "exp_market"):
