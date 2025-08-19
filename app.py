@@ -1,8 +1,8 @@
-# app.py — Crypto Tracker (sellable build)
-# Highlights:
-# - Semi-restrictive defaults (shows results, but not noisy)
+# app.py — Crypto Tracker (sellable build, fixed)
+# - Fixed: Coinbase fetch_candles SyntaxError (no one-line "arr=r.json(); if not arr")
+# - Semi-restrictive defaults (shows results, not noisy)
 # - Collapse-all button for sidebar expanders
-# - Top scrollbar fully synced with table (fixed)
+# - Top scrollbar fully synced with table
 # - Click headers to sort ASC/DESC (client-side)
 # - Green row = all gates pass; Yellow row = partial pass (true yellow)
 # - Pair hover + in-app TradingView modal (iframe, CSP-safe)
@@ -37,10 +37,10 @@ def init_state():
     ss.setdefault("last_alert_hashes", set())
     ss.setdefault("trend_alerted", set())
     ss.setdefault("diag", {})
-    ss.setdefault("expander_keys", {})  # track expanders open/close
+    ss.setdefault("expander_keys", {})
 init_state()
 
-APP_VERSION = "v1.5.0"
+APP_VERSION = "v1.5.1"
 
 # =========================
 #  CSS / AUDIO
@@ -54,7 +54,6 @@ def inject_css(display_wrap: bool, col_min_px: int, font_scale: float):
 
       .hint {{ color:#9aa3ab; font-size:0.92em; }}
 
-      /* Modal (iframe) */
       .tv-modal-backdrop {{
         position: fixed; inset: 0; background: rgba(0,0,0,0.65);
         display: none; align-items: center; justify-content: center; z-index: 99999;
@@ -72,15 +71,12 @@ def inject_css(display_wrap: bool, col_min_px: int, font_scale: float):
       .tv-close {{ cursor:pointer; border:0; background:transparent; font-size:1.3rem; opacity:.8; }}
       .tv-modal-body {{ width:100%; height:calc(100% - 44px); }}
 
-      /* Top scrollbar */
       .top-scrollbar {{ width:100%; overflow-x:auto; overflow-y:hidden; height:16px; }}
       .top-scrollbar .spacer {{ height:1px; }}
 
-      /* Row highlights */
       .row-green  {{ background: rgba(0,255,0,0.20); font-weight:600; }}
       .row-yellow {{ background: rgba(255,255,0,0.35); font-weight:600; }}
 
-      /* Table */
       table.mv-table {{ width: max(1200px, 100%); border-collapse: collapse; table-layout: fixed; }}
       table.mv-table th, table.mv-table td {{
         padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,0.06);
@@ -98,7 +94,6 @@ def inject_css(display_wrap: bool, col_min_px: int, font_scale: float):
     """, unsafe_allow_html=True)
 
 def audible_js():
-    # AudioContext + <audio> fallback (short beep)
     st.markdown("""
     <audio id="mv_beep" preload="auto">
       <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAAAAP8AAP//AAD//wAA//8AAP//AAD//wAA" type="audio/wav">
@@ -185,7 +180,8 @@ EXCHANGES = [
 
 def coinbase_list_products(quote: str) -> List[str]:
     try:
-        r = requests.get(f"{CB_BASE}/products", timeout=15); r.raise_for_status()
+        r = requests.get(f"{CB_BASE}/products", timeout=15)
+        r.raise_for_status()
         data = r.json()
         return sorted([f"{p['base_currency']}-{p['quote_currency']}" for p in data if p.get("quote_currency")==quote])
     except Exception:
@@ -193,7 +189,8 @@ def coinbase_list_products(quote: str) -> List[str]:
 
 def binance_list_products(quote: str) -> List[str]:
     try:
-        r = requests.get(f"{BN_BASE}/api/v3/exchangeInfo", timeout=20); r.raise_for_status()
+        r = requests.get(f"{BN_BASE}/api/v3/exchangeInfo", timeout=20)
+        r.raise_for_status()
         info = r.json(); out=[]
         for s in info.get("symbols", []):
             if s.get("status")!="TRADING": continue
@@ -218,11 +215,14 @@ def fetch_candles(exchange: str, pair_dash: str, granularity_sec: int,
         if start: params["start"]=start.replace(tzinfo=dt.timezone.utc).isoformat()
         if end:   params["end"]=end.replace(tzinfo=dt.timezone.utc).isoformat()
         try:
-            r=requests.get(url, params=params, timeout=20)
-            if r.status_code!=200: return None
-            arr=r.json(); if not arr: return None
-            df=pd.DataFrame(arr, columns=["ts","low","high","open","close","volume"])
-            df["ts"]=pd.to_datetime(df["ts"], unit="s", utc=True)
+            r = requests.get(url, params=params, timeout=20)
+            if r.status_code != 200:
+                return None
+            arr = r.json()
+            if not arr:
+                return None
+            df = pd.DataFrame(arr, columns=["ts","low","high","open","close","volume"])
+            df["ts"] = pd.to_datetime(df["ts"], unit="s", utc=True)
             return df.sort_values("ts").reset_index(drop=True)
         except Exception:
             return None
@@ -476,42 +476,27 @@ def build_gate_mask(view_idxed: pd.DataFrame, sort_tf: str,
                     use_rsi: bool, rsi_min: float,
                     use_macd: bool, macd_hist_nonneg: bool, macd_need_cross: bool,
                     use_atr: bool, atrp_min: float):
-    # 💡 If too restrictive: reduce pct_thresh / min_quote / min_base / vol_mult,
-    #     disable extra gates (RSI/MACD/ATR) or switch logic to ANY.
+    # 💡 Too restrictive? Lower pct_thresh / min_quote / min_base / vol_mult,
+    #    disable extra gates (RSI/MACD/ATR) or switch logic to ANY.
     def col(name): return view_idxed.get(name)
 
     mlist=[]
-    # GATE: % change (lower to show more)
     m_pct=(col(f"% {sort_tf}").fillna(-1) >= pct_thresh); mlist.append(m_pct)
-
-    # GATE: Quote$ volume (lower to include smaller pairs, or disable)
     if use_quote: mlist.append((col(f"QuoteVol {sort_tf}").fillna(0) >= min_quote))
-
-    # GATE: Base units (rarely needed; lower or disable)
     if use_base:  mlist.append((col(f"BaseVol {sort_tf}").fillna(0)  >= min_base))
-
-    # GATE: Volume spike SMA× (reduce multiple or disable)
     if use_spike: mlist.append((col(f"Vol x {sort_tf}").fillna(0)   >= vol_mult))
-
-    # GATE: Trend break (turn off to include non-breakouts)
     if use_trend:
         tb=col("Trend broken?")
         if trend_required=="Any": m_trend=tb.isin(["Yes ↑","Yes ↓"])
         elif trend_required=="Breakout ↑": m_trend=tb.eq("Yes ↑")
         else: m_trend=tb.eq("Yes ↓")
         mlist.append(m_trend.fillna(False))
-
-    # GATE: RSI (uncheck to disable)
     if use_rsi:  mlist.append((col(f"RSI {sort_tf}").fillna(0) >= rsi_min))
-
-    # GATE: MACD (uncheck to disable; turning on both hist>=0 + cross can be strict)
     if use_macd:
         m=pd.Series(True, index=view_idxed.index)
         if macd_hist_nonneg: m = m & (col(f"MACDh {sort_tf}").fillna(-1) >= 0)
         if macd_need_cross:  m = m &  col(f"MACDcross {sort_tf}").fillna(False)
         mlist.append(m)
-
-    # GATE: ATR% (higher favors movers; lower or disable to show more)
     if use_atr:  mlist.append((col(f"ATR% {sort_tf}").fillna(0) >= atrp_min))
 
     if not mlist:
@@ -573,7 +558,6 @@ def inject_chart_modal_and_helpers():
         document.onkeydown=null;
       }
 
-      // Make a table sortable by clicking headers
       function mvMakeSortable(tableId){
         const tbl=document.getElementById(tableId); if(!tbl) return;
         const thead=tbl.querySelector('thead'); const tbody=tbl.querySelector('tbody');
@@ -604,7 +588,7 @@ def inject_chart_modal_and_helpers():
         });
       }
 
-      // Top scrollbar sync — FIX: size spacer using table.scrollWidth, not wrapper
+      // FIXED: size spacer from table.scrollWidth; sync both directions
       function mvInitTopScroll(topId, wrapId, tableId){
         const top=document.getElementById(topId);
         const wrap=document.getElementById(wrapId);
@@ -630,7 +614,6 @@ def inject_chart_modal_and_helpers():
 
 def render_html_table(df: pd.DataFrame, green_mask: pd.Series, yellow_mask: pd.Series,
                       exchange: str, sort_tf: str, table_key: str):
-    # unique per table
     wrap_id = f"{table_key}_wrap_{uuid.uuid4().hex[:6]}"
     table_id = f"{table_key}_tbl_{uuid.uuid4().hex[:6]}"
     top_id   = f"{table_key}_top_{uuid.uuid4().hex[:6]}"
@@ -679,22 +662,19 @@ def render_html_table(df: pd.DataFrame, green_mask: pd.Series, yellow_mask: pd.S
 st.set_page_config(page_title="Crypto Tracker", layout="wide")
 st.title(f"Crypto Tracker — {APP_VERSION}")
 
-# ---- Collapse-all button (closes all expanders at once)
 with st.sidebar:
     colA, colB = st.columns([1.2, 1])
     with colA:
         if st.button("Collapse all open menu tabs"):
-            # Flip a flag and rerun; expanders below read this to set expanded=False
             st.session_state["collapse_all"] = True
             st.rerun()
     with colB:
         st.caption("Quick tidy")
 
-# ---- MARKET
 with st.sidebar:
     exp_market = st.expander("Market", expanded=not st.session_state.get("collapse_all", False))
     with exp_market:
-        exchange=st.selectbox("Exchange", EXCHANGES, index=0, help="💡 Use Coinbase or Binance now; others show a 'coming soon' note.")
+        exchange=st.selectbox("Exchange", EXCHANGES, index=0, help="💡 Use Coinbase or Binance now; others are 'coming soon'.")
         effective_exchange="Coinbase" if "(coming soon)" in exchange else exchange
         if "(coming soon)" in exchange: st.info("This exchange is coming soon. Please use Coinbase or Binance for now.")
         quote=st.selectbox("Quote currency", QUOTES, index=0)
@@ -702,18 +682,16 @@ with st.sidebar:
         watchlist=st.text_area("Watchlist (comma-separated)", "BTC-USD, ETH-USD, SOL-USD")
         max_pairs=st.slider("Max pairs", 10, 1000, 200, 10)
 
-# ---- TIMEFRAMES
 with st.sidebar:
     exp_tf = st.expander("Timeframes", expanded=not st.session_state.get("collapse_all", False))
     with exp_tf:
         pick_tfs=st.multiselect("Select timeframes", DEFAULT_TFS + ["1w"], default=DEFAULT_TFS,
-                                help="💡 Choose the windows to calculate % change. 1w is resampled from daily.")
+                                help="💡 Choose windows to calculate % change. 1w is resampled from daily.")
         default_idx = pick_tfs.index("1h") if "1h" in pick_tfs else 0
         sort_tf=st.selectbox("Primary sort timeframe", pick_tfs, index=default_idx,
                              help="💡 This timeframe drives % change ranking and most gates.")
         sort_desc=st.checkbox("Sort descending (largest first)", value=True)
 
-# ---- GATES (Semi-restrictive defaults + inline hints)
 with st.sidebar:
     exp_gates = st.expander("Gates", expanded=not st.session_state.get("collapse_all", False))
     with exp_gates:
@@ -721,7 +699,6 @@ with st.sidebar:
         st.caption("💡 If nothing shows up, switch to ANY or loosen thresholds below.")
 
         st.markdown("**Price gate**")
-        # Default 1.0% — semi-restrictive
         pct_thresh=st.slider("Min +% change (Sort TF)", 0.0, 20.0, 1.0, 0.1,
                              help="💡 Lower this % if no pairs are appearing. Set to 0 to disable.")
         st.divider()
@@ -761,7 +738,6 @@ with st.sidebar:
             use_atr = st.checkbox("ATR% ≥", value=False, help="💡 Uncheck to disable ATR gate.")
             atrp_min = st.slider("ATR% min", 0.0, 10.0, 0.5, 0.1, help="💡 Lower to include more.")
 
-# ---- HISTORY DEPTH
 with st.sidebar:
     exp_hist = st.expander("History depth", expanded=not st.session_state.get("collapse_all", False))
     with exp_hist:
@@ -774,7 +750,6 @@ with st.sidebar:
         else:
             amount=st.slider("Weeks to fetch (≤52)", 1, 52, 12, 1)
 
-# ---- LENGTHS
 with st.sidebar:
     exp_len = st.expander("Trend/Indicator lengths", expanded=not st.session_state.get("collapse_all", False))
     with exp_len:
@@ -786,7 +761,6 @@ with st.sidebar:
         macd_sig =st.slider("MACD signal", 3, 50, 9, 1)
         atr_len =st.slider("ATR length", 5, 50, 14, 1)
 
-# ---- DISPLAY
 with st.sidebar:
     exp_disp = st.expander("Display", expanded=not st.session_state.get("collapse_all", False))
     with exp_disp:
@@ -794,7 +768,6 @@ with st.sidebar:
         col_min_px   = st.slider("Column min width (px)", 120, 360, 160, 10)
         font_scale   = st.slider("Font scale", 0.8, 1.6, 1.0, 0.05)
 
-# ---- NOTIFICATIONS
 with st.sidebar:
     exp_notif = st.expander("Notifications", expanded=not st.session_state.get("collapse_all", False))
     with exp_notif:
@@ -808,7 +781,6 @@ with st.sidebar:
         email_to=st.text_input("Email recipient (optional)", "")
         webhook_url=st.text_input("Webhook URL (optional)", "", help="Discord/Slack/Telegram/Pushover/ntfy, etc.")
 
-# ---- ADVANCED
 with st.sidebar:
     exp_adv = st.expander("Advanced", expanded=not st.session_state.get("collapse_all", False))
     with exp_adv:
@@ -816,15 +788,12 @@ with st.sidebar:
         chunk=st.slider("Coinbase WebSocket subscribe chunk", 2, 200, 10, 1)
         if st.button("Restart stream"): st.session_state["ws_alive"]=False; time.sleep(0.2); st.rerun()
 
-# Reset collapse flag after UI render so next open respects user actions
 st.session_state["collapse_all"] = False
 
-# === Init CSS/JS/AUDIO/MODAL
 inject_css(display_wrap, col_min_px, font_scale)
 audible_js()
 inject_chart_modal_and_helpers()
 
-# === Quick Controls
 st.markdown("### 🔧 Quick Controls")
 col1, col2, col3, col4 = st.columns([1.1, 1.2, 1.3, 1.0])
 with col1: st.write(f"**Sort TF:** {sort_tf}")
@@ -839,7 +808,7 @@ with col4:
             ok, info=post_webhook(webhook_url, {"title":"[Crypto Tracker] Test alert","lines":["Quick test"]}); st.success("Webhook OK") if ok else st.warning(f"Webhook error: {info}")
 st.divider()
 
-# === Discover pairs
+# Discover pairs
 if use_watch and watchlist.strip():
     pairs=[p.strip().upper() for p in watchlist.split(",") if p.strip()]
 else:
@@ -850,7 +819,7 @@ pairs=pairs[:max_pairs]
 if not pairs:
     st.info("No pairs. Try a different Quote, uncheck Watchlist-only, or increase Max pairs."); st.stop()
 
-# === WebSocket (Coinbase only)
+# WebSocket (Coinbase only)
 diag={"WS lib": WS_AVAILABLE, "exchange": effective_exchange, "mode": mode}
 if effective_exchange!="Coinbase" and mode.startswith("WebSocket"):
     st.warning("WebSocket is only available on Coinbase. Using REST.")
@@ -863,13 +832,13 @@ if mode.startswith("WebSocket") and WS_AVAILABLE and effective_exchange=="Coinba
 diag["ws_alive"]=bool(st.session_state["ws_alive"])
 st.session_state["diag"]=diag
 
-# === Build view
+# Build view
 needed_tfs = sorted(set([sort_tf] + DEFAULT_TFS))
 base=compute_view(effective_exchange, pairs, needed_tfs, sort_tf, rsi_len, macd_fast, macd_slow, macd_sig, atr_len)
 if base.empty:
     st.info("No data returned. Try fewer pairs or different Timeframes."); st.stop()
 
-# === Enrich with ATH/ATL + trend/recent-high
+# Enrich with ATH/ATL + trend/recent-high
 def recent_high_metrics_safe(df_prices: pd.DataFrame, span: int):
     try:
         return recent_high_metrics(df_prices, span)
@@ -895,7 +864,7 @@ for pid in pairs:
                    **info})
 view=base.merge(pd.DataFrame(extras), on="Pair", how="left")
 
-# === Display table (requested columns/order)
+# Display table
 price_col=f"Price {sort_tf}" if f"Price {sort_tf}" in view.columns else "Last"
 pct_col=f"% {sort_tf}"; pct_label=f"% change ({sort_tf})"
 disp=view.copy()
@@ -911,12 +880,10 @@ disp = disp[["Pair"]].assign(
         "Broken since": view["Broken since"],
     }
 )
-
-# Server-side default sort by % change desc (client can resort by header click)
 disp = disp.sort_values(pct_label, ascending=not sort_desc, na_position="last").reset_index(drop=True)
 disp.insert(0, "#", disp.index + 1)
 
-# === Gate masks
+# Gates
 view_idxed = view.set_index("Pair")
 green_mask, yellow_mask = build_gate_mask(
     view_idxed, sort_tf,
@@ -933,7 +900,7 @@ green_mask, yellow_mask = build_gate_mask(
 green_mask = green_mask.reindex(disp["Pair"].values).reset_index(drop=True)
 yellow_mask = yellow_mask.reindex(disp["Pair"].values).reset_index(drop=True)
 
-# === Top‑10 (ALL gates)
+# Top‑10 (ALL gates)
 st.subheader("📌 Top‑10 (meets ALL enabled gates)")
 top_now = disp.loc[green_mask].copy()
 top_now = top_now.sort_values(pct_label, ascending=not sort_desc, na_position="last").head(10)
@@ -943,11 +910,11 @@ else:
     render_html_table(top_now.reset_index(drop=True), pd.Series([True]*len(top_now)),
                       pd.Series([False]*len(top_now)), effective_exchange, sort_tf, table_key="top")
 
-# === All pairs
+# All pairs
 st.subheader("📑 All pairs (ranked by % change)")
 render_html_table(disp, green_mask, yellow_mask, effective_exchange, sort_tf, table_key="main")
 
-# === Alerts
+# Alerts
 new_spikes=[]
 if not top_now.empty:
     for _, r in top_now.iterrows():
