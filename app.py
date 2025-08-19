@@ -1,11 +1,13 @@
-# app.py — Movers scanner with in‑app TradingView modal + top scrollbar
-# - Pair cell opens a true TradingView chart in a modal (no redirect).
-# - Top horizontal scrollbar synced with the table.
-# - Green rows = pass ALL enabled gates; Yellow rows = partial pass.
-# - Keeps your original columns: Pair | Price | % change (TF) | From ATH% (date) | From ATL% (date) | Trend? | Since when
-# - Sorting by signed % change (desc); Top‑10 panel only pairs that pass ALL gates.
+# app.py — Crypto Tracker
+# - In‑app TradingView chart modal (iframe, no external JS execution)
+# - Top horizontal scrollbar synced to the table (no need to scroll to bottom)
+# - Same columns you requested:
+#   # | Pair | Price | % change (TF) | From ATH % | ATH date | From ATL % | ATL date | Trend broken? | Broken since
+# - Green row: meets ALL enabled gates; Yellow: partial pass; Default: none
+# - Top‑10 panel lists only pairs that meet ALL enabled gates
+# - Sorting by signed % change (descending)
 # - History caps: Hours ≤ 72, Days ≤ 365, Weeks ≤ 52
-# - Alerts: Top‑10 entries + Trend breaks (audible/email/webhook), plus Test Alerts.
+# - Alerts: Top‑10 entries + Trend breaks (audible/email/webhook) + Test Alert buttons
 #
 # SMTP example (.streamlit/secrets.toml):
 # [smtp]
@@ -51,7 +53,7 @@ def inject_css_scale(scale: float):
       [data-testid="stSidebar"] * {{ font-size: {scale}rem; }}
       .hint {{ color:#9aa3ab; font-size:0.92em; }}
 
-      /* Modal overlay for TradingView */
+      /* Modal overlay for TradingView (iframe version) */
       .tv-modal-backdrop {{
         position: fixed; inset: 0; background: rgba(0,0,0,0.65);
         display: none; align-items: center; justify-content: center;
@@ -68,27 +70,21 @@ def inject_css_scale(scale: float):
         display:flex; align-items:center; justify-content:space-between;
         padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,0.08);
       }}
-      .tv-modal-title {{
-        font-weight: 700; font-size: 1.05rem;
-      }}
+      .tv-modal-title {{ font-weight: 700; font-size: 1.05rem; }}
       .tv-close {{
         cursor: pointer; border: 0; background: transparent;
         font-size: 1.3rem; opacity: .8;
       }}
-      .tv-modal-body {{
-        width: 100%; height: calc(100% - 44px);
-      }}
+      .tv-modal-body {{ width: 100%; height: calc(100% - 44px); }}
 
       /* Top scrollbar wrapper */
       .top-scrollbar {{
         width: 100%; overflow-x: auto; overflow-y: hidden;
-        height: 16px;  /* slim bar */
+        height: 16px;
       }}
-      .top-scrollbar .spacer {{
-        height: 1px; /* invisible but gives width */
-      }}
+      .top-scrollbar .spacer {{ height: 1px; }}
 
-      /* Simple row highlights for HTML table */
+      /* HTML table styling + highlights */
       .row-green {{ background: rgba(0,255,0,0.18); font-weight: 600; }}
       .row-yellow{{ background: rgba(255,215,0,0.18); font-weight: 600; }}
 
@@ -257,7 +253,7 @@ def fetch_candles(exchange: str, pair_dash: str, granularity_sec: int,
                              "volume":float(a[5]),
                              "quote_volume": float(a[7]) if len(a)>7 else None})
             df = pd.DataFrame(rows).sort_values("ts").reset_index(drop=True)
-            if "quote_volume" not in df:
+            if "quote_volume" not in df.columns:
                 df["quote_volume"] = np.nan
             return df
         except Exception:
@@ -522,9 +518,9 @@ def build_gate_mask(view_idxed: pd.DataFrame, sort_tf: str,
 
     if use_trend:
         tb = col("Trend broken?")
-        if trend_required == "Any":       m_trend = tb.isin(["Yes ↑","Yes ↓"])
+        if trend_required == "Any":         m_trend = tb.isin(["Yes ↑","Yes ↓"])
         elif trend_required == "Breakout ↑": m_trend = tb.eq("Yes ↑")
-        else:                               m_trend = tb.eq("Yes ↓")
+        else:                                 m_trend = tb.eq("Yes ↓")
         mlist.append(m_trend.fillna(False))
 
     if use_rsi:
@@ -546,7 +542,7 @@ def build_gate_mask(view_idxed: pd.DataFrame, sort_tf: str,
     yellow_mask = (~green_mask) & m_any
     return green_mask, yellow_mask
 
-# ---------------- TradingView modal (JS/HTML) ----------------
+# ---------------- TradingView modal (iframe) + top scroll sync ----------------
 def tv_symbol(exchange: str, pair: str) -> Optional[str]:
     base, quote = pair.split("-")
     if exchange=="Coinbase":
@@ -564,7 +560,6 @@ def tv_interval(tf: str) -> str:
     }.get(tf, "60")
 
 def inject_chart_modal():
-    # Inject one-time modal + TV loader + sync top scrollbar helper
     st.markdown("""
     <div id="mv-tv-backdrop" class="tv-modal-backdrop" onclick="if(event.target.id==='mv-tv-backdrop'){mvCloseChart();}"></div>
     <div id="mv-tv-modal" class="tv-modal" style="display:none;">
@@ -573,53 +568,35 @@ def inject_chart_modal():
         <button class="tv-close" onclick="mvCloseChart()">✕</button>
       </div>
       <div class="tv-modal-body">
-        <div id="mv-tv-container" style="width:100%;height:100%;"></div>
+        <iframe id="mv-tv-iframe" style="width:100%;height:100%;border:0;" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
       </div>
     </div>
 
     <script>
-      // Load TradingView script once
-      (function(){
-        if(!window._tvScriptLoading){
-          window._tvScriptLoading = true;
-          const s = document.createElement('script');
-          s.src = "https://s3.tradingview.com/tv.js";
-          s.onload = () => { window._tvReady = true; };
-          document.head.appendChild(s);
-        }
-      })();
-
       function mvOpenChart(symbol, interval, title){
-        // show modal
         document.getElementById('mv-tv-backdrop').style.display = 'flex';
         const modal = document.getElementById('mv-tv-modal');
         modal.style.display = 'block';
         document.getElementById('mv-tv-title').textContent = title || symbol;
 
-        // Create or recreate widget
-        const target = document.getElementById('mv-tv-container');
-        target.innerHTML = ""; // clear
+        const iframe = document.getElementById('mv-tv-iframe');
+        const params = new URLSearchParams({
+          symbol: symbol,
+          interval: interval,
+          theme: 'dark',
+          style: '1',
+          timezone: 'Etc/UTC',
+          hide_top_toolbar: '0',
+          hide_side_toolbar: '0',
+          allow_symbol_change: '0',
+          withdateranges: '1',
+          details: '1',
+          studies: '',
+          hideideas: '1',
+          locale: 'en',
+        });
+        iframe.src = 'https://s.tradingview.com/widgetembed/?' + params.toString();
 
-        const tryInit = () => {
-          if(!window.TradingView){ setTimeout(tryInit, 150); return; }
-          new TradingView.widget({
-            autosize: true,
-            symbol: symbol,
-            interval: interval,
-            timezone: "Etc/UTC",
-            theme: "dark",
-            style: "1",
-            locale: "en",
-            toolbar_bg: "rgba(0,0,0,0)",
-            hide_top_toolbar: false,
-            withdateranges: true,
-            allow_symbol_change: false,
-            container_id: "mv-tv-container"
-          });
-        };
-        tryInit();
-
-        // esc to close
         document.onkeydown = (e) => { if(e.key === "Escape"){ mvCloseChart(); } };
       }
 
@@ -627,11 +604,12 @@ def inject_chart_modal():
         document.getElementById('mv-tv-backdrop').style.display = 'none';
         const modal = document.getElementById('mv-tv-modal');
         modal.style.display = 'none';
-        document.getElementById('mv-tv-container').innerHTML = "";
+        const iframe = document.getElementById('mv-tv-iframe');
+        iframe.src = 'about:blank';
         document.onkeydown = null;
       }
 
-      // Top scrollbar sync helper
+      // Sync a top horizontal scrollbar with the table's scrollLeft
       window.mvSyncScroll = function(topId, tblId){
         const top = document.getElementById(topId);
         const tbl = document.getElementById(tblId);
@@ -644,9 +622,7 @@ def inject_chart_modal():
 
 def render_html_table(df: pd.DataFrame, green_mask: pd.Series, yellow_mask: pd.Series,
                       exchange: str, sort_tf: str, table_id: str="mvTable"):
-    # Build HTML manually so the Pair cell can open the modal
     cols = list(df.columns)
-    # Build header row
     thead = "<tr>" + "".join(f"<th>{c}</th>" for c in cols) + "</tr>"
 
     rows_html = []
@@ -660,10 +636,10 @@ def render_html_table(df: pd.DataFrame, green_mask: pd.Series, yellow_mask: pd.S
         cls = "row-green" if bool(green_mask.iloc[i]) else ("row-yellow" if bool(yellow_mask.iloc[i]) else "")
         tds=[]
         for c in cols:
-            val = row[c]
             if c=="Pair":
                 tds.append(f"<td>{pair_html}</td>")
             else:
+                val = row[c]
                 if isinstance(val, float):
                     tds.append(f"<td>{val:.4g}</td>")
                 else:
@@ -683,8 +659,8 @@ def render_html_table(df: pd.DataFrame, green_mask: pd.Series, yellow_mask: pd.S
     st.markdown(html, unsafe_allow_html=True)
 
 # ---------------- Streamlit UI ----------------
-st.set_page_config(page_title="Movers — In‑App Charts", layout="wide")
-st.title("Movers — In‑App Charts (TV modal + top scrollbar)")
+st.set_page_config(page_title="Crypto Tracker", layout="wide")
+st.title("Crypto Tracker")
 
 with st.sidebar:
     with st.expander("Market", expanded=False):
@@ -705,6 +681,7 @@ with st.sidebar:
 
     with st.expander("Gates", expanded=False):
         gate_logic_all = st.radio("Gate logic for enabled filters", ["ALL", "ANY"], index=0) == "ALL"
+
         st.markdown("**Price gate**")
         pct_thresh=st.slider("Min +% change (Sort Timeframe)", 0.1, 20.0, 1.0, 0.1)
 
@@ -763,7 +740,7 @@ with st.sidebar:
         webhook_url=st.text_input("Webhook URL (optional)", "", help="Discord/Slack/Telegram/Pushover/ntfy, etc.")
         if st.button("Test Alerts"):
             if enable_sound: trigger_beep()
-            sub="[Movers] Test alert"; body="This is a test alert from the app."
+            sub="[Crypto Tracker] Test alert"; body="This is a test alert from the app."
             if email_to:
                 ok, info=send_email_alert(sub, body, email_to); st.success("Test email sent") if ok else st.warning(info)
             if webhook_url:
@@ -779,9 +756,9 @@ with st.sidebar:
 # CSS/Audio & modal scaffolding
 inject_css_scale(1.0)
 audible_bridge()
-inject_chart_modal()  # modal + TV loader + top-scroll sync
+inject_chart_modal()  # modal + top-scroll sync
 
-# Quick Controls (sticky area – keep minimal text)
+# Quick Controls (minimal + sticky feel when near top)
 st.markdown("### 🔧 Quick Controls")
 col1, col2, col3, col4, col5 = st.columns([1.1, 1.2, 1.3, 1.0, 0.8])
 with col1: st.write(f"**Sort TF:** {sort_tf}")
@@ -792,7 +769,7 @@ with col5:
     if st.button("🔊 Test Alert (quick)"): 
         trigger_beep()
         if email_to:
-            ok, info=send_email_alert("[Movers] Test alert", "Quick test", email_to); st.success("Email OK") if ok else st.warning(info)
+            ok, info=send_email_alert("[Crypto Tracker] Test alert", "Quick test", email_to); st.success("Email OK") if ok else st.warning(info)
 
 st.divider()
 
@@ -852,7 +829,7 @@ for pid in pairs:
                    **info})
 view=base.merge(pd.DataFrame(extras), on="Pair", how="left")
 
-# Minimal display set, same order you asked for
+# Display set (your order)
 price_col=f"Price {sort_tf}" if f"Price {sort_tf}" in view.columns else "Last"
 pct_col=f"% {sort_tf}"
 pct_label=f"% change ({sort_tf})"
@@ -891,7 +868,7 @@ green_mask, yellow_mask = build_gate_mask(
 green_mask = green_mask.reindex(disp["Pair"].values).reset_index(drop=True)
 yellow_mask = yellow_mask.reindex(disp["Pair"].values).reset_index(drop=True)
 
-# ---------- Top-10 panel (ALL gates) ----------
+# ---------- Top‑10 panel (ALL gates) ----------
 st.subheader("📌 Top‑10 (meets ALL enabled gates)")
 top_now = disp.loc[green_mask].copy()
 top_now = top_now.sort_values(pct_label, ascending=not sort_desc, na_position="last").head(10)
@@ -932,7 +909,7 @@ if (new_spikes or trend_triggers) and (email_to or webhook_url):
     if trend_triggers:
         lines.append("Trend breaks:")
         for p, tb, since in trend_triggers: lines.append(f" • {p}: {tb} (since {since})")
-    sub=f"[{effective_exchange}] Movers alerts"
+    sub=f"[{effective_exchange}] Crypto Tracker alerts"
     if email_to:
         ok, info=send_email_alert(sub, "\n".join(lines), email_to); 
         if not ok: st.warning(info)
