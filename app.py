@@ -1,15 +1,15 @@
-# app.py — Crypto Tracker (in‑app charts, auto‑refresh, manual row expand)
-# - Removed Quick Controls & Quick tidy
+# app.py — Crypto Tracker (single-file build)
 # - Sidebar auto-refresh (On/Off + interval)
-# - Manual per-row expansion (click ⤢ in first column)
-# - Sorting on all columns (ASC/DESC)
-# - Top scrollbar synced to table
-# - Timeframe label outside table
-# - Hover preview + modal chart (Lightweight Charts); no external redirect
-# - Alerts preserved (audio / email / webhook) + Test beep
-# - Inline hints under every gate; semi‑restrictive defaults
-#
-# Drop this file in and run:  streamlit run app.py
+# - Manual per-row expand (⤢ icon)
+# - Sorting on ALL columns (ASC/DESC)
+# - Top scrollbar synced with table
+# - “Timeframe: X” label above table
+# - Hover preview + modal chart using Lightweight Charts (no external redirection)
+# - Alerts (audio/email/webhook) + Test beep
+# - Inline hints under every gate; semi‑restrictive defaults so results appear
+# - Coinbase + Binance (others marked “coming soon”)
+# - ATH/ATL with Hourly/Daily/Weekly depth (no yearly)
+# - No `key=` on st.expander to avoid TypeError
 
 import json, time, threading, queue, ssl, smtplib, datetime as dt, html, uuid
 from email.mime.text import MIMEText
@@ -21,7 +21,7 @@ import pandas as pd
 import requests
 import streamlit as st
 
-# ---------------- State
+# ---------------- Runtime/session state
 WS_AVAILABLE = True
 try:
     import websocket  # websocket-client
@@ -36,12 +36,11 @@ def init_state():
     ss.setdefault("ws_prices", {})
     ss.setdefault("last_alert_hashes", set())
     ss.setdefault("trend_alerted", set())
-    ss.setdefault("diag", {})
-    ss.setdefault("collapse_all_now", False)
     ss.setdefault("alert_log", [])
+    ss.setdefault("collapse_all_now", False)
 init_state()
 
-APP_VERSION = "v1.7.0"
+APP_VERSION = "v1.8.0"
 
 # ---------------- CSS/JS helpers
 def inject_css(display_wrap: bool, col_min_px: int, font_scale: float):
@@ -60,7 +59,7 @@ def inject_css(display_wrap: bool, col_min_px: int, font_scale: float):
       }}
       .tv-modal {{
         width: min(96vw, 1200px); height: min(85vh, 820px);
-        background: var(--background-color); border-radius: 12px;
+        background: var(--background-color, #0e1117); border-radius: 12px;
         box-shadow: 0 8px 28px rgba(0,0,0,0.45); overflow: hidden; position: relative;
       }}
       .tv-modal-header {{ display:flex; align-items:center; justify-content:space-between; padding:8px 12px; border-bottom:1px solid rgba(255,255,255,0.08); }}
@@ -68,14 +67,14 @@ def inject_css(display_wrap: bool, col_min_px: int, font_scale: float):
       .tv-close {{ cursor:pointer; border:0; background:transparent; font-size:1.3rem; opacity:.8; }}
       .tv-modal-body {{ width:100%; height:calc(100% - 44px); }}
 
-      /* Lightweight preview (floating) */
+      /* Floating preview */
       .lw-preview {{
         position: fixed; pointer-events:none; z-index: 99998;
         width: 420px; height: 280px; background: #111; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; overflow: hidden; display:none;
       }}
 
       /* Top scrollbar */
-      .top-scrollbar {{ width:100%; overflow-x:auto; overflow-y:hidden; height:16px; }}
+      .top-scrollbar {{ width:100%; overflow-x:auto; overflow-y:hidden; height:16px; position: sticky; top: 56px; background: var(--background-color, #0e1117); z-index: 5; }}
       .top-scrollbar .spacer {{ height:1px; }}
 
       /* Row colors */
@@ -94,22 +93,22 @@ def inject_css(display_wrap: bool, col_min_px: int, font_scale: float):
         vertical-align: middle; min-width: var(--col-min);
       }}
       table.mv-table th {{
-        position: sticky; top: 0; background: var(--background-color); z-index: 2; cursor: pointer;
+        position: sticky; top: 72px; background: var(--background-color, #0e1117); z-index: 4; cursor: pointer;
       }}
       table.mv-table th .sort-ind {{ opacity:.6; margin-left:6px; }}
 
-      a.mv-pair {{ color: var(--text-color); text-decoration: underline; cursor: pointer; }}
+      a.mv-pair {{ color: var(--text-color, #e6e6e6); text-decoration: underline; cursor: pointer; }}
       a.mv-pair:hover::after {{ content:"  (view chart)"; opacity:.55; font-size:.92em; }}
     </style>
     """, unsafe_allow_html=True)
 
-def audible_js():
+def audible_and_chart_js():
     st.markdown("""
     <audio id="mv_beep" preload="auto">
       <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAAAAP8AAP//AAD//wAA//8AAP//AAD//wAA" type="audio/wav">
     </audio>
     <script>
-      // Lightweight Charts
+      // Load Lightweight Charts
       (function addLw(){ if(window.LightweightCharts) return;
         var s=document.createElement('script'); s.src='https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js';
         document.head.appendChild(s);
@@ -152,40 +151,23 @@ def audible_js():
       window.mvArmAudio  = mvEnsureCtx;
       window.mvTestBeep  = () => { mvEnsureCtx(); localStorage.setItem('mustBeep','1'); };
 
-      // Modal + preview using LW charts
-      function ensurePreview(){
-        if (document.getElementById('lw-preview')) return document.getElementById('lw-preview');
-        const box=document.createElement('div'); box.id='lw-preview'; box.className='lw-preview';
-        const inner=document.createElement('div'); inner.id='lw-preview-inner'; inner.style.width='100%'; inner.style.height='100%';
-        box.appendChild(inner); document.body.appendChild(box);
-        return box;
-      }
-
-      function buildChart(container, seriesData){
-        const c = LightweightCharts.createChart(container, {layout:{background:{type:'solid', color:'#111'}, textColor:'#DDD'},
-          grid:{vertLines:{color:'#222'}, horzLines:{color:'#222'}}, timeScale:{timeVisible:true, secondsVisible:false}});
-        const s = c.addCandlestickSeries();
-        s.setData(seriesData);
-        return {c,s};
-      }
-
+      // Modal with LW charts
       window.mvOpenChart = (symbol, title) => {
         const data = (window._mvCandleCache||{})[symbol] || [];
         const backdrop=document.getElementById('mv-tv-backdrop');
         const modal=document.getElementById('mv-tv-modal');
         const body=document.getElementById('mv-tv-body');
         document.getElementById('mv-tv-title').textContent = title || symbol;
-        // wipe & build LW chart
         body.innerHTML = '<div id="lw-modal" style="width:100%;height:100%"></div>';
         const wait = ()=> {
           if (!window.LightweightCharts){ setTimeout(wait,80); return; }
-          buildChart(document.getElementById('lw-modal'), data);
+          const c = LightweightCharts.createChart(document.getElementById('lw-modal'), {layout:{background:{type:'solid', color:'#111'}, textColor:'#DDD'}, grid:{vertLines:{color:'#222'}, horzLines:{color:'#222'}}, timeScale:{timeVisible:true}});
+          const s = c.addCandlestickSeries(); s.setData(data);
         };
         wait();
         backdrop.style.display='flex'; modal.style.display='block';
         document.onkeydown=(e)=>{ if(e.key==='Escape') mvCloseChart(); };
       };
-
       window.mvCloseChart = () => {
         document.getElementById('mv-tv-backdrop').style.display='none';
         const modal=document.getElementById('mv-tv-modal'); modal.style.display='none';
@@ -193,6 +175,7 @@ def audible_js():
         document.onkeydown=null;
       };
 
+      // Sorting
       window.mvMakeSortable = (tableId) => {
         const tbl=document.getElementById(tableId); if(!tbl) return;
         const thead=tbl.querySelector('thead'); const tbody=tbl.querySelector('tbody');
@@ -204,10 +187,8 @@ def audible_js():
             ths.forEach(t=>{ t.dataset.asc=''; const s=t.querySelector('.sort-ind'); if(s) s.textContent=''; });
             th.dataset.asc = asc ? 'true':'false';
             const rows=[...tbody.querySelectorAll('tr')];
-
             const parseVal=(td)=>{
               const raw=td.textContent.trim();
-              // date?
               const d=Date.parse(raw);
               if (!isNaN(d) && raw.includes('-')) return d;
               const t=raw.replace('%','').replace('$','').replaceAll(',','');
@@ -228,6 +209,7 @@ def audible_js():
         });
       };
 
+      // Top scrollbar
       window.mvInitTopScroll = (topId, wrapId, tableId) => {
         const top=document.getElementById(topId);
         const wrap=document.getElementById(wrapId);
@@ -247,31 +229,31 @@ def audible_js():
         wrap.addEventListener('scroll', ()=>{ top.scrollLeft = wrap.scrollLeft; });
       };
 
+      // Hover preview + expand button
       window.mvBindRowExtras = (tableId) => {
         const tbl=document.getElementById(tableId); if(!tbl) return;
+        // Hover preview
         const links=[...tbl.querySelectorAll('a.mv-pair-link')];
-        const preview=ensurePreview();
+        let preview=document.getElementById('lw-preview');
+        if(!preview){
+          preview=document.createElement('div'); preview.id='lw-preview'; preview.className='lw-preview';
+          const inner=document.createElement('div'); inner.id='lw-preview-inner'; inner.style.width='100%'; inner.style.height='100%';
+          preview.appendChild(inner); document.body.appendChild(preview);
+        }
         const inner=preview.querySelector('#lw-preview-inner');
         let chart=null, series=null;
-
         function ensureChart(){
           if (!window.LightweightCharts) return false;
           if (inner.childElementCount===0){
-            const built = (function(){
-              const c = LightweightCharts.createChart(inner, {{ layout:{{background:{{type:'solid', color:'#111'}}, textColor:'#DDD'}},
-                grid:{{vertLines:{{color:'#222'}}, horzLines:{{color:'#222'}}}}, timeScale:{{timeVisible:true}} }});
-              const s = c.addCandlestickSeries();
-              return {{c,s}};
-            }());
-            chart=built.c; series=built.s;
+            const c = LightweightCharts.createChart(inner, {layout:{background:{type:'solid', color:'#111'}, textColor:'#DDD'}, grid:{vertLines:{color:'#222'}, horzLines:{color:'#222'}}, timeScale:{timeVisible:true}});
+            series = c.addCandlestickSeries();
           }
           return true;
         }
-
         links.forEach(el=>{
-          el.addEventListener('mouseenter', (e)=>{
+          el.addEventListener('mouseenter', ()=>{
             const sym=el.dataset.tvSymbol;
-            const data=(window._mvCandleCache||{{}})[sym]||[];
+            const data=(window._mvCandleCache||{})[sym]||[];
             if (!ensureChart()) return;
             series.setData(data);
             preview.style.display='block';
@@ -280,12 +262,10 @@ def audible_js():
             preview.style.left=(e.clientX+16)+'px';
             preview.style.top =(e.clientY+16)+'px';
           });
-          el.addEventListener('mouseleave', ()=>{
-            preview.style.display='none';
-          });
+          el.addEventListener('mouseleave', ()=>{ preview.style.display='none'; });
         });
 
-        // expand buttons
+        // Manual per-row expand
         const exps=[...tbl.querySelectorAll('.expand-btn')];
         exps.forEach(btn=>{
           btn.addEventListener('click', (e)=>{
@@ -296,7 +276,7 @@ def audible_js():
         });
       };
 
-      window.mvBeepNow = () => {{ localStorage.setItem('mustBeep','1'); }};
+      window.mvBeepNow = () => { localStorage.setItem('mustBeep','1'); };
     </script>
     """, unsafe_allow_html=True)
 
@@ -304,19 +284,13 @@ def trigger_beep():
     st.markdown("<script>localStorage.setItem('mustBeep','1');</script>", unsafe_allow_html=True)
 
 # ---------------- Indicators
-def ema(s: pd.Series, span: int) -> pd.Series:
-    return s.ewm(span=span, adjust=False).mean()
-
+def ema(s: pd.Series, span: int) -> pd.Series: return s.ewm(span=span, adjust=False).mean()
 def rsi(series: pd.Series, length: int = 14) -> pd.Series:
     d = series.diff(); up = d.clip(lower=0); down = (-d).clip(lower=0)
     rs = up.ewm(alpha=1/length, adjust=False).mean() / (down.ewm(alpha=1/length, adjust=False).mean() + 1e-12)
     return 100 - (100/(1+rs))
-
 def macd(series: pd.Series, fast=12, slow=26, signal=9):
-    m = ema(series, fast) - ema(series, slow)
-    s = ema(m, signal)
-    return m, s, m-s
-
+    m = ema(series, fast) - ema(series, slow); s = ema(m, signal); return m, s, m-s
 def atr(df: pd.DataFrame, length=14):
     h,l,c = df["high"], df["low"], df["close"]; pc = c.shift(1)
     tr = pd.concat([(h-l),(h-pc).abs(),(l-pc).abs()], axis=1).max(axis=1)
@@ -336,24 +310,18 @@ EXCHANGES = ["Coinbase","Binance","Kraken (coming soon)","KuCoin (coming soon)",
 
 def coinbase_list_products(quote: str) -> List[str]:
     try:
-        r = requests.get(f"{CB_BASE}/products", timeout=15)
-        r.raise_for_status()
-        data = r.json()
+        r = requests.get(f"{CB_BASE}/products", timeout=15); r.raise_for_status(); data = r.json()
         return sorted([f"{p['base_currency']}-{p['quote_currency']}" for p in data if p.get("quote_currency")==quote])
-    except Exception:
-        return []
+    except Exception: return []
 
 def binance_list_products(quote: str) -> List[str]:
     try:
-        r = requests.get(f"{BN_BASE}/api/v3/exchangeInfo", timeout=20)
-        r.raise_for_status()
-        info = r.json(); out=[]
+        r = requests.get(f"{BN_BASE}/api/v3/exchangeInfo", timeout=20); r.raise_for_status(); info = r.json(); out=[]
         for s in info.get("symbols", []):
             if s.get("status")!="TRADING": continue
             if s.get("quoteAsset")==quote: out.append(f"{s['baseAsset']}-{quote}")
         return sorted(out)
-    except Exception:
-        return []
+    except Exception: return []
 
 def list_products(exchange: str, quote: str) -> List[str]:
     if exchange=="Coinbase": return coinbase_list_products(quote)
@@ -370,16 +338,13 @@ def fetch_candles(exchange: str, pair_dash: str, granularity_sec: int,
         if end:   params["end"]=end.replace(tzinfo=dt.timezone.utc).isoformat()
         try:
             r = requests.get(url, params=params, timeout=20)
-            if r.status_code != 200:
-                return None
+            if r.status_code != 200: return None
             arr = r.json()
-            if not arr:
-                return None
+            if not arr: return None
             df = pd.DataFrame(arr, columns=["ts","low","high","open","close","volume"])
             df["ts"] = pd.to_datetime(df["ts"], unit="s", utc=True)
             return df.sort_values("ts").reset_index(drop=True)
-        except Exception:
-            return None
+        except Exception: return None
     elif exchange=="Binance":
         base, quote = pair_dash.split("-"); symbol=f"{base}{quote}"
         interval=NATIVE_BINANCE.get(granularity_sec)
@@ -398,8 +363,7 @@ def fetch_candles(exchange: str, pair_dash: str, granularity_sec: int,
                              "volume":float(a[5]),
                              "quote_volume": float(a[7]) if len(a)>7 else float(a[5])*float(a[4])})
             return pd.DataFrame(rows).sort_values("ts").reset_index(drop=True)
-        except Exception:
-            return None
+        except Exception: return None
     return None
 
 def resample_ohlcv(df: pd.DataFrame, target_sec: int) -> Optional[pd.DataFrame]:
@@ -426,7 +390,7 @@ def get_df_for_tf(exchange: str, pair: str, tf: str,
         return resample_ohlcv(d1, 7*86400) if d1 is not None else None
     return None
 
-# ---------------- History / ATH-ATL
+# ---------------- ATH/ATL history
 @st.cache_data(ttl=6*3600, show_spinner=False)
 def get_hist(exchange: str, pair: str, basis: str, amount: int) -> Optional[pd.DataFrame]:
     end = dt.datetime.utcnow().replace(tzinfo=dt.timezone.utc)
@@ -569,9 +533,9 @@ def drain_ws_queue():
             except Exception: pass
         else:
             err=payload
-    if err: st.session_state["diag"]["ws_error"]=err
+    if err: st.session_state.setdefault("diag", {})["ws_error"]=err
 
-# ---------------- View
+# ---------------- View calc
 def compute_view(exchange: str, pairs: List[str], timeframes: List[str], sort_tf: str,
                  rsi_len:int, macd_fast:int, macd_slow:int, macd_sig:int, atr_len:int) -> pd.DataFrame:
     rows=[]; cache_1m={}; cache_1h={}
@@ -607,7 +571,7 @@ def compute_view(exchange: str, pairs: List[str], timeframes: List[str], sort_tf
         rows.append(rec)
     return pd.DataFrame(rows)
 
-# ---------------- Gates
+# ---------------- Gate logic
 def build_gate_mask(view_idxed: pd.DataFrame, sort_tf: str,
                     pct_thresh: float,
                     use_quote: bool, min_quote: float,
@@ -649,21 +613,19 @@ def build_gate_mask(view_idxed: pd.DataFrame, sort_tf: str,
     yellow = (~green) & m_any
     return green, yellow
 
-# ---------------- TV/LW widgets & table
+# ---------------- TV/LW widgets & table renderers
 def tv_symbol(exchange: str, pair: str) -> Optional[str]:
     base, quote = pair.split("-")
     if exchange=="Coinbase":
-        tvq={"USDC":"USD","BUSD":"USD"}.get(quote, quote)
-        return f"COINBASE:{base}{tvq}"
+        tvq={"USDC":"USD","BUSD":"USD"}.get(quote, quote); return f"COINBASE:{base}{tvq}"
     if exchange=="Binance":
-        tvq={"BUSD":"USDT"}.get(quote, quote)
-        return f"BINANCE:{base}{tvq}"
+        tvq={"BUSD":"USDT"}.get(quote, quote); return f"BINANCE:{base}{tvq}"
     return None
 
 def tv_interval(tf: str) -> str:
     return {"1m":"1","5m":"5","15m":"15","30m":"30","1h":"60","4h":"240","6h":"360","12h":"720","1d":"D","1w":"W"}.get(tf,"60")
 
-def inject_chart_modal_and_helpers():
+def inject_chart_modal_scaffold():
     st.markdown("""
     <div id="mv-tv-backdrop" class="tv-modal-backdrop" onclick="if(event.target.id==='mv-tv-backdrop'){mvCloseChart();}"></div>
     <div id="mv-tv-modal" class="tv-modal" style="display:none;">
@@ -729,43 +691,42 @@ def render_html_table(df: pd.DataFrame, green_mask: pd.Series, yellow_mask: pd.S
 st.set_page_config(page_title="Crypto Tracker", layout="wide")
 st.title(f"Crypto Tracker — {APP_VERSION}")
 
-# Collapse-all button
+# Collapse-all control
 with st.sidebar:
     if st.button("Collapse all open menu tabs"):
         st.session_state["collapse_all_now"] = True
         st.rerun()
 
-def expander(title, key=None):
+def expander(title):  # no key= use (avoids TypeError on older Streamlit)
     opened = not st.session_state.get("collapse_all_now", False)
-    # Your Streamlit build doesn't support key= on st.expander, so we ignore it
     return st.expander(label=title, expanded=opened)
 
 with st.sidebar:
-    with expander("Market", "exp_market"):
-        exchange=st.selectbox("Exchange", EXCHANGES, index=0, help="💡 Use Coinbase or Binance now; others show 'coming soon'.", key="sel_exch")
+    with expander("Market"):
+        exchange=st.selectbox("Exchange", EXCHANGES, index=0, help="Use Coinbase or Binance now; others show 'coming soon'.")
         effective_exchange="Coinbase" if "(coming soon)" in exchange else exchange
         if "(coming soon)" in exchange: st.info("This exchange is coming soon. Please use Coinbase or Binance for now.")
-        quote=st.selectbox("Quote currency", QUOTES, index=0, key="sel_quote")
-        use_watch=st.checkbox("Use watchlist only", value=False, key="watch_only")
-        watchlist=st.text_area("Watchlist (comma-separated)", "BTC-USD, ETH-USD, SOL-USD", key="watch_text")
-        max_pairs=st.slider("Max pairs", 10, 1000, 200, 10, key="max_pairs")
+        quote=st.selectbox("Quote currency", QUOTES, index=0)
+        use_watch=st.checkbox("Use watchlist only", value=False)
+        watchlist=st.text_area("Watchlist (comma-separated)", "BTC-USD, ETH-USD, SOL-USD")
+        max_pairs=st.slider("Max pairs", 10, 1000, 200, 10)
 
 with st.sidebar:
-    with expander("Timeframes", "exp_tf"):
-        pick_tfs=st.multiselect("Select timeframes", DEFAULT_TFS + ["1w"], default=DEFAULT_TFS, key="pick_tfs",
-                                help="💡 Choose windows to calculate % change. 1w is resampled from daily.")
+    with expander("Timeframes"):
+        pick_tfs=st.multiselect("Select timeframes", DEFAULT_TFS + ["1w"], default=DEFAULT_TFS,
+                                help="Choose windows for % change. 1w is resampled from daily.")
         default_idx = pick_tfs.index("1h") if "1h" in pick_tfs else 0
-        sort_tf=st.selectbox("Primary sort timeframe", pick_tfs, index=default_idx, key="sort_tf",
-                             help="💡 This timeframe drives % change ranking and most gates.")
-        sort_desc=st.checkbox("Sort descending (largest first)", value=True, key="sort_desc")
+        sort_tf=st.selectbox("Primary sort timeframe", pick_tfs, index=default_idx,
+                             help="This timeframe drives % change ranking and most gates.")
+        sort_desc=st.checkbox("Sort descending (largest first)", value=True)
 
 with st.sidebar:
-    with expander("Gates", "exp_gates"):
-        gate_logic_all = st.radio("Gate logic for enabled filters", ["ALL", "ANY"], index=0, key="gate_logic") == "ALL"
+    with expander("Gates"):
+        gate_logic_all = st.radio("Gate logic for enabled filters", ["ALL", "ANY"], index=0) == "ALL"
         st.caption("💡 If nothing shows up, switch to ANY or loosen thresholds below.")
 
         st.markdown("**Price gate**")
-        pct_thresh=st.slider("Min +% change (Sort TF)", 0.0, 20.0, 0.3, 0.1, key="pct_gate",
+        pct_thresh=st.slider("Min +% change (Sort TF)", 0.0, 20.0, 0.3, 0.1,
                              help="💡 Lower this % if no pairs are appearing. Set to 0 to disable.")
         st.caption("💡 Lower this if the page looks empty.")
         st.divider()
@@ -773,25 +734,25 @@ with st.sidebar:
         st.markdown("**Volume gates**")
         colv1, colv2, colv3 = st.columns(3)
         with colv1:
-            use_quote = st.checkbox("Use Quote $", value=True, key="use_quote", help="💡 Uncheck to disable this gate.")
-            min_quote = st.number_input("Min Quote $", min_value=0.0, value=100_000.0, step=50_000.0, format="%.0f", key="min_quote",
+            use_quote = st.checkbox("Use Quote $", value=True, help="💡 Uncheck to disable this gate.")
+            min_quote = st.number_input("Min Quote $", min_value=0.0, value=100_000.0, step=50_000.0, format="%.0f",
                                         help="💡 Lower this $ to include smaller names.")
             st.caption("💡 Try 50k or 0 to disable.")
         with colv2:
-            use_base  = st.checkbox("Use Base units", value=False, key="use_base", help="💡 Rarely needed; uncheck to disable.")
-            min_base  = st.number_input("Min Base units", min_value=0.0, value=0.0, step=100.0, format="%.0f", key="min_base",
+            use_base  = st.checkbox("Use Base units", value=False, help="💡 Rarely needed; uncheck to disable.")
+            min_base  = st.number_input("Min Base units", min_value=0.0, value=0.0, step=100.0, format="%.0f",
                                         help="💡 Lower this to include more pairs.")
             st.caption("💡 Set 0 to disable.")
         with colv3:
-            use_spike = st.checkbox("Use Volume spike (SMA×)", value=True, key="use_spike", help="💡 Uncheck to disable spike filter.")
-            vol_mult  = st.slider("Min SMA×", 1.0, 10.0, 1.05, 0.05, key="vol_mult",
+            use_spike = st.checkbox("Use Volume spike (SMA×)", value=True, help="💡 Uncheck to disable spike filter.")
+            vol_mult  = st.slider("Min SMA×", 1.0, 10.0, 1.05, 0.05,
                                   help="💡 Reduce from 1.5× → 1.05× if too few pass.")
             st.caption("💡 Lower = more names.")
         st.divider()
 
         st.markdown("**Trend gate**")
-        use_trend = st.checkbox("Require trend break", value=False, key="use_trend", help="💡 Turn off to include names that haven't broken trend yet.")
-        trend_required = st.selectbox("Break type", ["Any","Breakout ↑","Breakdown ↓"], index=0, key="trend_req",
+        use_trend = st.checkbox("Require trend break", value=False, help="💡 Turn off to include names that haven't broken trend yet.")
+        trend_required = st.selectbox("Break type", ["Any","Breakout ↑","Breakdown ↓"], index=0,
                                       help="💡 'Any' is least restrictive.")
         st.caption("💡 Turn OFF if nothing passes.")
         st.divider()
@@ -799,81 +760,81 @@ with st.sidebar:
         st.markdown("**Indicator gates (optional)**")
         colind1, colind2, colind3 = st.columns(3)
         with colind1:
-            use_rsi = st.checkbox("RSI ≥", value=False, key="use_rsi", help="💡 Uncheck to disable.")
-            rsi_min = st.slider("RSI min", 0, 100, 55, 1, key="rsi_min", help="💡 Lower to include more.")
+            use_rsi = st.checkbox("RSI ≥", value=False, help="💡 Uncheck to disable.")
+            rsi_min = st.slider("RSI min", 0, 100, 55, 1, help="💡 Lower to include more.")
         with colind2:
-            use_macd = st.checkbox("MACD", value=False, key="use_macd", help="💡 Uncheck to disable MACD gate.")
-            macd_hist_nonneg = st.checkbox("Hist ≥ 0", value=True, key="macd_hist", help="💡 Makes MACD gate stricter.")
-            macd_need_cross  = st.checkbox("Fresh bull cross (≤3 bars)", value=False, key="macd_cross", help="💡 Very restrictive when on.")
+            use_macd = st.checkbox("MACD", value=False, help="💡 Uncheck to disable MACD gate.")
+            macd_hist_nonneg = st.checkbox("Hist ≥ 0", value=True, help="💡 Makes MACD gate stricter.")
+            macd_need_cross  = st.checkbox("Fresh bull cross (≤3 bars)", value=False, help="💡 Very restrictive when on.")
         with colind3:
-            use_atr = st.checkbox("ATR% ≥", value=False, key="use_atr", help="💡 Uncheck to disable ATR gate.")
-            atrp_min = st.slider("ATR% min", 0.0, 10.0, 0.5, 0.1, key="atr_min", help="💡 Lower to include more.")
+            use_atr = st.checkbox("ATR% ≥", value=False, help="💡 Uncheck to disable ATR gate.")
+            atrp_min = st.slider("ATR% min", 0.0, 10.0, 0.5, 0.1, help="💡 Lower to include more.")
 
 with st.sidebar:
-    with expander("History depth", "exp_hist"):
-        basis=st.selectbox("Basis for ATH/ATL & recent-high", ["Hourly","Daily","Weekly"], index=1, key="basis",
+    with expander("History depth"):
+        basis=st.selectbox("Basis for ATH/ATL & recent-high", ["Hourly","Daily","Weekly"], index=1,
                            help="💡 Shorter windows run faster; extend if ATH/ATL dates look too recent.")
         if basis=="Hourly":
-            amount=st.slider("Hours to fetch (≤72)", 1, 72, 24, 1, key="amt_hour")
+            amount=st.slider("Hours to fetch (≤72)", 1, 72, 24, 1)
         elif basis=="Daily":
-            amount=st.slider("Days to fetch (≤365)", 1, 365, 90, 1, key="amt_day")
+            amount=st.slider("Days to fetch (≤365)", 1, 365, 90, 1)
         else:
-            amount=st.slider("Weeks to fetch (≤52)", 1, 52, 12, 1, key="amt_week")
+            amount=st.slider("Weeks to fetch (≤52)", 1, 52, 12, 1)
 
 with st.sidebar:
-    with expander("Trend/Indicator lengths", "exp_len"):
-        pivot_span=st.slider("Pivot lookback span (bars)", 2, 10, 5, 1, key="pivot_span",
+    with expander("Trend/Indicator lengths"):
+        pivot_span=st.slider("Pivot lookback span (bars)", 2, 10, 5, 1,
                              help="💡 Increase to smooth noise; decrease for earlier (noisier) signals.")
-        rsi_len=st.slider("RSI length", 5, 50, 14, 1, key="rsi_len")
-        macd_fast=st.slider("MACD fast", 3, 50, 12, 1, key="macd_fast")
-        macd_slow=st.slider("MACD slow", 5, 100, 26, 1, key="macd_slow")
-        macd_sig =st.slider("MACD signal", 3, 50, 9, 1, key="macd_sig")
-        atr_len =st.slider("ATR length", 5, 50, 14, 1, key="atr_len")
+        rsi_len=st.slider("RSI length", 5, 50, 14, 1)
+        macd_fast=st.slider("MACD fast", 3, 50, 12, 1)
+        macd_slow=st.slider("MACD slow", 5, 100, 26, 1)
+        macd_sig =st.slider("MACD signal", 3, 50, 9, 1)
+        atr_len =st.slider("ATR length", 5, 50, 14, 1)
 
 with st.sidebar:
-    with expander("Display", "exp_disp"):
-        display_wrap = st.checkbox("Wrap text (show full cell text)", value=False, key="wrap")
-        col_min_px   = st.slider("Column min width (px)", 120, 360, 160, 10, key="col_min")
-        font_scale   = st.slider("Font scale", 0.8, 1.6, 1.0, 0.05, key="font_scale")
+    with expander("Display"):
+        display_wrap = st.checkbox("Wrap text (show full cell text)", value=False)
+        col_min_px   = st.slider("Column min width (px)", 120, 360, 160, 10)
+        font_scale   = st.slider("Font scale", 0.8, 1.6, 1.0, 0.05)
 
 with st.sidebar:
-    with expander("Notifications", "exp_notif"):
-        enable_sound=st.checkbox("Audible chime (browser)", value=True, key="audio")
+    with expander("Notifications"):
+        enable_sound=st.checkbox("Audible chime (browser)", value=True)
         colA, colB = st.columns([1, 1.4])
         with colA:
             if st.button("🔊 Arm audio"): st.markdown("<script>window.mvArmAudio && window.mvArmAudio();</script>", unsafe_allow_html=True)
         with colB:
             if st.button("Test beep"): st.markdown("<script>window.mvTestBeep && window.mvTestBeep();</script>", unsafe_allow_html=True)
         st.caption("💡 If you hear nothing, click once anywhere to allow audio.")
-        email_to=st.text_input("Email recipient (optional)", "", key="email_to")
-        webhook_url=st.text_input("Webhook URL (optional)", "", key="webhook", help="Discord/Slack/Telegram/Pushover/ntfy, etc.")
+        email_to=st.text_input("Email recipient (optional)", "")
+        webhook_url=st.text_input("Webhook URL (optional)", "", help="Discord/Slack/Telegram/Pushover/ntfy, etc.")
 
 with st.sidebar:
-    with expander("Auto-refresh", "exp_refresh"):
-        auto_refresh = st.checkbox("Enable auto-refresh", value=False, key="auto_ref")
-        refresh_sec  = st.slider("Interval (seconds)", 5, 120, 30, 1, key="ref_int")
-        # JS-based refresh to avoid extra dependency; paused automatically if toggle off
+    with expander("Auto-refresh"):
+        auto_refresh = st.checkbox("Enable auto-refresh", value=False)
+        refresh_sec  = st.slider("Interval (seconds)", 5, 120, 30, 1)
+        # Lightweight JS refresh (no extra deps)
         if auto_refresh:
             st.markdown(f"<script>window._mv_autoref && clearInterval(window._mv_autoref); window._mv_autoref=setInterval(()=>window.location.reload(), {refresh_sec*1000});</script>", unsafe_allow_html=True)
         else:
             st.markdown("<script>if(window._mv_autoref){clearInterval(window._mv_autoref); window._mv_autoref=null;}</script>", unsafe_allow_html=True)
 
 with st.sidebar:
-    with expander("Advanced", "exp_adv"):
-        mode=st.radio("Data source mode", ["REST only", "WebSocket + REST (hybrid)"], index=0, key="mode")
-        chunk=st.slider("Coinbase WebSocket subscribe chunk", 2, 200, 10, 1, key="ws_chunk")
+    with expander("Advanced"):
+        mode=st.radio("Data source mode", ["REST only", "WebSocket + REST (hybrid)"], index=0)
+        chunk=st.slider("Coinbase WebSocket subscribe chunk", 2, 200, 10, 1)
         if st.button("Restart stream"): st.session_state["ws_alive"]=False; time.sleep(0.2); st.rerun()
 
-# clear collapse flag after first render
+# clear collapse flag after render
 st.session_state["collapse_all_now"] = False
 
 # Bootstraps
 inject_css(display_wrap, col_min_px, font_scale)
-audible_js()
-inject_chart_modal_and_helpers()
+audible_and_chart_js()
+inject_chart_modal_scaffold()
 
 # Header + timeframe label
-st.subheader(f"Timeframe: {st.session_state['sort_tf']}")
+st.subheader(f"Timeframe: {sort_tf}")
 
 # Discover pairs
 if use_watch and watchlist.strip():
@@ -887,7 +848,6 @@ if not pairs:
     st.info("No pairs. Try a different Quote, uncheck Watchlist-only, or increase Max pairs."); st.stop()
 
 # WebSocket (Coinbase only)
-diag={"WS lib": WS_AVAILABLE, "exchange": effective_exchange, "mode": mode}
 if effective_exchange!="Coinbase" and mode.startswith("WebSocket"):
     st.warning("WebSocket is only available on Coinbase. Using REST.")
     mode="REST only"
@@ -896,8 +856,6 @@ if mode.startswith("WebSocket") and WS_AVAILABLE and effective_exchange=="Coinba
         pick=pairs[:max(2, min(chunk, len(pairs)))]
         t=threading.Thread(target=ws_worker, args=(pick,), daemon=True); t.start(); time.sleep(0.2)
     drain_ws_queue()
-diag["ws_alive"]=bool(st.session_state["ws_alive"])
-st.session_state["diag"]=diag
 
 # Build view
 needed_tfs = sorted(set([sort_tf] + DEFAULT_TFS))
@@ -905,21 +863,15 @@ base=compute_view(effective_exchange, pairs, needed_tfs, sort_tf, rsi_len, macd_
 if base.empty:
     st.info("No data returned. Try fewer pairs or different Timeframes."); st.stop()
 
-# Enrich rows
-def recent_high_metrics_safe(df_prices: pd.DataFrame, span: int):
-    try: return recent_high_metrics(df_prices, span)
-    except Exception: return np.nan, "—"
-
-extras=[]
-candles_for_js={}  # for LW charts {symbol: [{time,open,high,low,close}, ...]}
+# Enrich rows + prep candle cache for charts
+extras=[]; candles_for_js={}
 for pid in pairs:
     h=get_hist(effective_exchange, pid, basis, amount)
     info={"From ATH %": np.nan, "ATH date":"—", "From ATL %": np.nan, "ATL date":"—"} if (h is None or len(h)<10) else ath_atl_info(h)
     dft=get_df_for_tf(effective_exchange, pid, sort_tf, {}, {})
     if dft is not None and len(dft)>=max(50, pivot_span*4+10):
-        pct_since_high, since_high = recent_high_metrics_safe(dft[["ts","close"]], span=pivot_span)
+        pct_since_high, since_high = recent_high_metrics(dft[["ts","close"]], span=pivot_span)
         tb, since_break = trend_breakout_info(dft[["ts","close"]], span=pivot_span)
-        # Build LW chart data (last 150 bars)
         lite = dft.tail(150)
         arr = [{"time": int(pd.to_datetime(t).timestamp()), "open": float(o), "high": float(hh), "low": float(ll), "close": float(c)}
                for t,o,hh,ll,c in zip(lite["ts"], lite["open"], lite["high"], lite["low"], lite["close"])]
@@ -935,10 +887,10 @@ for pid in pairs:
                    **info})
 view=base.merge(pd.DataFrame(extras), on="Pair", how="left")
 
-# Push candle cache to JS (for preview + modal)
+# Push candle cache to JS
 st.markdown(f"<script>window._mvCandleCache = {json.dumps(candles_for_js)}</script>", unsafe_allow_html=True)
 
-# Display table build
+# Build display table
 price_col=f"Price {sort_tf}" if f"Price {sort_tf}" in view.columns else "Last"
 pct_col=f"% {sort_tf}"; pct_label=f"% change ({sort_tf})"
 disp=view.copy()
@@ -957,24 +909,24 @@ disp = disp[["Pair"]].assign(
 disp = disp.sort_values(pct_label, ascending=not sort_desc, na_position="last").reset_index(drop=True)
 disp.insert(0, "#", disp.index + 1)
 
-# Masks
+# Masks for row colors
 view_idxed = view.set_index("Pair")
 green_mask, yellow_mask = build_gate_mask(
     view_idxed, sort_tf,
-    st.session_state["pct_gate"],
-    st.session_state["use_quote"], st.session_state["min_quote"],
-    st.session_state["use_base"],  st.session_state["min_base"],
-    st.session_state["use_spike"], st.session_state["vol_mult"],
-    st.session_state["gate_logic"],
-    st.session_state["use_trend"], st.session_state["trend_req"],
-    st.session_state["use_rsi"],   st.session_state["rsi_min"],
-    st.session_state["use_macd"],  st.session_state["macd_hist"], st.session_state["macd_cross"],
-    st.session_state["use_atr"],   st.session_state["atr_min"]
+    pct_thresh,
+    use_quote, min_quote,
+    use_base,  min_base,
+    use_spike, vol_mult,
+    gate_logic_all,
+    use_trend, trend_required,
+    use_rsi, rsi_min,
+    use_macd, macd_hist_nonneg, macd_need_cross,
+    use_atr, atrp_min
 )
 green_mask = green_mask.reindex(disp["Pair"].values).reset_index(drop=True)
 yellow_mask = yellow_mask.reindex(disp["Pair"].values).reset_index(drop=True)
 
-# Top 10 (ALL gates)
+# Top‑10 (meets ALL enabled gates)
 st.subheader("📌 Top‑10 (meets ALL enabled gates)")
 top_now = disp.loc[green_mask].copy()
 top_now = top_now.sort_values(pct_label, ascending=not sort_desc, na_position="last").head(10)
@@ -1026,9 +978,9 @@ if (new_spikes or trend_triggers):
     st.session_state["alert_log"] = (st.session_state.get("alert_log", []) + [sub] + log_lines)[-30:]
 
 if st.session_state.get("alert_log"):
-    with st.expander("Alert log (last 30)"):
+    with st.expander("Alert log (last 30)", expanded=False):
         for line in st.session_state["alert_log"]:
             st.write(line)
 
 st.caption(f"Pairs: {len(disp)} • Exchange: {effective_exchange} • Quote: {quote} • Sort TF: {sort_tf} • "
-           f"Gates: {'ALL' if st.session_state['gate_logic'] else 'ANY'} • Mode: {mode}")
+           f"Gates: {'ALL' if gate_logic_all else 'ANY'} • Mode: {mode}")
