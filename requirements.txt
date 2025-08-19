@@ -1,16 +1,5 @@
-# Core framework
 streamlit>=1.34
-
-# Data handling
 pandas>=2.2
 numpy>=1.26
-
-# Charts / plots
-plotly>=5.22
-matplotlib>=3.9
-
-# Requests for Coinbase API
 requests>=2.32
-
-# Technical indicators (RSI, MACD, ATR, etc.)
-ta>=0.11.0
+websocket-client>=1.7
