@@ -1,6 +1,5 @@
-streamlit>=1.34
-pandas>=2.0
-numpy>=1.24
-requests>=2.31
-websocket-client>=1.6
-python-dateutil>=2.9
+streamlit
+pandas
+numpy
+requests
+websocket-client
