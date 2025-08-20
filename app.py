@@ -1,5 +1,5 @@
-# app.py — Crypto Tracker by: hioncrypto (simple UI, hidden-indicator gates, dual REST/WS)
-# - Title only "Crypto Tracker" (no version tag)
+# app.py — Crypto Tracker (simple UI, hidden-indicator gates, dual REST/WS)
+# - Title only "Crypto Tracker by: hioncrypto" (no version tag)
 # - Auto-scan on open (no Apply)
 # - Discovery ON by default (+ optional "Use watchlist only")
 # - Exchanges: Coinbase, Binance (others shown as "coming soon")
