@@ -1,22 +1,11 @@
-# app.py — Crypto Tracker (simple UI, hidden-indicator gates, dual REST/WS)
-# - Title only "Crypto Tracker by: hioncrypto" (no version tag)
-# - Auto-scan on open (no Apply)
-# - Discovery ON by default (+ optional "Use watchlist only")
-# - Exchanges: Coinbase, Binance (others shown as "coming soon")
-# - Quotes: USD, USDC, USDT, BTC, ETH, EUR
-# - Timeframes: 15m, 1h, 4h, 6h, 12h, 1d (choose Sort TF)
-# - Gates engine uses hidden indicators (Trend break, RSI, MACD hist, ATR%, Vol spike) + % change (positive-only)
-#   * These indicators DO NOT show as columns, but DO influence Strong Buy & Top-10
-# - Tables:
-#   * Top‑10 (ALL gates) — green rows only
-#   * All pairs — green (all gates), yellow (partial), neutral otherwise
-#   * Visible columns ONLY: # | Pair | Price | % Change (Sort TF) | From ATH % | ATH date | From ATL % | ATL date | Strong Buy
-# - Sortable headers: click any column (Streamlit native)
-# - Alerts: Email + Webhook when a pair first enters Top‑10 (deduped)
-# - Auto-refresh: ALWAYS ON (configurable seconds; no toggle)
-# - Minimal WebSocket: Coinbase ticker (optional, hybrid), tucked into Advanced
+# Crypto Tracker by hioncrypto — unified single-file app
+# - Scanner with Top-10 (ALL gates) + All pairs
+# - Alerts when a pair enters Top-10 (select alert type: None / Chime / Email / Webhook)
+# - Listings Monitor (bottom of sidebar): track proposed tokens and alert when they list on Coinbase/Binance
+# - Positive-only % change; Top-10 sorted desc; green for ALL gates; yellow for partial
+# - Auto-refresh with st.rerun()
 
-import json, time, datetime as dt, threading, queue, ssl, smtplib
+import json, time, datetime as dt, threading, queue, ssl, smtplib, base64
 from typing import List, Optional, Tuple
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -26,39 +15,69 @@ import pandas as pd
 import requests
 import streamlit as st
 
-# -------------------------- Session / Globals
+# -------------------- Optional WebSocket
 WS_AVAILABLE = True
 try:
     import websocket  # websocket-client
 except Exception:
     WS_AVAILABLE = False
 
+# -------------------- Session init
 def _init_state():
     ss = st.session_state
     ss.setdefault("ws_thread", None)
     ss.setdefault("ws_alive", False)
     ss.setdefault("ws_q", queue.Queue())
     ss.setdefault("ws_prices", {})
-    ss.setdefault("alert_seen", set())   # keys of already-alerted Top-10 rows
+    ss.setdefault("alert_seen", set())       # for Top-10 alerts (dedupe)
+    ss.setdefault("listings_seen", {})       # token -> {"coinbase":bool,"binance":bool}
+    ss.setdefault("listings_first_seen", {}) # token -> iso datetime string
     ss.setdefault("collapse_all_now", False)
+    ss.setdefault("last_refresh", time.time())
+    ss.setdefault("trigger_beep", False)
 _init_state()
 
-# -------------------------- Static config
+# -------------------- Constants / TFs
 TF_LIST = ["15m","1h","4h","6h","12h","1d"]
 ALL_TFS = {"15m":900,"1h":3600,"4h":14400,"6h":21600,"12h":43200,"1d":86400}
-
 QUOTES = ["USD","USDC","USDT","BTC","ETH","EUR"]
 EXCHANGES = ["Coinbase","Binance","Kraken (coming soon)","KuCoin (coming soon)"]
 
 CB_BASE = "https://api.exchange.coinbase.com"
 BN_BASE = "https://api.binance.com"
 
-# -------------------------- UI helpers
+# -------------------- Small audio 'beep' bridge
+# 1-second silent WAV (works well as a play() call to prove audio path)
+BEEP_WAV = base64.b64encode(
+    requests.get("https://cdn.jsdelivr.net/gh/anars/blank-audio/1-second-of-silence.wav").content
+).decode()
+
+def inject_audio_bridge():
+    st.markdown(f"""
+    <audio id="mv-beep" src="data:audio/wav;base64,{BEEP_WAV}"></audio>
+    <script>
+      const audio = document.getElementById('mv-beep');
+      const tick = () => {{
+        const tag = window.localStorage.getItem('mv_beep');
+        if (tag === '1') {{
+          audio.volume = 1.0;
+          audio.play().catch(()=>{{}});
+          window.localStorage.setItem('mv_beep','0');
+        }}
+        requestAnimationFrame(tick);
+      }};
+      requestAnimationFrame(tick);
+    </script>
+    """, unsafe_allow_html=True)
+
+def trigger_beep():
+    st.markdown("<script>window.localStorage.setItem('mv_beep','1');</script>", unsafe_allow_html=True)
+
+# -------------------- UI helpers
 def collapse_all_button():
     with st.sidebar:
         if st.button("Collapse all menu tabs", use_container_width=True):
             st.session_state["collapse_all_now"] = True
-        # Note: we reset this flag to False later in the script, after building the sidebar
 
 def expander(title: str):
     opened = not st.session_state.get("collapse_all_now", False)
@@ -70,7 +89,7 @@ def big_timeframe_label(tf: str):
         unsafe_allow_html=True
     )
 
-# -------------------------- Indicators (hidden; used for gates only)
+# -------------------- Indicators (used only in gates)
 def ema(s: pd.Series, span: int) -> pd.Series:
     return s.ewm(span=span, adjust=False).mean()
 
@@ -106,12 +125,10 @@ def find_pivots(close: pd.Series, span=3) -> Tuple[pd.Index, pd.Index]:
     return pd.Index(highs), pd.Index(lows)
 
 def trend_breakout_up(df: pd.DataFrame, span=3, within_bars=48) -> bool:
-    # "breakout" if close > last pivot high and that cross happened within the last N bars
     if df is None or len(df) < span*2+5: return False
     highs,_ = find_pivots(df["close"], span)
     if len(highs)==0: return False
     hi = int(highs[-1]); level = float(df["close"].iloc[hi])
-    # find first time we crossed above that level after the pivot
     cross = None
     for j in range(hi+1, len(df)):
         if float(df["close"].iloc[j]) > level:
@@ -119,7 +136,7 @@ def trend_breakout_up(df: pd.DataFrame, span=3, within_bars=48) -> bool:
     if cross is None: return False
     return (len(df)-1 - cross) <= within_bars
 
-# -------------------------- Discovery
+# -------------------- Exchange discovery/fetch
 def coinbase_list_products(quote: str) -> List[str]:
     try:
         r = requests.get(f"{CB_BASE}/products", timeout=20); r.raise_for_status()
@@ -145,7 +162,6 @@ def list_products(exchange: str, quote: str) -> List[str]:
     if exchange=="Binance":  return binance_list_products(quote)
     return []
 
-# -------------------------- Candles
 def fetch_candles(exchange: str, pair_dash: str, gran_sec: int,
                   start: Optional[dt.datetime]=None, end: Optional[dt.datetime]=None) -> Optional[pd.DataFrame]:
     try:
@@ -194,14 +210,13 @@ def df_for_tf(exchange: str, pair: str, tf: str) -> Optional[pd.DataFrame]:
     if exchange=="Coinbase":
         native = sec in {900,3600,21600,86400}
         if native: return fetch_candles(exchange, pair, sec)
-        # 4h/12h resample from 1h
         base = fetch_candles(exchange, pair, 3600)
         return resample_ohlcv(base, sec)
     elif exchange=="Binance":
         return fetch_candles(exchange, pair, sec)
     return None
 
-# -------------------------- ATH/ATL history (cached)
+# --- ATH/ATL history
 @st.cache_data(ttl=6*3600, show_spinner=False)
 def get_hist(exchange: str, pair: str, basis: str, amount: int) -> Optional[pd.DataFrame]:
     end = dt.datetime.utcnow().replace(tzinfo=dt.timezone.utc)
@@ -233,7 +248,7 @@ def ath_atl_info(hist: pd.DataFrame) -> dict:
     return {"From ATH %": (last/ath-1)*100 if ath>0 else np.nan, "ATH date": d_ath,
             "From ATL %": (last/atl-1)*100 if atl>0 else np.nan, "ATL date": d_atl}
 
-# -------------------------- WebSocket (minimal, Coinbase)
+# -------------------- Coinbase WS
 def ws_worker(product_ids, endpoint="wss://ws-feed.exchange.coinbase.com"):
     ss = st.session_state
     try:
@@ -265,10 +280,9 @@ def start_ws_if_needed(exchange: str, pairs: List[str], chunk: int):
     if not st.session_state["ws_alive"]:
         pick = pairs[:max(2, min(chunk, len(pairs)))]
         t = threading.Thread(target=ws_worker, args=(pick,), daemon=True)
-        t.start()
-        time.sleep(0.2)
+        t.start(); time.sleep(0.2)
 
-# -------------------------- Notifications
+# -------------------- Alerts
 def send_email_alert(subject, body, recipient):
     try: cfg=st.secrets["smtp"]
     except Exception: return False, "SMTP not configured in st.secrets"
@@ -289,42 +303,39 @@ def post_webhook(url, payload):
     except Exception as e:
         return False, str(e)
 
-# -------------------------- Gates engine (ALL/ANY with visibility toggles)
-def build_gate_masks(
-    df_tf: pd.DataFrame, df_hist: Optional[pd.DataFrame],
-    settings: dict
-) -> dict:
-    """
-    Returns dict with boolean Series:
-      - m_pct_pos   : % change >= min_pct (positive-only)
-      - m_vol_spike : spike >= mult           (if enabled)
-      - m_rsi       : rsi >= min_rsi          (if enabled)
-      - m_macd      : macd_hist >= min_mhist  (if enabled)
-      - m_atr       : atr_pct >= min_atr      (if enabled)
-      - m_trend     : breakout_up True        (if enabled)
-      - m_all, m_any
-    """
+def push_alert(alert_type: str, subject: str, lines: List[str], email_to: str, webhook_url: str):
+    # Chime
+    if alert_type == "Browser chime":
+        trigger_beep()
+    # Email
+    if alert_type == "Email" and email_to:
+        ok, info = send_email_alert(subject, "\n".join(lines), email_to)
+        if not ok: st.sidebar.warning(info)
+    # Webhook
+    if alert_type == "Webhook" and webhook_url:
+        ok, info = post_webhook(webhook_url, {"title": subject, "lines": lines})
+        if not ok: st.sidebar.warning(f"Webhook error: {info}")
+
+# -------------------- Gate builder (positive-only % change)
+def build_gate_masks(df_tf: pd.DataFrame, df_hist: Optional[pd.DataFrame], settings: dict) -> dict:
     n = len(df_tf)
     last_close = df_tf["close"].iloc[-1]
     first_close = df_tf["close"].iloc[0]
     pct = (last_close/first_close - 1.0) * 100.0
     m_pct_pos = pd.Series([pct >= settings["min_pct"] and pct > 0] * n, index=df_tf.index)
 
-    # Compute indicators on df_tf (hidden)
     rsi_len   = settings["rsi_len"]
     macd_fast = settings["macd_fast"]; macd_slow = settings["macd_slow"]; macd_sig=settings["macd_sig"]
     atr_len   = settings["atr_len"]
     piv_span  = settings["pivot_span"]; within_bars=settings["trend_within"]
     vol_win   = settings["vol_window"]; vol_mult=settings["vol_mult"]
 
-    # Prepare series
     rsi_ser  = rsi(df_tf["close"], rsi_len)
     mh_ser   = macd_hist(df_tf["close"], macd_fast, macd_slow, macd_sig)
     atr_ser  = atr(df_tf, atr_len) / (df_tf["close"] + 1e-12) * 100.0
     volx     = volume_spike(df_tf, vol_win)
     tr_up    = trend_breakout_up(df_tf, span=piv_span, within_bars=within_bars)
 
-    # Build individual masks (uniform length == n)
     def uni(val: bool): return pd.Series([bool(val)]*n, index=df_tf.index)
 
     m_vol_spike = uni((volx >= vol_mult)) if settings["use_vol_spike"] else uni(True)
@@ -333,44 +344,32 @@ def build_gate_masks(
     m_atr       = uni((atr_ser.iloc[-1] >= settings["min_atr"])) if settings["use_atr"] else uni(True)
     m_trend     = uni(tr_up) if settings["use_trend"] else uni(True)
 
-    # Combine
     parts = [m_pct_pos, m_vol_spike, m_rsi, m_macd, m_atr, m_trend]
-    enabled = [
-        True, settings["use_vol_spike"], settings["use_rsi"],
-        settings["use_macd"], settings["use_atr"], settings["use_trend"]
-    ]
-    # If gate is disabled, treat as always True
-    masks_considered = [m for m, en in zip(parts, enabled) if True]  # all masks included; disabled already True
-
     if settings["logic"] == "ALL":
-        m_all = masks_considered[0].copy()
-        for m in masks_considered[1:]:
-            m_all = m_all & m
-        m_any = masks_considered[0].copy()
-        for m in masks_considered[1:]:
-            m_any = m_any | m
+        m_all = parts[0].copy()
+        for m in parts[1:]: m_all = m_all & m
+        m_any = parts[0].copy()
+        for m in parts[1:]: m_any = m_any | m
     else:
-        # ANY logic
-        m_any = masks_considered[0].copy()
-        for m in masks_considered[1:]:
-            m_any = m_any | m
-        m_all = m_any.copy()  # for consistency
+        m_any = parts[0].copy()
+        for m in parts[1:]: m_any = m_any | m
+        m_all = m_any.copy()
 
-    return {
-        "pct": m_pct_pos, "vol": m_vol_spike, "rsi": m_rsi, "macd": m_macd, "atr": m_atr, "trend": m_trend,
-        "all": m_all, "any": m_any, "pct_value": pct
-    }
+    return {"pct": m_pct_pos, "vol": m_vol_spike, "rsi": m_rsi, "macd": m_macd, "atr": m_atr, "trend": m_trend,
+            "all": m_all, "any": m_any, "pct_value": pct}
 
-# -------------------------- UI: Page & Sidebar
-st.set_page_config(page_title="Crypto Tracker", layout="wide")
-st.title("Crypto Tracker")
-
+# ==================== UI ====================
+st.set_page_config(page_title="Crypto Tracker by hioncrypto", layout="wide")
+st.title("Crypto Tracker by hioncrypto")
+inject_audio_bridge()
 collapse_all_button()
 
+# --- Market
 with expander("Market"):
     exchange = st.selectbox("Exchange", EXCHANGES, index=0)
     effective_exchange = exchange if "coming soon" not in exchange else "Coinbase"
-    if "coming soon" in exchange: st.info("This exchange is coming soon. Using Coinbase for data.")
+    if "coming soon" in exchange:
+        st.info("This exchange is coming soon. Using Coinbase for data.")
     quote = st.selectbox("Quote currency", QUOTES, index=0)
     use_watch = st.checkbox("Use watchlist only (ignore discovery)", value=False)
     watchlist = st.text_area("Watchlist (comma-separated)", "BTC-USD, ETH-USD, SOL-USD, AVAX-USD, ADA-USD, DOGE-USD, MATIC-USD")
@@ -379,8 +378,7 @@ with expander("Market"):
 with expander("Mode"):
     mode = st.radio("Data source", ["REST only", "WebSocket + REST (hybrid)"], index=0, horizontal=True)
     with st.popover("Advanced (Coinbase WS)"):
-        ws_chunk = st.slider("WS subscribe chunk", 2, 20, 5, 1,
-                             help="Very small subscription chunk to keep WS minimal.")
+        ws_chunk = st.slider("WS subscribe chunk", 2, 20, 5, 1)
 
 with expander("Timeframes"):
     pick_tfs = st.multiselect("Available timeframes", TF_LIST, default=TF_LIST)
@@ -389,7 +387,7 @@ with expander("Timeframes"):
 
 with expander("Gates"):
     logic = st.radio("Gate logic", ["ALL","ANY"], index=0, horizontal=True)
-    min_pct = st.slider("Min +% change (Sort TF)", 0.0, 20.0, 0.5, 0.1)
+    min_pct = st.slider("Min +% change (Sort TF)", 0.0, 50.0, 20.0, 0.5)
     st.caption("💡 If nothing shows, lower this threshold.")
 
     st.markdown("**Indicators to include (used internally; NOT shown as columns):**")
@@ -413,9 +411,6 @@ with expander("Gates"):
                               help="Close > last pivot high, occurred recently.")
         pivot_span = st.slider("Pivot span (bars)", 2, 10, 4, 1)
         trend_within = st.slider("Breakout within (bars)", 5, 96, 48, 1)
-    with cols2[2]:
-        st.caption("📝 Gates are used for **Strong Buy** & **Top‑10**.\n"
-                   "If too few pairs pass, loosen thresholds above.")
 
 with expander("Indicator lengths"):
     rsi_len = st.slider("RSI length", 5, 50, 14, 1)
@@ -437,18 +432,28 @@ with expander("History depth (for ATH/ATL)"):
 with expander("Display"):
     font_scale = st.slider("Font size (global)", 0.8, 1.6, 1.0, 0.05)
 
-with expander("Notifications"):
-    email_to = st.text_input("Email recipient (optional)", "")
-    webhook_url = st.text_input("Webhook URL (optional)", "")
+with expander("Notifications (Top‑10 & Listings)"):
+    alert_type = st.selectbox("Alert type", ["None","Browser chime","Email","Webhook"], index=1)
+    st.button("Test alert (chime)", on_click=lambda: st.session_state.update(trigger_beep=True))
+    if st.session_state.get("trigger_beep"):
+        trigger_beep(); st.session_state["trigger_beep"] = False
+    email_to = st.text_input("Email recipient (for Email)", "")
+    webhook_url = st.text_input("Webhook URL (for Webhook)", "")
 
 with expander("Auto-refresh"):
     refresh_sec = st.slider("Refresh every (seconds)", 5, 120, 30, 1)
     st.caption("Auto-refresh is always on.")
 
-# Reset collapse flag now that sidebar is built
+# --- Listings Monitor (bottom of sidebar)
+with expander("Listings Monitor (proposed → live)"):
+    st.caption("Enter base symbols (e.g., SOL, AVAX, ADA). I’ll check Coinbase & Binance for any listed pairs using your selected quote currency.")
+    proposed_text = st.text_area("Proposed tokens (base symbols)", "SOL, AVAX, ADA, DOGE, MATIC")
+    check_coinbase = st.checkbox("Check Coinbase", True)
+    check_binance  = st.checkbox("Check Binance", True)
+    st.caption("💡 Alerts fire when a previously ‘Not listed’ token becomes ‘Listed’.")
 st.session_state["collapse_all_now"] = False
 
-# Global CSS for row colors + font scale
+# --- Global style
 st.markdown(f"""
 <style>
   html, body {{ font-size: {font_scale}rem; }}
@@ -457,28 +462,22 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# -------------------------- Main content
+# ==================== Scanner ====================
 big_timeframe_label(sort_tf)
 
-# Discover pairs (discovery ON by default)
 if use_watch and watchlist.strip():
     pairs = [p.strip().upper() for p in watchlist.split(",") if p.strip()]
 else:
     pairs = list_products(effective_exchange, quote)
 pairs = [p for p in pairs if p.endswith(f"-{quote}")]
 pairs = pairs[:max_pairs]
-if not pairs:
-    st.info("No pairs found. Try different Quote, lower Max pairs, or use a watchlist.")
-    # still fall through to refresh loop at the bottom
 
-# Start WS if selected & available
 if pairs and mode.startswith("WebSocket") and effective_exchange=="Coinbase" and WS_AVAILABLE:
     start_ws_if_needed(effective_exchange, pairs, ws_chunk)
 
-# Build rows for display + compute gates (hidden indicators)
 rows = []
-green_flags = []   # all gates pass
-yellow_flags = []  # partial gates pass
+flags_all = []
+flags_any = []
 
 if pairs:
     for pid in pairs:
@@ -486,16 +485,12 @@ if pairs:
         if dft is None or len(dft) < 30:
             continue
         dft = dft.tail(400).copy()
-
-        # Live price override (if WS active for Coinbase)
         last_price = float(dft["close"].iloc[-1])
         if effective_exchange=="Coinbase" and st.session_state["ws_prices"].get(pid):
             last_price = float(st.session_state["ws_prices"][pid])
-
         first_price = float(dft["close"].iloc[0])
         pct = (last_price/first_price - 1.0) * 100.0
 
-        # ATH/ATL (history depth)
         hist = get_hist(effective_exchange, pid, basis, amount)
         if hist is None or len(hist)<10:
             athp, athd, atlp, atld = np.nan, "—", np.nan, "—"
@@ -503,13 +498,10 @@ if pairs:
             aa = ath_atl_info(hist)
             athp, athd, atlp, atld = aa["From ATH %"], aa["ATH date"], aa["From ATL %"], aa["ATL date"]
 
-        # Gate masks for this pair (hidden indicators used here)
         m = build_gate_masks(
-            dft,
-            hist,
+            dft, hist,
             {
-                "logic": logic,
-                "min_pct": min_pct,
+                "logic": logic, "min_pct": min_pct,
                 "use_vol_spike": use_vol_spike, "vol_window": vol_window, "vol_mult": vol_mult,
                 "use_rsi": use_rsi, "min_rsi": min_rsi, "rsi_len": rsi_len,
                 "use_macd": use_macd, "min_mhist": min_mhist,
@@ -518,11 +510,11 @@ if pairs:
                 "macd_fast": macd_fast, "macd_slow": macd_slow, "macd_sig": macd_sig,
             }
         )
-        # Decide pass/partial for this row
         all_pass = bool(m["all"].iloc[-1])
         any_pass = bool(m["any"].iloc[-1])
-        green_flags.append(all_pass)
-        yellow_flags.append((not all_pass) and any_pass)
+
+        flags_all.append(all_pass)
+        flags_any.append(any_pass)
 
         rows.append({
             "Pair": pid,
@@ -533,87 +525,110 @@ if pairs:
             "Strong Buy": "YES" if all_pass else "—",
         })
 
-# Build DataFrame
-if rows:
-    df = pd.DataFrame(rows)
+df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=["Pair"])
+if not df.empty:
     chg_col = f"% Change ({sort_tf})"
-    # Default sort by % change desc
     df = df.sort_values(chg_col, ascending=not sort_desc, na_position="last").reset_index(drop=True)
     df.insert(0, "#", df.index+1)
 
-    # Styling masks
-    green_mask = pd.Series(green_flags, index=df.index)
-    yellow_mask = pd.Series(yellow_flags, index=df.index)
+    # masks (align later in styler)
+    green_mask = pd.Series(flags_all, index=range(len(flags_all)))
+    yellow_mask = pd.Series([(not a) and b for a,b in zip(flags_all, flags_any)], index=range(len(flags_any)))
 
-    def style_rows(x):
+    def style_rows_full(x):
         styles = pd.DataFrame("", index=x.index, columns=x.columns)
-        styles.loc[green_mask, :]  = "background-color: rgba(0,255,0,0.22); font-weight: 600;"
-        styles.loc[yellow_mask, :] = "background-color: rgba(255,255,0,0.60); font-weight: 600;"
+        gm = green_mask.reindex(x.index, fill_value=False)
+        ym = yellow_mask.reindex(x.index, fill_value=False)
+        styles.loc[gm, :] = "background-color: rgba(0,255,0,0.22); font-weight: 600;"
+        styles.loc[ym, :] = "background-color: rgba(255,255,0,0.60); font-weight: 600;"
         return styles
 
-    # Top‑10 (ALL gates)
+    # ----- Top‑10 (ALL gates) — sorted & always green
     st.subheader("📌 Top‑10 (ALL gates)")
-    top10 = df[df["Strong Buy"].eq("YES")].head(10).reset_index(drop=True)
+    top10 = df[df["Strong Buy"].eq("YES")].sort_values(chg_col, ascending=False, na_position="last").head(10).reset_index(drop=True)
+
+    def style_rows_green_only(x):
+        return pd.DataFrame("background-color: rgba(0,255,0,0.22); font-weight: 600;", index=x.index, columns=x.columns)
+
     if top10.empty:
         st.write("—")
-        st.caption("💡 If nothing appears, loosen gates (e.g., lower Min +% change, turn off some indicator toggles).")
+        st.caption("💡 If nothing appears, loosen gates (lower Min +% change or disable some toggles).")
     else:
-        st.dataframe(top10.style.apply(style_rows, axis=None), use_container_width=True)
+        st.dataframe(top10.style.apply(style_rows_green_only, axis=None), use_container_width=True)
 
-    # All pairs
-    st.subheader("📑 All pairs")
-    st.dataframe(df.style.apply(style_rows, axis=None), use_container_width=True)
-
-    # Alerts: fire when a pair first appears in Top‑10
+    # Alerts for Top‑10 entrants (dedup by session)
     new_msgs=[]
     for _, r in top10.iterrows():
-        key = f"{r['Pair']}|{sort_tf}|{round(float(r[chg_col]),2)}"
+        msg = f"{r['Pair']}: {float(r[chg_col]):+.2f}% ({sort_tf})"
+        key = f"TOP10|{msg}"
         if key not in st.session_state["alert_seen"]:
             st.session_state["alert_seen"].add(key)
-            new_msgs.append(f"{r['Pair']}: {float(r[chg_col]):+.2f}% ({sort_tf})")
+            new_msgs.append(msg)
+    if new_msgs and alert_type!="None":
+        push_alert(alert_type, f"[{effective_exchange}] Top‑10 entrant(s)", new_msgs, email_to, webhook_url)
 
-    if new_msgs:
-        subject = f"[{effective_exchange}] Top‑10 Crypto Tracker"
-        body    = "\n".join(new_msgs)
-        if st.sidebar.checkbox("Send Email/Webhook alerts this session", value=False, help="Enable to actually send alerts."):
-            if st.sidebar.text_input("Email recipient (optional)", key="alerts_email"):
-                ok, info = send_email_alert(subject, body, st.session_state["alerts_email"])
-                if not ok: st.sidebar.warning(info)
-            if st.sidebar.text_input("Webhook URL (optional)", key="alerts_hook"):
-                ok, info = post_webhook(st.session_state["alerts_hook"], {"title": subject, "lines": new_msgs})
-                if not ok: st.sidebar.warning(f"Webhook error: {info}")
+    # ----- All pairs table
+    st.subheader("📑 All pairs")
+    st.dataframe(df.style.apply(style_rows_full, axis=None), use_container_width=True)
 
     st.caption(f"Pairs: {len(df)} • Exchange: {effective_exchange} • Quote: {quote} • Sort TF: {sort_tf} • Mode: {'WS+REST' if (mode.startswith('WebSocket') and effective_exchange=='Coinbase' and WS_AVAILABLE) else 'REST only'}")
 else:
     st.info("No rows to show. Loosen gates or choose a different timeframe.")
     st.caption(f"Exchange: {effective_exchange} • Quote: {quote} • Sort TF: {sort_tf}")
 
-# -------------------------- Auto-refresh (always on)
-# Use Streamlit's built-in autorefresh helper
-try:
-    from streamlit.runtime.scriptrunner import add_script_run_ctx  # noqa
-    st.experimental_rerun  # keep reference alive for older versions
-except Exception:
-    pass
+# ==================== Listings Monitor logic ====================
+def check_listed_on_exchange(base: str, quote: str, exch: str) -> bool:
+    if exch=="Coinbase":
+        return f"{base}-{quote}" in coinbase_list_products(quote)
+    if exch=="Binance":
+        # Binance lists base/quote exactly as returned by exchangeInfo:
+        try:
+            syms = binance_list_products(quote)
+            return f"{base}-{quote}" in syms
+        except Exception:
+            return False
+    return False
 
-# st_autorefresh is available in modern Streamlit; fall back to a simple countdown+rerun if not.
-try:
-    from streamlit import experimental_rerun as _rerun
-    if "last_autorefresh" not in st.session_state:
-        st.session_state["last_autorefresh"] = time.time()
-    # Use a small empty placeholder to prevent layout jump
-    ph = st.empty()
-    # Lightweight timer bar
-    remaining = max(0, int(refresh_sec - (time.time() - st.session_state["last_autorefresh"])))
-    ph.caption(f"Auto-refresh every {refresh_sec}s (next in {remaining}s)")
-    if remaining <= 0:
-        st.session_state["last_autorefresh"] = time.time()
-        _rerun()
-except Exception:
-    # Basic fallback
-    import time as _t
-    ph = st.empty()
-    for i in range(refresh_sec, 0, -1):
-        ph.caption(f"Auto-refresh in {i}s…")
-        _t.sleep(1)
-    st.experimental_rerun()
+proposed_tokens = [t.strip().upper() for t in (proposed_text or "").split(",") if t.strip()]
+if proposed_tokens:
+    table_rows = []
+    newly_listed_msgs = []
+    for tok in proposed_tokens:
+        cb = check_listed_on_exchange(tok, quote, "Coinbase") if check_coinbase else False
+        bn = check_listed_on_exchange(tok, quote, "Binance") if check_binance else False
+
+        prev = st.session_state["listings_seen"].get(tok, {"coinbase":False,"binance":False})
+        now  = {"coinbase":cb, "binance":bn}
+        st.session_state["listings_seen"][tok] = now
+
+        # First seen timestamp
+        if (cb or bn) and tok not in st.session_state["listings_first_seen"]:
+            st.session_state["listings_first_seen"][tok] = dt.datetime.utcnow().isoformat(timespec="seconds")
+
+        # Alerts: changed from not listed to listed
+        if (not prev.get("coinbase",False) and cb) or (not prev.get("binance",False) and bn):
+            newly = []
+            if (not prev.get("coinbase",False) and cb): newly.append("Coinbase")
+            if (not prev.get("binance",False) and bn): newly.append("Binance")
+            newly_listed_msgs.append(f"{tok} listed on {', '.join(newly)} (quote {quote})")
+
+        table_rows.append({
+            "Token": tok,
+            "Coinbase": "Listed" if cb else "Not listed",
+            "Binance":  "Listed" if bn else "Not listed",
+            "First seen": st.session_state["listings_first_seen"].get(tok, "—"),
+        })
+
+    st.sidebar.markdown("**Proposed tokens status (this session):**")
+    st.sidebar.dataframe(pd.DataFrame(table_rows), use_container_width=True, height=220)
+
+    if newly_listed_msgs and alert_type!="None":
+        push_alert(alert_type, "New listing detected", newly_listed_msgs, email_to, webhook_url)
+
+# ---------------- Auto-refresh
+remaining = refresh_sec - (time.time() - st.session_state["last_refresh"])
+if remaining <= 0:
+    st.session_state["last_refresh"] = time.time()
+    st.rerun()
+else:
+    st.caption(f"Auto-refresh every {refresh_sec}s (next in {int(remaining)}s)")
