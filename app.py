@@ -1,6 +1,6 @@
 # app.py — Crypto Tracker by hioncrypto (all-in-one, SMTP fallback included)
-# Everything is self-contained. If SMTP secrets are missing, you can type SMTP
-# settings in the Notifications panel and alerts will work immediately.
+# CHANGE: Reliable "Collapse all menu tabs" using expander key versioning.
+# Everything else unchanged.
 
 import json, time, datetime as dt, threading, queue, ssl, smtplib
 from email.mime.text import MIMEText
@@ -52,12 +52,13 @@ def _init_state():
     ss.setdefault("ws_prices", {})
     ss.setdefault("alert_seen", set())
     ss.setdefault("collapse_all_now", False)
+    ss.setdefault("collapse_version", 0)   # << NEW: expander key version
     ss.setdefault("last_refresh", time.time())
     ss.setdefault("use_my_pairs", False)
     ss.setdefault("my_pairs", ["BTC-USD","ETH-USD","SOL-USD"])
     ss.setdefault("seen_pairs", set())
     ss.setdefault("listings_alert_seen", set())
-    # SMTP fallback fields (used only if secrets are absent)
+    # SMTP fallback
     ss.setdefault("smtp_host", "")
     ss.setdefault("smtp_port", 465)
     ss.setdefault("smtp_user", "")
@@ -258,7 +259,6 @@ def start_ws_if_needed(exchange: str, pairs: List[str], chunk: int):
 
 # ---------- Alerts with SMTP fallback
 def _smtp_config_from_ui_or_secrets():
-    # Prefer st.secrets if available; otherwise use UI inputs stored in session_state
     try:
         cfg = st.secrets["smtp"]
         return dict(host=cfg["host"], port=int(cfg.get("port",465)),
@@ -272,12 +272,11 @@ def _smtp_config_from_ui_or_secrets():
                 password=st.session_state.get("smtp_pass",""),
                 sender=st.session_state["smtp_sender"],
             )
-        return None  # no SMTP configured
+        return None
 
 def send_email_alert(subject, body, recipient):
     cfg = _smtp_config_from_ui_or_secrets()
-    if not cfg:  # not configured
-        return False, "SMTP not configured (add in Notifications)"
+    if not cfg:  return False, "SMTP not configured (add in Notifications)"
     try:
         msg=MIMEMultipart(); msg["From"]=cfg["sender"]; msg["To"]=recipient; msg["Subject"]=subject
         msg.attach(MIMEText(body, "plain"))
@@ -347,12 +346,14 @@ def build_gate_eval(df_tf: pd.DataFrame, settings: dict) -> Tuple[dict, int, str
 st.set_page_config(page_title="Crypto Tracker by hioncrypto", layout="wide")
 st.title("Crypto Tracker by hioncrypto")
 
-# Top strip
+# Top strip (with reliable collapse)
 with st.sidebar:
     c1, c2 = st.columns([1,1])
     with c1:
         if st.button("Collapse all menu tabs", use_container_width=True):
-            st.session_state["collapse_all_now"] = True
+            # bump version so all expanders get fresh keys (and mount closed)
+            st.session_state["collapse_version"] += 1
+            st.rerun()
     with c2:
         st.toggle("⭐ Use My Pairs only", key="use_my_pairs", value=st.session_state.get("use_my_pairs", False))
     with st.popover("Manage My Pairs"):
@@ -365,7 +366,11 @@ with st.sidebar:
                 st.success("Saved.")
 
 def expander(title: str, key: Optional[str]=None):
-    return st.sidebar.expander(title, expanded=False)
+    """Create a sidebar expander that can be force‑collapsed via versioned keys."""
+    ver = st.session_state.get("collapse_version", 0)
+    key = f"{key or title}_v{ver}"
+    # Always mount closed; Streamlit will remember state until version changes
+    return st.sidebar.expander(title, expanded=False, key=key)
 
 # Market
 with expander("Market","exp_market"):
@@ -456,7 +461,7 @@ with expander("Notifications","exp_notif"):
         st.session_state["smtp_pass"]   = st.text_input("SMTP password (optional)", st.session_state["smtp_pass"], type="password")
         st.session_state["smtp_sender"] = st.text_input("Sender address (From:)", st.session_state["smtp_sender"])
 
-# Listings monitor
+# Listings monitor (UI stub stays; full feed can be added later)
 with expander("Listings monitor","exp_listings"):
     st.caption("Alerts when **new pairs** appear this session from discovery endpoints.")
     proposed = st.text_area("Proposed listings watch (notes)", "", height=60)
@@ -465,9 +470,6 @@ with expander("Listings monitor","exp_listings"):
 with expander("Auto-refresh","exp_auto"):
     refresh_sec = st.slider("Refresh every (seconds)", 5, 120, DEFAULTS["refresh_sec"], 1)
     st.caption("Auto-refresh is always on.")
-
-if st.session_state.get("collapse_all_now", False):
-    st.session_state["collapse_all_now"] = False
 
 st.markdown(f"""
 <style>
@@ -493,7 +495,7 @@ pairs = pairs[:max_pairs]
 if pairs and mode.startswith("WebSocket") and effective_exchange=="Coinbase" and WS_AVAILABLE:
     start_ws_if_needed(effective_exchange, pairs, ws_chunk)
 
-# New listings vs session
+# New listings vs session (simple session-based)
 now_seen = set(pairs)
 new_pairs = sorted(list(now_seen - st.session_state["seen_pairs"]))
 if new_pairs:
@@ -577,7 +579,7 @@ else:
             return pd.DataFrame("background-color: rgba(0,255,0,0.22); font-weight: 600;", index=x.index, columns=x.columns)
         st.dataframe(top10.style.apply(style_rows_green_only, axis=None), use_container_width=True)
 
-        # Top‑10 alerts (new entrants)
+        # alerts for new Top‑10 entrants
         new_msgs=[]
         for _, r in top10.iterrows():
             key = f"{r['Pair']}|{sort_tf}|{round(float(r[chg_col]),2)}"
@@ -601,7 +603,7 @@ else:
     st.caption(f"Pairs: {len(df)} • Exchange: {effective_exchange} • Quote: {quote} • Sort TF: {sort_tf} • Mode: {'WS+REST' if (mode.startswith('WebSocket') and effective_exchange=='Coinbase' and WS_AVAILABLE) else 'REST only'}")
 
 # Auto-refresh
-remaining = int(DEFAULTS["refresh_sec"])  # fallback
+remaining = int(DEFAULTS["refresh_sec"])
 try: remaining = int(refresh_sec - (time.time() - st.session_state["last_refresh"]))
 except Exception: pass
 if remaining <= 0:
