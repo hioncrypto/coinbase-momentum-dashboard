@@ -267,7 +267,8 @@ def get_hist(exchange: str, pair: str, basis: str, amount: int) -> Optional[pd.D
 
 def ath_atl_info(hist: pd.DataFrame) -> dict:
     last=float(hist["close"].iloc[-1])
-    idx_ath=int(hist["high"].idxmax()); idx_atl=int(hist["low"].idxmin"])
+    idx_ath = int(hist["high"].idxmax())
+    idx_atl = int(hist["low"].idxmin())
     ath=float(hist["high"].iloc[idx_ath]); d_ath=pd.to_datetime(hist["ts"].iloc[idx_ath]).date().isoformat()
     atl=float(hist["low"].iloc[idx_atl]);  d_atl=pd.to_datetime(hist["ts"].iloc[idx_atl]).date().isoformat()
     return {"From ATH %": (last/ath-1)*100 if ath>0 else np.nan, "ATH date": d_ath,
