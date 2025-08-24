@@ -1,12 +1,4 @@
-# Core UI
-streamlit>=1.36,<2
-
-# Data handling
-pandas>=2.2
-numpy>=1.26
-
-# HTTP requests (REST APIs + webhooks)
-requests>=2.31
-
-# WebSocket client (only needed if you want Coinbase WS hybrid mode)
-websocket-client>=1.7
+streamlit==1.25.0
+requests==2.31.0
+pandas==2.1.0
+numpy==1.26.0
