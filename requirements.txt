@@ -1,9 +1,3 @@
-# --- base build tools first (pin conservative versions) ---
-pip==24.1.2
-setuptools==69.5.1
-wheel==0.43.0
-
-# --- app deps (no pyarrow; Streamlit pulls rich, markdown-it-py, etc.) ---
 streamlit==1.36.0
 pandas==2.1.4
 numpy==1.26.4
