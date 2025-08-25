@@ -1,7 +1,21 @@
-your-repo/
-├─ app.py
-├─ requirements.txt
-└─ .streamlit/
-   ├─ secrets.toml      (local dev only; DO NOT commit)
-   └─ config.toml       (optional)
+# Core Streamlit app
+streamlit==1.38.0
 
+# Data handling
+pandas==2.2.2
+numpy==1.26.4
+
+# API calls
+requests==2.32.3
+
+# WebSocket client (Coinbase live ticker)
+websocket-client==1.8.0
+
+# Config + alerts
+python-dotenv==1.0.1
+
+# Needed for Streamlit image handling (fix build error)
+pillow==9.5.0
+
+# Optional plotting (kept lean)
+matplotlib==3.9.2
