@@ -1,21 +1,15 @@
-# Core Streamlit app
-streamlit==1.38.0
+# Core
+streamlit>=1.37
+pandas>=2.2
+numpy>=1.26,<2.0
+requests>=2.32
+websocket-client>=1.7
+python-dateutil>=2.9
+pytz>=2024.1
+tenacity>=8.2
 
-# Data handling
-pandas==2.2.2
-numpy==1.26.4
+# Display / images (pin to wheel so it won't compile)
+pillow==10.4.0
 
-# API calls
-requests==2.32.3
-
-# WebSocket client (Coinbase live ticker)
-websocket-client==1.8.0
-
-# Config + alerts
-python-dotenv==1.0.1
-
-# Needed for Streamlit image handling (fix build error)
-pillow==9.5.0
-
-# Optional plotting (kept lean)
-matplotlib==3.9.2
+# Optional: speed up JSON/arrow where available, but keep versions safe
+pyarrow<17
