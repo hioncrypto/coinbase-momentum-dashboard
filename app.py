@@ -650,4 +650,3 @@ if remaining <= 0:
     st.rerun()
 else:
     st.caption(f"Auto-refresh every {refresh_sec}s (next in {int(remaining)}s)")
-
