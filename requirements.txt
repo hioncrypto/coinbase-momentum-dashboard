@@ -1,8 +1,14 @@
+# --- base build tools first (pin conservative versions) ---
+pip==24.1.2
+setuptools==69.5.1
+wheel==0.43.0
+
+# --- app deps (no pyarrow; Streamlit pulls rich, markdown-it-py, etc.) ---
 streamlit==1.36.0
-pandas==2.1.4           # avoids pyarrow dependency
+pandas==2.1.4
 numpy==1.26.4
 requests==2.31.0
 websocket-client==1.8.0
-Pillow==10.3.0          # prebuilt wheels; fixes past pillow build error
+Pillow==10.3.0
 python-dateutil==2.9.0.post0
 pytz==2024.1
