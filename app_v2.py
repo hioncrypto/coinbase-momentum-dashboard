@@ -454,3 +454,4 @@ st.caption(f"Discovery: {len(universe)} pairs • showing rows {start+1}–{min(
 
 # ------------- finalize collapse state
 st.session_state["collapse_all_now"]=False
+
