@@ -1,17 +1,7 @@
-# Core dependencies
-streamlit==1.38.0
-pandas==2.2.2
-numpy==1.26.4
-requests==2.32.3
+your-repo/
+├─ app.py
+├─ requirements.txt
+└─ .streamlit/
+   ├─ secrets.toml      (local dev only; DO NOT commit)
+   └─ config.toml       (optional)
 
-# WebSocket for Coinbase live prices
-websocket-client==1.8.0
-
-# Email / notifications (smtplib is built-in, but we add helpers)
-python-dotenv==1.0.1
-
-# Plotting & visualization (if used later)
-matplotlib==3.9.2
-
-# Fixing the deployment bug: Pillow version must be pinned
-pillow==9.5.0
