@@ -1,8 +1,9 @@
 streamlit==1.36.0
-pandas==2.1.4           # avoids pyarrow dependency
+pandas==2.1.4
 numpy==1.26.4
 requests==2.31.0
-websocket-client==1.8.0
-Pillow==10.3.0          # prebuilt wheels; fixes past pillow build error
-python-dateutil==2.9.0.post0
-pytz==2024.1
+matplotlib==3.8.2
+plotly==5.18.0
+ta==0.10.2
+websocket-client==1.6.1
+python-dotenv==1.0.1
