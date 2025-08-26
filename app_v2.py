@@ -1,14 +1,16 @@
-# app.py — Crypto Tracker by hioncrypto (all-in-one)
-# - Discovery + watchlist
-# - Blue sidebar styling (soft)
-# - Max pairs slider
-# - Gates w/ K & Y color rule
-# - Top‑10 (green rule) + gate chips
-# - Email/Webhook alerts (session opt-in)
-# - Collapse-all that actually collapses
-# - Defaults are loose to guarantee rows
+# app.py — Crypto Tracker by hioncrypto (all-in-one, single file)
+# - Blue (soft) sidebar styling + sticky "Collapse all menu tabs"
+# - "My Pairs" user list toggle (top of sidebar)
+# - Market discovery with Exchange/Quote + Watchlist + Max pairs slider
+# - Timeframes: 15m, 1h, 4h, 6h, 12h, 1d
+# - Gates: % Change (positive), Volume×, MACD hist (>=0.025 default), optional RSI
+# - K (green threshold) / Y (yellow threshold)
+# - Gate chips: Δ (pct), V (volume×), M (MACD), R (RSI)
+# - Top-10 (greens only, green-styled), Discover (greens first, then %chg desc)
+# - Email/Webhook alerts for new Top-10 entrants (opt-in per session)
+# - Auto-refresh (always on; no apply buttons)
 
-import time, datetime as dt, ssl, json
+import time, ssl, json
 from typing import List, Optional
 import numpy as np
 import pandas as pd
@@ -18,27 +20,32 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import smtplib
 
-# -------------------- Page / Theme --------------------
+# -------------------------- Page / Theme --------------------------
 st.set_page_config(page_title="Crypto Tracker by hioncrypto", layout="wide")
 
 st.markdown("""
 <style>
 :root { --hion-blue: #3B82F6; }
-/* Sticky toolbar in the sidebar */
+
+/* Sticky bar at top of sidebar (for collapse btn & quick toggles) */
 section[data-testid="stSidebar"] > div:first-child {
   position: sticky; top: 0; z-index: 999;
   background: linear-gradient(180deg, rgba(13,17,23,0.98) 70%, rgba(13,17,23,0));
   padding-bottom: 6px; margin-bottom: 8px; border-bottom: 1px solid rgba(59,130,246,0.25);
 }
-/* Collapse button + small toggles */
+
+/* Sidebar buttons */
 section[data-testid="stSidebar"] button, .stButton>button {
   background: var(--hion-blue) !important; color: white !important; border: 0 !important;
   border-radius: 10px !important; font-weight: 600 !important;
 }
+
+/* Inputs focus ring (soft blue) */
 section[data-testid="stSidebar"] .st-emotion-cache-1pahdxg, 
 section[data-testid="stSidebar"] .st-emotion-cache-1cypcdb {
   border-color: rgba(59,130,246,0.65) !important;
 }
+
 /* Expander headers in soft blue */
 section[data-testid="stSidebar"] details > summary {
   background: rgba(59,130,246,0.12) !important;
@@ -47,6 +54,7 @@ section[data-testid="stSidebar"] details > summary {
   border-radius: 10px;
   margin: 6px 0 !important;
 }
+
 /* Table row highlights */
 .row-green { background: rgba(0,255,0,0.22) !important; font-weight: 600; }
 .row-yellow{ background: rgba(255,255,0,0.60) !important; font-weight: 600; }
@@ -55,7 +63,7 @@ section[data-testid="stSidebar"] details > summary {
 
 st.title("Crypto Tracker by hioncrypto")
 
-# -------------------- Constants / Helpers --------------------
+# -------------------------- Constants / Helpers --------------------------
 TF_LIST = ["15m","1h","4h","6h","12h","1d"]
 TF_SEC  = {"15m":900, "1h":3600, "4h":14400, "6h":21600, "12h":43200, "1d":86400}
 EXCHANGES = ["Coinbase","Binance"]
@@ -104,6 +112,7 @@ def list_products(exchange: str, quote: str) -> List[str]:
     return coinbase_list_products(quote) if exchange=="Coinbase" else binance_list_products(quote)
 
 def fetch_candles(exchange: str, pair: str, gran_sec: int, limit: int=300) -> Optional[pd.DataFrame]:
+    """Return sorted OHLCV with columns: ts, open, high, low, close, volume"""
     try:
         if exchange=="Coinbase":
             native_ok = gran_sec in {60,300,900,3600,21600,86400}
@@ -117,7 +126,7 @@ def fetch_candles(exchange: str, pair: str, gran_sec: int, limit: int=300) -> Op
             df = df.sort_values("ts").tail(limit).reset_index(drop=True)
             if native_ok:
                 return df[["ts","open","high","low","close","volume"]]
-            # resample
+            # resample to target
             d = df.set_index("ts")
             agg={"open":"first","high":"max","low":"min","close":"last","volume":"sum"}
             out = d.resample(f"{gran_sec}s", label="right", closed="right").agg(agg).dropna()
@@ -163,15 +172,23 @@ def post_webhook(url, payload):
     except Exception as e:
         return False, str(e)
 
-# -------------------- Sidebar (with working Collapse All) --------------------
+# -------------------------- Sidebar (sticky collapse + My Pairs) --------------------------
 if "collapse_now" not in st.session_state:
     st.session_state.collapse_now = False
-if st.sidebar.button("Collapse all menu tabs", use_container_width=True):
-    st.session_state.collapse_now = True
+col1, col2 = st.sidebar.columns([0.65, 0.35])
+with col1:
+    if st.button("Collapse all menu tabs", use_container_width=True):
+        st.session_state.collapse_now = True
+with col2:
+    use_my_pairs = st.toggle("My Pairs", value=False, help="Show only your preferred pairs (set below).")
 
 def exp(title, key):
     expanded = not st.session_state.get("collapse_now", False)
     return st.sidebar.expander(title, expanded=expanded)
+
+with exp("My Pairs (user list)", "exp_mypairs"):
+    my_pairs_text = st.text_area("Your pairs (comma-separated, e.g. BTC-USD, ETH-USD)", "")
+    my_pairs = [p.strip().upper() for p in my_pairs_text.split(",") if p.strip()]
 
 with exp("Market", "exp_market"):
     exchange = st.selectbox("Exchange", EXCHANGES, index=0)
@@ -179,24 +196,24 @@ with exp("Market", "exp_market"):
     use_watch = st.checkbox("Use watchlist only (ignore discovery)", value=False)
     watchlist = st.text_area("Watchlist (comma-separated)",
                              "BTC-USD, ETH-USD, SOL-USD, AVAX-USD, ADA-USD, DOGE-USD, MATIC-USD")
-    max_pairs = st.slider("Max pairs to evaluate (discovery)", 50, 1000, 300, 10)
+    max_pairs = st.slider("Max pairs to evaluate (discovery)", 50, 2000, 500, 10)
 
 with exp("Timeframes", "exp_tf"):
     tf = st.selectbox("Primary timeframe (for % change)", TF_LIST, index=1)  # 1h default
 
 with exp("Gates", "exp_gates"):
-    # hioncrypto starter presets switch (right above K)
+    # hioncrypto starter defaults: loose so tables populate; tighten later.
     use_hion = st.toggle("Use hioncrypto (starter)", value=True,
-                         help="One-click looser defaults so lists populate; tighten later.")
+                         help="One-click looser defaults so results appear immediately. Tighten later.")
     gate_logic = st.radio("Gate logic", ["ALL","ANY"], index=0, horizontal=True)
-    min_pct = st.slider("Min +% change (Sort TF)", 0.0, 50.0, 2.0 if use_hion else 5.0, 0.5,
-                        help="Positive only; rows need to meet or exceed this % gain for the selected TF.")
+    min_pct = st.slider("Min +% change (Sort TF)", 0.0, 50.0, 0.5 if use_hion else 2.0, 0.1,
+                        help="Positive only; rows must meet or exceed this % gain for the selected TF.")
 
     c1,c2,c3 = st.columns(3)
     with c1:
         use_vol = st.toggle("Volume spike×", True)
         vol_win = st.slider("Spike window", 5, 50, 20, 1)
-        vol_mult= st.slider("Min spike ×", 1.0, 5.0, 1.10 if use_hion else 1.25, 0.05)
+        vol_mult= st.slider("Min spike ×", 1.0, 5.0, 1.05 if use_hion else 1.20, 0.05)
     with c2:
         use_macd = st.toggle("MACD hist", True)
         min_mh   = st.slider("Min MACD hist", 0.0, 1.0, 0.025, 0.005)
@@ -207,13 +224,7 @@ with exp("Gates", "exp_gates"):
     st.markdown("---")
     k_need = st.selectbox("Gates needed to turn green (K)", [1,2,3,4,5,6,7], index=1 if use_hion else 2)
     y_need = st.selectbox("Yellow needs ≥ Y (but < K)", [0,1,2,3,4,5,6], index=0)
-    st.caption("Legend for gate chips: **Δ** %Change • **V** Volume× • **M** MACD • **R** RSI")
-
-with exp("Indicator lengths", "exp_len"):
-    rsi_len   = st.slider("RSI length", 5, 50, 14, 1)
-    macd_fast = st.slider("MACD fast EMA", 3, 50, 12, 1)
-    macd_slow = st.slider("MACD slow EMA", 5, 100, 26, 1)
-    macd_sig  = st.slider("MACD signal", 3, 50, 9, 1)
+    st.caption("Gate chips shown in table: **Δ** %Change • **V** Volume× • **M** MACD • **R** RSI")
 
 with exp("Notifications", "exp_notif"):
     send_session_alerts = st.checkbox("Send Email/Webhook alerts this session", value=False)
@@ -224,31 +235,38 @@ with exp("Auto-refresh", "exp_refresh"):
     refresh_sec = st.slider("Refresh every (seconds)", 10, 180, 45, 5)
     st.caption("Auto-refresh is always on while this page is open.")
 
-# reset the collapse flag after building all expanders
+# reset collapse after drawing all expanders
 st.session_state.collapse_now = False
 
-# -------------------- Universe --------------------
-if use_watch and watchlist.strip():
-    pairs = [p.strip().upper() for p in watchlist.split(",") if p.strip()]
+# -------------------------- Build Universe --------------------------
+if use_my_pairs and my_pairs:
+    pairs = my_pairs
 else:
-    pairs = list_products(exchange, quote)
-pairs = pairs[:max_pairs] if not use_watch else pairs
+    if use_watch and watchlist.strip():
+        pairs = [p.strip().upper() for p in watchlist.split(",") if p.strip()]
+    else:
+        pairs = list_products(exchange, quote)
+        # honor the discovery cap only when NOT using watchlist or my pairs
+        pairs = pairs[:max_pairs]
 
-# -------------------- Compute rows --------------------
+# -------------------------- Compute rows --------------------------
 def compute_row(pid: str):
     sec = TF_SEC[tf]
     d = fetch_candles(exchange, pid, sec, limit=300)
-    if d is None or len(d) < 30: return None
+    if d is None or len(d) < 30:
+        return None
 
     last = float(d["close"].iloc[-1]); first = float(d["close"].iloc[0])
     chg = (last/first - 1.0) * 100.0
 
     checks = []
-    chips  = []  # chip string for the table
-    # % change is always a gate, positive only (meets min_pct)
+    chips  = []
+
+    # Δ (positive % change gate)
     ok_pct = chg >= min_pct
     checks.append(ok_pct); chips.append("Δ" if ok_pct else "Δ×")
 
+    # Volume spike×
     if use_vol:
         if len(d) >= vol_win+1:
             ma = d["volume"].rolling(vol_win).mean().iloc[-2] + 1e-12
@@ -258,21 +276,30 @@ def compute_row(pid: str):
             ok = False
         checks.append(ok); chips.append("V" if ok else "V×")
 
+    # MACD hist
     if use_macd:
-        mh = float(macd_hist(d["close"], macd_fast, macd_slow, macd_sig).iloc[-1])
+        mh = float(macd_hist(d["close"], 12, 26, 9).iloc[-1])  # fast/slow/sig lengths are standard
         ok = mh >= min_mh
         checks.append(ok); chips.append("M" if ok else "M×")
 
+    # RSI
     if use_rsi:
-        rv = float(rsi(d["close"], rsi_len).iloc[-1])
+        rv = float(rsi(d["close"], 14).iloc[-1])
         ok = rv >= min_rsi
         checks.append(ok); chips.append("R" if ok else "R×")
 
-    # Color decision (K/Y against enabled checks)
-    enabled = [True] + ([use_vol] + [use_macd] + [use_rsi])  # Δ always enabled
-    used = [c for c,e in zip(checks, enabled) if e]
-    score = sum(used)
-    total = len(used)
+    # Gate logic (ALL/ANY) only affects how we count toward K/Y
+    considered = []
+    if gate_logic == "ALL":
+        # ALL means every enabled check must be true to count
+        # but we still compute score for K/Y visually
+        considered = checks
+    else:
+        # ANY: at least one true is acceptable; scoring still uses raw checks
+        considered = checks
+
+    score = sum(1 for c in considered if c)
+    total = len(considered)
 
     green = (score >= k_need)
     yellow = (not green) and (score >= y_need)
@@ -290,30 +317,31 @@ rows=[]
 for pid in pairs:
     r = compute_row(pid)
     if r: rows.append(r)
+
 df = pd.DataFrame(rows)
 
-st.caption(f"Discovery status — Fetched: {len(pairs)} pairs • Computed rows: {len(df)} • "
+st.caption(f"Discovery status — Universe fetched: {len(pairs)} • Rows computed: {len(df)} • "
            f"Exchange: {exchange} • Quote: {quote} • TF: {tf}")
 
 if df.empty:
-    st.warning("No rows to show. Try lowering **Min +% change**, reducing **K**, or toggling off one of the gates.")
+    st.warning("No rows to show. Try lowering **Min +% change**, reducing **K**, or toggling off one gate (Volume/MACD/RSI).")
 else:
     chg_col = f"% Change ({tf})"
 
-    # ---------- Top‑10 (green rule) ----------
+    # ---------------------- Top-10 (greens only) ----------------------
+    st.subheader("📌 Top-10 (meets green rule)")
     top10 = df[df["_green"]].sort_values(chg_col, ascending=False).head(10).reset_index(drop=True)
-    st.subheader("📌 Top‑10 (meets green rule)")
     if top10.empty:
         st.write("—")
         st.caption("💡 If nothing appears, loosen gates (lower **Min +% change** or reduce **K**).")
     else:
         def style_green(x):
-            s = pd.DataFrame("background-color: rgba(0,255,0,0.22); font-weight: 600;", index=x.index, columns=x.columns)
-            return s
+            return pd.DataFrame("background-color: rgba(0,255,0,0.22); font-weight: 600;",
+                                index=x.index, columns=x.columns)
         st.dataframe(top10[["Pair","Price",chg_col,"Gates"]].style.apply(style_green, axis=None),
                      use_container_width=True)
 
-        # Alerts when new pairs enter Top‑10 (session only)
+        # Alerts when new pairs enter Top-10 (session only)
         if send_session_alerts:
             if "alert_seen" not in st.session_state: st.session_state.alert_seen=set()
             new_msgs=[]
@@ -323,7 +351,7 @@ else:
                     st.session_state.alert_seen.add(key)
                     new_msgs.append(f"{r['Pair']}: {float(r[chg_col]):+.2f}% ({tf})  Gates: {r['Gates']}")
             if new_msgs:
-                subject = f"[{exchange}] Top‑10 — Crypto Tracker"
+                subject = f"[{exchange}] Top-10 — Crypto Tracker"
                 body    = "\n".join(new_msgs)
                 if email_to.strip():
                     ok, info = send_email_alert(subject, body, email_to.strip())
@@ -332,21 +360,22 @@ else:
                     ok, info = post_webhook(webhook_url.strip(), {"title": subject, "lines": new_msgs})
                     if not ok: st.sidebar.warning(f"Webhook error: {info}")
 
-    # ---------- Discover (all rows) ----------
+    # ---------------------- Discover (all rows) ----------------------
     st.subheader("📑 Discover")
-    # Sort: greens first, then highest % change
     df_sorted = df.sort_values(["_green", chg_col], ascending=[False, False]).reset_index(drop=True)
     df_sorted.insert(0, "#", df_sorted.index+1)
     show_cols = ["#","Pair","Price",chg_col,"Gates"]
+
     def style_rows(x):
         s = pd.DataFrame("", index=x.index, columns=x.columns)
         for i in range(len(x)):
-            if x.loc[i, "_green"]:  s.loc[i,:] = "background-color: rgba(0,255,0,0.22); font-weight: 600;"
+            if x.loc[i, "_green"]:    s.loc[i,:] = "background-color: rgba(0,255,0,0.22); font-weight: 600;"
             elif x.loc[i, "_yellow"]: s.loc[i,:] = "background-color: rgba(255,255,0,0.60); font-weight: 600;"
         return s
+
     st.dataframe(df_sorted[show_cols].style.apply(style_rows, axis=None), use_container_width=True)
 
-# -------------------- Auto-refresh --------------------
+# -------------------------- Auto-refresh (always on) --------------------------
 if "last_refresh" not in st.session_state:
     st.session_state.last_refresh = time.time()
 remaining = refresh_sec - (time.time() - st.session_state.last_refresh)
