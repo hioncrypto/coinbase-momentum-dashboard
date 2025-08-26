@@ -1,11 +1,15 @@
 # app.py — Crypto Tracker by hioncrypto
-# One-file build with: Collapse-all, Resets, Presets/My Pairs persistence, Coinbase+Binance,
-# timeframes (15m,1h,4h,6h,12h,1d), positive-only % change, K/Y gates, Top-10, Alerts, Auto-refresh.
+# Fixes:
+#  - Presets now save to ./user_presets/presets.json (instead of /mnt/data)
+#  - Sticky "Collapse all menu tabs" in sidebar; no auto-open on reruns
+#  - Discovery no longer stuck on 'A' symbols (supports "All pairs" toggle)
 #
-# If disk is read-only, the app still runs (presets/My Pairs won't persist but no crashes).
+# Notes:
+#  - Keeps your gates/green-yellow K+Y rules, Top-10 (% change desc), alerts,
+#    “My Pairs”, emails/webhooks, multiple quotes, Coinbase/Binance, etc.
 
 import os, json, time, ssl, smtplib, datetime as dt, threading, queue
-from typing import List, Optional, Tuple, Dict
+from typing import List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -14,28 +18,28 @@ import streamlit as st
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-# ----------------------------- Optional WebSocket
+# -------------------- Optional WS
 WS_AVAILABLE = True
 try:
     import websocket  # websocket-client
 except Exception:
     WS_AVAILABLE = False
 
+# -------------------- Constants
 APP_TITLE = "Crypto Tracker by hioncrypto"
-
-# ----------------------------- Globals / Constants
 TF_LIST = ["15m","1h","4h","6h","12h","1d"]
-TF_SEC  = {"15m":900,"1h":3600,"4h":14400,"6h":21600,"12h":43200,"1d":86400}
-
+ALL_TFS = {"15m":900,"1h":3600,"4h":14400,"6h":21600,"12h":43200,"1d":86400}
 QUOTES = ["USD","USDC","USDT","BTC","ETH","EUR"]
 EXCHANGES = ["Coinbase","Binance","Kraken (coming soon)","KuCoin (coming soon)"]
 
 CB_BASE = "https://api.exchange.coinbase.com"
 BN_BASE = "https://api.binance.com"
 
-STATE_PATH = "./user_state.json"  # for presets & my pairs
+# -------------------- Preset storage (file-based, writable folder)
+PRESET_DIR = os.path.join(".", "user_presets")
+PRESET_FILE = os.path.join(PRESET_DIR, "presets.json")
 
-# ----------------------------- Session init
+
 def _init_state():
     ss = st.session_state
     ss.setdefault("ws_thread", None)
@@ -43,144 +47,62 @@ def _init_state():
     ss.setdefault("ws_q", queue.Queue())
     ss.setdefault("ws_prices", {})
     ss.setdefault("alert_seen", set())
+    # Expander control: we do NOT auto-open/close on reruns
+    ss.setdefault("collapse_all_now", False)
+    # Presets
+    ss.setdefault("gate_presets", {})
+    ss.setdefault("loaded_default_presets", False)
+    # refresh
     ss.setdefault("last_refresh", time.time())
-
-    # UI behaviors
-    ss.setdefault("collapse_now", False)
-
-    # persistent buckets we try to load/save
-    ss.setdefault("presets", {})
-    ss.setdefault("my_pairs", [])
-
-    # one-time disk load
-    if not ss.get("disk_loaded", False):
-        try:
-            if os.path.exists(STATE_PATH):
-                with open(STATE_PATH, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    if isinstance(data, dict):
-                        ss["presets"] = data.get("presets", {})
-                        ss["my_pairs"] = data.get("my_pairs", [])
-        except Exception:
-            pass
-        # seed a helpful preset if empty
-        if not ss["presets"]:
-            ss["presets"]["hioncrypto (starter)"] = {
-                "min_pct": 20.0,
-                "use_vol_spike": True,  "vol_mult": 1.10,
-                "use_rsi": False,       "min_rsi": 55,
-                "use_macd": True,       "min_mhist": 0.0,
-                "use_atr": False,       "min_atr": 0.5,
-                "use_trend": True,      "pivot_span": 4, "trend_within": 48,
-                "rsi_len": 14, "macd_fast":12, "macd_slow":26, "macd_sig":9,
-                "atr_len":14, "vol_window":20,
-                "gates_to_green": 3, "yellow_needed": 1
-            }
-        ss["disk_loaded"] = True
-
 _init_state()
 
-def save_state_to_disk():
-    try:
-        with open(STATE_PATH, "w", encoding="utf-8") as f:
-            json.dump({"presets": st.session_state["presets"],
-                       "my_pairs": st.session_state["my_pairs"]}, f, indent=2)
-        return True, "Saved"
-    except Exception as e:
-        return False, str(e)
-
-# ----------------------------- Reset & Defaults
-DEFAULTS = {
-    # Market / Mode
-    "use_watch_only": False, "watchlist": "BTC-USD, ETH-USD, SOL-USD, AVAX-USD, ADA-USD, DOGE-USD, MATIC-USD",
-    "all_pairs_toggle": True, "max_pairs": 200,
-    "mode": "REST only", "ws_chunk": 10,
-    # TF & sorting
-    "sort_tf": "1h", "sort_desc": True,
-    # Gates core
-    "min_pct": 20.0,
-    "use_vol_spike": True, "vol_mult": 1.10,
-    "use_rsi": False, "min_rsi": 55,
-    "use_macd": True, "min_mhist": 0.0,
-    "use_atr": False, "min_atr": 0.5,
-    "use_trend": True, "pivot_span": 4, "trend_within": 48,
-    # Gate color thresholds
-    "gates_to_green": 3, "yellow_needed": 1,  # K and Y
-    # Indicator lengths
-    "rsi_len": 14, "macd_fast": 12, "macd_slow": 26, "macd_sig": 9,
-    "atr_len": 14, "vol_window": 20,
-    # History depth
-    "basis": "Daily", "amount": 90,
-    # Display & refresh
-    "font_scale": 1.0, "refresh_sec": 30,
-}
-
-def reset_all():
-    for k, v in DEFAULTS.items():
-        st.session_state[k] = v
-    # do not wipe presets/my_pairs here; separate buttons handle those
-
-def reset_gates_only():
-    for k in ["min_pct","use_vol_spike","vol_mult","use_rsi","min_rsi",
-              "use_macd","min_mhist","use_atr","min_atr","use_trend","pivot_span","trend_within",
-              "gates_to_green","yellow_needed"]:
-        st.session_state[k] = DEFAULTS[k]
-
-def reset_indicator_lengths():
-    for k in ["rsi_len","macd_fast","macd_slow","macd_sig","atr_len","vol_window"]:
-        st.session_state[k] = DEFAULTS[k]
-
-def reset_history_depth():
-    st.session_state["basis"] = DEFAULTS["basis"]
-    st.session_state["amount"] = DEFAULTS["amount"]
-
-def reset_display():
-    st.session_state["font_scale"] = DEFAULTS["font_scale"]
-
-def reset_autorefresh():
-    st.session_state["refresh_sec"] = DEFAULTS["refresh_sec"]
-
-# ----------------------------- UI helpers
-def sticky_collapse_header():
+# -------------------- UI helpers
+def sticky_collapse_button():
+    # CSS to keep the first block in sidebar sticky (button + My Pairs toggle row)
     st.sidebar.markdown("""
     <style>
-      [data-testid="stSidebar"] > div:first-child {position: sticky; top: 0; z-index: 1000;}
-      .hio-sticky {background: var(--secondary-background-color); padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.1);}
+      [data-testid="stSidebar"] > div:first-child {position: sticky; top: 0; z-index: 999;}
+      .hio-sticky-wrap {background: var(--secondary-background-color); padding: 8px 8px 0 8px; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.1);}
+      .hio-row {display:flex; gap:10px; align-items:center;}
     </style>
     """, unsafe_allow_html=True)
     with st.sidebar.container():
-        st.markdown('<div class="hio-sticky">', unsafe_allow_html=True)
-        c1, c2 = st.columns([1,1])
-        with c1:
-            if st.button("Collapse all", use_container_width=True):
-                st.session_state["collapse_now"] = True
-        with c2:
-            st.toggle("⭐ Use My Pairs", key="use_my_pairs_global", value=False)
-        st.markdown('</div>', unsafe_allow_html=True)
-    # consume the flag just for this render (no auto-behavior on next rerun)
-    flag = st.session_state.get("collapse_now", False)
-    st.session_state["collapse_now"] = False
-    return flag
+        with st.sidebar.container():
+            st.markdown('<div class="hio-sticky-wrap">', unsafe_allow_html=True)
+            cols = st.columns([1,1])
+            with cols[0]:
+                if st.button("Collapse all\nmenu tabs", use_container_width=True):
+                    st.session_state["collapse_all_now"] = True
+            with cols[1]:
+                st.toggle("⭐ Use My\nPairs only", key="use_my_pairs_global", value=False)
+            st.markdown('</div>', unsafe_allow_html=True)
+    # Reset the flag immediately after read—no auto-behavior on next rerun
+    flag = st.session_state.get("collapse_all_now", False)
+    st.session_state["collapse_all_now"] = False
+    return flag  # we only use it *this* render, not future ones
 
-def expander(title: str):
-    # if user clicked collapse this render, start closed; else keep default behavior
-    expanded = not st.session_state.get("collapse_once_used", False)
+
+def expander(title: str, key: str):
+    # Honor *current* collapse request only; otherwise leave Streamlit's default behavior
+    expanded = not st.session_state.get("collapse_all_now_now_used", False)
     return st.sidebar.expander(title, expanded=expanded)
+
 
 def big_timeframe_label(tf: str):
     st.markdown(f"<div style='font-size:1.4rem;font-weight:700;margin:8px 0 4px 2px;'>Timeframe: {tf}</div>", unsafe_allow_html=True)
 
-# ----------------------------- Indicators
+
+# -------------------- Indicators
 def ema(s: pd.Series, span: int) -> pd.Series:
     return s.ewm(span=span, adjust=False).mean()
 
 def rsi(close: pd.Series, length=14) -> pd.Series:
-    delta = close.diff()
-    up = np.where(delta > 0, delta, 0.0)
-    down = np.where(delta < 0, -delta, 0.0)
+    d = close.diff()
+    up = np.where(d > 0, d, 0.0)
+    dn = np.where(d < 0, -d, 0.0)
     roll_up = pd.Series(up, index=close.index).ewm(alpha=1/length, adjust=False).mean()
-    roll_down = pd.Series(down, index=close.index).ewm(alpha=1/length, adjust=False).mean()
-    rs = roll_up / (roll_down + 1e-12)
+    roll_dn = pd.Series(dn, index=close.index).ewm(alpha=1/length, adjust=False).mean()
+    rs = roll_up / (roll_dn + 1e-12)
     return 100 - (100 / (1 + rs))
 
 def macd_hist(close: pd.Series, fast=12, slow=26, signal=9) -> pd.Series:
@@ -217,10 +139,10 @@ def trend_breakout_up(df: pd.DataFrame, span=3, within_bars=48) -> bool:
     if cross is None: return False
     return (len(df)-1 - cross) <= within_bars
 
-# ----------------------------- Exchanges & data
+# -------------------- Exchanges
 def coinbase_list_products(quote: str) -> List[str]:
     try:
-        r = requests.get(f"{CB_BASE}/products", timeout=25); r.raise_for_status()
+        r = requests.get(f"{CB_BASE}/products", timeout=20); r.raise_for_status()
         data = r.json()
         return sorted(f"{p['base_currency']}-{p['quote_currency']}" for p in data if p.get("quote_currency")==quote)
     except Exception:
@@ -258,7 +180,8 @@ def fetch_candles(exchange: str, pair_dash: str, gran_sec: int,
             df = pd.DataFrame(arr, columns=["ts","low","high","open","close","volume"])
             df["ts"] = pd.to_datetime(df["ts"], unit="s", utc=True)
             return df.sort_values("ts").reset_index(drop=True)
-        elif exchange=="Binance":
+
+        if exchange=="Binance":
             base, quote = pair_dash.split("-"); symbol=f"{base}{quote}"
             interval_map = {900:"15m",3600:"1h",14400:"4h",21600:"6h",43200:"12h",86400:"1d"}
             interval = interval_map.get(gran_sec)
@@ -281,19 +204,19 @@ def fetch_candles(exchange: str, pair_dash: str, gran_sec: int,
 
 def resample_ohlcv(df: pd.DataFrame, target_sec: int) -> Optional[pd.DataFrame]:
     if df is None or df.empty: return None
-    d=df.set_index(pd.DatetimeIndex(df["ts"]))
+    d = df.set_index(pd.DatetimeIndex(df["ts"]))
     agg={"open":"first","high":"max","low":"min","close":"last","volume":"sum"}
-    out=d.resample(f"{target_sec}s", label="right", closed="right").agg(agg).dropna()
+    out = d.resample(f"{target_sec}s", label="right", closed="right").agg(agg).dropna()
     return out.reset_index()
 
 def df_for_tf(exchange: str, pair: str, tf: str) -> Optional[pd.DataFrame]:
-    sec = TF_SEC[tf]
+    sec = ALL_TFS[tf]
     if exchange=="Coinbase":
         native = sec in {900,3600,21600,86400}
         if native: return fetch_candles(exchange, pair, sec)
         base = fetch_candles(exchange, pair, 3600)
         return resample_ohlcv(base, sec)
-    elif exchange=="Binance":
+    if exchange=="Binance":
         return fetch_candles(exchange, pair, sec)
     return None
 
@@ -301,11 +224,11 @@ def df_for_tf(exchange: str, pair: str, tf: str) -> Optional[pd.DataFrame]:
 def get_hist(exchange: str, pair: str, basis: str, amount: int) -> Optional[pd.DataFrame]:
     end = dt.datetime.utcnow().replace(tzinfo=dt.timezone.utc)
     if basis=="Hourly":
-        amount = max(1, min(amount, 72)); gran=3600; start=end-dt.timedelta(hours=amount)
+        amount = max(1, min(amount,72)); gran=86400//24; start=end-dt.timedelta(hours=amount)
     elif basis=="Daily":
         amount = max(1, min(amount,365)); gran=86400; start=end-dt.timedelta(days=amount)
     else:
-        amount = max(1, min(amount, 52)); gran=86400; start=end-dt.timedelta(weeks=amount)
+        amount = max(1, min(amount,52)); gran=86400; start=end-dt.timedelta(weeks=amount)
     out=[]; step=300; cursor_end=end
     while True:
         win=dt.timedelta(seconds=step*gran)
@@ -328,16 +251,14 @@ def ath_atl_info(hist: pd.DataFrame) -> dict:
     return {"From ATH %": (last/ath-1)*100 if ath>0 else np.nan, "ATH date": d_ath,
             "From ATL %": (last/atl-1)*100 if atl>0 else np.nan, "ATL date": d_atl}
 
-# ----------------------------- Gates / masks
-def build_gate_checks(df_tf: pd.DataFrame, settings: dict) -> Tuple[float, List[str], int]:
-    """Return (pct_up, passed_labels, passed_count) for enabled gates.
-       Gates: Δ, V, R, M, A, T
-    """
-    last_close = float(df_tf["close"].iloc[-1])
-    first_close = float(df_tf["close"].iloc[0])
-    pct_up = (last_close/first_close - 1.0) * 100.0
+# -------------------- Gates
+def build_gate_masks(df_tf: pd.DataFrame, settings: dict) -> dict:
+    n = len(df_tf)
+    last_close = df_tf["close"].iloc[-1]
+    first_close = df_tf["close"].iloc[0]
+    pct = (last_close/first_close - 1.0) * 100.0
+    m_pct_pos = pd.Series([pct >= settings["min_pct"] and pct > 0] * n, index=df_tf.index)
 
-    # indicators
     rsi_len   = settings["rsi_len"]
     macd_fast = settings["macd_fast"]; macd_slow = settings["macd_slow"]; macd_sig=settings["macd_sig"]
     atr_len   = settings["atr_len"]
@@ -350,40 +271,40 @@ def build_gate_checks(df_tf: pd.DataFrame, settings: dict) -> Tuple[float, List[
     volx     = volume_spike(df_tf, vol_win)
     tr_up    = trend_breakout_up(df_tf, span=piv_span, within_bars=within_bars)
 
-    enabled_labels = []
-    passed_labels  = []
+    def uni(val: bool): return pd.Series([bool(val)]*n, index=df_tf.index)
+    m_vol_spike = uni((volx >= vol_mult)) if settings["use_vol_spike"] else uni(True)
+    m_rsi       = uni((rsi_ser.iloc[-1] >= settings["min_rsi"])) if settings["use_rsi"] else uni(True)
+    m_macd      = uni((mh_ser.iloc[-1] >= settings["min_mhist"])) if settings["use_macd"] else uni(True)
+    m_atr       = uni((atr_ser.iloc[-1] >= settings["min_atr"])) if settings["use_atr"] else uni(True)
+    m_trend     = uni(tr_up) if settings["use_trend"] else uni(True)
 
-    # Δ: min +% change, positive-only
-    if settings["use_pct"]:
-        enabled_labels.append("Δ")
-        if pct_up >= settings["min_pct"] and pct_up > 0:
-            passed_labels.append("Δ")
+    # How many checks enabled & passed now?
+    checks = [
+        ("Δ", bool(m_pct_pos.iloc[-1])),
+        ("V", bool(m_vol_spike.iloc[-1])),
+        ("R", bool(m_rsi.iloc[-1])),
+        ("M", bool(m_macd.iloc[-1])),
+        ("A", bool(m_atr.iloc[-1])),
+        ("T", bool(m_trend.iloc[-1])),
+    ]
+    enabled = [c for c,(lab,ok) in zip([settings["use_pct"],settings["use_vol_spike"],settings["use_rsi"],settings["use_macd"],settings["use_atr"],settings["use_trend"]], checks) if c]
+    passed  = [ok for (lab,ok) in checks if True]  # we’ll count below
 
-    if settings["use_vol_spike"]:
-        enabled_labels.append("V")
-        if (volx >= settings["vol_mult"]): passed_labels.append("V")
+    return {
+        "pct": m_pct_pos, "vol": m_vol_spike, "rsi": m_rsi, "macd": m_macd, "atr": m_atr, "trend": m_trend,
+        "pct_value": pct,
+        "checks_enabled": [lab for (lab,_ok) in checks if True and (
+            (lab=="Δ" and settings["use_pct"]) or
+            (lab=="V" and settings["use_vol_spike"]) or
+            (lab=="R" and settings["use_rsi"]) or
+            (lab=="M" and settings["use_macd"]) or
+            (lab=="A" and settings["use_atr"]) or
+            (lab=="T" and settings["use_trend"])
+        )],
+        "checks_passed": [lab for (lab,ok) in checks if ok],
+    }
 
-    if settings["use_rsi"]:
-        enabled_labels.append("R")
-        if float(rsi_ser.iloc[-1]) >= settings["min_rsi"]: passed_labels.append("R")
-
-    if settings["use_macd"]:
-        enabled_labels.append("M")
-        if float(mh_ser.iloc[-1]) >= settings["min_mhist"]: passed_labels.append("M")
-
-    if settings["use_atr"]:
-        enabled_labels.append("A")
-        if float(atr_ser.iloc[-1]) >= settings["min_atr"]: passed_labels.append("A")
-
-    if settings["use_trend"]:
-        enabled_labels.append("T")
-        if bool(tr_up): passed_labels.append("T")
-
-    # only count gates that are enabled
-    passed_count = len([lab for lab in passed_labels if lab in enabled_labels])
-    return pct_up, passed_labels, passed_count
-
-# ----------------------------- Alerts
+# -------------------- Alerts
 def send_email_alert(subject, body, recipient):
     try: cfg=st.secrets["smtp"]
     except Exception: return False, "SMTP not configured in st.secrets"
@@ -404,13 +325,228 @@ def post_webhook(url, payload):
     except Exception as e:
         return False, str(e)
 
-# ----------------------------- WebSocket (Coinbase)
-def ws_worker(product_ids, endpoint="wss://ws-feed.exchange.coinbase.com"):
+# -------------------- Preset helpers
+def _ensure_preset_dir():
+    try:
+        os.makedirs(PRESET_DIR, exist_ok=True)
+        return True, ""
+    except Exception as e:
+        return False, str(e)
+
+def save_presets_to_disk(presets: dict):
+    ok, msg = _ensure_preset_dir()
+    if not ok: return False, msg
+    try:
+        with open(PRESET_FILE, "w", encoding="utf-8") as f:
+            json.dump(presets, f, indent=2)
+        return True, "Saved"
+    except Exception as e:
+        return False, f"{e}"
+
+def load_presets_from_disk() -> dict:
+    try:
+        if os.path.exists(PRESET_FILE):
+            with open(PRESET_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+# -------------------- App UI
+st.set_page_config(page_title=APP_TITLE, layout="wide")
+st.title(APP_TITLE)
+
+# Sticky tools
+collapse_clicked = sticky_collapse_button()
+# Consume this run's collapse request *only* for expanders right below
+st.session_state["collapse_all_now_now_used"] = collapse_clicked
+
+# --- Manage My Pairs (top of sidebar)
+with st.sidebar.expander("Manage My Pairs", expanded=False):
+    st.caption("Tip: pin/unpin from tables or paste here.")
+    mypairs_text = st.text_area("My Pairs (comma-separated)", st.session_state.get("mypairs_text", "BTC-USD, ETH-USD, SOL-USD"))
+    st.session_state["mypairs_text"] = mypairs_text
+    my_pairs = [p.strip().upper() for p in mypairs_text.split(",") if p.strip()]
+    if st.button("Clear My Pairs"):
+        st.session_state["mypairs_text"] = ""
+        my_pairs = []
+
+# --- Market
+with st.sidebar.expander("Market", expanded=False):
+    exchange = st.selectbox("Exchange", EXCHANGES, index=0)
+    effective_exchange = exchange if "coming soon" not in exchange else "Coinbase"
+    if "coming soon" in exchange: st.info("Coming soon — using Coinbase for now.")
+    quote = st.selectbox("Quote currency", QUOTES, index=0)
+    use_watch_only = st.checkbox("Use watchlist only (ignore discovery)")
+    watchlist = st.text_area("Watchlist (comma-separated)", "BTC-USD, ETH-USD, SOL-USD, AVAX-USD, ADA-USD, DOGE-USD, MATIC-USD")
+
+    cols = st.columns([1,1])
+    with cols[0]:
+        all_pairs_toggle = st.toggle("All pairs (discovery)", value=True,
+                                     help="If ON, use ALL discovered pairs; if OFF, limit by the slider.")
+    with cols[1]:
+        max_pairs = st.slider("Max pairs (if not All)", 10, 2000, 200, 10)
+
+# --- Timeframes
+with st.sidebar.expander("Timeframes", expanded=False):
+    pick_tfs = st.multiselect("Available timeframes", TF_LIST, default=TF_LIST)
+    sort_tf = st.selectbox("Primary sort timeframe", TF_LIST, index=1)  # default 1h
+    sort_desc = st.checkbox("Sort descending (largest first)", value=True)
+
+# --- Gates (same behavior as last working version)
+with st.sidebar.expander("Gates", expanded=False):
+    # logic is implicit now (we use counts K and Y), but keep min +% change and toggles
+    min_pct = st.slider("Min +% change (Sort TF)", 0.0, 100.0, 20.0, 0.5)
+    st.caption("💡 If nothing shows, lower this threshold.")
+    cols = st.columns(3)
+    with cols[0]:
+        use_vol_spike = st.toggle("Volume spike×", value=True)
+        vol_mult = st.slider("Spike multiple ×", 1.0, 5.0, 1.10, 0.05)
+    with cols[1]:
+        use_rsi = st.toggle("RSI", value=False)
+        min_rsi = st.slider("Min RSI", 40, 90, 55, 1)
+    with cols[2]:
+        use_macd = st.toggle("MACD hist", value=True)
+        min_mhist = st.slider("Min MACD hist", 0.0, 2.0, 0.0, 0.05)
+
+    cols2 = st.columns(3)
+    with cols2[0]:
+        use_atr = st.toggle("ATR %", value=False, help="ATR/close × 100")
+        min_atr = st.slider("Min ATR %", 0.0, 10.0, 0.5, 0.1)
+    with cols2[1]:
+        use_trend = st.toggle("Trend breakout (up)", value=True)
+        pivot_span = st.slider("Pivot span (bars)", 2, 10, 4, 1)
+        trend_within = st.slider("Breakout within (bars)", 5, 96, 48, 1)
+
+    st.markdown("---")
+    st.markdown("**Color rules (beginner‑friendly)**")
+    k_choices = [1,2,3,4,5,6]  # 6 gates: Δ, V, R, M, A, T
+    gates_to_green = st.selectbox("Gates needed to turn GREEN (K)", k_choices, index=2)
+    y_max = gates_to_green-1
+    yellow_needed = st.selectbox("YELLOW needs ≥ Y (but < K)", list(range(0, max(1,y_max)+1)), index=min(2,y_max))
+
+# --- Indicator lengths
+with st.sidebar.expander("Indicator lengths", expanded=False):
+    rsi_len = st.slider("RSI length", 5, 50, 14, 1)
+    macd_fast = st.slider("MACD fast EMA", 3, 50, 12, 1)
+    macd_slow = st.slider("MACD slow EMA", 5, 100, 26, 1)
+    macd_sig  = st.slider("MACD signal", 3, 50, 9, 1)
+    atr_len   = st.slider("ATR length", 5, 50, 14, 1)
+    vol_window= st.slider("Volume SMA window", 5, 50, 20, 1)
+
+# --- History depth
+with st.sidebar.expander("History depth (for ATH/ATL)", expanded=False):
+    basis = st.selectbox("Basis", ["Hourly","Daily","Weekly"], index=1)
+    if basis=="Hourly":
+        amount = st.slider("Hours (≤72)", 1, 72, 24, 1)
+    elif basis=="Daily":
+        amount = st.slider("Days (≤365)", 1, 365, 90, 1)
+    else:
+        amount = st.slider("Weeks (≤52)", 1, 52, 12, 1)
+
+# --- Notifications
+with st.sidebar.expander("Notifications", expanded=False):
+    email_to = st.text_input("Email recipient (optional)", "")
+    webhook_url = st.text_input("Webhook URL (optional)", "")
+
+# --- Auto-refresh
+with st.sidebar.expander("Auto-refresh", expanded=False):
+    refresh_sec = st.slider("Refresh every (seconds)", 5, 120, 30, 1)
+    st.caption("Auto-refresh is always on.")
+
+# --- Presets (save/load)
+with st.sidebar.expander("Gate presets", expanded=False):
+    # Load from disk once
+    if not st.session_state["loaded_default_presets"]:
+        st.session_state["gate_presets"].update(load_presets_from_disk())
+        # include a gentle default "hioncrypto" example if missing
+        st.session_state["gate_presets"].setdefault("hioncrypto (starter)", {
+            "min_pct": 20.0, "use_vol_spike": True, "vol_mult": 1.1,
+            "use_rsi": False, "min_rsi": 55,
+            "use_macd": True, "min_mhist": 0.0,
+            "use_atr": False, "min_atr": 0.5,
+            "use_trend": True, "pivot_span": 4, "trend_within": 48,
+            "rsi_len": 14, "macd_fast":12, "macd_slow":26, "macd_sig":9,
+            "atr_len":14, "vol_window":20,
+            "gates_to_green":3, "yellow_needed":2
+        })
+        st.session_state["loaded_default_presets"] = True
+
+    presets = st.session_state["gate_presets"]
+    preset_names = sorted(presets.keys())
+    if preset_names:
+        sel = st.selectbox("Load preset", preset_names, index=0, key="preset_sel")
+        if st.button("Apply preset"):
+            p = presets[st.session_state["preset_sel"]]
+            # apply to current controls
+            min_pct = p["min_pct"]
+            use_vol_spike = p["use_vol_spike"]; vol_mult = p["vol_mult"]
+            use_rsi = p["use_rsi"]; min_rsi = p["min_rsi"]
+            use_macd = p["use_macd"]; min_mhist = p["min_mhist"]
+            use_atr = p["use_atr"]; min_atr = p["min_atr"]
+            use_trend = p["use_trend"]; pivot_span = p["pivot_span"]; trend_within = p["trend_within"]
+            rsi_len = p["rsi_len"]; macd_fast = p["macd_fast"]; macd_slow = p["macd_slow"]; macd_sig = p["macd_sig"]
+            atr_len = p["atr_len"]; vol_window = p["vol_window"]
+            gates_to_green = p["gates_to_green"]; yellow_needed = p["yellow_needed"]
+            st.success(f"Applied preset: {st.session_state['preset_sel']}")
+
+    st.markdown("—")
+    newname = st.text_input("Save as", "")
+    if st.button("Save current as preset") and newname.strip():
+        presets[newname.strip()] = {
+            "min_pct": min_pct,
+            "use_vol_spike": use_vol_spike, "vol_mult": vol_mult,
+            "use_rsi": use_rsi, "min_rsi": min_rsi,
+            "use_macd": use_macd, "min_mhist": min_mhist,
+            "use_atr": use_atr, "min_atr": min_atr,
+            "use_trend": use_trend, "pivot_span": pivot_span, "trend_within": trend_within,
+            "rsi_len": rsi_len, "macd_fast":macd_fast, "macd_slow":macd_slow, "macd_sig":macd_sig,
+            "atr_len": atr_len, "vol_window": vol_window,
+            "gates_to_green": gates_to_green, "yellow_needed": yellow_needed
+        }
+        ok, info = save_presets_to_disk(presets)
+        if ok: st.success("Preset saved.")
+        else:  st.warning(f"Could not save presets: {info}")
+
+# -------------------- Apply “collapse once” semantics
+st.session_state["collapse_all_now_now_used"] = False
+
+# -------------------- Display & fonts
+with st.sidebar.expander("Display", expanded=False):
+    font_scale = st.slider("Font size (global)", 0.8, 1.6, 1.0, 0.05)
+
+st.markdown(f"""
+<style>
+  html, body {{ font-size: {font_scale}rem; }}
+  .row-green {{ background: rgba(0,255,0,0.22) !important; font-weight: 600; }}
+  .row-yellow {{ background: rgba(255,255,0,0.65) !important; font-weight: 600; }}
+</style>
+""", unsafe_allow_html=True)
+
+# -------------------- Data Discovery
+big_timeframe_label(sort_tf)
+
+# universe
+if st.session_state.get("use_my_pairs_global") and my_pairs:
+    base_pairs = my_pairs[:]
+else:
+    if use_watch_only and watchlist.strip():
+        base_pairs = [p.strip().upper() for p in watchlist.split(",") if p.strip()]
+    else:
+        base_pairs = list_products(effective_exchange, quote)
+
+base_pairs = [p for p in base_pairs if p.endswith(f"-{quote}")]
+if not all_pairs_toggle:
+    base_pairs = base_pairs[:max_pairs]  # user-limited
+pairs = base_pairs[:]  # final list to evaluate
+
+# Optional WS start
+def ws_worker(pids, endpoint="wss://ws-feed.exchange.coinbase.com"):
     ss = st.session_state
     try:
         ws = websocket.WebSocket()
         ws.connect(endpoint, timeout=10); ws.settimeout(1.0)
-        ws.send(json.dumps({"type":"subscribe","channels":[{"name":"ticker","product_ids":product_ids}]}))
+        ws.send(json.dumps({"type":"subscribe","channels":[{"name":"ticker","product_ids":pids}]}))
         ss["ws_alive"]=True
         while ss.get("ws_alive", False):
             try:
@@ -438,241 +574,26 @@ def start_ws_if_needed(exchange: str, pairs: List[str], chunk: int=10):
         t = threading.Thread(target=ws_worker, args=(pick,), daemon=True)
         t.start(); time.sleep(0.2)
 
-# ----------------------------- STREAMLIT APP
-st.set_page_config(page_title=APP_TITLE, layout="wide")
-st.title(APP_TITLE)
+if pairs and WS_AVAILABLE and effective_exchange=="Coinbase":
+    start_ws_if_needed(effective_exchange, pairs, chunk=10)
 
-# Sticky header (Collapse + My Pairs toggle)
-collapse_clicked = sticky_collapse_header()
-st.session_state["collapse_once_used"] = collapse_clicked
+# -------------------- Build rows
+settings_common = dict(
+    use_pct=True,
+    min_pct=min_pct,
+    use_vol_spike=use_vol_spike, vol_window=vol_window, vol_mult=vol_mult,
+    use_rsi=use_rsi, min_rsi=min_rsi, rsi_len=rsi_len,
+    use_macd=use_macd, min_mhist=min_mhist, macd_fast=macd_fast, macd_slow=macd_slow, macd_sig=macd_sig,
+    use_atr=use_atr, min_atr=min_atr, atr_len=atr_len,
+    use_trend=use_trend, pivot_span=pivot_span, trend_within=trend_within,
+)
 
-# Reset / Utilities
-with st.sidebar.expander("Reset / Utilities", expanded=False):
-    c1,c2 = st.columns(2)
-    if c1.button("Reset ALL", use_container_width=True, type="primary"):
-        reset_all(); st.rerun()
-    if c2.button("Reset Gates", use_container_width=True):
-        reset_gates_only(); st.rerun()
-
-    c3,c4,c5 = st.columns(3)
-    if c3.button("Indicators", use_container_width=True):
-        reset_indicator_lengths(); st.rerun()
-    if c4.button("History", use_container_width=True):
-        reset_history_depth(); st.rerun()
-    if c5.button("Refresh", use_container_width=True):
-        reset_autorefresh(); st.rerun()
-
-    c6,c7 = st.columns(2)
-    if c6.button("Clear My Pairs", use_container_width=True):
-        st.session_state["my_pairs"] = []
-        save_state_to_disk()
-        st.rerun()
-    if c7.button("Clear Presets", use_container_width=True):
-        st.session_state["presets"] = {}
-        save_state_to_disk()
-        st.rerun()
-
-# Manage My Pairs
-with st.sidebar.expander("Manage My Pairs", expanded=False):
-    st.caption("Comma‑separated, e.g., BTC-USD, ETH-USD")
-    mp_text = st.text_area("My Pairs", ", ".join(st.session_state["my_pairs"]))
-    if st.button("Save My Pairs"):
-        st.session_state["my_pairs"] = [p.strip().upper() for p in mp_text.split(",") if p.strip()]
-        save_state_to_disk()
-        st.success("Saved.")
-
-# Market
-with expander("Market"):
-    exchange = st.selectbox("Exchange", EXCHANGES, index=0)
-    effective_exchange = exchange if "coming soon" not in exchange else "Coinbase"
-    if "coming soon" in exchange:
-        st.info("This exchange is coming soon. Using Coinbase for data.")
-    quote = st.selectbox("Quote currency", QUOTES, index=0)
-    use_watch_only = st.checkbox("Use watchlist only (ignore discovery)",
-                                 value=DEFAULTS["use_watch_only"])
-    watchlist = st.text_area("Watchlist (comma-separated)",
-                             DEFAULTS["watchlist"])
-    co = st.columns([1,1])
-    with co[0]:
-        all_pairs_toggle = st.toggle("All pairs (discovery)", value=DEFAULTS["all_pairs_toggle"],
-                                     help="ON = use all discovered pairs; OFF = limit via slider")
-    with co[1]:
-        max_pairs = st.slider("Max pairs (if not All)", 10, 2000, DEFAULTS["max_pairs"], 10)
-
-# Mode
-with expander("Mode"):
-    mode = st.radio("Data source", ["REST only", "WebSocket + REST (hybrid)"], index=0, horizontal=True)
-    ws_chunk = st.slider("WS subscribe chunk (Coinbase)", 2, 50, DEFAULTS["ws_chunk"], 1)
-
-# Timeframes
-with expander("Timeframes"):
-    pick_tfs = st.multiselect("Available timeframes", TF_LIST, default=TF_LIST)
-    sort_tf = st.selectbox("Primary sort timeframe", TF_LIST, index=1)  # default 1h
-    sort_desc = st.checkbox("Sort descending (largest % first)", value=True)
-
-# Gates
-with expander("Gates"):
-    st.slider("Min +% change (Sort TF)", 0.0, 100.0, DEFAULTS["min_pct"], 0.5, key="min_pct")
-    c = st.columns(3)
-    with c[0]:
-        st.toggle("Volume spike×", value=DEFAULTS["use_vol_spike"], key="use_vol_spike")
-        st.slider("Spike multiple ×", 1.0, 8.0, DEFAULTS["vol_mult"], 0.05, key="vol_mult")
-    with c[1]:
-        st.toggle("RSI", value=DEFAULTS["use_rsi"], key="use_rsi")
-        st.slider("Min RSI", 40, 90, DEFAULTS["min_rsi"], 1, key="min_rsi")
-        st.toggle("MACD hist", value=DEFAULTS["use_macd"], key="use_macd")
-        st.number_input("Min MACD hist", min_value=0.0, max_value=3.0, value=DEFAULTS["min_mhist"], step=0.05, key="min_mhist")
-    with c[2]:
-        st.toggle("ATR %", value=DEFAULTS["use_atr"], key="use_atr", help="ATR/close × 100")
-        st.slider("Min ATR %", 0.0, 10.0, DEFAULTS["min_atr"], 0.1, key="min_atr")
-        st.toggle("Trend breakout (up)", value=DEFAULTS["use_trend"], key="use_trend")
-        st.slider("Pivot span (bars)", 2, 10, DEFAULTS["pivot_span"], 1, key="pivot_span")
-        st.slider("Breakout within (bars)", 5, 96, DEFAULTS["trend_within"], 1, key="trend_within")
-
-    st.markdown("---")
-    st.markdown("**Color rules**")
-    K = st.selectbox("Gates needed to turn **GREEN** (K)", [1,2,3,4,5,6], index=DEFAULTS["gates_to_green"]-1, key="gates_to_green")
-    Ymax = max(0, K-1)
-    Y = st.selectbox("**YELLOW** needs ≥ Y (but < K)", list(range(0, Ymax+1)),
-                     index=min(DEFAULTS["yellow_needed"], Ymax), key="yellow_needed")
-    if Y >= K:
-        st.warning("Yellow must be less than K (green). Lower Y or increase K.")
-
-# Indicator lengths
-with expander("Indicator lengths"):
-    st.slider("RSI length", 5, 50, DEFAULTS["rsi_len"], 1, key="rsi_len")
-    st.slider("MACD fast EMA", 3, 50, DEFAULTS["macd_fast"], 1, key="macd_fast")
-    st.slider("MACD slow EMA", 5, 100, DEFAULTS["macd_slow"], 1, key="macd_slow")
-    st.slider("MACD signal", 3, 50, DEFAULTS["macd_sig"], 1, key="macd_sig")
-    st.slider("ATR length", 5, 50, DEFAULTS["atr_len"], 1, key="atr_len")
-    st.slider("Volume SMA window", 5, 50, DEFAULTS["vol_window"], 1, key="vol_window")
-
-# History
-with expander("History depth (for ATH/ATL)"):
-    basis = st.selectbox("Basis", ["Hourly","Daily","Weekly"], index=1, key="basis")
-    if basis=="Hourly":
-        amount = st.slider("Hours (≤72)", 1, 72, 24, 1, key="amount")
-    elif basis=="Daily":
-        amount = st.slider("Days (≤365)", 1, 365, 90, 1, key="amount")
-    else:
-        amount = st.slider("Weeks (≤52)", 1, 52, 12, 1, key="amount")
-
-# Presets
-with expander("Gate presets (persisted)"):
-    presets = st.session_state["presets"]
-    names = sorted(presets.keys())
-    if names:
-        sel = st.selectbox("Load preset", names, index=0)
-        if st.button("Apply preset"):
-            p = presets[sel]
-            # Apply into current widgets
-            st.session_state["min_pct"] = float(p.get("min_pct", DEFAULTS["min_pct"]))
-            st.session_state["use_vol_spike"] = bool(p.get("use_vol_spike", DEFAULTS["use_vol_spike"]))
-            st.session_state["vol_mult"] = float(p.get("vol_mult", DEFAULTS["vol_mult"]))
-            st.session_state["use_rsi"] = bool(p.get("use_rsi", DEFAULTS["use_rsi"]))
-            st.session_state["min_rsi"] = int(p.get("min_rsi", DEFAULTS["min_rsi"]))
-            st.session_state["use_macd"] = bool(p.get("use_macd", DEFAULTS["use_macd"]))
-            st.session_state["min_mhist"] = float(p.get("min_mhist", DEFAULTS["min_mhist"]))
-            st.session_state["use_atr"] = bool(p.get("use_atr", DEFAULTS["use_atr"]))
-            st.session_state["min_atr"] = float(p.get("min_atr", DEFAULTS["min_atr"]))
-            st.session_state["use_trend"] = bool(p.get("use_trend", DEFAULTS["use_trend"]))
-            st.session_state["pivot_span"] = int(p.get("pivot_span", DEFAULTS["pivot_span"]))
-            st.session_state["trend_within"] = int(p.get("trend_within", DEFAULTS["trend_within"]))
-            st.session_state["rsi_len"] = int(p.get("rsi_len", DEFAULTS["rsi_len"]))
-            st.session_state["macd_fast"] = int(p.get("macd_fast", DEFAULTS["macd_fast"]))
-            st.session_state["macd_slow"] = int(p.get("macd_slow", DEFAULTS["macd_slow"]))
-            st.session_state["macd_sig"]  = int(p.get("macd_sig",  DEFAULTS["macd_sig"]))
-            st.session_state["atr_len"] = int(p.get("atr_len", DEFAULTS["atr_len"]))
-            st.session_state["vol_window"] = int(p.get("vol_window", DEFAULTS["vol_window"]))
-            st.session_state["gates_to_green"] = int(p.get("gates_to_green", DEFAULTS["gates_to_green"]))
-            st.session_state["yellow_needed"]  = int(p.get("yellow_needed",  DEFAULTS["yellow_needed"]))
-            st.success(f"Applied preset: {sel}")
-
-    st.markdown("—")
-    newname = st.text_input("Save current as", "")
-    if st.button("Save preset") and newname.strip():
-        presets[newname.strip()] = {
-            "min_pct": float(st.session_state["min_pct"]),
-            "use_vol_spike": bool(st.session_state["use_vol_spike"]),
-            "vol_mult": float(st.session_state["vol_mult"]),
-            "use_rsi": bool(st.session_state["use_rsi"]),
-            "min_rsi": int(st.session_state["min_rsi"]),
-            "use_macd": bool(st.session_state["use_macd"]),
-            "min_mhist": float(st.session_state["min_mhist"]),
-            "use_atr": bool(st.session_state["use_atr"]),
-            "min_atr": float(st.session_state["min_atr"]),
-            "use_trend": bool(st.session_state["use_trend"]),
-            "pivot_span": int(st.session_state["pivot_span"]),
-            "trend_within": int(st.session_state["trend_within"]),
-            "rsi_len": int(st.session_state["rsi_len"]),
-            "macd_fast": int(st.session_state["macd_fast"]),
-            "macd_slow": int(st.session_state["macd_slow"]),
-            "macd_sig":  int(st.session_state["macd_sig"]),
-            "atr_len":   int(st.session_state["atr_len"]),
-            "vol_window":int(st.session_state["vol_window"]),
-            "gates_to_green": int(st.session_state["gates_to_green"]),
-            "yellow_needed":  int(st.session_state["yellow_needed"]),
-        }
-        ok, info = save_state_to_disk()
-        if not ok:
-            st.warning(f"Could not persist to disk: {info}")
-        else:
-            st.success("Preset saved.")
-
-# Notifications
-with expander("Notifications"):
-    st.caption("Alerts send when a pair enters **Top‑10** (Green). Configure here:")
-    email_to = st.text_input("Email recipient (optional)", "")
-    webhook_url = st.text_input("Webhook URL (optional)", "")
-
-# Display
-with expander("Display"):
-    font_scale = st.slider("Font size (global)", 0.8, 1.6, DEFAULTS["font_scale"], 0.05, key="font_scale")
-
-# Auto-refresh
-with expander("Auto-refresh"):
-    refresh_sec = st.slider("Refresh every (seconds)", 5, 120, DEFAULTS["refresh_sec"], 1, key="refresh_sec")
-    st.caption("Auto-refresh is always on (no deprecated APIs).")
-
-# End collapse request
-st.session_state["collapse_once_used"] = False
-
-# Global style
-st.markdown(f"""
-<style>
-  html, body {{ font-size: {st.session_state['font_scale']}rem; }}
-  .row-green  {{ background: rgba(0,255,0,0.22) !important; font-weight: 600; }}
-  .row-yellow {{ background: rgba(255,255,0,0.65) !important; font-weight: 600; }}
-</style>
-""", unsafe_allow_html=True)
-
-# Timeframe headline
-big_timeframe_label(sort_tf)
-st.caption("Legend: Δ %Change • V Volume× • R RSI • M MACD • A ATR • T Trend")
-
-# ----------------------------- Build universe
-if st.session_state.get("use_my_pairs_global") and st.session_state["my_pairs"]:
-    pairs = st.session_state["my_pairs"][:]
-else:
-    if use_watch_only and watchlist.strip():
-        pairs = [p.strip().upper() for p in watchlist.split(",") if p.strip()]
-    else:
-        pairs = list_products(effective_exchange, quote)
-
-pairs = [p for p in pairs if p.endswith(f"-{quote}")]
-
-if not st.session_state["all_pairs_toggle"]:
-    pairs = pairs[:st.session_state["max_pairs"]]  # user cap
-
-# Start WS if requested (Coinbase only)
-if pairs and mode.startswith("WebSocket") and effective_exchange=="Coinbase" and WS_AVAILABLE:
-    start_ws_if_needed(effective_exchange, pairs, ws_chunk)
-
-# ----------------------------- Compute rows
 rows=[]
+badge_info=[]  # to style green/yellow
+
 for pid in pairs:
     dft = df_for_tf(effective_exchange, pid, sort_tf)
-    if dft is None or len(dft) < 30:
+    if dft is None or len(dft)<30:
         continue
     dft = dft.tail(400).copy()
 
@@ -682,75 +603,74 @@ for pid in pairs:
     first_price = float(dft["close"].iloc[0])
     pct = (last_price/first_price - 1.0) * 100.0
 
-    hist = get_hist(effective_exchange, pid, st.session_state["basis"], st.session_state["amount"])
+    hist = get_hist(effective_exchange, pid, basis, amount)
     if hist is None or len(hist)<10:
         aa={"From ATH %": np.nan, "ATH date":"—","From ATL %": np.nan, "ATL date":"—"}
     else:
         aa = ath_atl_info(hist)
 
-    settings_pack = {
-        "use_pct": True,
-        "min_pct": float(st.session_state["min_pct"]),
-        "use_vol_spike": bool(st.session_state["use_vol_spike"]),
-        "vol_window": int(st.session_state["vol_window"]),
-        "vol_mult": float(st.session_state["vol_mult"]),
-        "use_rsi": bool(st.session_state["use_rsi"]),
-        "min_rsi": int(st.session_state["min_rsi"]),
-        "rsi_len": int(st.session_state["rsi_len"]),
-        "use_macd": bool(st.session_state["use_macd"]),
-        "min_mhist": float(st.session_state["min_mhist"]),
-        "macd_fast": int(st.session_state["macd_fast"]),
-        "macd_slow": int(st.session_state["macd_slow"]),
-        "macd_sig": int(st.session_state["macd_sig"]),
-        "use_atr": bool(st.session_state["use_atr"]),
-        "min_atr": float(st.session_state["min_atr"]),
-        "atr_len": int(st.session_state["atr_len"]),
-        "use_trend": bool(st.session_state["use_trend"]),
-        "pivot_span": int(st.session_state["pivot_span"]),
-        "trend_within": int(st.session_state["trend_within"]),
-    }
-    pct_up, passed_labels, passed_count = build_gate_checks(dft, settings_pack)
-
-    K = int(st.session_state["gates_to_green"])
-    Y = int(st.session_state["yellow_needed"])
-    is_green  = (passed_count >= K) and (pct_up > 0)
-    is_yellow = (passed_count >= Y) and (passed_count < K)
-
+    m = build_gate_masks(dft, settings_common)
     enabled_labels = [lab for lab in ["Δ","V","R","M","A","T"]
-                      if ((lab=="Δ" and settings_pack["use_pct"]) or
-                          (lab=="V" and settings_pack["use_vol_spike"]) or
-                          (lab=="R" and settings_pack["use_rsi"]) or
-                          (lab=="M" and settings_pack["use_macd"]) or
-                          (lab=="A" and settings_pack["use_atr"]) or
-                          (lab=="T" and settings_pack["use_trend"]))]
+                      if ((lab=="Δ" and settings_common["use_pct"]) or
+                          (lab=="V" and settings_common["use_vol_spike"]) or
+                          (lab=="R" and settings_common["use_rsi"]) or
+                          (lab=="M" and settings_common["use_macd"]) or
+                          (lab=="A" and settings_common["use_atr"]) or
+                          (lab=="T" and settings_common["use_trend"]))]
 
-    gate_chips = "".join([f"{'✅' if lab in passed_labels else '❌'}{lab} " for lab in enabled_labels]).strip()
+    passed_labels = [lab for lab in m["checks_passed"] if lab in ["Δ","V","R","M","A","T"]]
+    passed_count = len([lab for lab in passed_labels if (
+        (lab=="Δ" and settings_common["use_pct"]) or
+        (lab=="V" and settings_common["use_vol_spike"]) or
+        (lab=="R" and settings_common["use_rsi"]) or
+        (lab=="M" and settings_common["use_macd"]) or
+        (lab=="A" and settings_common["use_atr"]) or
+        (lab=="T" and settings_common["use_trend"])
+    )])
+    enabled_count = len(enabled_labels)
+
+    is_green = passed_count >= gates_to_green
+    is_yellow = (yellow_needed <= passed_count < gates_to_green)
 
     rows.append({
         "Pair": pid,
         "Price": last_price,
-        f"% Change ({sort_tf})": pct_up,
+        f"% Change ({sort_tf})": pct,
         "From ATH %": aa["From ATH %"], "ATH date": aa["ATH date"],
         "From ATL %": aa["From ATL %"], "ATL date": aa["ATL date"],
-        "Gates": gate_chips,
+        "Gates": "".join([f"{'✅' if lab in passed_labels else '❌'}{lab} " for lab in enabled_labels]).strip(),
         "Strong Buy": "YES" if is_green else "—",
-        "_green": is_green, "_yellow": is_yellow
+        "_green": is_green, "_yellow": is_yellow,
     })
 
-df = pd.DataFrame(rows)
+# -------------------- Tables
+df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=["Pair"])
 
-# ----------------------------- Render
 if df.empty:
     st.info("No rows to show. Loosen gates or choose a different timeframe.")
 else:
     chg_col = f"% Change ({sort_tf})"
-    # Default sort by % change desc; headers in st.dataframe aren’t clickable-sort, so this is the source of truth.
+    # Sort: % change desc (your default)
     df = df.sort_values(chg_col, ascending=not sort_desc, na_position="last").reset_index(drop=True)
     df.insert(0, "#", df.index+1)
 
-    def style_green(x):
-        return pd.DataFrame("background-color: rgba(0,255,0,0.22); font-weight: 600;", index=x.index, columns=x.columns)
+    # Top‑10: green rule + % change desc
+    st.subheader("📌 Top‑10 (meets green rule)")
+    top10 = df[df["_green"]].sort_values(chg_col, ascending=False, na_position="last").head(10).reset_index(drop=True)
 
+    def style_green(x):
+        styles = pd.DataFrame("background-color: rgba(0,255,0,0.22); font-weight: 600;", index=x.index, columns=x.columns)
+        return styles
+
+    if top10.empty:
+        st.write("—")
+        st.caption("💡 If nothing appears, loosen gates (lower Min +% change or disable some toggles).")
+    else:
+        show_cols = ["#","Pair","Price",chg_col,"From ATH %","ATH date","From ATL %","ATL date","Gates","Strong Buy"]
+        st.dataframe(top10[show_cols].style.apply(style_green, axis=None), use_container_width=True)
+
+    # All pairs with green/yellow styling
+    st.subheader("📑 All pairs")
     def style_full(x):
         styles = pd.DataFrame("", index=x.index, columns=x.columns)
         gm = df["_green"].reindex(x.index, fill_value=False)
@@ -759,20 +679,10 @@ else:
         styles.loc[ym, :] = "background-color: rgba(255,255,0,0.65); font-weight: 600;"
         return styles
 
-    st.subheader("📌 Top‑10 (Green only)")
-    top10 = df[df["_green"]].sort_values(chg_col, ascending=False, na_position="last").head(10).reset_index(drop=True)
     show_cols = ["#","Pair","Price",chg_col,"From ATH %","ATH date","From ATL %","ATL date","Gates","Strong Buy"]
-
-    if top10.empty:
-        st.write("—")
-        st.caption("💡 If nothing appears, loosen gates (lower Min +% change or disable some toggles).")
-    else:
-        st.dataframe(top10[show_cols].style.apply(style_green, axis=None), use_container_width=True)
-
-    st.subheader("📑 All pairs")
     st.dataframe(df[show_cols].style.apply(style_full, axis=None), use_container_width=True)
 
-    # Alerts for Top‑10 entrants
+    # Alerts when a pair enters Top‑10 green
     new_msgs=[]
     for _, r in top10.iterrows():
         key = f"{r['Pair']}|{sort_tf}|{round(float(r[chg_col]),2)}"
@@ -790,12 +700,12 @@ else:
             ok, info = post_webhook(webhook_url, {"title": subject, "lines": new_msgs})
             if not ok: st.sidebar.warning(f"Webhook error: {info}")
 
-    st.caption(f"Pairs: {len(df)} • Exchange: {effective_exchange} • Quote: {quote} • Sort TF: {sort_tf} • Mode: {'WS+REST' if (mode.startswith('WebSocket') and effective_exchange=='Coinbase' and WS_AVAILABLE) else 'REST only'}")
+    st.caption(f"Pairs evaluated: {len(df)} • Exchange: {effective_exchange} • Quote: {quote} • Sort TF: {sort_tf}")
 
-# ----------------------------- Auto-refresh
-remaining = st.session_state["refresh_sec"] - (time.time() - st.session_state["last_refresh"])
+# -------------------- Auto-refresh
+remaining = refresh_sec - (time.time() - st.session_state["last_refresh"])
 if remaining <= 0:
     st.session_state["last_refresh"] = time.time()
     st.rerun()
 else:
-    st.caption(f"Auto-refresh every {st.session_state['refresh_sec']}s (next in {int(remaining)}s)")
+    st.caption(f"Auto-refresh every {refresh_sec}s (next in {int(remaining)}s)")
