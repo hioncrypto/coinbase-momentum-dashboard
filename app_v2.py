@@ -1,16 +1,14 @@
-# app.py — Crypto Tracker by hioncrypto (all-in-one, single file)
-# - Blue (soft) sidebar styling + sticky "Collapse all menu tabs"
-# - "My Pairs" user list toggle (top of sidebar)
-# - Market discovery with Exchange/Quote + Watchlist + Max pairs slider
-# - Timeframes: 15m, 1h, 4h, 6h, 12h, 1d
-# - Gates: % Change (positive), Volume×, MACD hist (>=0.025 default), optional RSI
-# - K (green threshold) / Y (yellow threshold)
-# - Gate chips: Δ (pct), V (volume×), M (MACD), R (RSI)
-# - Top-10 (greens only, green-styled), Discover (greens first, then %chg desc)
-# - Email/Webhook alerts for new Top-10 entrants (opt-in per session)
-# - Auto-refresh (always on; no apply buttons)
+# app.py — Crypto Tracker by hioncrypto (single-file, discovery + UI fixes)
+# - Blue (soft) sidebar styling (robust selectors)
+# - Sticky "Collapse all menu tabs" (actually collapses all)
+# - "Max pairs to evaluate (discovery)" slider (50..500)
+# - Looser defaults so pairs show immediately; tighten later
+# - Top-10 (greens only) + Discover (greens first, then %chg)
+# - Gate chips (Δ %chg, V volume×, M MACD, R RSI)
+# - Email/Webhook alerts for new Top-10 entrants (opt-in)
+# - Auto-refresh always on; no apply buttons
 
-import time, ssl, json
+import time, ssl
 from typing import List, Optional
 import numpy as np
 import pandas as pd
@@ -25,31 +23,36 @@ st.set_page_config(page_title="Crypto Tracker by hioncrypto", layout="wide")
 
 st.markdown("""
 <style>
-:root { --hion-blue: #3B82F6; }
+:root { --hion-blue: #3B82F6; --hion-blue-soft: rgba(59,130,246,0.12); --hion-blue-border: rgba(59,130,246,0.25); }
 
-/* Sticky bar at top of sidebar (for collapse btn & quick toggles) */
+/* Sticky strip at top of sidebar */
 section[data-testid="stSidebar"] > div:first-child {
   position: sticky; top: 0; z-index: 999;
-  background: linear-gradient(180deg, rgba(13,17,23,0.98) 70%, rgba(13,17,23,0));
-  padding-bottom: 6px; margin-bottom: 8px; border-bottom: 1px solid rgba(59,130,246,0.25);
+  background: linear-gradient(180deg, rgba(13,17,23,0.98) 75%, rgba(13,17,23,0));
+  padding-bottom: 6px; margin-bottom: 8px; border-bottom: 1px solid var(--hion-blue-border);
 }
 
-/* Sidebar buttons */
+/* Buttons (sidebar + general) */
 section[data-testid="stSidebar"] button, .stButton>button {
-  background: var(--hion-blue) !important; color: white !important; border: 0 !important;
+  background: var(--hion-blue) !important; color: #ffffff !important; border: 0 !important;
   border-radius: 10px !important; font-weight: 600 !important;
 }
 
-/* Inputs focus ring (soft blue) */
-section[data-testid="stSidebar"] .st-emotion-cache-1pahdxg, 
-section[data-testid="stSidebar"] .st-emotion-cache-1cypcdb {
+/* Inputs focus ring */
+section[data-testid="stSidebar"] .stSelectbox > div > div,
+section[data-testid="stSidebar"] .stTextArea > div > div,
+section[data-testid="stSidebar"] .stTextInput > div > div,
+section[data-testid="stSidebar"] .stSlider > div > div,
+section[data-testid="stSidebar"] .stNumberInput > div > div {
   border-color: rgba(59,130,246,0.65) !important;
 }
 
-/* Expander headers in soft blue */
-section[data-testid="stSidebar"] details > summary {
-  background: rgba(59,130,246,0.12) !important;
-  border: 1px solid rgba(59,130,246,0.25) !important;
+/* Expander headers (robust selectors across Streamlit versions) */
+section[data-testid="stSidebar"] details > summary,
+section[data-testid="stSidebar"] [data-testid="stExpander"] summary,
+section[data-testid="stSidebar"] div[role="button"][aria-expanded] {
+  background: var(--hion-blue-soft) !important;
+  border: 1px solid var(--hion-blue-border) !important;
   color: #dbeafe !important;
   border-radius: 10px;
   margin: 6px 0 !important;
@@ -175,12 +178,12 @@ def post_webhook(url, payload):
 # -------------------------- Sidebar (sticky collapse + My Pairs) --------------------------
 if "collapse_now" not in st.session_state:
     st.session_state.collapse_now = False
-col1, col2 = st.sidebar.columns([0.65, 0.35])
-with col1:
+c1, c2 = st.sidebar.columns([0.65, 0.35])
+with c1:
     if st.button("Collapse all menu tabs", use_container_width=True):
         st.session_state.collapse_now = True
-with col2:
-    use_my_pairs = st.toggle("My Pairs", value=False, help="Show only your preferred pairs (set below).")
+with c2:
+    use_my_pairs = st.toggle("My Pairs", value=False, help="Only show your preferred pairs.")
 
 def exp(title, key):
     expanded = not st.session_state.get("collapse_now", False)
@@ -196,35 +199,36 @@ with exp("Market", "exp_market"):
     use_watch = st.checkbox("Use watchlist only (ignore discovery)", value=False)
     watchlist = st.text_area("Watchlist (comma-separated)",
                              "BTC-USD, ETH-USD, SOL-USD, AVAX-USD, ADA-USD, DOGE-USD, MATIC-USD")
-    max_pairs = st.slider("Max pairs to evaluate (discovery)", 50, 2000, 500, 10)
+    # ✅ Slider restored (50..500)
+    max_pairs = st.slider("Max pairs to evaluate (discovery)", 50, 500, 300, 10)
 
 with exp("Timeframes", "exp_tf"):
     tf = st.selectbox("Primary timeframe (for % change)", TF_LIST, index=1)  # 1h default
 
 with exp("Gates", "exp_gates"):
-    # hioncrypto starter defaults: loose so tables populate; tighten later.
+    # Very loose defaults so rows appear; you can tighten later
     use_hion = st.toggle("Use hioncrypto (starter)", value=True,
-                         help="One-click looser defaults so results appear immediately. Tighten later.")
-    gate_logic = st.radio("Gate logic", ["ALL","ANY"], index=0, horizontal=True)
-    min_pct = st.slider("Min +% change (Sort TF)", 0.0, 50.0, 0.5 if use_hion else 2.0, 0.1,
-                        help="Positive only; rows must meet or exceed this % gain for the selected TF.")
+                         help="Loose defaults to ensure results on first load.")
+    gate_logic = st.radio("Gate logic", ["ALL","ANY"], index=1, horizontal=True)  # ANY by default
+    min_pct = st.slider("Min +% change (Sort TF)", 0.0, 50.0, 0.2 if use_hion else 2.0, 0.1,
+                        help="Positive only; rows must meet/exceed this gain for selected TF.")
 
     c1,c2,c3 = st.columns(3)
     with c1:
         use_vol = st.toggle("Volume spike×", True)
         vol_win = st.slider("Spike window", 5, 50, 20, 1)
-        vol_mult= st.slider("Min spike ×", 1.0, 5.0, 1.05 if use_hion else 1.20, 0.05)
+        vol_mult= st.slider("Min spike ×", 1.0, 5.0, 1.02 if use_hion else 1.20, 0.02)
     with c2:
         use_macd = st.toggle("MACD hist", True)
-        min_mh   = st.slider("Min MACD hist", 0.0, 1.0, 0.025, 0.005)
+        min_mh   = st.slider("Min MACD hist", 0.0, 1.0, 0.01 if use_hion else 0.025, 0.005)
     with c3:
         use_rsi = st.toggle("RSI", False)
         min_rsi = st.slider("Min RSI", 40, 90, 55, 1)
 
     st.markdown("---")
-    k_need = st.selectbox("Gates needed to turn green (K)", [1,2,3,4,5,6,7], index=1 if use_hion else 2)
+    k_need = st.selectbox("Gates needed to turn green (K)", [1,2,3,4,5,6,7], index=0 if use_hion else 1)
     y_need = st.selectbox("Yellow needs ≥ Y (but < K)", [0,1,2,3,4,5,6], index=0)
-    st.caption("Gate chips shown in table: **Δ** %Change • **V** Volume× • **M** MACD • **R** RSI")
+    st.caption("Gate chips in table: **Δ** %Change • **V** Volume× • **M** MACD • **R** RSI")
 
 with exp("Notifications", "exp_notif"):
     send_session_alerts = st.checkbox("Send Email/Webhook alerts this session", value=False)
@@ -235,7 +239,7 @@ with exp("Auto-refresh", "exp_refresh"):
     refresh_sec = st.slider("Refresh every (seconds)", 10, 180, 45, 5)
     st.caption("Auto-refresh is always on while this page is open.")
 
-# reset collapse after drawing all expanders
+# reset collapse flag after laying out the expanders
 st.session_state.collapse_now = False
 
 # -------------------------- Build Universe --------------------------
@@ -246,7 +250,7 @@ else:
         pairs = [p.strip().upper() for p in watchlist.split(",") if p.strip()]
     else:
         pairs = list_products(exchange, quote)
-        # honor the discovery cap only when NOT using watchlist or my pairs
+        # Honor the discovery cap only when discovering (not when using watchlist/My Pairs)
         pairs = pairs[:max_pairs]
 
 # -------------------------- Compute rows --------------------------
@@ -278,7 +282,7 @@ def compute_row(pid: str):
 
     # MACD hist
     if use_macd:
-        mh = float(macd_hist(d["close"], 12, 26, 9).iloc[-1])  # fast/slow/sig lengths are standard
+        mh = float(macd_hist(d["close"], 12, 26, 9).iloc[-1])
         ok = mh >= min_mh
         checks.append(ok); chips.append("M" if ok else "M×")
 
@@ -288,19 +292,16 @@ def compute_row(pid: str):
         ok = rv >= min_rsi
         checks.append(ok); chips.append("R" if ok else "R×")
 
-    # Gate logic (ALL/ANY) only affects how we count toward K/Y
-    considered = []
-    if gate_logic == "ALL":
-        # ALL means every enabled check must be true to count
-        # but we still compute score for K/Y visually
-        considered = checks
-    else:
-        # ANY: at least one true is acceptable; scoring still uses raw checks
-        considered = checks
+    # Gate logic (ALL vs ANY) influences the pass definition if you later want to extend,
+    # but for color scoring we simply count enabled-gate truths vs K/Y thresholds.
+    enabled_checks = []
+    if True:  # Δ always on
+        enabled_checks.append(checks[0])
+    if use_vol:  enabled_checks.append(checks[1])
+    if use_macd: enabled_checks.append(checks[2])
+    if use_rsi:  enabled_checks.append(checks[3])
 
-    score = sum(1 for c in considered if c)
-    total = len(considered)
-
+    score = sum(1 for c in enabled_checks if c)
     green = (score >= k_need)
     yellow = (not green) and (score >= y_need)
 
@@ -324,7 +325,7 @@ st.caption(f"Discovery status — Universe fetched: {len(pairs)} • Rows comput
            f"Exchange: {exchange} • Quote: {quote} • TF: {tf}")
 
 if df.empty:
-    st.warning("No rows to show. Try lowering **Min +% change**, reducing **K**, or toggling off one gate (Volume/MACD/RSI).")
+    st.warning("No rows to show. Try: lower **Min +% change**, reduce **K**, or toggle off a gate (Volume/MACD/RSI).")
 else:
     chg_col = f"% Change ({tf})"
 
@@ -342,23 +343,24 @@ else:
                      use_container_width=True)
 
         # Alerts when new pairs enter Top-10 (session only)
-        if send_session_alerts:
-            if "alert_seen" not in st.session_state: st.session_state.alert_seen=set()
-            new_msgs=[]
-            for _, r in top10.iterrows():
-                key=f"{r['Pair']}|{tf}|{round(float(r[chg_col]),2)}"
-                if key not in st.session_state.alert_seen:
-                    st.session_state.alert_seen.add(key)
-                    new_msgs.append(f"{r['Pair']}: {float(r[chg_col]):+.2f}% ({tf})  Gates: {r['Gates']}")
-            if new_msgs:
-                subject = f"[{exchange}] Top-10 — Crypto Tracker"
-                body    = "\n".join(new_msgs)
-                if email_to.strip():
-                    ok, info = send_email_alert(subject, body, email_to.strip())
-                    if not ok: st.sidebar.warning(info)
-                if webhook_url.strip():
-                    ok, info = post_webhook(webhook_url.strip(), {"title": subject, "lines": new_msgs})
-                    if not ok: st.sidebar.warning(f"Webhook error: {info}")
+        with st.sidebar:
+            if send_session_alerts:
+                if "alert_seen" not in st.session_state: st.session_state.alert_seen=set()
+                new_msgs=[]
+                for _, r in top10.iterrows():
+                    key=f"{r['Pair']}|{tf}|{round(float(r[chg_col]),2)}"
+                    if key not in st.session_state.alert_seen:
+                        st.session_state.alert_seen.add(key)
+                        new_msgs.append(f"{r['Pair']}: {float(r[chg_col]):+.2f}% ({tf})  Gates: {r['Gates']}")
+                if new_msgs:
+                    subject = f"[{exchange}] Top-10 — Crypto Tracker"
+                    body    = "\n".join(new_msgs)
+                    if email_to.strip():
+                        ok, info = send_email_alert(subject, body, email_to.strip())
+                        if not ok: st.warning(info)
+                    if webhook_url.strip():
+                        ok, info = post_webhook(webhook_url.strip(), {"title": subject, "lines": new_msgs})
+                        if not ok: st.warning(f"Webhook error: {info}")
 
     # ---------------------- Discover (all rows) ----------------------
     st.subheader("📑 Discover")
@@ -384,4 +386,5 @@ if remaining <= 0:
     st.rerun()
 else:
     st.caption(f"Auto-refresh every {refresh_sec}s (next in {int(remaining)}s)")
+
 
