@@ -1,7 +1,6 @@
-
-# app.py — Crypto Tracker by hioncrypto (all-in-one, SMTP fallback included)
-# CHANGE: Reliable "Collapse all menu tabs" using expander key versioning.
-# Everything else unchanged.
+# app.py — Crypto Tracker by hioncrypto (single-file)
+# Fix: reliable "Collapse all menu tabs" for older Streamlit (no key= on expander).
+# Uses zero‑width spaces to version expander labels instead of expander keys.
 
 import json, time, datetime as dt, threading, queue, ssl, smtplib
 from email.mime.text import MIMEText
@@ -13,6 +12,7 @@ import pandas as pd
 import requests
 import streamlit as st
 
+# -------------------- Setup / defaults
 WS_AVAILABLE = True
 try:
     import websocket  # websocket-client
@@ -20,12 +20,12 @@ except Exception:
     WS_AVAILABLE = False
 
 TF_LIST = ["15m","1h","4h","6h","12h","1d"]
-ALL_TFS = {"15m":900,"1h":3600,"4h":14400,"6h":21600,"12h":43200,"1d":86400}
+ALL_TFS  = {"15m":900,"1h":3600,"4h":14400,"6h":21600,"12h":43200,"1d":86400}
 
-QUOTES = ["USD","USDC","USDT","BTC","ETH","EUR", "GBP", "AUD"]
+QUOTES    = ["USD","USDC","USDT","BTC","ETH","EUR","GBP","AUD"]
 EXCHANGES = ["Coinbase","Binance","Kraken (coming soon)","KuCoin (coming soon)"]
-CB_BASE = "https://api.exchange.coinbase.com"
-BN_BASE = "https://api.binance.com"
+CB_BASE   = "https://api.exchange.coinbase.com"
+BN_BASE   = "https://api.binance.com"
 
 DEFAULTS = dict(
     sort_tf="1h",
@@ -38,10 +38,7 @@ DEFAULTS = dict(
     use_roc=True,        min_roc=1.0,  roc_len=14,
     K_green=3,           Y_yellow=2,
     basis="Daily",       amount_daily=90, amount_hourly=24, amount_weekly=12,
-    refresh_sec=30,
-    max_pairs=25,
-    quote="USD",
-    exchange="Coinbase",
+    refresh_sec=30,      max_pairs=25, quote="USD", exchange="Coinbase",
     watchlist="BTC-USD, ETH-USD, SOL-USD, AVAX-USD, ADA-USD, DOGE-USD, MATIC-USD",
 )
 
@@ -52,23 +49,19 @@ def _init_state():
     ss.setdefault("ws_q", queue.Queue())
     ss.setdefault("ws_prices", {})
     ss.setdefault("alert_seen", set())
-    ss.setdefault("collapse_all_now", False)
-    ss.setdefault("collapse_version", 0)   # << NEW: expander key version
+    ss.setdefault("collapse_version", 0)   # << used for expander label versioning
     ss.setdefault("last_refresh", time.time())
     ss.setdefault("use_my_pairs", False)
     ss.setdefault("my_pairs", ["BTC-USD","ETH-USD","SOL-USD"])
     ss.setdefault("seen_pairs", set())
     ss.setdefault("listings_alert_seen", set())
     # SMTP fallback
-    ss.setdefault("smtp_host", "")
-    ss.setdefault("smtp_port", 465)
-    ss.setdefault("smtp_user", "")
-    ss.setdefault("smtp_pass", "")
-    ss.setdefault("smtp_sender", "")
-    ss.setdefault("use_manual_smtp", False)
+    ss.setdefault("smtp_host", ""); ss.setdefault("smtp_port", 465)
+    ss.setdefault("smtp_user", ""); ss.setdefault("smtp_pass", "")
+    ss.setdefault("smtp_sender", ""); ss.setdefault("use_manual_smtp", False)
 _init_state()
 
-# ---------- indicators
+# -------------------- Indicators
 def ema(s: pd.Series, span: int) -> pd.Series:
     return s.ewm(span=span, adjust=False).mean()
 
@@ -86,8 +79,7 @@ def macd_hist(close: pd.Series, fast=12, slow=26, signal=9) -> pd.Series:
     return m - s
 
 def atr(df: pd.DataFrame, length=14) -> pd.Series:
-    h,l,c = df["high"], df["low"], df["close"]
-    pc = c.shift(1)
+    h,l,c = df["high"], df["low"], df["close"]; pc = c.shift(1)
     tr = pd.concat([(h-l),(h-pc).abs(),(l-pc).abs()], axis=1).max(axis=1)
     return tr.ewm(alpha=1/length, adjust=False).mean()
 
@@ -114,7 +106,7 @@ def trend_breakout_up(df: pd.DataFrame, span=3, within_bars=48) -> bool:
     if cross is None: return False
     return (len(df)-1 - cross) <= within_bars
 
-# ---------- exchange utils
+# -------------------- Exchanges
 def coinbase_list_products(quote: str) -> List[str]:
     try:
         r = requests.get(f"{CB_BASE}/products", timeout=20); r.raise_for_status()
@@ -224,7 +216,7 @@ def ath_atl_info(hist: pd.DataFrame) -> dict:
     return {"From ATH %": (last/ath-1)*100 if ath>0 else np.nan, "ATH date": d_ath,
             "From ATL %": (last/atl-1)*100 if atl>0 else np.nan, "ATL date": d_atl}
 
-# ---------- WS
+# -------------------- WS
 def ws_worker(product_ids, endpoint="wss://ws-feed.exchange.coinbase.com"):
     ss = st.session_state
     try:
@@ -258,7 +250,7 @@ def start_ws_if_needed(exchange: str, pairs: List[str], chunk: int):
         t = threading.Thread(target=ws_worker, args=(pick,), daemon=True)
         t.start(); time.sleep(0.2)
 
-# ---------- Alerts with SMTP fallback
+# -------------------- Alerts (SMTP fallback)
 def _smtp_config_from_ui_or_secrets():
     try:
         cfg = st.secrets["smtp"]
@@ -296,7 +288,7 @@ def post_webhook(url, payload):
     except Exception as e:
         return False, str(e)
 
-# ---------- Gates (last bar)
+# -------------------- Gates (last bar)
 def build_gate_eval(df_tf: pd.DataFrame, settings: dict) -> Tuple[dict, int, str]:
     last = df_tf["close"].iloc[-1]; first = df_tf["close"].iloc[0]
     pct = (last/first - 1.0) * 100.0
@@ -343,20 +335,19 @@ def build_gate_eval(df_tf: pd.DataFrame, settings: dict) -> Tuple[dict, int, str
 
     return {"pct": g_delta}, passed, " ".join(chips)
 
-# ---------- Page
+# -------------------- UI
 st.set_page_config(page_title="Crypto Tracker by hioncrypto", layout="wide")
 st.title("Crypto Tracker by hioncrypto")
 
-# Top strip (with reliable collapse)
+# Top strip: collapse + My Pairs
 with st.sidebar:
     c1, c2 = st.columns([1,1])
     with c1:
-        if st.button("Collapse all menu tabs", use_container_width=True):
-            # bump version so all expanders get fresh keys (and mount closed)
+        if st.button("Collapse all\nmenu tabs", use_container_width=True):
             st.session_state["collapse_version"] += 1
             st.rerun()
     with c2:
-        st.toggle("⭐ Use My Pairs only", key="use_my_pairs", value=st.session_state.get("use_my_pairs", False))
+        st.toggle("⭐ Use My\nPairs only", key="use_my_pairs", value=st.session_state.get("use_my_pairs", False))
     with st.popover("Manage My Pairs"):
         st.caption("Comma‑separated. Example: BTC-USD, ETH-USDT")
         current = st.text_area("My Pairs", ", ".join(st.session_state["my_pairs"]), height=80)
@@ -366,15 +357,15 @@ with st.sidebar:
                 st.session_state["my_pairs"] = new_list
                 st.success("Saved.")
 
-def expander(title: str, key: Optional[str]=None):
-    """Create a sidebar expander that can be force‑collapsed via versioned keys."""
+def expander(title: str):
+    """Expander that can be force‑collapsed by 'versioning' its label with zero-width spaces."""
     ver = st.session_state.get("collapse_version", 0)
-    key = f"{key or title}_v{ver}"
-    # Always mount closed; Streamlit will remember state until version changes
-    return st.sidebar.expander(title, expanded=False, key=key)
+    label = ("\u200B" * ver) + title   # invisible prefix changes identity without visible change
+    # Always mount closed; Streamlit will remember state until label changes.
+    return st.sidebar.expander(label, expanded=False)
 
 # Market
-with expander("Market","exp_market"):
+with expander("Market"):
     exchange = st.selectbox("Exchange", EXCHANGES, index=EXCHANGES.index(DEFAULTS["exchange"]))
     effective_exchange = exchange if "coming soon" not in exchange else "Coinbase"
     if "coming soon" in exchange: st.info("This exchange is coming soon. Using Coinbase for data.")
@@ -384,17 +375,17 @@ with expander("Market","exp_market"):
     max_pairs = st.slider("Max pairs to evaluate", 10, 50, DEFAULTS["max_pairs"], 1)
 
 # Mode
-with expander("Mode","exp_mode"):
+with expander("Mode"):
     mode = st.radio("Data source", ["REST only","WebSocket + REST (hybrid)"], index=0, horizontal=True)
     ws_chunk = st.slider("WS subscribe chunk (Coinbase)", 2, 20, 5, 1)
 
 # Timeframes
-with expander("Timeframes","exp_tfs"):
+with expander("Timeframes"):
     sort_tf = st.selectbox("Primary sort timeframe", TF_LIST, index=TF_LIST.index(DEFAULTS["sort_tf"]))
     sort_desc = st.checkbox("Sort descending (largest first)", value=True)
 
 # Gates
-with expander("Gates","exp_gates"):
+with expander("Gates"):
     st.caption("Defaults are semi‑restrictive. Loosen if nothing appears.")
     min_pct = st.slider("Min +% change (Sort TF)", 0.0, 50.0, DEFAULTS["min_pct"], 0.5)
     cols1 = st.columns(3)
@@ -422,12 +413,12 @@ with expander("Gates","exp_gates"):
 
     st.markdown("---")
     st.subheader("Color rules — beginner friendly")
-    K_green = st.selectbox("Gates needed to turn green (K)", list(range(1,8)), index=DEFAULTS["K_green"]-1)
+    K_green  = st.selectbox("Gates needed to turn green (K)", list(range(1,8)), index=DEFAULTS["K_green"]-1)
     Y_yellow = st.selectbox("Yellow needs ≥ Y (but < K)", list(range(0, K_green)), index=min(DEFAULTS["Y_yellow"], K_green-1))
     st.caption("Enabled checks = Δ + any toggled gates • Green needs ≥ K • Yellow needs ≥ Y (but < K)")
 
 # Indicator lengths
-with expander("Indicator lengths","exp_lens"):
+with expander("Indicator lengths"):
     rsi_len = st.slider("RSI length", 5, 50, DEFAULTS["rsi_len"], 1)
     macd_fast = st.slider("MACD fast EMA", 3, 50, DEFAULTS["macd_fast"], 1)
     macd_slow = st.slider("MACD slow EMA", 5, 100, DEFAULTS["macd_slow"], 1)
@@ -436,7 +427,7 @@ with expander("Indicator lengths","exp_lens"):
     roc_len   = st.slider("ROC length (bars)", 2, 60, DEFAULTS["roc_len"], 1)
 
 # History depth
-with expander("History depth (for ATH/ATL)","exp_hist"):
+with expander("History depth (for ATH/ATL)"):
     basis = st.selectbox("Basis", ["Hourly","Daily","Weekly"], index=["Hourly","Daily","Weekly"].index(DEFAULTS["basis"]))
     if basis=="Hourly":
         amount = st.slider("Hours (≤72)", 1, 72, DEFAULTS["amount_hourly"], 1)
@@ -446,11 +437,11 @@ with expander("History depth (for ATH/ATL)","exp_hist"):
         amount = st.slider("Weeks (≤52)", 1, 52, DEFAULTS["amount_weekly"], 1)
 
 # Display
-with expander("Display","exp_disp"):
+with expander("Display"):
     font_scale = st.slider("Font size (global)", 0.8, 1.6, 1.0, 0.05)
 
-# Notifications (with SMTP fallback fields)
-with expander("Notifications","exp_notif"):
+# Notifications
+with expander("Notifications"):
     email_to = st.text_input("Email recipient (optional)", "")
     webhook_url = st.text_input("Webhook URL (optional)", "")
     st.markdown("**SMTP (only if secrets are not set)**")
@@ -462,16 +453,17 @@ with expander("Notifications","exp_notif"):
         st.session_state["smtp_pass"]   = st.text_input("SMTP password (optional)", st.session_state["smtp_pass"], type="password")
         st.session_state["smtp_sender"] = st.text_input("Sender address (From:)", st.session_state["smtp_sender"])
 
-# Listings monitor (UI stub stays; full feed can be added later)
-with expander("Listings monitor","exp_listings"):
+# Listings monitor (session-based stub)
+with expander("Listings monitor"):
     st.caption("Alerts when **new pairs** appear this session from discovery endpoints.")
     proposed = st.text_area("Proposed listings watch (notes)", "", height=60)
 
 # Auto refresh
-with expander("Auto-refresh","exp_auto"):
+with expander("Auto-refresh"):
     refresh_sec = st.slider("Refresh every (seconds)", 5, 120, DEFAULTS["refresh_sec"], 1)
     st.caption("Auto-refresh is always on.")
 
+# Global CSS + TF label
 st.markdown(f"""
 <style>
   html, body {{ font-size: {font_scale}rem; }}
@@ -479,10 +471,9 @@ st.markdown(f"""
   .row-yellow {{ background: rgba(255,255,0,0.60) !important; font-weight: 600; }}
 </style>
 """, unsafe_allow_html=True)
-
 st.markdown(f"<div style='font-size:1.3rem;font-weight:700;margin:4px 0 10px 2px;'>Timeframe: {sort_tf}</div>", unsafe_allow_html=True)
 
-# Build universe
+# Universe
 if st.session_state["use_my_pairs"]:
     pairs = st.session_state["my_pairs"][:]
 else:
@@ -496,7 +487,7 @@ pairs = pairs[:max_pairs]
 if pairs and mode.startswith("WebSocket") and effective_exchange=="Coinbase" and WS_AVAILABLE:
     start_ws_if_needed(effective_exchange, pairs, ws_chunk)
 
-# New listings vs session (simple session-based)
+# New listings (per session)
 now_seen = set(pairs)
 new_pairs = sorted(list(now_seen - st.session_state["seen_pairs"]))
 if new_pairs:
@@ -504,12 +495,12 @@ if new_pairs:
     if fresh and (email_to or webhook_url):
         subject = f"[{effective_exchange}] New tradable pairs (session)"
         body = "\n".join(fresh)
-        if email_to: send_email_alert(subject, body, email_to)
+        if email_to:    send_email_alert(subject, body, email_to)
         if webhook_url: post_webhook(webhook_url, {"title": subject, "lines": fresh})
         st.session_state["listings_alert_seen"].update(fresh)
 st.session_state["seen_pairs"].update(now_seen)
 
-# Rows
+# Table rows
 rows=[]
 for pid in pairs:
     dft = df_for_tf(effective_exchange, pid, sort_tf)
@@ -520,6 +511,7 @@ for pid in pairs:
         last_price = float(st.session_state["ws_prices"][pid])
     first_price = float(dft["close"].iloc[0])
     pct = (last_price/first_price - 1.0) * 100.0
+
     hist = get_hist(effective_exchange, pid, basis, amount)
     if hist is None or len(hist)<10:
         athp, athd, atlp, atld = np.nan, "—", np.nan, "—"
@@ -536,17 +528,13 @@ for pid in pairs:
         use_trend=use_trend, pivot_span=pivot_span, trend_within=trend_within,
         use_roc=use_roc, min_roc=min_roc, roc_len=roc_len,
     ))
-    is_green = (passed >= K_green)
+    is_green  = (passed >= K_green)
     is_yellow = (passed >= Y_yellow) and (passed < K_green) and gates["pct"]
 
     rows.append({
-        "Pair": pid,
-        "Price": last_price,
-        f"% Change ({sort_tf})": pct,
-        "From ATH %": athp, "ATH date": athd,
-        "From ATL %": atlp, "ATL date": atld,
-        "Gates": chips,
-        "Strong Buy": "YES" if is_green else "—",
+        "Pair": pid, "Price": last_price, f"% Change ({sort_tf})": pct,
+        "From ATH %": athp, "ATH date": athd, "From ATL %": atlp, "ATL date": atld,
+        "Gates": chips, "Strong Buy": "YES" if is_green else "—",
         "_green": is_green, "_yellow": is_yellow,
     })
 
@@ -558,12 +546,12 @@ else:
     df = df.sort_values(chg_col, ascending=False, na_position="last").reset_index(drop=True)
     df.insert(0, "#", df.index+1)
 
-    green_mask = df["_green"].fillna(False).astype(bool)
+    green_mask  = df["_green"].fillna(False).astype(bool)
     yellow_mask = df["_yellow"].fillna(False).astype(bool)
 
     def style_rows_full(x):
         styles = pd.DataFrame("", index=x.index, columns=x.columns)
-        gm = green_mask.reindex(x.index, fill_value=False)
+        gm = green_mask.reindex(x.index,  fill_value=False)
         ym = yellow_mask.reindex(x.index, fill_value=False)
         styles.loc[gm, :] = "background-color: rgba(0,255,0,0.22); font-weight: 600;"
         styles.loc[ym, :] = "background-color: rgba(255,255,0,0.60); font-weight: 600;"
@@ -598,15 +586,13 @@ else:
                 if not ok: st.sidebar.warning(f"Webhook error: {info}")
 
     st.subheader("📑 All pairs")
-    show_df = df.drop(columns=["_green","_yellow"])
-    st.dataframe(show_df.style.apply(style_rows_full, axis=None), use_container_width=True)
+    st.dataframe(df.drop(columns=["_green","_yellow"]).style.apply(style_rows_full, axis=None),
+                 use_container_width=True)
 
     st.caption(f"Pairs: {len(df)} • Exchange: {effective_exchange} • Quote: {quote} • Sort TF: {sort_tf} • Mode: {'WS+REST' if (mode.startswith('WebSocket') and effective_exchange=='Coinbase' and WS_AVAILABLE) else 'REST only'}")
 
-# Auto-refresh
-remaining = int(DEFAULTS["refresh_sec"])
-try: remaining = int(refresh_sec - (time.time() - st.session_state["last_refresh"]))
-except Exception: pass
+# -------------------- Auto-refresh
+remaining = int(refresh_sec - (time.time() - st.session_state["last_refresh"]))
 if remaining <= 0:
     st.session_state["last_refresh"] = time.time()
     st.rerun()
