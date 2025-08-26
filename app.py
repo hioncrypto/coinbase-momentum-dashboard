@@ -1,23 +1,13 @@
-# app.py — Crypto Tracker by hioncrypto (all-in-one)
-# Highlights
-# • Sidebar “⭐ Use My Pairs only” lives at the very top (outside tabs)
-# • Expanders never remember state; they start collapsed on each rerun
-# • Collapse-all acts only when clicked (one-shot)
-# • Timeframes: 15m, 1h, 4h, 6h, 12h, 1d
-# • Tables:
-#     - Top‑10: ONLY green rows (meets K gates), sorted by % Change (desc)
-#     - All pairs: sorted by % Change (desc); green/yellow are colors only
-# • Gates:
-#     - Positive-only % change gate (Δ)
-#     - Volume spike×, ROC, Trend, RSI, MACD, ATR (togglable; evaluated but NOT columns)
-#     - “Gates needed to turn green (K)” dropdown (1–7)
-#     - “Yellow needs ≥ Y (but < K)” dropdown (0..K-1)
-#     - “Gates” chips column (plain text emojis): Δ / V / R / T / S / M / A
-# • Alerts: Email/Webhook when NEW pairs enter Top‑10
-# • Auto-refresh: set interval; always on (st.rerun)
-# • WebSocket hybrid (Coinbase) for live price nudge (optional)
-# • Listings monitor (basic): alerts when new tradable pairs appear since session start;
-#   manual “Proposed listings watch” list for your notes.
+# app.py — Crypto Tracker by hioncrypto
+# - Top‑10 shows ONLY green rows (meets "K gates" rule), sorted by % Change (desc)
+# - All pairs sorted by % Change (desc) too; green/yellow are just colors
+# - Gates chips use simple ✅/❌/– text (reliable)
+# - Collapse‑all only acts when clicked, then immediately resets; expanders start collapsed
+# - K/Y controls are dropdowns inside "Gates"
+# - "⭐ Use My Pairs only" lives at the very top of the sidebar (outside expanders)
+# - Auto‑refresh via st.rerun() timer
+# - Alerts (email/webhook) fire on new Top‑10 entrants
+# - Defaults are semi‑restrictive; “Reset gates to defaults” button added
 
 import json, time, datetime as dt, threading, queue, ssl, smtplib
 from email.mime.text import MIMEText
@@ -40,10 +30,7 @@ except Exception:
 TF_LIST = ["15m","1h","4h","6h","12h","1d"]
 ALL_TFS = {"15m":900,"1h":3600,"4h":14400,"6h":21600,"12h":43200,"1d":86400}
 
-# Quote currencies (expandable)
-QUOTES = ["USD","USDC","USDT","BTC","ETH","EUR", "GBP", "AUD"]
-
-# Exchanges (secondaries marked coming soon)
+QUOTES = ["USD","USDC","USDT","BTC","ETH","EUR"]
 EXCHANGES = ["Coinbase","Binance","Kraken (coming soon)","KuCoin (coming soon)"]
 
 CB_BASE = "https://api.exchange.coinbase.com"
@@ -51,19 +38,17 @@ BN_BASE = "https://api.binance.com"
 
 DEFAULTS = dict(
     sort_tf = "1h",
-    min_pct = 20.0,        # positive-only gate
-    use_vol_spike = True,  vol_mult = 1.10, vol_window = 20,
-    use_rsi = False,       rsi_len = 14,    min_rsi = 55,
-    use_macd = True,       macd_fast = 12,  macd_slow = 26, macd_sig = 9, min_mhist = 0.0,
-    use_atr = False,       atr_len = 14,    min_atr = 0.5,
-    use_trend = True,      pivot_span = 4,  trend_within = 48,
-    use_roc = True,        min_roc = 1.0,   roc_len = 14,   # ROC over last N bars
-    K_green = 3,           Y_yellow = 2,
-    basis = "Daily",       amount_daily = 90, amount_hourly = 24, amount_weekly = 12,
-    refresh_sec = 30,
-    max_pairs = 25,
-    quote = "USD",
-    exchange = "Coinbase",
+    sort_desc = True,
+    min_pct = 20.0,         # positive-only gate threshold (Sort TF)
+    use_vol_spike = True,   vol_mult = 1.10, vol_window = 20,
+    use_rsi = False,        rsi_len = 14,    min_rsi = 55,
+    use_macd = True,        macd_fast = 12,  macd_slow = 26, macd_sig = 9, min_mhist = 0.0,
+    use_atr = False,        atr_len = 14,    min_atr = 0.5,
+    use_trend = True,       pivot_span = 4,  trend_within = 48,
+    K_green = 3,            Y_yellow = 2,
+    basis = "Daily",        amount_daily = 90, amount_hourly = 24, amount_weekly = 12,
+    refresh_sec = 30,       max_pairs = 25,
+    quote = "USD",          exchange = "Coinbase",
     watchlist = "BTC-USD, ETH-USD, SOL-USD, AVAX-USD, ADA-USD, DOGE-USD, MATIC-USD",
 )
 
@@ -75,16 +60,13 @@ def _init_state():
     ss.setdefault("ws_q", queue.Queue())
     ss.setdefault("ws_prices", {})
     ss.setdefault("alert_seen", set())
-    ss.setdefault("collapse_all_now", False)   # one-shot flag
+    ss.setdefault("collapse_all_now", False)      # one-shot flag
     ss.setdefault("last_refresh", time.time())
     ss.setdefault("use_my_pairs", False)
     ss.setdefault("my_pairs", ["BTC-USD","ETH-USD","SOL-USD"])
-    # Listings monitor
-    ss.setdefault("seen_pairs", set())         # for new listings detection (per session)
-    ss.setdefault("listings_alert_seen", set())
 _init_state()
 
-# ----------------------------- Indicators / helpers
+# ----------------------------- Small utilities
 def ema(s: pd.Series, span: int) -> pd.Series:
     return s.ewm(span=span, adjust=False).mean()
 
@@ -242,7 +224,7 @@ def ath_atl_info(hist: pd.DataFrame) -> dict:
     return {"From ATH %": (last/ath-1)*100 if ath>0 else np.nan, "ATH date": d_ath,
             "From ATL %": (last/atl-1)*100 if atl>0 else np.nan, "ATL date": d_atl}
 
-# ----------------------------- WebSocket worker (Coinbase)
+# ----------------------------- WebSocket worker
 def ws_worker(product_ids, endpoint="wss://ws-feed.exchange.coinbase.com"):
     ss = st.session_state
     try:
@@ -297,7 +279,7 @@ def post_webhook(url, payload):
     except Exception as e:
         return False, str(e)
 
-# ----------------------------- Gates (last-bar evaluation)
+# ----------------------------- Gates
 def build_gate_eval(df_tf: pd.DataFrame, settings: dict) -> Tuple[dict, int, str]:
     """Return per-gate booleans at the last bar, gates_passed count, and chips string."""
     last_close = df_tf["close"].iloc[-1]
@@ -305,89 +287,111 @@ def build_gate_eval(df_tf: pd.DataFrame, settings: dict) -> Tuple[dict, int, str
     pct = (last_close/first_close - 1.0) * 100.0
     g_delta = (pct >= settings["min_pct"] and pct > 0)
 
-    chips = [f"Δ{'✅' if g_delta else '❌'}"]
-    passed = int(g_delta)
+    # Optional gates
+    chips = []
+    passed = 0
 
-    def add_chip(label: str, enabled: bool, ok: bool):
-        chips.append(f"{label}{'✅' if (enabled and ok) else ('–' if not enabled else '❌')}")
-        return int(enabled and ok)
+    def chip(name, enabled, ok):
+        if not enabled:
+            chips.append(f"{name}–")
+        else:
+            chips.append(f"{name}{'✅' if ok else '❌'}")
+
+    # Δ % Change (always considered)
+    chips.append(f"Δ{'✅' if g_delta else '❌'}")
+    passed += int(g_delta)
 
     # Volume spike ×
     if settings["use_vol_spike"]:
         volx = volume_spike(df_tf, settings["vol_window"])
-        ok = bool(pd.notna(volx) and volx >= settings["vol_mult"])
-        passed += add_chip(" V", True, ok)
+        ok = bool(volx >= settings["vol_mult"])
+        passed += int(ok)
+        chip(" V", True, ok)
     else:
-        add_chip(" V", False, False)
+        chip(" V", False, False)
 
-    # ROC %
-    if settings["use_roc"]:
-        n = max(2, settings.get("roc_len", 14))
-        roc = (df_tf["close"].iloc[-1] / df_tf["close"].iloc[-n] - 1.0) * 100.0 if len(df_tf) > n else np.nan
-        ok = bool(pd.notna(roc) and roc >= settings.get("min_roc", 1.0))
-        passed += add_chip(" R", True, ok)
+    # ROC — simple % change over last N bars (use rsi_len as ROC length for simplicity)
+    roc_len = max(2, settings.get("roc_len", settings["rsi_len"]))
+    if len(df_tf) > roc_len:
+        roc = (df_tf["close"].iloc[-1] / df_tf["close"].iloc[-roc_len] - 1.0) * 100.0
     else:
-        add_chip(" R", False, False)
+        roc = np.nan
+    use_roc = settings.get("use_roc", True)
+    min_roc = settings.get("min_roc", 1.0)
+    if use_roc:
+        ok = bool(pd.notna(roc) and roc >= min_roc)
+        passed += int(ok)
+        chip(" R", True, ok)
+    else:
+        chip(" R", False, False)
 
     # Trend breakout (up)
     if settings["use_trend"]:
         ok = trend_breakout_up(df_tf, span=settings["pivot_span"], within_bars=settings["trend_within"])
-        passed += add_chip(" T", True, ok)
+        passed += int(ok)
+        chip(" T", True, ok)
     else:
-        add_chip(" T", False, False)
+        chip(" T", False, False)
 
     # RSI
     if settings["use_rsi"]:
         ok = bool(rsi(df_tf["close"], settings["rsi_len"]).iloc[-1] >= settings["min_rsi"])
-        passed += add_chip(" S", True, ok)  # S = Strength (RSI)
+        passed += int(ok)
+        chip(" S", True, ok)  # S for RSI (Strength)
     else:
-        add_chip(" S", False, False)
+        chip(" S", False, False)
 
     # MACD hist
     if settings["use_macd"]:
         ok = bool(macd_hist(df_tf["close"], settings["macd_fast"], settings["macd_slow"], settings["macd_sig"]).iloc[-1] >= settings["min_mhist"])
-        passed += add_chip(" M", True, ok)
+        passed += int(ok)
+        chip(" M", True, ok)
     else:
-        add_chip(" M", False, False)
+        chip(" M", False, False)
 
     # ATR %
     if settings["use_atr"]:
         atr_pct = (atr(df_tf, settings["atr_len"]) / (df_tf["close"] + 1e-12) * 100.0).iloc[-1]
-        ok = bool(pd.notna(atr_pct) and atr_pct >= settings["min_atr"])
-        passed += add_chip(" A", True, ok)
+        ok = bool(atr_pct >= settings["min_atr"])
+        passed += int(ok)
+        chip(" A", True, ok)
     else:
-        add_chip(" A", False, False)
+        chip(" A", False, False)
 
     return {"pct": g_delta}, passed, " ".join(chips)
 
-# ----------------------------- Page config
+# ----------------------------- Page
 st.set_page_config(page_title="Crypto Tracker by hioncrypto", layout="wide")
 st.title("Crypto Tracker by hioncrypto")
 
-# ----------------------------- Top-of-sidebar strip (outside expanders)
+# --------- Top-of-sidebar strip (outside expanders)
 with st.sidebar:
     colA, colB = st.columns([1,1])
     with colA:
         if st.button("Collapse all menu tabs", use_container_width=True):
             st.session_state["collapse_all_now"] = True
     with colB:
-        st.toggle("⭐ Use My Pairs only", key="use_my_pairs", value=st.session_state.get("use_my_pairs", False),
-                  help="Show only your saved pairs.")
+        st.toggle("⭐ Use My Pairs only", key="use_my_pairs", value=st.session_state.get("use_my_pairs", False), help="Show only the pairs in your 'My Pairs' list.")
 
     with st.popover("Manage My Pairs"):
-        st.caption("Edit as comma‑separated list, e.g. BTC-USD, ETH-USDT")
-        current = st.text_area("My Pairs", ", ".join(st.session_state["my_pairs"]), height=80)
+        st.caption("Tip: Symbols like `BTC-USD`, `ETH-USDT` etc.")
+        current = st.text_area("Edit list (comma‑separated)", ", ".join(st.session_state["my_pairs"]))
         if st.button("Save My Pairs"):
             new_list = [p.strip().upper() for p in current.split(",") if p.strip()]
             if new_list:
                 st.session_state["my_pairs"] = new_list
                 st.success("Saved.")
+        st.write("Current:", st.session_state["my_pairs"])
 
-# Helper: expander always starts collapsed; one-shot collapse flag is cleared below
+# --------- Helper: expander that starts collapsed; collapse-all is one-shot
 def expander(title: str, key: Optional[str] = None):
-    return st.sidebar.expander(title, expanded=False)
+    opened = False
+    if st.session_state.get("collapse_all_now", False):
+        opened = False
+    e = st.sidebar.expander(title, expanded=opened)
+    return e
 
-# ----------------------------- MARKET
+# --------- MARKET
 with expander("Market", "exp_market"):
     exchange = st.selectbox("Exchange", EXCHANGES, index=EXCHANGES.index(DEFAULTS["exchange"]))
     effective_exchange = exchange if "coming soon" not in exchange else "Coinbase"
@@ -398,19 +402,19 @@ with expander("Market", "exp_market"):
     watchlist = st.text_area("Watchlist (comma‑separated)", DEFAULTS["watchlist"])
     max_pairs = st.slider("Max pairs to evaluate", 10, 50, DEFAULTS["max_pairs"], 1)
 
-# ----------------------------- MODE
+# --------- MODE
 with expander("Mode", "exp_mode"):
     mode = st.radio("Data source", ["REST only", "WebSocket + REST (hybrid)"], index=0, horizontal=True)
     ws_chunk = st.slider("WS subscribe chunk (Coinbase)", 2, 20, 5, 1)
 
-# ----------------------------- TIMEFRAMES
+# --------- TIMEFRAMES
 with expander("Timeframes", "exp_tfs"):
     sort_tf = st.selectbox("Primary sort timeframe", TF_LIST, index=TF_LIST.index(DEFAULTS["sort_tf"]))
     sort_desc = st.checkbox("Sort descending (largest first)", value=True)
 
-# ----------------------------- GATES
+# --------- GATES
 with expander("Gates", "exp_gates"):
-    st.caption("These checks decide green/yellow; defaults are semi‑restrictive.")
+    st.caption("These checks decide green/yellow; values below are beginner‑friendly defaults.")
     min_pct = st.slider("Min +% change (Sort TF)", 0.0, 50.0, DEFAULTS["min_pct"], 0.5)
     st.caption("💡 If nothing shows, lower this threshold.")
 
@@ -435,26 +439,36 @@ with expander("Gates", "exp_gates"):
         pivot_span = st.slider("Pivot span (bars)", 2, 10, DEFAULTS["pivot_span"], 1)
         trend_within = st.slider("Breakout within (bars)", 5, 96, DEFAULTS["trend_within"], 1)
     with cols2[2]:
-        use_roc = st.toggle("ROC (rate of change)", value=DEFAULTS["use_roc"])
-        min_roc = st.slider("Min ROC % (over ~ROC length)", 0.0, 50.0, DEFAULTS["min_roc"], 0.5)
+        use_roc = st.toggle("ROC (rate of change)", value=True)
+        min_roc = st.slider("Min ROC % (over ~RSI length)", 0.0, 50.0, 1.0, 0.5)
 
-    # Color rules (dropdowns, not sliders)
     st.markdown("---")
     st.subheader("Color rules — beginner friendly")
     K_green = st.selectbox("Gates needed to turn green (K)", list(range(1,8)), index=DEFAULTS["K_green"]-1)
     Y_yellow = st.selectbox("Yellow needs ≥ Y (but < K)", list(range(0, K_green)), index=min(DEFAULTS["Y_yellow"], K_green-1))
-    st.caption("Enabled checks = Δ + any toggled gates • Green needs ≥ K • Yellow needs ≥ Y (but < K)")
+    st.caption("Enabled checks: Δ + any toggled gates • Green needs ≥ K • Yellow needs ≥ Y (but < K)")
 
-# ----------------------------- INDICATOR LENGTHS
+    # Reset to defaults button
+    if st.button("Reset gates to defaults"):
+        st.session_state.update({
+            "min_pct": DEFAULTS["min_pct"], "use_vol_spike": DEFAULTS["use_vol_spike"],
+            "vol_mult": DEFAULTS["vol_mult"], "use_rsi": DEFAULTS["use_rsi"], "min_rsi": DEFAULTS["min_rsi"],
+            "use_macd": DEFAULTS["use_macd"], "min_mhist": DEFAULTS["min_mhist"], "use_atr": DEFAULTS["use_atr"],
+            "min_atr": DEFAULTS["min_atr"], "use_trend": DEFAULTS["use_trend"],
+            "pivot_span": DEFAULTS["pivot_span"], "trend_within": DEFAULTS["trend_within"],
+            "K_green": DEFAULTS["K_green"], "Y_yellow": DEFAULTS["Y_yellow"],
+        })
+        st.rerun()
+
+# --------- INDICATOR LENGTHS
 with expander("Indicator lengths", "exp_lens"):
     rsi_len = st.slider("RSI length", 5, 50, DEFAULTS["rsi_len"], 1)
     macd_fast = st.slider("MACD fast EMA", 3, 50, DEFAULTS["macd_fast"], 1)
     macd_slow = st.slider("MACD slow EMA", 5, 100, DEFAULTS["macd_slow"], 1)
     macd_sig  = st.slider("MACD signal", 3, 50, DEFAULTS["macd_sig"], 1)
     atr_len   = st.slider("ATR length", 5, 50, DEFAULTS["atr_len"], 1)
-    roc_len   = st.slider("ROC length (bars)", 2, 60, DEFAULTS["roc_len"], 1)
 
-# ----------------------------- HISTORY DEPTH
+# --------- HISTORY DEPTH
 with expander("History depth (for ATH/ATL)", "exp_hist"):
     basis = st.selectbox("Basis", ["Hourly","Daily","Weekly"], index=["Hourly","Daily","Weekly"].index(DEFAULTS["basis"]))
     if basis=="Hourly":
@@ -464,33 +478,25 @@ with expander("History depth (for ATH/ATL)", "exp_hist"):
     else:
         amount = st.slider("Weeks (≤52)", 1, 52, DEFAULTS["amount_weekly"], 1)
 
-# ----------------------------- DISPLAY
+# --------- DISPLAY
 with expander("Display", "exp_disp"):
     font_scale = st.slider("Font size (global)", 0.8, 1.6, 1.0, 0.05)
 
-# ----------------------------- NOTIFICATIONS
+# --------- NOTIFICATIONS
 with expander("Notifications", "exp_notif"):
     email_to = st.text_input("Email recipient (optional)", "")
     webhook_url = st.text_input("Webhook URL (optional)", "")
 
-# ----------------------------- LISTINGS MONITOR (basic)
-with expander("Listings monitor", "exp_listings"):
-    st.caption("Alerts when **new pairs** appear this session (from /products or /exchangeInfo).")
-    proposed = st.text_area("Proposed listings watch (notes)", "", height=60,
-                            help="Freeform notes, e.g. ‘COIN‑USD (Coinbase rumour)’.")
-    st.caption("• Programmatic ‘proposed’ feeds vary by exchange; this box is for your notes.\n"
-               "• ‘Newly live’ detection below compares live discovery vs earlier runs in this session.")
-
-# ----------------------------- AUTO REFRESH
+# --------- AUTO REFRESH
 with expander("Auto-refresh", "exp_auto"):
     refresh_sec = st.slider("Refresh every (seconds)", 5, 120, DEFAULTS["refresh_sec"], 1)
     st.caption("Auto-refresh is always on.")
 
-# One-shot collapse flag is cleared immediately
+# One-shot collapse: apply then clear
 if st.session_state.get("collapse_all_now", False):
-    st.session_state["collapse_all_now"] = False
+    st.session_state["collapse_all_now"] = False  # clear immediately
 
-# ----------------------------- Global CSS & TF label
+# Global CSS
 st.markdown(f"""
 <style>
   html, body {{ font-size: {font_scale}rem; }}
@@ -499,9 +505,10 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
+# Big timeframe label
 st.markdown(f"<div style='font-size:1.3rem;font-weight:700;margin:4px 0 10px 2px;'>Timeframe: {sort_tf}</div>", unsafe_allow_html=True)
 
-# ----------------------------- Discover universe
+# ----------------------------- Discovery
 if st.session_state["use_my_pairs"]:
     pairs = st.session_state["my_pairs"][:]
 else:
@@ -512,36 +519,22 @@ else:
     pairs = [p for p in pairs if p.endswith(f"-{quote}")]
 pairs = pairs[:max_pairs]
 
-# Start WS if needed
+# WS start
 if pairs and mode.startswith("WebSocket") and effective_exchange=="Coinbase" and WS_AVAILABLE:
     start_ws_if_needed(effective_exchange, pairs, ws_chunk)
 
-# ----------------------------- Listings new-vs-seen detection
-now_seen = set(pairs)
-new_pairs = sorted(list(now_seen - st.session_state["seen_pairs"]))
-if new_pairs:
-    # notify once per symbol
-    fresh = [p for p in new_pairs if p not in st.session_state["listings_alert_seen"]]
-    if fresh and (email_to or webhook_url):
-        subject = f"[{effective_exchange}] New tradable pairs (session)"
-        body = "\n".join(fresh)
-        if email_to:
-            send_email_alert(subject, body, email_to)
-        if webhook_url:
-            post_webhook(webhook_url, {"title": subject, "lines": fresh})
-        st.session_state["listings_alert_seen"].update(fresh)
-st.session_state["seen_pairs"].update(now_seen)
-
 # ----------------------------- Build rows
 rows = []
+green_rows = []
+top10_msgs = []
 
 for pid in pairs:
     dft = df_for_tf(effective_exchange, pid, sort_tf)
-    if dft is None or len(dft) < 30:
+    if dft is None or len(dft) < 30:  # not enough data
         continue
     dft = dft.tail(400).copy()
 
-    # Live price override from WS (Coinbase)
+    # Live price override (WS)
     last_price = float(dft["close"].iloc[-1])
     if effective_exchange=="Coinbase" and st.session_state["ws_prices"].get(pid):
         last_price = float(st.session_state["ws_prices"][pid])
@@ -550,7 +543,7 @@ for pid in pairs:
     first_price = float(dft["close"].iloc[0])
     pct = (last_price/first_price - 1.0) * 100.0
 
-    # ATH/ATL
+    # ATH/ATL based on chosen history
     hist = get_hist(effective_exchange, pid, basis, amount)
     if hist is None or len(hist)<10:
         athp, athd, atlp, atld = np.nan, "—", np.nan, "—"
@@ -558,7 +551,7 @@ for pid in pairs:
         aa = ath_atl_info(hist)
         athp, athd, atlp, atld = aa["From ATH %"], aa["ATH date"], aa["From ATL %"], aa["ATL date"]
 
-    # Gates (last bar)
+    # Gates (evaluate last bar only)
     gates, passed, chips = build_gate_eval(dft, dict(
         min_pct=min_pct,
         use_vol_spike=use_vol_spike, vol_mult=vol_mult, vol_window=DEFAULTS["vol_window"],
@@ -566,7 +559,7 @@ for pid in pairs:
         use_macd=use_macd, macd_fast=macd_fast, macd_slow=macd_slow, macd_sig=macd_sig, min_mhist=min_mhist,
         use_atr=use_atr, atr_len=atr_len, min_atr=min_atr,
         use_trend=use_trend, pivot_span=pivot_span, trend_within=trend_within,
-        use_roc=use_roc, min_roc=min_roc, roc_len=roc_len,
+        use_roc=True, min_roc=min_roc, roc_len=rsi_len,
     ))
 
     is_green = (passed >= K_green)
@@ -583,17 +576,18 @@ for pid in pairs:
         "_green": is_green, "_yellow": is_yellow,
     })
 
-# ----------------------------- Tables
+# DataFrames
 df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=["Pair"])
 if df.empty:
     st.info("No rows to show. Loosen gates or try a different timeframe.")
 else:
     chg_col = f"% Change ({sort_tf})"
 
-    # Always sort by % change (desc)
-    df = df.sort_values(chg_col, ascending=not True, na_position="last").reset_index(drop=True)
+    # Sort by % change (desc) ALWAYS
+    df = df.sort_values(chg_col, ascending=not sort_desc, na_position="last").reset_index(drop=True)
     df.insert(0, "#", df.index+1)
 
+    # Masks
     green_mask = df["_green"].fillna(False).astype(bool)
     yellow_mask = df["_yellow"].fillna(False).astype(bool)
 
@@ -605,26 +599,26 @@ else:
         styles.loc[ym, :] = "background-color: rgba(255,255,0,0.60); font-weight: 600;"
         return styles
 
-    # Top‑10: ONLY green, sorted by % change desc
+    # Top‑10: ONLY green
     st.subheader("📌 Top‑10 (meets green rule)")
     top10 = df[df["_green"]].sort_values(chg_col, ascending=False, na_position="last").head(10)
     top10 = top10.drop(columns=["_green","_yellow"])
     if top10.empty:
         st.write("—")
-        st.caption("💡 If nothing appears, lower Min +% change, reduce K (gates needed), or disable some gates.")
+        st.caption("💡 If nothing appears, lower Min +% change, or reduce K (gates needed), or disable some gates.")
     else:
         def style_rows_green_only(x):
             return pd.DataFrame("background-color: rgba(0,255,0,0.22); font-weight: 600;", index=x.index, columns=x.columns)
         st.dataframe(top10.style.apply(style_rows_green_only, axis=None), use_container_width=True)
 
-        # Alerts for NEW entrants
+        # Alerts for new entrants
         new_msgs=[]
         for _, r in top10.iterrows():
             key = f"{r['Pair']}|{sort_tf}|{round(float(r[chg_col]),2)}"
             if key not in st.session_state["alert_seen"]:
                 st.session_state["alert_seen"].add(key)
                 new_msgs.append(f"{r['Pair']}: {float(r[chg_col]):+.2f}% ({sort_tf})")
-        if new_msgs and (email_to or webhook_url):
+        if new_msgs:
             subject = f"[{effective_exchange}] Top‑10 Crypto Tracker"
             body    = "\n".join(new_msgs)
             if email_to:
@@ -642,11 +636,11 @@ else:
     # Footer
     st.caption(f"Pairs: {len(df)} • Exchange: {effective_exchange} • Quote: {quote} • Sort TF: {sort_tf} • Mode: {'WS+REST' if (mode.startswith('WebSocket') and effective_exchange=='Coinbase' and WS_AVAILABLE) else 'REST only'}")
 
-# ----------------------------- Auto-refresh timer (always on)
-remaining = refresh_sec - (time.time() - st.session_state["last_refresh"])
+# ---------------- Auto-refresh timer
+remaining = DEFAULTS["refresh_sec"] if 'refresh_sec' not in locals() else refresh_sec
+remaining = remaining - (time.time() - st.session_state["last_refresh"])
 if remaining <= 0:
     st.session_state["last_refresh"] = time.time()
     st.rerun()
 else:
-    st.caption(f"Auto-refresh every {refresh_sec}s (next in {int(remaining)}s)")
-
+    st.caption(f"Auto-refresh every {refresh_sec if 'refresh_sec' in locals() else DEFAULTS['refresh_sec']}s (next in {int(remaining)}s)")
