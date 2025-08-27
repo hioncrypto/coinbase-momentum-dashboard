@@ -1,20 +1,16 @@
 # app.py — Crypto Tracker by hioncrypto
-# One-file Streamlit app with:
-# - Presets (ticks): Spike Hunter, Early MACD Cross, Confirm Rally, None
-# - Gate Mode ticks: ALL | ANY | Custom (K/Y)
-# - Hard filter toggle (scan vs strict)
-# - Δ lookback 0–100 (0 clamps to 1)
-# - MACD Cross gate: recency-in-N-bars, below-zero preference, optional hist>0 confirm within M bars
-# - Chips: Δ, V, R, T, S, M, A, C
-# - Discovery slider 0–500 with inline counts
-# - Collapse-all truly collapses all and persists (via URL params)
-# - Anti-dimming CSS; tables render with read-only data editor to avoid transitions
-# - Immediate apply for all controls; settings persisted via query params
+# Single-file Streamlit app.
+# New in this build:
+# - Timeframes: Minimum bars slider (5–200, default 30)
+# - Diagnostics: Available • Capped • Fetched • Skipped (bars) • Skipped (API) • Shown
+# - Listing Radar: detects newly listed pairs (Coinbase/Binance) + parses announcement feeds for upcoming go-live
+#   - Blinking badge when unacknowledged events exist
+#   - Alerts via existing email/webhook settings
 
-import json, time, datetime as dt, threading, queue, ssl, smtplib
+import json, time, datetime as dt, threading, queue, ssl, smtplib, re
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict
 
 import numpy as np
 import pandas as pd
@@ -36,6 +32,14 @@ EXCHANGES = ["Coinbase","Binance","Kraken (coming soon)","KuCoin (coming soon)"]
 CB_BASE = "https://api.exchange.coinbase.com"
 BN_BASE = "https://api.binance.com"
 
+# RSS/announcement defaults (editable in UI). These are best-effort and may change.
+DEFAULT_FEEDS = [
+    # Coinbase blog RSS often includes listing posts
+    "https://blog.coinbase.com/feed",
+    # Binance announcements RSS-like feed (fallback to HTML if needed)
+    "https://www.binance.com/en/support/announcement",
+]
+
 DEFAULTS = dict(
     sort_tf="1h", sort_desc=True,
     min_pct=3.0, lookback_candles=3,
@@ -45,16 +49,26 @@ DEFAULTS = dict(
     use_atr=False, atr_len=14, min_atr=0.5,
     use_trend=False, pivot_span=4, trend_within=48,
     use_roc=False, min_roc=1.0,
-    # New MACD Cross gate
+    # MACD Cross gate
     use_macd_cross=True, macd_cross_bars=5, macd_cross_only_bull=True,
     macd_cross_below_zero=True, macd_hist_confirm_bars=3,
+    # Color rules
     K_green=3, Y_yellow=2,
     gate_mode="ANY", hard_filter=False, preset="Spike Hunter",
+    # History depth
     basis="Daily", amount_daily=90, amount_hourly=24, amount_weekly=12,
+    # Timeframes guard
+    min_bars=30,
     refresh_sec=30, font_scale=1.0,
     quote="USD", exchange="Coinbase",
     watchlist="BTC-USD, ETH-USD, SOL-USD, AVAX-USD, ADA-USD, DOGE-USD, MATIC-USD",
     discover_cap=400,
+    # Listing Radar defaults
+    lr_enabled=False, lr_watch_coinbase=True, lr_watch_binance=True,
+    lr_watch_quotes="USD, USDT, USDC",
+    lr_poll_sec=30, lr_upcoming_sec=300,
+    lr_feeds=", ".join(DEFAULT_FEEDS),
+    lr_alert_new=True, lr_alert_upcoming=True, lr_upcoming_window_h=48,
 )
 
 # ---------------- Persistence via URL params
@@ -68,7 +82,7 @@ def _coerce(v, typ):
         except: return None
     return str(v)
 
-PERSIST = {
+PERSIST: Dict[str, Tuple[object, type]] = {
     # Market
     "exchange": (DEFAULTS["exchange"], str),
     "quote": (DEFAULTS["quote"], str),
@@ -83,6 +97,7 @@ PERSIST = {
 
     # TF & sort
     "sort_tf": (DEFAULTS["sort_tf"], str), "sort_desc": (True, bool),
+    "min_bars": (DEFAULTS["min_bars"], int),
 
     # Gates core
     "gate_mode": (DEFAULTS["gate_mode"], str),
@@ -100,7 +115,7 @@ PERSIST = {
     "use_trend": (DEFAULTS["use_trend"], bool), "pivot_span": (DEFAULTS["pivot_span"], int), "trend_within": (DEFAULTS["trend_within"], int),
     "use_roc": (DEFAULTS["use_roc"], bool), "min_roc": (DEFAULTS["min_roc"], float),
 
-    # New MACD Cross params
+    # MACD Cross params
     "use_macd_cross": (DEFAULTS["use_macd_cross"], bool),
     "macd_cross_bars": (DEFAULTS["macd_cross_bars"], int),
     "macd_cross_only_bull": (DEFAULTS["macd_cross_only_bull"], bool),
@@ -120,8 +135,20 @@ PERSIST = {
     "font_scale": (DEFAULTS["font_scale"], float),
     "email_to": ("", str), "webhook_url": ("", str),
 
-    # Misc
+    # Collapse
     "collapse_all": (False, bool),
+
+    # Listing Radar
+    "lr_enabled": (DEFAULTS["lr_enabled"], bool),
+    "lr_watch_coinbase": (DEFAULTS["lr_watch_coinbase"], bool),
+    "lr_watch_binance": (DEFAULTS["lr_watch_binance"], bool),
+    "lr_watch_quotes": (DEFAULTS["lr_watch_quotes"], str),
+    "lr_poll_sec": (DEFAULTS["lr_poll_sec"], int),
+    "lr_upcoming_sec": (DEFAULTS["lr_upcoming_sec"], int),
+    "lr_feeds": (DEFAULTS["lr_feeds"], str),
+    "lr_alert_new": (DEFAULTS["lr_alert_new"], bool),
+    "lr_alert_upcoming": (DEFAULTS["lr_alert_upcoming"], bool),
+    "lr_upcoming_window_h": (DEFAULTS["lr_upcoming_window_h"], int),
 }
 
 def init_persisted_state():
@@ -136,7 +163,7 @@ def init_persisted_state():
         st.session_state.setdefault(k, val)
 
 def sync_state_to_query_params():
-    qp = {k: (", ".join(v) if isinstance(v,(list,tuple)) else str(v)) for k,v in st.session_state.items() if k in PERSIST}
+    qp = {k: (", ".join(v) if isinstance(v,(list,tuple)) else str(v)) for k in PERSIST.keys() if (v:=st.session_state.get(k)) is not None}
     if qp: st.query_params.update(qp)
 
 def _init_runtime():
@@ -147,6 +174,13 @@ def _init_runtime():
     ss.setdefault("ws_prices", {})
     ss.setdefault("alert_seen", set())
     ss.setdefault("last_refresh", time.time())
+
+    # Listing Radar runtime
+    ss.setdefault("lr_baseline", {"Coinbase": set(), "Binance": set()})
+    ss.setdefault("lr_events", [])     # list of dicts
+    ss.setdefault("lr_unacked", 0)
+    ss.setdefault("lr_last_poll", 0.0)
+    ss.setdefault("lr_last_upcoming_poll", 0.0)
 
 _init_runtime()
 init_persisted_state()
@@ -229,7 +263,7 @@ def fetch_candles(exchange: str, pair_dash: str, gran_sec: int,
             if end: params["end"]=end.replace(tzinfo=dt.timezone.utc).isoformat()
             r=requests.get(url, params=params, timeout=25)
             if r.status_code!=200: return None
-            arr=r.json(); 
+            arr=r.json()
             if not arr: return None
             df=pd.DataFrame(arr, columns=["ts","low","high","open","close","volume"])
             df["ts"]=pd.to_datetime(df["ts"], unit="s", utc=True)
@@ -237,7 +271,7 @@ def fetch_candles(exchange: str, pair_dash: str, gran_sec: int,
         elif exchange=="Binance":
             base,quote=pair_dash.split("-"); symbol=f"{base}{quote}"
             interval_map={900:"15m",3600:"1h",14400:"4h",21600:"6h",43200:"12h",86400:"1d"}
-            interval=interval_map.get(gran_sec); 
+            interval=interval_map.get(gran_sec)
             if not interval: return None
             params={"symbol":symbol,"interval":interval,"limit":1000}
             if start: params["startTime"]=int(start.replace(tzinfo=dt.timezone.utc).timestamp()*1000)
@@ -355,9 +389,7 @@ def post_webhook(url, payload):
 def build_gate_eval(df_tf: pd.DataFrame, settings: dict) -> Tuple[dict,int,str,int]:
     """
     Returns: meta, passed_count, chips_str, enabled_count
-    Gates:
-      Δ (delta% vs lookback), Volume spike, ROC, Trend breakout, RSI, MACD hist, ATR%, MACD Cross
-    Δ isn't forced positive; ANY/ALL treat each gate equally.
+    Gates: Δ, Volume×, ROC, Trend, RSI, MACD hist, ATR%, MACD Cross
     """
     n=len(df_tf)
     lb=max(1, min(int(settings["lookback_candles"]), 100, n-1))
@@ -366,7 +398,6 @@ def build_gate_eval(df_tf: pd.DataFrame, settings: dict) -> Tuple[dict,int,str,i
     delta_pct=(last_close/ref_close - 1.0)*100.0
     g_delta = bool(delta_pct >= settings["min_pct"])
 
-    # MACD core once
     macd_line, signal_line, hist = macd_core(df_tf["close"], settings["macd_fast"], settings["macd_slow"], settings["macd_sig"])
 
     chips=[]; passed=0; enabled=0
@@ -387,7 +418,7 @@ def build_gate_eval(df_tf: pd.DataFrame, settings: dict) -> Tuple[dict,int,str,i
         passed+=int(ok); enabled+=1; chip(" V", True, ok, f"({volx:.2f}×)" if pd.notna(volx) else "")
     else: chip(" V", False, False)
 
-    # ROC (same lookback)
+    # ROC
     if settings.get("use_roc", False):
         roc=(df_tf["close"].iloc[-1]/df_tf["close"].iloc[-lb]-1.0)*100.0 if n>lb else np.nan
         ok=bool(pd.notna(roc) and roc >= settings.get("min_roc",1.0))
@@ -407,7 +438,7 @@ def build_gate_eval(df_tf: pd.DataFrame, settings: dict) -> Tuple[dict,int,str,i
         passed+=int(ok); enabled+=1; chip(" S", True, ok, f"({rcur:.1f})")
     else: chip(" S", False, False)
 
-    # MACD histogram >= threshold
+    # MACD histogram
     if settings["use_macd"]:
         mh=hist.iloc[-1]
         ok=bool(mh >= settings["min_mhist"])
@@ -421,14 +452,12 @@ def build_gate_eval(df_tf: pd.DataFrame, settings: dict) -> Tuple[dict,int,str,i
         passed+=int(ok); enabled+=1; chip(" A", True, ok, f"({atr_pct:.2f}%)")
     else: chip(" A", False, False)
 
-    # MACD Cross gate
+    # MACD Cross
     cross_meta = {"ok": False, "bars_ago": None, "below_zero": None}
     if settings.get("use_macd_cross", True):
         bars=int(settings.get("macd_cross_bars",5))
         ok=False; bars_ago=None; below=None
-        # detect latest bullish/bearish cross within last N bars
         for i in range(1, min(bars+1, len(hist))):
-            # cross at index -i if macd_line crosses signal_line between -i-1 and -i
             prev = macd_line.iloc[-i-1] - signal_line.iloc[-i-1]
             now  = macd_line.iloc[-i]   - signal_line.iloc[-i]
             if prev==0: continue
@@ -439,14 +468,12 @@ def build_gate_eval(df_tf: pd.DataFrame, settings: dict) -> Tuple[dict,int,str,i
             else:
                 hit = crossed_up or crossed_dn
             if not hit: continue
-            # below-zero preference
             if settings.get("macd_cross_below_zero", True):
                 if float(macd_line.iloc[-i]) > 0 or float(signal_line.iloc[-i]) > 0:
-                    continue  # prefer crosses under zero
+                    continue
                 below=True
             else:
                 below = (float(macd_line.iloc[-i]) < 0 and float(signal_line.iloc[-i]) < 0)
-            # optional histogram confirm within M bars
             conf=int(settings.get("macd_hist_confirm_bars",3))
             if conf>0:
                 conf_ok = any(hist.iloc[-k] > 0 for k in range(i, min(i+conf, len(hist))))
@@ -455,9 +482,8 @@ def build_gate_eval(df_tf: pd.DataFrame, settings: dict) -> Tuple[dict,int,str,i
             ok=True; bars_ago=i; break
         cross_meta.update({"ok": ok, "bars_ago": bars_ago, "below_zero": below})
         passed+=int(ok); enabled+=1
-        extra = f"(≤{bars} bars" + (", below0" if settings.get("macd_cross_below_zero", True) else ", any0") + (")")
-        if bars_ago is not None: extra = f"({bars_ago} bars ago)"
-        chip(" C", True, ok, f"{' '+extra if extra else ''}")
+        display = f"({bars_ago} bars ago)" if bars_ago is not None else f"(≤{bars})"
+        chip(" C", True, ok, f" {display}")
     else:
         chip(" C", False, False)
 
@@ -473,12 +499,17 @@ st.markdown(f"""
   section[data-testid="stSidebar"] details summary {{
       background: rgba(30,144,255,0.18) !important; border-radius: 8px;
   }}
+  /* blinking badge */
+  @keyframes blinkRB {{
+    0% {{ background:#e74c3c; }} 50% {{ background:#3498db; }} 100% {{ background:#e74c3c; }}
+  }}
+  .blink-badge {{
+    display:inline-block; padding:3px 8px; color:white; border-radius:8px; font-weight:700; animation: blinkRB 1.2s linear infinite;
+  }}
   /* kill fade/dim on renders */
   div[data-testid="stDataFrame"], div[data-testid="stDataEditor"] * {{
       opacity: 1 !important; filter: none !important; transition: none !important;
   }}
-  .row-green  {{ background: rgba(0,255,0,0.22) !important; font-weight: 600; }}
-  .row-yellow {{ background: rgba(255,255,0,0.60) !important; font-weight: 600; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -550,24 +581,24 @@ with expander("Timeframes"):
     st.selectbox("Primary sort timeframe", TF_LIST, index=TF_LIST.index(st.session_state.get("sort_tf", DEFAULTS["sort_tf"])), key="sort_tf",
                  help="Determines which candles are fetched and the % Change column.")
     st.checkbox("Sort descending (largest first)", value=st.session_state.get("sort_desc", True), key="sort_desc",
-                help="Uncheck to see the laggards first. Why would you, though.")
+                help="Uncheck to see the laggards first.")
+    st.slider("Minimum bars required (per pair)", 5, 200, int(st.session_state.get("min_bars", DEFAULTS["min_bars"])), 1, key="min_bars",
+              help="Pairs with fewer candles than this on the chosen timeframe are skipped. Lower this on 1d to include newer listings.")
 
 # ---------------- GATES
 with expander("Gates"):
     with st.expander("Quick start tips", expanded=False):
         st.markdown(
             "- **Spike Hunter**: find movers fast. Use with Hard filter OFF.\n"
-            "- **Early MACD Cross**: catch MACD signal-line crosses **below zero** in last few bars, plus Δ and Volume.\n"
+            "- **Early MACD Cross**: catch MACD crosses **below zero** in last few bars, plus Δ and Volume.\n"
             "- **Confirm Rally**: keep only strong breakouts. Use with Hard filter ON.\n"
             "- **Gate Mode**: ANY shows if **any** gate passes; ALL requires every enabled gate; Custom uses K/Y thresholds."
         )
 
-    # Presets (ticks)
     st.radio("Preset", ["Spike Hunter","Early MACD Cross","Confirm Rally","None"],
              index=["Spike Hunter","Early MACD Cross","Confirm Rally","None"].index(st.session_state.get("preset","Spike Hunter")),
              horizontal=True, key="preset")
 
-    # Apply preset subtly (doesn't lock controls)
     if st.session_state["preset"]=="Spike Hunter":
         st.session_state.update({
             "gate_mode":"ANY", "hard_filter": False,
@@ -575,7 +606,7 @@ with expander("Gates"):
             "min_pct": 3.0,
             "use_vol_spike": True, "vol_mult": 1.10,
             "use_rsi": False, "use_macd": False, "use_trend": False, "use_roc": False,
-            "use_macd_cross": False  # keep ultra simple
+            "use_macd_cross": False
         })
     elif st.session_state["preset"]=="Early MACD Cross":
         st.session_state.update({
@@ -608,9 +639,9 @@ with expander("Gates"):
               value=st.session_state.get("hard_filter", False),
               help="Off = show all rows but highlight passers; On = hide rows that fail the chosen rule.")
 
-    # Δ and Volume
+    # Δ & Volume
     st.slider("Δ lookback (candles)", 0, 100, int(st.session_state.get("lookback_candles", DEFAULTS["lookback_candles"])), 1, key="lookback_candles",
-              help="Bars back for % change; 0 is treated as 1 under the hood.")
+              help="Bars back for % change; 0 is treated as 1.")
     st.slider("Min +% change (Δ gate)", 0.0, 50.0, float(st.session_state.get("min_pct", DEFAULTS["min_pct"])), 0.5, key="min_pct",
               help="Lower to see more candidates; raise to see only fast movers.")
     c1,c2,c3 = st.columns(3)
@@ -656,8 +687,7 @@ with expander("Gates"):
                   help="If off, accepts bearish crosses too.")
     with c10:
         st.toggle("Prefer below zero", key="macd_cross_below_zero", value=st.session_state.get("macd_cross_below_zero", True),
-                  help="Only consider crosses when MACD & signal are below 0 (earlier, riskier).")
-
+                  help="Consider only crosses when MACD & signal are below 0.")
     st.slider("Histogram > 0 within (bars)", 0, 10, int(st.session_state.get("macd_hist_confirm_bars", DEFAULTS["macd_hist_confirm_bars"])), 1, key="macd_hist_confirm_bars",
               help="0 disables. If >0, require MACD histogram turns positive within this many bars after the cross.")
 
@@ -696,10 +726,34 @@ with expander("Notifications"):
     st.text_input("Email recipient (optional)", st.session_state.get("email_to",""), key="email_to")
     st.text_input("Webhook URL (optional)", st.session_state.get("webhook_url",""), key="webhook_url")
 
-# ---------------- AUTO REFRESH
-with expander("Auto-refresh"):
-    st.slider("Refresh every (seconds)", 5, 120, int(st.session_state.get("refresh_sec", DEFAULTS["refresh_sec"])), 1, key="refresh_sec")
-    st.caption("Auto-refresh is always on.")
+# ---------------- LISTING RADAR (bottom)
+with expander("Listing Radar"):
+    # badge if unread
+    if st.session_state.get("lr_unacked", 0) > 0:
+        st.markdown('<span class="blink-badge">New/Upcoming listings</span>', unsafe_allow_html=True)
+
+    st.toggle("Enable Listing Radar", key="lr_enabled",
+              value=st.session_state.get("lr_enabled", False),
+              help="Alert when new pairs go live or upcoming listings are announced.")
+    cols = st.columns(2)
+    with cols[0]:
+        st.toggle("Watch Coinbase", key="lr_watch_coinbase", value=st.session_state.get("lr_watch_coinbase", True))
+        st.toggle("Watch Binance", key="lr_watch_binance", value=st.session_state.get("lr_watch_binance", True))
+        st.text_input("Quotes to watch (CSV)", st.session_state.get("lr_watch_quotes", DEFAULTS["lr_watch_quotes"]), key="lr_watch_quotes",
+                      help="Only notify for pairs with these quotes, e.g., USD, USDT, USDC")
+        st.slider("Poll interval (seconds)", 10, 120, int(st.session_state.get("lr_poll_sec", DEFAULTS["lr_poll_sec"])), 5, key="lr_poll_sec")
+    with cols[1]:
+        st.text_area("Announcement feeds (one or more URLs, comma-separated)",
+                     st.session_state.get("lr_feeds", DEFAULTS["lr_feeds"]), key="lr_feeds",
+                     help="RSS/announcement pages to scan for upcoming listings.")
+        st.slider("Re-scan feeds every (seconds)", 60, 900, int(st.session_state.get("lr_upcoming_sec", DEFAULTS["lr_upcoming_sec"])), 30, key="lr_upcoming_sec")
+        st.slider("Upcoming alert window (hours)", 6, 168, int(st.session_state.get("lr_upcoming_window_h", DEFAULTS["lr_upcoming_window_h"])), 6, key="lr_upcoming_window_h")
+    st.toggle("Email on NEW listing", key="lr_alert_new", value=st.session_state.get("lr_alert_new", True))
+    st.toggle("Email on UPCOMING listing", key="lr_alert_upcoming", value=st.session_state.get("lr_alert_upcoming", True))
+
+    if st.button("Acknowledge all alerts"):
+        st.session_state["lr_unacked"] = 0
+        st.success("Alerts acknowledged.")
 
 # persist to URL
 sync_state_to_query_params()
@@ -714,24 +768,36 @@ else:
     if st.session_state["use_watch"] and st.session_state["watchlist"].strip():
         pairs=[p.strip().upper() for p in st.session_state["watchlist"].split(",") if p.strip()]
     else:
-        pairs=list_products(effective_exchange, st.session_state["quote"])
+        pairs=list_products("Coinbase" if "coming soon" in st.session_state["exchange"] else st.session_state["exchange"], st.session_state["quote"])
         pairs=[p for p in pairs if p.endswith(f"-{st.session_state['quote']}")]
         cap=max(0, min(500, int(st.session_state.get("discover_cap", DEFAULTS["discover_cap"]))))
         pairs=pairs[:cap] if cap>0 else []
 
 # WS boot
-if pairs and st.session_state["mode"].startswith("WebSocket") and effective_exchange=="Coinbase" and WS_AVAILABLE:
-    start_ws_if_needed(effective_exchange, pairs, st.session_state.get("ws_chunk",5))
+if pairs and st.session_state["mode"].startswith("WebSocket") and (st.session_state["exchange"]=="Coinbase" or "coming soon" in st.session_state["exchange"]) and WS_AVAILABLE:
+    start_ws_if_needed("Coinbase", pairs, st.session_state.get("ws_chunk",5))
 
-# ---------------- Build rows
+# ---------------- Build rows with diagnostics
+diag_available = len(pairs)
+diag_capped = len(pairs)
+diag_fetched = 0
+diag_skip_bars = 0
+diag_skip_api = 0
+
 rows=[]
 for pid in pairs:
-    dft = df_for_tf(effective_exchange, pid, st.session_state["sort_tf"])
-    if dft is None or len(dft)<30: continue
+    dft = df_for_tf("Coinbase" if "coming soon" in st.session_state["exchange"] else st.session_state["exchange"], pid, st.session_state["sort_tf"])
+    if dft is None:
+        diag_skip_api += 1
+        continue
+    if len(dft) < int(st.session_state.get("min_bars", DEFAULTS["min_bars"])):
+        diag_skip_bars += 1
+        continue
+    diag_fetched += 1
     dft = dft.tail(400).copy()
 
     last_price=float(dft["close"].iloc[-1])
-    if effective_exchange=="Coinbase" and st.session_state["ws_prices"].get(pid):
+    if st.session_state["exchange"]=="Coinbase" and st.session_state["ws_prices"].get(pid):
         last_price=float(st.session_state["ws_prices"][pid])
 
     # display-wide % change for context
@@ -743,7 +809,7 @@ for pid in pairs:
     amt=dict(Hourly=st.session_state["amount_hourly"],
              Daily=st.session_state["amount_daily"],
              Weekly=st.session_state["amount_weekly"])[basis]
-    histdf=get_hist(effective_exchange, pid, basis, amt)
+    histdf=get_hist("Coinbase" if "coming soon" in st.session_state["exchange"] else st.session_state["exchange"], pid, basis, amt)
     if histdf is None or len(histdf)<10:
         athp,athd,atlp,atld=np.nan,"—",np.nan,"—"
     else:
@@ -752,10 +818,10 @@ for pid in pairs:
     meta, passed, chips, enabled_cnt = build_gate_eval(dft, dict(
         lookback_candles=int(st.session_state["lookback_candles"]), min_pct=float(st.session_state["min_pct"]),
         use_vol_spike=st.session_state["use_vol_spike"], vol_mult=float(st.session_state["vol_mult"]), vol_window=DEFAULTS["vol_window"],
-        use_rsi=st.session_state["use_rsi"], rsi_len=int(st.session_state.get("rsi_len",14)), min_rsi=int(st.session_state["min_rsi"]),
-        use_macd=st.session_state["use_macd"], macd_fast=int(st.session_state.get("macd_fast",12)), macd_slow=int(st.session_state.get("macd_slow",26)),
-        macd_sig=int(st.session_state.get("macd_sig",9)), min_mhist=float(st.session_state["min_mhist"]),
-        use_atr=st.session_state["use_atr"], atr_len=int(st.session_state.get("atr_len",14)), min_atr=float(st.session_state["min_atr"]),
+        use_rsi=st.session_state["use_rsi"], rsi_len=int(st.session_state.get("rsi_len",14")), min_rsi=int(st.session_state["min_rsi"]),
+        use_macd=st.session_state["use_macd"], macd_fast=int(st.session_state.get("macd_fast",12")), macd_slow=int(st.session_state.get("macd_slow",26")),
+        macd_sig=int(st.session_state.get("macd_sig",9")), min_mhist=float(st.session_state["min_mhist"]),
+        use_atr=st.session_state["use_atr"], atr_len=int(st.session_state.get("atr_len",14")), min_atr=float(st.session_state["min_atr"]),
         use_trend=st.session_state["use_trend"], pivot_span=int(st.session_state["pivot_span"]), trend_within=int(st.session_state["trend_within"]),
         use_roc=st.session_state["use_roc"], min_roc=float(st.session_state["min_roc"]),
         # macd cross
@@ -793,12 +859,15 @@ for pid in pairs:
         "_green": is_green, "_yellow": is_yellow
     })
 
-# ---------------- Tables
+# ---------------- Tables + diagnostics
 df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=["Pair"])
-st.caption(f"Pairs available pre-cap: {len(avail)} • Shown now: {len(df)}")
+diag_shown = len(df)
+
+st.caption(f"Diagnostics — Available: {diag_available} • Capped: {diag_capped} • Fetched OK: {diag_fetched} • "
+           f"Skipped (bars): {diag_skip_bars} • Skipped (API): {diag_skip_api} • Shown: {diag_shown}")
 
 if df.empty:
-    st.info("No rows to show. Try ANY mode, lower Min Δ, shorter lookback, enable Volume spike/MACD Cross, or increase discovery cap.")
+    st.info("No rows to show. Try ANY mode, lower Min Δ, shorter lookback, reduce Minimum bars, enable Volume spike/MACD Cross, or increase discovery cap.")
 else:
     chg_col=f"% Change ({st.session_state['sort_tf']})"
     df=df.sort_values(chg_col, ascending=not st.session_state["sort_desc"], na_position="last").reset_index(drop=True)
@@ -809,7 +878,6 @@ else:
     if top10.empty:
         st.write("—")
     else:
-        # If you prefer st.dataframe, swap the line below, but data_editor avoids dimming.
         st.data_editor(top10, use_container_width=True, hide_index=True, disabled=True)
 
     st.subheader("📑 All pairs")
@@ -817,9 +885,147 @@ else:
     st.data_editor(show_df, use_container_width=True, hide_index=True, disabled=True)
 
     st.caption(
-        f"Pairs shown: {len(df)} • Exchange: {effective_exchange} • Quote: {st.session_state['quote']} "
+        f"Pairs shown: {len(df)} • Exchange: {st.session_state['exchange']} • Quote: {st.session_state['quote']} "
         f"• TF: {st.session_state['sort_tf']} • Gate Mode: {st.session_state['gate_mode']} • Hard filter: {'On' if st.session_state['hard_filter'] else 'Off'}"
     )
+
+# ---------------- Listing Radar engine
+def lr_parse_quotes(csv_text: str) -> set:
+    return set(x.strip().upper() for x in (csv_text or "").split(",") if x.strip())
+
+def lr_fetch_symbols(exchange: str, quotes: set) -> set:
+    try:
+        if exchange=="Coinbase":
+            r=requests.get(f"{CB_BASE}/products", timeout=25); r.raise_for_status()
+            return set(f"{p['base_currency']}-{p['quote_currency']}" for p in r.json() if p.get("quote_currency") in quotes)
+        elif exchange=="Binance":
+            r=requests.get(f"{BN_BASE}/api/v3/exchangeInfo", timeout=25); r.raise_for_status()
+            out=set()
+            for s in r.json().get("symbols",[]):
+                if s.get("status")!="TRADING": continue
+                q=s.get("quoteAsset","")
+                if q in quotes:
+                    out.add(f"{s['baseAsset']}-{q}")
+            return out
+    except Exception:
+        return set()
+    return set()
+
+def lr_note_event(kind:str, exchange:str, pair:str, when:Optional[str], link:str):
+    ev_id = f"{kind}|{exchange}|{pair}|{when or ''}"
+    existing = {e.get("id") for e in st.session_state["lr_events"]}
+    if ev_id in existing: return False
+    st.session_state["lr_events"].insert(0, {"id": ev_id, "kind": kind, "exchange": exchange, "pair": pair, "when": when, "link": link, "ts": dt.datetime.utcnow().isoformat()+"Z"})
+    st.session_state["lr_unacked"] += 1
+    # alerts
+    subject = f"[Listing Radar] {kind}: {exchange} {pair}" + (f" at {when}" if when else "")
+    body = f"{kind} detected\nExchange: {exchange}\nPair: {pair}\nWhen: {when or 'unknown'}\nLink: {link or 'n/a'}"
+    if st.session_state.get("email_to"):
+        if (kind=="NEW" and st.session_state.get("lr_alert_new")) or (kind=="UPCOMING" and st.session_state.get("lr_alert_upcoming")):
+            send_email_alert(subject, body, st.session_state["email_to"])
+    if st.session_state.get("webhook_url"):
+        post_webhook(st.session_state["webhook_url"], {"title": subject, "details": body})
+    return True
+
+def lr_scan_new_listings():
+    if not st.session_state.get("lr_enabled"): return
+    quotes = lr_parse_quotes(st.session_state.get("lr_watch_quotes", DEFAULTS["lr_watch_quotes"]))
+    now = time.time()
+    if now - st.session_state.get("lr_last_poll", 0) < int(st.session_state.get("lr_poll_sec", DEFAULTS["lr_poll_sec"])): return
+    st.session_state["lr_last_poll"] = now
+
+    for exch, enabled in [("Coinbase", st.session_state.get("lr_watch_coinbase", True)),
+                          ("Binance", st.session_state.get("lr_watch_binance", True))]:
+        if not enabled: continue
+        current = lr_fetch_symbols(exch, quotes)
+        base = st.session_state["lr_baseline"].get(exch, set())
+        if not base:
+            # first run: initialize baseline so we don't spam with every symbol
+            st.session_state["lr_baseline"][exch] = current
+            continue
+        new_syms = sorted(list(current - base))
+        if new_syms:
+            for sy in new_syms:
+                lr_note_event("NEW", exch, sy, None, "")
+        # update baseline
+        st.session_state["lr_baseline"][exch] = current
+
+def lr_parse_feed_items(text:str) -> List[Tuple[str,str]]:
+    # Extremely simple RSS-ish parser: extract titles and dates if present
+    items=[]
+    # titles
+    for m in re.finditer(r"<title>(.*?)</title>", text, re.I|re.S):
+        title = re.sub(r"\s+", " ", m.group(1)).strip()
+        items.append(("title", title))
+    # pubDate
+    dates = re.findall(r"<pubDate>(.*?)</pubDate>", text, re.I|re.S)
+    # Pair items with dates if lengths match; otherwise keep titles only
+    return items, dates
+
+def lr_extract_upcoming_from_text(txt:str) -> List[Tuple[str, Optional[str]]]:
+    # Heuristics: look for "list(s|ing|ed)" and phrases like "trading starts", capture dates if present
+    out=[]
+    lines = re.split(r"[\r\n]+", txt)
+    for ln in lines:
+        low = ln.lower()
+        if any(k in low for k in ["list", "listing", "will list", "trading opens", "trading will open", "launches", "goes live"]):
+            # try to extract a date-ish substring
+            m = re.search(r"(\d{4}[-/]\d{1,2}[-/]\d{1,2}([ T]\d{1,2}:\d{2}(:\d{2})?)?)", ln)
+            when = m.group(1) if m else None
+            out.append((ln.strip(), when))
+    return out
+
+def lr_scan_upcoming():
+    if not st.session_state.get("lr_enabled"): return
+    now = time.time()
+    if now - st.session_state.get("lr_last_upcoming_poll", 0) < int(st.session_state.get("lr_upcoming_sec", DEFAULTS["lr_upcoming_sec"])): return
+    st.session_state["lr_last_upcoming_poll"] = now
+
+    feeds = [u.strip() for u in st.session_state.get("lr_feeds", "").split(",") if u.strip()]
+    for url in feeds:
+        try:
+            r = requests.get(url, timeout=20)
+            if r.status_code != 200: continue
+            txt = r.text
+            # very light parsing
+            items, _ = lr_parse_feed_items(txt)
+            # fallback: just scan whole text
+            found = lr_extract_upcoming_from_text(txt)
+            horizon_h = int(st.session_state.get("lr_upcoming_window_h", DEFAULTS["lr_upcoming_window_h"]))
+            horizon = dt.datetime.utcnow() + dt.timedelta(hours=horizon_h)
+            for snippet, when in found:
+                # Try to pull a symbol-like token (e.g., ABC/USDT, ABC-USD, ABC)
+                sym_m = re.search(r"([A-Z0-9]{2,10})[-/ ](USD|USDC|USDT|BTC|ETH|EUR)\b", snippet)
+                pair = sym_m.group(0).replace(" ", "-").replace("/", "-") if sym_m else "UNKNOWN"
+                when_iso = None
+                if when:
+                    try:
+                        # Try a few naive parses
+                        dt_guess = pd.to_datetime(when, utc=True)
+                        if dt_guess.tzinfo is None:
+                            dt_guess = dt_guess.tz_localize("UTC")
+                        if dt_guess.to_pydatetime(tzinfo=None) <= horizon:
+                            when_iso = dt_guess.isoformat()
+                    except Exception:
+                        when_iso = None
+                lr_note_event("UPCOMING", "Unknown", pair, when_iso, url)
+        except Exception:
+            continue
+
+# Kick the radar every render (rate limited by its own timers)
+lr_scan_new_listings()
+lr_scan_upcoming()
+
+# Show Listing Radar events on main (so it’s visible even if sidebar is closed)
+if st.session_state.get("lr_enabled"):
+    st.subheader("🛰️ Listing Radar events")
+    if not st.session_state["lr_events"]:
+        st.caption("No events yet.")
+    else:
+        evdf = pd.DataFrame(st.session_state["lr_events"])
+        cols = ["ts","kind","exchange","pair","when","link"]
+        evdf = evdf.reindex(columns=cols)
+        st.data_editor(evdf, use_container_width=True, hide_index=True, disabled=True)
 
 # ---------------- Auto-refresh
 remaining = st.session_state["refresh_sec"] - (time.time() - st.session_state.get("last_refresh", time.time()))
@@ -828,3 +1034,4 @@ if remaining <= 0:
     st.rerun()
 else:
     st.caption(f"Auto-refresh every {int(st.session_state['refresh_sec'])}s (next in {int(remaining)}s)")
+
