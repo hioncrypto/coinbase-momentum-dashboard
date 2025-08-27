@@ -782,140 +782,71 @@ for pid in pairs:
     })
 
 # ----------------------------- Diagnostics & Tables
-st.caption(f"Diagnostics — Available: {diag_available} • Capped: {diag_capped} • Fetched OK: {diag_fetched} • "
-           f"Skipped (bars): {diag_skip_bars} • Skipped (API): {diag_skip_api} • Shown: {len(rows)}")
+# If your file already defines these diag_* counters above, this will just use them.
+# Otherwise, the locals().get(...) fallbacks keep this block safe to paste.
+diag_available   = locals().get("diag_available", len(pairs) if "pairs" in locals() else 0)
+diag_capped      = locals().get("diag_capped",   len(pairs) if "pairs" in locals() else 0)
+diag_fetched     = locals().get("diag_fetched",  0)
+diag_skip_bars   = locals().get("diag_skip_bars",0)
+diag_skip_api    = locals().get("diag_skip_api", 0)
+
+st.caption(
+    f"Diagnostics — Available: {diag_available} • Capped: {diag_capped} • "
+    f"Fetched OK: {diag_fetched} • Skipped (bars): {diag_skip_bars} • "
+    f"Skipped (API): {diag_skip_api} • Shown: {len(rows)}"
+)
 
 df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=["Pair"])
+
 if df.empty:
-    st.info("No rows to show. Try ANY mode, lower Min Δ, shorten lookback, reduce Minimum bars, enable Volume spike/MACD Cross, or increase discovery cap.")
+    st.info(
+        "No rows to show. Try ANY mode, lower Min Δ, shorten lookback, reduce Minimum bars, "
+        "enable Volume spike/MACD Cross, or increase discovery cap."
+    )
 else:
-    chg_col=f"% Change ({st.session_state['sort_tf']})"
-    df=df.sort_values(chg_col, ascending=not st.session_state["sort_desc"], na_position="last").reset_index(drop=True)
-    df.insert(0,"#",df.index+1)
+    # Determine which TF label was used earlier in the script
+    _tf = locals().get("sort_tf", st.session_state.get("sort_tf", "1h"))
+    chg_col = f"% Change ({_tf})"
 
+    # Sort and add rank column
+    sort_desc_flag = locals().get("sort_desc", st.session_state.get("sort_desc", True))
+    df = df.sort_values(chg_col, ascending=not sort_desc_flag, na_position="last").reset_index(drop=True)
+    df.insert(0, "#", df.index + 1)
+
+    # ---------------- Top-10 (greens only)
     st.subheader("📌 Top-10 (greens only)")
-    top10=df[df["_green"]].sort_values(chg_col, ascending=False, na_position="last").head(10).drop(columns=["_green","_yellow"])
-    st.data_editor(top10 if not top10.empty else pd.DataFrame(columns=top10.columns if not top10.empty else []),
-                   use_container_width=True, hide_index=True, disabled=True)
-
-    st.subheader("📑 All pairs")
-    st.data_editor(df.drop(columns=["_green","_yellow"]), use_container_width=True, hide_index=True, disabled=True)
-
-    st.caption(f"Pairs shown: {len(df)} • Exchange: {effective_exchange} • Quote: {st.session_state['quote']} "
-               f"• TF: {st.session_state['sort_tf']} • Gate Mode: {st.session_state['gate_mode']} • Hard filter: {'On' if st.session_state['hard_filter'] else 'Off'}")
-
-# ----------------------------- Listing Radar engine
-def lr_parse_quotes(csv_text: str) -> set:
-    return set(x.strip().upper() for x in (csv_text or "").split(",") if x.strip())
-
-def lr_fetch_symbols(exchange: str, quotes: set) -> set:
-    try:
-        if exchange=="Coinbase":
-            r=requests.get(f"{CB_BASE}/products", timeout=25); r.raise_for_status()
-            return set(f"{p['base_currency']}-{p['quote_currency']}" for p in r.json() if p.get("quote_currency") in quotes)
-        elif exchange=="Binance":
-            r=requests.get(f"{BN_BASE}/api/v3/exchangeInfo", timeout=25); r.raise_for_status()
-            out=set()
-            for s in r.json().get("symbols",[]):
-                if s.get("status")!="TRADING": continue
-                q=s.get("quoteAsset","")
-                if q in quotes: out.add(f"{s['baseAsset']}-{q}")
-            return out
-    except Exception:
-        return set()
-    return set()
-
-def lr_note_event(kind:str, exchange:str, pair:str, when:Optional[str], link:str):
-    ev_id=f"{kind}|{exchange}|{pair}|{when or ''}"
-    if any(ev.get("id")==ev_id for ev in st.session_state["lr_events"]): return
-    st.session_state["lr_events"].insert(0, {"id":ev_id,"kind":kind,"exchange":exchange,"pair":pair,"when":when,"link":link,"ts":dt.datetime.utcnow().isoformat()+"Z"})
-    st.session_state["lr_unacked"] += 1
-    # alerts
-    subject=f"[Listing Radar] {kind}: {exchange} {pair}" + (f" at {when}" if when else "")
-    body=f"{kind} detected\nExchange: {exchange}\nPair: {pair}\nWhen: {when or 'unknown'}\nLink: {link or 'n/a'}"
-    if st.session_state.get("email_to"):
-        send_email_alert(subject, body, st.session_state["email_to"])
-    if st.session_state.get("webhook_url"):
-        post_webhook(st.session_state["webhook_url"], {"title": subject, "details": body})
-
-def lr_scan_new_listings():
-    if not st.session_state.get("lr_enabled"): return
-    quotes = lr_parse_quotes(st.session_state.get("lr_watch_quotes","USD, USDT, USDC"))
-    now = time.time()
-    if now - st.session_state.get("lr_last_poll", 0) < int(st.session_state.get("lr_poll_sec", 30)): return
-    st.session_state["lr_last_poll"] = now
-
-    for exch, enabled in [("Coinbase", st.session_state.get("lr_watch_coinbase", True)),
-                          ("Binance", st.session_state.get("lr_watch_binance", True))]:
-        if not enabled: continue
-        current = lr_fetch_symbols(exch, quotes)
-        base = st.session_state["lr_baseline"].get(exch, set())
-        if not base:
-            st.session_state["lr_baseline"][exch] = current
-            continue
-        for sy in sorted(list(current - base)):
-            lr_note_event("NEW", exch, sy, None, "")
-        st.session_state["lr_baseline"][exch] = current
-
-def lr_extract_upcoming_from_text(txt:str) -> List[Tuple[str, Optional[str]]]:
-    out=[]
-    lines=re.split(r"[\r\n]+", txt)
-    for ln in lines:
-        low=ln.lower()
-        if any(k in low for k in ["will list","trading opens","trading will open","launches","goes live","lists "]):
-            m=re.search(r"(\d{4}[-/]\d{1,2}[-/]\d{1,2}([ T]\d{1,2}:\d{2}(:\d{2})?)?)", ln)
-            when=m.group(1) if m else None
-            out.append((ln.strip(), when))
-    return out
-
-def lr_scan_upcoming():
-    if not st.session_state.get("lr_enabled"): return
-    now = time.time()
-    if now - st.session_state.get("lr_last_upcoming_poll", 0) < int(st.session_state.get("lr_upcoming_sec", 300)): return
-    st.session_state["lr_last_upcoming_poll"] = now
-
-    feeds=[u.strip() for u in st.session_state.get("lr_feeds","").split(",") if u.strip()]
-    for url in feeds:
-        try:
-            r=requests.get(url, timeout=20)
-            if r.status_code!=200: continue
-            txt=r.text
-            found=lr_extract_upcoming_from_text(txt)
-            horizon = dt.datetime.utcnow() + dt.timedelta(hours=int(st.session_state.get("lr_upcoming_window_h",48)))
-            for snippet, when in found:
-                sym_m=re.search(r"([A-Z0-9]{2,10})[-/ ](USD|USDC|USDT|BTC|ETH|EUR)\b", snippet)
-                pair=sym_m.group(0).replace(" ","-").replace("/","-") if sym_m else "UNKNOWN"
-                when_iso=None
-                if when:
-                    try:
-                        dt_guess=pd.to_datetime(when, utc=True)
-                        if dt_guess.tzinfo is None: dt_guess=dt_guess.tz_localize("UTC")
-                        if dt_guess.to_pydatetime() <= horizon:
-                            when_iso=dt_guess.isoformat()
-                    except Exception:
-                        when_iso=None
-                lr_note_event("UPCOMING", "Unknown", pair, when_iso, url)
-        except Exception:
-            continue
-
-# tick Listing Radar (self rate-limited)
-lr_scan_new_listings()
-lr_scan_upcoming()
-
-if st.session_state.get("lr_enabled"):
-    st.subheader("🛰️ Listing Radar events")
-    if not st.session_state["lr_events"]:
-        st.caption("No events yet.")
+    top10 = df[df["_green"]].sort_values(chg_col, ascending=False, na_position="last").head(10)
+    top10 = top10.drop(columns=["_green", "_yellow"], errors="ignore")
+    if top10.empty:
+        st.write("—")
     else:
-        evdf=pd.DataFrame(st.session_state["lr_events"]).reindex(columns=["ts","kind","exchange","pair","when","link"])
-        st.data_editor(evdf, use_container_width=True, hide_index=True, disabled=True)
+        st.dataframe(top10, use_container_width=True)
 
-# ----------------------------- Auto-refresh
-remaining = int(st.session_state.get("refresh_sec", 30)) - int(time.time() - st.session_state.get("last_refresh", time.time()))
+    # ---------------- All pairs
+    st.subheader("📑 All pairs")
+    show_df = df.drop(columns=["_green", "_yellow"], errors="ignore")
+    st.dataframe(show_df, use_container_width=True)
+
+    # Footer
+    _exchange = locals().get("effective_exchange", "Coinbase")
+    _quote    = st.session_state.get("quote", "USD")
+    _mode_txt = st.session_state.get("gate_mode", locals().get("gate_mode", "ANY"))
+    _hard     = st.session_state.get("hard_filter", locals().get("hard_filter", False))
+    st.caption(
+        f"Pairs shown: {len(df)} • Exchange: {_exchange} • Quote: {_quote} "
+        f"• TF: {_tf} • Gate Mode: {_mode_txt} • Hard filter: {'On' if _hard else 'Off'}"
+    )
+
+# ---------------- Auto-refresh timer
+# Keep the same behavior as earlier: use session_state timer and rerun when due.
+if "last_refresh" not in st.session_state:
+    st.session_state["last_refresh"] = time.time()
+
+_refresh_every = int(st.session_state.get("refresh_sec", DEFAULTS.get("refresh_sec", 30)))
+remaining = _refresh_every - int(time.time() - st.session_state["last_refresh"])
+
 if remaining <= 0:
     st.session_state["last_refresh"] = time.time()
     st.rerun()
 else:
-    st.caption(f"Auto-refresh every {int(st.session_state.get('refresh_sec',30))}s (next in {max(0,remaining)}s)")
-
-
+    st.caption(f"Auto-refresh every {_refresh_every}s (next in {max(0, remaining)}s)")
