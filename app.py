@@ -920,59 +920,38 @@ st.caption(
     f"Skipped(API): {diag_skip_api} • Raw rows len={len(rows)}"
 )
 
-# show rows count so we know what's happening
-st.write("DEBUG rows length:", len(rows))
+# BRUTE-FORCE VIEW: ignore all gates/hard filter and render a preview table from raw candles.
+st.subheader("🧪 Brute-force preview (filters ignored)")
+_tf = st.session_state.get("sort_tf", "1h")
+_min_bars = int(st.session_state.get("min_bars", 30))
+_tf_func = (globals().get("df_for_tf_cached") or globals().get("df_for_tf"))
 
-if not rows:
-    # Fallback: ignore gates and show a raw preview so the screen isn't blank
-    st.warning("No rows passed gates. Showing raw preview instead (filters ignored).")
-    _tf = st.session_state["sort_tf"]
-    _min_bars = int(st.session_state.get("min_bars", 30))
-    _tf_func = (globals().get("df_for_tf_cached") or globals().get("df_for_tf"))
+preview = []
+api_fail = 0
+too_few = 0
 
-    raw_preview, errs_api, errs_bars = [], 0, 0
-    for pid in pairs[:50]:  # cap for speed
-        try:
-            dft = _tf_func(effective_exchange, pid, _tf)
-        except Exception:
-            dft = None
-        if dft is None:
-            errs_api += 1
-            continue
-        if len(dft) < _min_bars:
-            errs_bars += 1
-            continue
-        last = float(dft["close"].iloc[-1])
-        first = float(dft["close"].iloc[0])
-        chg = (last/first - 1.0) * 100.0
-        raw_preview.append({"Pair": pid, "Price": last, f"% Change ({_tf})": chg, "Bars": len(dft)})
+for pid in pairs[:50]:  # cap to keep it fast
+    try:
+        dft = _tf_func(effective_exchange, pid, _tf)
+    except Exception:
+        dft = None
+    if dft is None or dft.empty:
+        api_fail += 1
+        continue
+    if len(dft) < _min_bars:
+        too_few += 1
+        continue
+    last = float(dft["close"].iloc[-1])
+    first = float(dft["close"].iloc[0])
+    chg = (last / first - 1.0) * 100.0
+    preview.append({"Pair": pid, "Price": last, f"% Change ({_tf})": chg, "Bars": len(dft)})
 
-    if raw_preview:
-        prev_df = pd.DataFrame(raw_preview).sort_values(by=f"% Change ({_tf})", ascending=False, na_position="last")
-        st.dataframe(prev_df, use_container_width=True, hide_index=True)
-        st.caption(f"Preview diagnostics — sample=50 • API_FAIL={errs_api} • TOO_FEW_BARS={errs_bars} • OK={len(raw_preview)}")
-    else:
-        st.error("Even raw preview found nothing. Lower 'Minimum bars' in Timeframes or switch TF (try 1h), then refresh.")
-
+if preview:
+    df_preview = pd.DataFrame(preview).sort_values(by=f"% Change ({_tf})", ascending=False, na_position="last")
+    st.dataframe(df_preview, use_container_width=True, hide_index=True)
+    st.caption(f"Brute-force preview • rendered={len(df_preview)} • API_FAIL={api_fail} • TOO_FEW_BARS={too_few}")
 else:
-    # Normal render path
-    chg_col = f"% Change ({st.session_state['sort_tf']})"
-    df = pd.DataFrame(rows).sort_values(chg_col, ascending=not st.session_state["sort_desc"], na_position="last").reset_index(drop=True)
-    df.insert(0, "#", df.index + 1)
-
-    st.subheader("📌 Top-10 (greens only)")
-    top10 = df[df["_green"]].sort_values(chg_col, ascending=False, na_position="last").head(10).drop(columns=["_green","_yellow"], errors="ignore")
-    st.data_editor(top10, use_container_width=True, hide_index=True, disabled=True)
-
-    st.subheader("📑 All pairs")
-    st.data_editor(df.drop(columns=["_green","_yellow"], errors="ignore"), use_container_width=True, hide_index=True, disabled=True)
-
-    st.caption(
-        f"Pairs shown: {len(df)} • Exchange: {effective_exchange} • Quote: {st.session_state['quote']} "
-        f"• TF: {st.session_state['sort_tf']} • Gate Mode: {st.session_state['gate_mode']} • "
-        f"Hard filter: {'On' if st.session_state['hard_filter'] else 'Off'}"
-    )
-
+    st.error("No data even in brute-force preview. Lower 'Minimum bars' in Timeframes, switch TF to 1h, and confirm REST only.")
 
 # ----------------------------- Listing Radar engine
 def lr_parse_quotes(csv_text: str) -> set:
