@@ -740,18 +740,27 @@ sync_state_to_query_params()
 st.markdown(f"<div style='font-size:1.3rem;font-weight:700;margin:4px 0 10px 2px;'>Timeframe: {st.session_state['sort_tf']}</div>", unsafe_allow_html=True)
 
 # ----------------------------- Discovery pool
+# ----------------------------- Discovery pool
 if st.session_state["use_my_pairs"]:
-    pairs=[p.strip().upper() for p in st.session_state.get("my_pairs","").split(",") if p.strip()]
+    pairs = [p.strip().upper() for p in st.session_state.get("my_pairs", "").split(",") if p.strip()]
 else:
     if st.session_state["use_watch"] and st.session_state["watchlist"].strip():
-        pairs=[p.strip().upper() for p in st.session_state["watchlist"].split(",") if p.strip()]
+        pairs = [p.strip().upper() for p in st.session_state["watchlist"].split(",") if p.strip()]
     else:
-        all_avail=list_products(effective_exchange, st.session_state["quote"])
-        pre_cap = len([p for p in all_avail if p.endswith(f"-{st.session_state['quote']}")])
-        cap=max(0, min(500, int(st.session_state.get("discover_cap", DEFAULTS["discover_cap"]))))
-        pairs=[p for p in all_avail if p.endswith(f"-{st.session_state['quote']}")]
-        pairs=pairs[:cap] if cap>0 else []
-        st.caption(f"Discovery pool: available={pre_cap} | cap={cap} | using={len(pairs)} on {effective_exchange} {st.session_state['quote']}")
+        pairs = list_products(effective_exchange, st.session_state["quote"])
+        pairs = [p for p in pairs if p.endswith(f"-{st.session_state['quote']}")]
+        cap = max(0, min(500, int(st.session_state.get("discover_cap", DEFAULTS["discover_cap"]))))
+        pairs = pairs[:cap] if cap > 0 else []
+
+# ---- DEBUG: show a small sample of discovered IDs so we know iteration isn't broken
+try:
+    _sample = pairs[:25]
+    if _sample:
+        st.caption("Debug • first 25 discovered pairs: " + ", ".join(_sample))
+    else:
+        st.error("Debug • discovery returned an empty list (check exchange/quote/cap).")
+except Exception as _e:
+    st.error(f"Debug • failed to render discovery sample: {type(_e).__name__}: {_e}")
 
 # WebSocket lifecycle + queue drain
 want_ws = (pairs and st.session_state.get("mode","REST only").startswith("WebSocket")
