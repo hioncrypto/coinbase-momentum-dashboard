@@ -926,67 +926,61 @@ for pid in pairs:
 # ----------------------------- Diagnostics & Tables
 # ----------------------------- Diagnostics & Tables
 st.caption(
-    f"Diagnostics — Available (after cap): {diag_available} • Fetched OK: {diag_fetched} • "
-    f"Skipped (bars): {diag_skip_bars} • Skipped (API): {diag_skip_api} • Shown: {len(rows)}"
+    f"Diagnostics — Available(after cap): {diag_available} • "
+    f"Fetched OK: {diag_fetched} • Skipped(bars): {diag_skip_bars} • "
+    f"Skipped(API): {diag_skip_api} • Raw rows len={len(rows)}"
 )
 
-df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=["Pair"])
-
-if df.empty:
-    # Emergency fallback: ignore gates and render a preview so the screen is never blank.
-    _min_bars = int(st.session_state.get("min_bars", 30))
+# Fallback: if rows is empty, try a raw preview ignoring gates
+if not rows:
+    st.warning("No rows passed gates. Showing raw preview instead (filters ignored).")
+    raw_preview = []
     _tf = st.session_state["sort_tf"]
     _tf_func = (globals().get("df_for_tf_cached") or globals().get("df_for_tf"))
 
-    preview = []
-    errs_api = 0
-    errs_bars = 0
-
-    for pid in pairs[:50]:  # cap preview so it stays fast
+    for pid in pairs[:50]:  # cap preview for speed
         try:
             dft = _tf_func(effective_exchange, pid, _tf)
+            if dft is None or dft.empty:
+                continue
+            last = float(dft["close"].iloc[-1])
+            first = float(dft["close"].iloc[0])
+            chg = (last / first - 1.0) * 100.0
+            raw_preview.append({"Pair": pid, "Price": last, f"% Change ({_tf})": chg, "Bars": len(dft)})
         except Exception:
-            dft = None
-        if dft is None:
-            errs_api += 1
             continue
-        if len(dft) < _min_bars:
-            errs_bars += 1
-            continue
-        last = float(dft["close"].iloc[-1])
-        first = float(dft["close"].iloc[0])
-        chg = (last/first - 1.0) * 100.0
-        preview.append({"Pair": pid, "Price": last, f"% Change ({_tf})": chg, "Bars": len(dft)})
 
-    if preview:
-        st.warning("Showing raw discovery preview (gates disabled). Your gates or hard filter hid everything above.")
-        prev_df = pd.DataFrame(preview).sort_values(by=f"% Change ({_tf})", ascending=False, na_position="last")
-        st.dataframe(prev_df, use_container_width=True, hide_index=True)
-        st.caption(f"Preview diagnostics — sample=50 • API_FAIL={errs_api} • TOO_FEW_BARS={errs_bars} • OK={len(preview)}")
+    if raw_preview:
+        df = pd.DataFrame(raw_preview).sort_values(by=f"% Change ({_tf})", ascending=False)
+        st.dataframe(df, use_container_width=True, hide_index=True)
     else:
-        st.error(
-            "No rows even in raw preview. That means not enough bars for your timeframe or API is failing. "
-            "Lower 'Minimum bars' in Timeframes or switch TF to 1h, then refresh."
-        )
+        st.error("Even raw preview found nothing. Try lowering min bars, switching TF, or checking API.")
 
 else:
-    # Normal render path
-    chg_col = f"% Change ({st.session_state['sort_tf']})"
-    df = df.sort_values(chg_col, ascending=not st.session_state["sort_desc"], na_position="last").reset_index(drop=True)
+    # Normal render path with rows
+    df = pd.DataFrame(rows).sort_values(
+        by=f"% Change ({st.session_state['sort_tf']})",
+        ascending=not st.session_state["sort_desc"],
+        na_position="last",
+    ).reset_index(drop=True)
     df.insert(0, "#", df.index + 1)
 
     st.subheader("📌 Top-10 (greens only)")
-    top10 = df[df["_green"]].sort_values(chg_col, ascending=False, na_position="last").head(10).drop(columns=["_green","_yellow"])
+    top10 = df[df["_green"]].sort_values(
+        by=f"% Change ({st.session_state['sort_tf']})", ascending=False
+    ).head(10).drop(columns=["_green", "_yellow"], errors="ignore")
     st.data_editor(top10, use_container_width=True, hide_index=True, disabled=True)
 
     st.subheader("📑 All pairs")
-    st.data_editor(df.drop(columns=["_green","_yellow"]), use_container_width=True, hide_index=True, disabled=True)
+    st.data_editor(df.drop(columns=["_green", "_yellow"], errors="ignore"),
+                   use_container_width=True, hide_index=True, disabled=True)
 
     st.caption(
-        f"Pairs shown: {len(df)} • Exchange: {effective_exchange} • Quote: {st.session_state['quote']} "
-        f"• TF: {st.session_state['sort_tf']} • Gate Mode: {st.session_state['gate_mode']} • "
+        f"Pairs shown: {len(df)} • Exchange: {effective_exchange} • Quote: {st.session_state['quote']} • "
+        f"TF: {st.session_state['sort_tf']} • Gate Mode: {st.session_state['gate_mode']} • "
         f"Hard filter: {'On' if st.session_state['hard_filter'] else 'Off'}"
     )
+
 
 # ----------------------------- Listing Radar engine
 def lr_parse_quotes(csv_text: str) -> set:
