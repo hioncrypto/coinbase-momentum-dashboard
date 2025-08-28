@@ -924,6 +924,7 @@ for pid in pairs:
     )
 
 # ----------------------------- Diagnostics & Tables
+# ----------------------------- Diagnostics & Tables
 st.caption(
     f"Diagnostics — Available (after cap): {diag_available} • Fetched OK: {diag_fetched} • "
     f"Skipped (bars): {diag_skip_bars} • Skipped (API): {diag_skip_api} • Shown: {len(rows)}"
@@ -931,8 +932,46 @@ st.caption(
 
 df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=["Pair"])
 
-if not df.empty:
-    chg_col = f"% Change ({_tf})"
+if df.empty:
+    # Emergency fallback: ignore gates and render a preview so the screen is never blank.
+    _min_bars = int(st.session_state.get("min_bars", 30))
+    _tf = st.session_state["sort_tf"]
+    _tf_func = (globals().get("df_for_tf_cached") or globals().get("df_for_tf"))
+
+    preview = []
+    errs_api = 0
+    errs_bars = 0
+
+    for pid in pairs[:50]:  # cap preview so it stays fast
+        try:
+            dft = _tf_func(effective_exchange, pid, _tf)
+        except Exception:
+            dft = None
+        if dft is None:
+            errs_api += 1
+            continue
+        if len(dft) < _min_bars:
+            errs_bars += 1
+            continue
+        last = float(dft["close"].iloc[-1])
+        first = float(dft["close"].iloc[0])
+        chg = (last/first - 1.0) * 100.0
+        preview.append({"Pair": pid, "Price": last, f"% Change ({_tf})": chg, "Bars": len(dft)})
+
+    if preview:
+        st.warning("Showing raw discovery preview (gates disabled). Your gates or hard filter hid everything above.")
+        prev_df = pd.DataFrame(preview).sort_values(by=f"% Change ({_tf})", ascending=False, na_position="last")
+        st.dataframe(prev_df, use_container_width=True, hide_index=True)
+        st.caption(f"Preview diagnostics — sample=50 • API_FAIL={errs_api} • TOO_FEW_BARS={errs_bars} • OK={len(preview)}")
+    else:
+        st.error(
+            "No rows even in raw preview. That means not enough bars for your timeframe or API is failing. "
+            "Lower 'Minimum bars' in Timeframes or switch TF to 1h, then refresh."
+        )
+
+else:
+    # Normal render path
+    chg_col = f"% Change ({st.session_state['sort_tf']})"
     df = df.sort_values(chg_col, ascending=not st.session_state["sort_desc"], na_position="last").reset_index(drop=True)
     df.insert(0, "#", df.index + 1)
 
@@ -945,16 +984,9 @@ if not df.empty:
 
     st.caption(
         f"Pairs shown: {len(df)} • Exchange: {effective_exchange} • Quote: {st.session_state['quote']} "
-        f"• TF: {_tf} • Gate Mode: {st.session_state['gate_mode']} • "
+        f"• TF: {st.session_state['sort_tf']} • Gate Mode: {st.session_state['gate_mode']} • "
         f"Hard filter: {'On' if st.session_state['hard_filter'] else 'Off'}"
     )
-else:
-    # If the second-pass preview ran, we've already shown something above; otherwise give a clear hint.
-    if not second_pass_used:
-        st.info(
-            "No rows to show. Try Gate Mode=ANY, Hard filter=Off, lower Min Δ, shorten Δ lookback, "
-            "reduce Minimum bars, or switch TF (try 1h)."
-        )
 
 # ----------------------------- Listing Radar engine
 def lr_parse_quotes(csv_text: str) -> set:
