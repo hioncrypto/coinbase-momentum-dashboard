@@ -498,15 +498,47 @@ def build_gate_eval(df_tf: pd.DataFrame, settings: dict) -> Tuple[dict, int, str
     return meta, passed, " ".join(chips), enabled
 
 # ----------------------------- Page CSS
+# ----------------------------- Page & CSS
 st.markdown(f"""
 <style>
+  /* Global font scale */
   html, body {{ font-size: {float(st.session_state.get('font_scale', DEFAULTS['font_scale']))}rem; }}
+
+  /* Sidebar expander header style + layout so icon doesn't show as text */
   section[data-testid="stSidebar"] details summary {{
-      background: rgba(30,144,255,0.18) !important; border-radius: 8px;
+      background: rgba(30,144,255,0.18) !important;
+      border-radius: 8px;
+      display: flex;               /* ensure icon + text line up */
+      align-items: center;
+      gap: 6px;
   }}
-  @keyframes blinkRB {{ 0% {{ background:#e74c3c; }} 50% {{ background:#3498db; }} 100% {{ background:#e74c3c; }} }}
-  .blink-badge {{ display:inline-block; padding:3px 8px; color:white; border-radius:8px; font-weight:700; animation: blinkRB 1.1s linear infinite; }}
-  div[data-testid="stDataFrame"], div[data-testid="stDataEditor"] * {{ opacity: 1 !important; filter: none !important; transition: none !important; }}
+
+  /* Force Material Icons font so Streamlit expander icons don't render as 'keyboard_arrow_right' text */
+  .material-icons, [class*="material-icons"] {{
+    font-family: "Material Icons" !important;
+    font-weight: normal !important;
+    font-style: normal !important;
+    letter-spacing: normal !important;
+    text-transform: none !important;
+    display: inline-block !important;
+    white-space: nowrap !important;
+    direction: ltr !important;
+    -webkit-font-feature-settings: 'liga';
+    -webkit-font-smoothing: antialiased;
+  }}
+
+  /* blinking badge */
+  @keyframes blinkRB {{
+    0% {{ background:#e74c3c; }} 50% {{ background:#3498db; }} 100% {{ background:#e74c3c; }}
+  }}
+  .blink-badge {{
+    display:inline-block; padding:3px 8px; color:white; border-radius:8px; font-weight:700; animation: blinkRB 1.1s linear infinite;
+  }}
+
+  /* kill fade/dim on tables */
+  div[data-testid="stDataFrame"], div[data-testid="stDataEditor"] * {{
+      opacity: 1 !important; filter: none !important; transition: none !important;
+  }}
 </style>
 """, unsafe_allow_html=True)
 
