@@ -601,18 +601,27 @@ with expander("Market"):
         step=10,
     )
 # ----------------------------- MODE
+# ----------------------------- MODE
 with expander("Mode"):
-    st.radio("Data source", ["REST only","WebSocket + REST (hybrid)"],
-             index=0 if st.session_state.get("mode","REST only")=="REST only" else 1,
-             horizontal=True, key="mode")
+    # Data source radio
+    st.radio(
+        "Data source",
+        ["REST only", "WebSocket + REST (hybrid)"],
+        index=0 if st.session_state.get("mode", "REST only") == "REST only" else 1,
+        horizontal=True,
+        key="mode",
+    )
 
-    # initialize once, then let the widget own it
+    # initialize once, then let the widget own it (prevents yellow warning)
     if "ws_chunk" not in st.session_state:
-        st.session_state["ws_chunk"] = 5  # default value
+        st.session_state["ws_chunk"] = 5  # default
 
-    st.slider("WS subscribe chunk (Coinbase)", 2, 20, key="ws_chunk", step=1)
-
-
+    st.slider(
+        "WS subscribe chunk (Coinbase)",
+        2, 20,
+        key="ws_chunk",
+        step=1
+    )
 # ----------------------------- TIMEFRAMES
 with expander("Timeframes"):
     st.selectbox("Primary sort timeframe", TF_LIST, index=TF_LIST.index(st.session_state["sort_tf"]), key="sort_tf")
