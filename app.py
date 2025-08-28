@@ -782,32 +782,6 @@ _tf = st.session_state["sort_tf"]
 # Use cached TF fn if present
 _tf_func = (globals().get("df_for_tf_cached") or globals().get("df_for_tf"))
 
-# ---- DEBUG: probe the first 30 pairs and report why they fail before gates
-try:
-    _probe_ids = pairs[:30]
-    _reason_api = 0
-    _reason_bars = 0
-    _reason_ok = 0
-    for _pid in _probe_ids:
-        try:
-            _d = _tf_func(effective_exchange, _pid, _tf)
-        except Exception:
-            _d = None
-        if _d is None:
-            _reason_api += 1
-            continue
-        if len(_d) < _min_bars:
-            _reason_bars += 1
-            continue
-        _reason_ok += 1
-    st.caption(
-        f"Debug • probe({_tf}) of {len(_probe_ids)}: "
-        f"OK={_reason_ok} | API_FAIL={_reason_api} | TOO_FEW_BARS={_reason_bars} "
-        f"(min_bars={_min_bars})"
-    )
-except Exception as _e:
-    st.caption(f"Debug • probe failed: {type(_e).__name__}: {_e}")
-
 for pid in pairs:
     dft = None
     try:
