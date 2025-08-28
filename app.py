@@ -889,60 +889,67 @@ for pid in pairs:
     )
 
 # ----------------------------- Diagnostics & Tables
+# ----------------------------- Diagnostics & Tables
 st.caption(
     f"Diagnostics — Available(after cap): {diag_available} • "
     f"Fetched OK: {diag_fetched} • Skipped(bars): {diag_skip_bars} • "
     f"Skipped(API): {diag_skip_api} • Raw rows len={len(rows)}"
 )
 
-# Debug rows length
+# Show rows length so we KNOW what's happening
 st.write("DEBUG rows length:", len(rows))
 
-# Fallback: if rows is empty, show raw preview ignoring gates
 if not rows:
+    # Emergency fallback: ignore gates and render a preview so the screen isn't blank.
     st.warning("No rows passed gates. Showing raw preview instead (filters ignored).")
-    raw_preview = []
     _tf = st.session_state["sort_tf"]
+    # Use whichever TF function exists
+    _tf_func = (globals().get("df_for_tf_cached") or globals().get("df_for_tf"))
+
+    raw_preview = []
+    errs_api = 0
+    errs_bars = 0
+    _min_bars = int(st.session_state.get("min_bars", 30))
+
     for pid in pairs[:50]:  # cap preview for speed
         try:
-            dft = df_for_tf(effective_exchange, pid, _tf)
-            if dft is None or dft.empty:
-                continue
-            last = float(dft["close"].iloc[-1])
-            first = float(dft["close"].iloc[0])
-            chg = (last / first - 1.0) * 100.0
-            raw_preview.append({"Pair": pid, "Price": last, f"% Change ({_tf})": chg, "Bars": len(dft)})
+            dft = _tf_func(effective_exchange, pid, _tf)
         except Exception:
+            dft = None
+        if dft is None:
+            errs_api += 1
             continue
+        if len(dft) < _min_bars:
+            errs_bars += 1
+            continue
+        last = float(dft["close"].iloc[-1])
+        first = float(dft["close"].iloc[0])
+        chg = (last/first - 1.0) * 100.0
+        raw_preview.append({"Pair": pid, "Price": last, f"% Change ({_tf})": chg, "Bars": len(dft)})
 
     if raw_preview:
-        df = pd.DataFrame(raw_preview).sort_values(by=f"% Change ({_tf})", ascending=False)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        prev_df = pd.DataFrame(raw_preview).sort_values(by=f"% Change ({_tf})", ascending=False, na_position="last")
+        st.dataframe(prev_df, use_container_width=True, hide_index=True)
+        st.caption(f"Preview diagnostics — sample=50 • API_FAIL={errs_api} • TOO_FEW_BARS={errs_bars} • OK={len(raw_preview)}")
     else:
-        st.error("Even raw preview found nothing. Try lowering min bars, switching TF, or checking API.")
+        st.error("Even raw preview found nothing. Lower 'Minimum bars' in Timeframes or switch TF (try 1h), then refresh.")
 
 else:
     # Normal render path
-    df = pd.DataFrame(rows).sort_values(
-        by=f"% Change ({st.session_state['sort_tf']})",
-        ascending=not st.session_state["sort_desc"],
-        na_position="last",
-    ).reset_index(drop=True)
+    chg_col = f"% Change ({st.session_state['sort_tf']})"
+    df = pd.DataFrame(rows).sort_values(chg_col, ascending=not st.session_state["sort_desc"], na_position="last").reset_index(drop=True)
     df.insert(0, "#", df.index + 1)
 
     st.subheader("📌 Top-10 (greens only)")
-    top10 = df[df["_green"]].sort_values(
-        by=f"% Change ({st.session_state['sort_tf']})", ascending=False
-    ).head(10).drop(columns=["_green", "_yellow"], errors="ignore")
+    top10 = df[df["_green"]].sort_values(chg_col, ascending=False, na_position="last").head(10).drop(columns=["_green","_yellow"], errors="ignore")
     st.data_editor(top10, use_container_width=True, hide_index=True, disabled=True)
 
     st.subheader("📑 All pairs")
-    st.data_editor(df.drop(columns=["_green", "_yellow"], errors="ignore"),
-                   use_container_width=True, hide_index=True, disabled=True)
+    st.data_editor(df.drop(columns=["_green","_yellow"], errors="ignore"), use_container_width=True, hide_index=True, disabled=True)
 
     st.caption(
-        f"Pairs shown: {len(df)} • Exchange: {effective_exchange} • Quote: {st.session_state['quote']} • "
-        f"TF: {st.session_state['sort_tf']} • Gate Mode: {st.session_state['gate_mode']} • "
+        f"Pairs shown: {len(df)} • Exchange: {effective_exchange} • Quote: {st.session_state['quote']} "
+        f"• TF: {st.session_state['sort_tf']} • Gate Mode: {st.session_state['gate_mode']} • "
         f"Hard filter: {'On' if st.session_state['hard_filter'] else 'Off'}"
     )
 
