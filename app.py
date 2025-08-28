@@ -830,13 +830,30 @@ for pid in pairs:
     })
 
 # ----------------------------- Diagnostics & Tables
-st.caption(f"Diagnostics — Available (after cap): {diag_available} • Fetched OK: {diag_fetched} • "
-           f"Skipped (bars): {diag_skip_bars} • Skipped (API): {diag_skip_api} • Shown: {len(rows)}")
-
-df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=["Pair"])
 if df.empty:
-    st.info("No rows to show. Try ANY mode, lower Min Δ, shorten lookback, reduce Minimum bars, enable Volume spike/MACD Cross, or increase discovery cap.")
-else:
+    # Fallback: show a raw discovery preview ignoring gates so the screen isn't blank.
+    preview = []
+    _min_bars = int(st.session_state.get("min_bars", 30))
+    tf = st.session_state["sort_tf"]
+    for pid in pairs[:50]:  # cap preview to 50 so it stays fast
+        dft = df_for_tf_cached(effective_exchange, pid, tf)
+        if dft is None:
+            continue  # API fail
+        if len(dft) < _min_bars:
+            continue  # not enough candles for this TF
+        last = float(dft["close"].iloc[-1])
+        first = float(dft["close"].iloc[0])
+        chg = (last/first - 1.0) * 100.0
+        preview.append({"Pair": pid, "Price": last, f"% Change ({tf})": chg, "Bars": len(dft)})
+
+    if preview:
+        st.warning("Showing raw discovery preview (gates disabled). Your gate settings or hard filter hid everything above.")
+        prev_df = pd.DataFrame(preview).sort_values(by=f"% Change ({tf})", ascending=False, na_position="last")
+        st.dataframe(prev_df, use_container_width=True, hide_index=True)
+    else:
+        # Still nothing? Then either API is failing or min_bars is too high for this TF.
+        st.error("No rows even in raw preview. Lower 'Minimum bars' in Timeframes or switch TF (try 1h), then refresh.")
+
     chg_col=f"% Change ({st.session_state['sort_tf']})"
     df=df.sort_values(chg_col, ascending=not st.session_state["sort_desc"], na_position="last").reset_index(drop=True)
     df.insert(0,"#",df.index+1)
