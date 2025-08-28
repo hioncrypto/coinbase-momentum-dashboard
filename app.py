@@ -913,8 +913,6 @@ for pid in pairs:
             "_yellow": is_yellow,
         }
     )
-
-
 # ----------------------------- Diagnostics & Tables
 st.caption(
     f"Diagnostics — Available(after cap): {diag_available} • "
@@ -922,22 +920,18 @@ st.caption(
     f"Skipped(API): {diag_skip_api} • Raw rows len={len(rows)}"
 )
 
-# Show rows length so we KNOW what's happening
+# show rows count so we know what's happening
 st.write("DEBUG rows length:", len(rows))
 
 if not rows:
-    # Emergency fallback: ignore gates and render a preview so the screen isn't blank.
+    # Fallback: ignore gates and show a raw preview so the screen isn't blank
     st.warning("No rows passed gates. Showing raw preview instead (filters ignored).")
     _tf = st.session_state["sort_tf"]
-    # Use whichever TF function exists
+    _min_bars = int(st.session_state.get("min_bars", 30))
     _tf_func = (globals().get("df_for_tf_cached") or globals().get("df_for_tf"))
 
-    raw_preview = []
-    errs_api = 0
-    errs_bars = 0
-    _min_bars = int(st.session_state.get("min_bars", 30))
-
-    for pid in pairs[:50]:  # cap preview for speed
+    raw_preview, errs_api, errs_bars = [], 0, 0
+    for pid in pairs[:50]:  # cap for speed
         try:
             dft = _tf_func(effective_exchange, pid, _tf)
         except Exception:
@@ -978,6 +972,7 @@ else:
         f"• TF: {st.session_state['sort_tf']} • Gate Mode: {st.session_state['gate_mode']} • "
         f"Hard filter: {'On' if st.session_state['hard_filter'] else 'Off'}"
     )
+
 
 # ----------------------------- Listing Radar engine
 def lr_parse_quotes(csv_text: str) -> set:
