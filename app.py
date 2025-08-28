@@ -1,5 +1,5 @@
-# app.py — Crypto Tracker by hioncrypto
-# One-file Streamlit app. See requirements.txt:
+# app.py — Crypto Tracker by hioncrypto (rewritten, stable)
+# One-file Streamlit app. Requirements:
 # streamlit>=1.33, pandas>=2.0, numpy>=1.24, requests>=2.31, websocket-client>=1.6
 
 import json, time, datetime as dt, threading, queue, ssl, smtplib, re
@@ -11,6 +11,9 @@ import numpy as np
 import pandas as pd
 import requests
 import streamlit as st
+
+# --- FIRST STREAMLIT CALL ---
+st.set_page_config(page_title="Crypto Tracker by hioncrypto", layout="wide")
 
 # Optional WebSocket for Coinbase live prices
 WS_AVAILABLE = True
@@ -29,8 +32,8 @@ CB_BASE = "https://api.exchange.coinbase.com"
 BN_BASE = "https://api.binance.com"
 
 DEFAULT_FEEDS = [
-    "https://blog.coinbase.com/feed",                 # best-effort
-    "https://www.binance.com/en/support/announcement" # HTML parsed best-effort
+    "https://blog.coinbase.com/feed",
+    "https://www.binance.com/en/support/announcement"
 ]
 
 DEFAULTS = dict(
@@ -70,14 +73,14 @@ DEFAULTS = dict(
 
 # ----------------------------- Persistence via URL params
 def _coerce(v, typ):
-    if typ is bool: return str(v).lower() in {"1","true","yes","on"}
+    if typ is bool: return str(v).strip().lower() in {"1","true","yes","on"}
     if typ is int:
-        try: return int(v)
+        try: return int(str(v).strip())
         except: return None
     if typ is float:
-        try: return float(v)
+        try: return float(str(v).strip())
         except: return None
-    return str(v)
+    return str(v).strip()
 
 PERSIST: Dict[str, Tuple[object, type]] = {
     # Market
@@ -97,7 +100,7 @@ PERSIST: Dict[str, Tuple[object, type]] = {
     "lookback_candles": (DEFAULTS["lookback_candles"], int), "min_pct": (DEFAULTS["min_pct"], float),
     "use_roc": (DEFAULTS["use_roc"], bool), "min_roc": (DEFAULTS["min_roc"], float),
     # Gates
-    "use_vol_spike": (DEFAULTS["use_vol_spike"], bool), "vol_mult": (DEFAULTS["vol_mult"], float),
+    "use_vol_spike": (DEFAULTS["use_vol_spike"], bool), "vol_mult": (DEFAULTS["vol_mult"], float), "vol_window": (DEFAULTS["vol_window"], int),
     "use_rsi": (DEFAULTS["use_rsi"], bool), "rsi_len": (DEFAULTS["rsi_len"], int), "min_rsi": (DEFAULTS["min_rsi"], int),
     "use_macd": (DEFAULTS["use_macd"], bool), "macd_fast": (DEFAULTS["macd_fast"], int),
     "macd_slow": (DEFAULTS["macd_slow"], int), "macd_sig": (DEFAULTS["macd_sig"], int), "min_mhist": (DEFAULTS["min_mhist"], float),
@@ -171,7 +174,7 @@ _init_runtime()
 init_persisted_state()
 
 # ----------------------------- Indicators
-def ema(s: pd.Series, span: int) -> pd.Series: return s.ewm(span=span, adjust=False).mean()
+def ema(s: pd.Series, span: int) -> pd.Series: return s.astype("float64").ewm(span=span, adjust=False).mean()
 
 def rsi(close: pd.Series, length=14) -> pd.Series:
     delta = close.diff()
@@ -235,12 +238,14 @@ def binance_list_products(quote: str) -> List[str]:
         return []
 
 def list_products(exchange: str, quote: str) -> List[str]:
+    quote = (quote or "").strip().upper()
     if exchange=="Coinbase": return coinbase_list_products(quote)
     if exchange=="Binance":  return binance_list_products(quote)
     return []
 
-def fetch_candles(exchange: str, pair_dash: str, gran_sec: int,
-                  start: Optional[dt.datetime]=None, end: Optional[dt.datetime]=None) -> Optional[pd.DataFrame]:
+@st.cache_data(ttl=30, show_spinner=False)
+def fetch_candles_cached(exchange: str, pair_dash: str, gran_sec: int,
+                         start: Optional[dt.datetime]=None, end: Optional[dt.datetime]=None) -> Optional[pd.DataFrame]:
     try:
         if exchange=="Coinbase":
             url=f"{CB_BASE}/products/{pair_dash}/candles?granularity={gran_sec}"
@@ -281,13 +286,14 @@ def resample_ohlcv(df: pd.DataFrame, target_sec: int) -> Optional[pd.DataFrame]:
     out=d.resample(f"{target_sec}s", label="right", closed="right").agg(agg).dropna()
     return out.reset_index()
 
-def df_for_tf(exchange: str, pair: str, tf: str) -> Optional[pd.DataFrame]:
+@st.cache_data(ttl=30, show_spinner=False)
+def df_for_tf_cached(exchange: str, pair: str, tf: str) -> Optional[pd.DataFrame]:
     sec=ALL_TFS[tf]
     if exchange=="Coinbase":
-        if sec in {900,3600,21600,86400}: return fetch_candles(exchange, pair, sec)
-        base=fetch_candles(exchange, pair, 3600); return resample_ohlcv(base, sec)
+        if sec in {900,3600,21600,86400}: return fetch_candles_cached(exchange, pair, sec)
+        base=fetch_candles_cached(exchange, pair, 3600); return resample_ohlcv(base, sec)
     elif exchange=="Binance":
-        return fetch_candles(exchange, pair, sec)
+        return fetch_candles_cached(exchange, pair, sec)
     return None
 
 @st.cache_data(ttl=6*3600, show_spinner=False)
@@ -304,7 +310,7 @@ def get_hist(exchange: str, pair: str, basis: str, amount: int) -> Optional[pd.D
         win=dt.timedelta(seconds=step*gran)
         cursor_start=max(start, cursor_end-win)
         if (cursor_end - cursor_start).total_seconds() < gran: break
-        df=fetch_candles(exchange, pair, gran, start=cursor_start, end=cursor_end)
+        df=fetch_candles_cached(exchange, pair, gran, start=cursor_start, end=cursor_end)
         if df is None or df.empty: break
         out.append(df); cursor_end=df["ts"].iloc[0]
         if cursor_end<=start: break
@@ -319,22 +325,25 @@ def ath_atl_info(hist: pd.DataFrame) -> dict:
     ath=float(hist["high"].iloc[idx_ath]); d_ath=pd.to_datetime(hist["ts"].iloc[idx_ath]).date().isoformat()
     atl=float(hist["low"].iloc[idx_atl]);  d_atl=pd.to_datetime(hist["ts"].iloc[idx_atl]).date().isoformat()
     return {"From ATH %": (last/ath-1)*100 if ath>0 else np.nan, "ATH date": d_ath,
-            "From ATL %": (last/atl-1)*100 if atl>0 else np.nan, "ATL date": d_atl}
+            "From ATL %": (last/atl-1)*100 if atl>0 else np.nan, "ATL date": atld if (atld:=d_atl) else d_atl}
 
-# ----------------------------- WebSocket
+# ----------------------------- WebSocket (thread-safe via queue)
 def ws_worker(product_ids, endpoint="wss://ws-feed.exchange.coinbase.com"):
     try:
-        ws=websocket.WebSocket(); ws.connect(endpoint, timeout=10); ws.settimeout(1.0)
+        ws = websocket.WebSocket()
+        ws.connect(endpoint, timeout=10)
+        ws.settimeout(1.0)
         ws.send(json.dumps({"type":"subscribe","channels":[{"name":"ticker","product_ids":product_ids}]}))
-        st.session_state["ws_alive"]=True
+        st.session_state["ws_alive"] = True
         while st.session_state.get("ws_alive", False):
             try:
-                msg=ws.recv()
+                msg = ws.recv()
                 if not msg: continue
-                d=json.loads(msg)
-                if d.get("type")=="ticker":
-                    pid=d.get("product_id"); px=d.get("price")
-                    if pid and px: st.session_state["ws_prices"][pid]=float(px)
+                d = json.loads(msg)
+                if d.get("type") == "ticker":
+                    pid = d.get("product_id"); px = d.get("price")
+                    if pid and px:
+                        st.session_state["ws_q"].put((pid, float(px)))
             except websocket.WebSocketTimeoutException:
                 continue
             except Exception:
@@ -342,16 +351,24 @@ def ws_worker(product_ids, endpoint="wss://ws-feed.exchange.coinbase.com"):
     except Exception:
         pass
     finally:
-        st.session_state["ws_alive"]=False
+        st.session_state["ws_alive"] = False
         try: ws.close()
         except Exception: pass
 
-def start_ws_if_needed(exchange: str, pairs: List[str], chunk: int):
-    if exchange!="Coinbase" or not WS_AVAILABLE: return
-    if not st.session_state["ws_alive"]:
-        pick=pairs[:max(2, min(chunk, len(pairs)))]
-        t=threading.Thread(target=ws_worker, args=(pick,), daemon=True)
-        t.start(); time.sleep(0.2)
+def start_ws(exchange: str, pairs: List[str], chunk: int):
+    if exchange != "Coinbase" or not WS_AVAILABLE or not pairs:
+        return
+    if st.session_state.get("ws_alive"):
+        return
+    pick = pairs[:max(2, min(chunk, len(pairs)))]
+    t = threading.Thread(target=ws_worker, args=(pick,), daemon=True)
+    st.session_state["ws_thread"] = t
+    t.start()
+    time.sleep(0.2)
+
+def stop_ws():
+    if st.session_state.get("ws_alive"):
+        st.session_state["ws_alive"] = False
 
 # ----------------------------- Alerts
 def send_email_alert(subject, body, recipient):
@@ -468,7 +485,7 @@ def build_gate_eval(df_tf: pd.DataFrame, settings: dict) -> Tuple[dict, int, str
                 below = (macd_line.iloc[-i] < 0 and signal_line.iloc[-i] < 0)
             if conf>0:
                 conf_ok = any(hist.iloc[-k] > 0 for k in range(i, min(i+conf, len(hist))))
-                if not conf_ok: 
+                if not conf_ok:
                     continue
             ok=True; bars_ago=i; break
 
@@ -480,26 +497,16 @@ def build_gate_eval(df_tf: pd.DataFrame, settings: dict) -> Tuple[dict, int, str
     meta={"delta_pct": delta_pct, "macd_cross": cross_meta}
     return meta, passed, " ".join(chips), enabled
 
-# ----------------------------- Page & CSS
-st.set_page_config(page_title="Crypto Tracker by hioncrypto", layout="wide")
+# ----------------------------- Page CSS
 st.markdown(f"""
 <style>
   html, body {{ font-size: {float(st.session_state.get('font_scale', DEFAULTS['font_scale']))}rem; }}
-  /* soft blue sidebar headers */
   section[data-testid="stSidebar"] details summary {{
       background: rgba(30,144,255,0.18) !important; border-radius: 8px;
   }}
-  /* blinking badge */
-  @keyframes blinkRB {{
-    0% {{ background:#e74c3c; }} 50% {{ background:#3498db; }} 100% {{ background:#e74c3c; }}
-  }}
-  .blink-badge {{
-    display:inline-block; padding:3px 8px; color:white; border-radius:8px; font-weight:700; animation: blinkRB 1.1s linear infinite;
-  }}
-  /* kill fade/dim on tables */
-  div[data-testid="stDataFrame"], div[data-testid="stDataEditor"] * {{
-      opacity: 1 !important; filter: none !important; transition: none !important;
-  }}
+  @keyframes blinkRB {{ 0% {{ background:#e74c3c; }} 50% {{ background:#3498db; }} 100% {{ background:#e74c3c; }} }}
+  .blink-badge {{ display:inline-block; padding:3px 8px; color:white; border-radius:8px; font-weight:700; animation: blinkRB 1.1s linear infinite; }}
+  div[data-testid="stDataFrame"], div[data-testid="stDataEditor"] * {{ opacity: 1 !important; filter: none !important; transition: none !important; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -536,18 +543,40 @@ with expander("Market"):
     st.selectbox("Quote currency", QUOTES, index=QUOTES.index(st.session_state["quote"]), key="quote")
     st.checkbox("Use watchlist only (ignore discovery)", key="use_watch", value=st.session_state.get("use_watch", False))
     st.text_area("Watchlist", st.session_state.get("watchlist", DEFAULTS["watchlist"]), key="watchlist")
-
-    # Available pool for caption
-    if st.session_state["use_watch"] and st.session_state["watchlist"].strip():
-        avail=[p.strip().upper() for p in st.session_state["watchlist"].split(",") if p.strip()]
-        avail=[p for p in avail if p.endswith(f"-{st.session_state['quote']}")]
-    elif st.session_state["use_my_pairs"]:
-        avail=[p.strip().upper() for p in st.session_state["my_pairs"].split(",") if p.strip()]
-        avail=[p for p in avail if p.endswith(f"-{st.session_state['quote']}")]
-    else:
-        avail=list_products(effective_exchange, st.session_state["quote"])
-    st.slider(f"Pairs to discover (0–500) • Available: {len(avail)}", 0, 500,
+    st.slider(f"Pairs to discover (0–500)", 0, 500,
               int(st.session_state.get("discover_cap", DEFAULTS["discover_cap"])), 10, key="discover_cap")
+
+# Auto-fix exchange/quote mismatch so discovery isn’t empty
+def _compatible_quote(exch: str, quote: str) -> str:
+    prefs = {
+        "Coinbase": ["USD", "USDC", "EUR", "BTC", "ETH"],
+        "Binance":  ["USDT", "USDC", "BTC", "ETH", "EUR"],
+    }
+    q = (quote or "").strip().upper()
+    if exch not in prefs:
+        return q or "USD"
+    try:
+        avail = list_products(exch, q)
+        if any(p.endswith(f"-{q}") for p in avail):
+            return q
+    except Exception:
+        pass
+    for cand in prefs[exch]:
+        try:
+            avail = list_products(exch, cand)
+            if any(p.endswith(f"-{cand}") for p in avail):
+                return cand
+        except Exception:
+            continue
+    return q or prefs[exch][0]
+
+fixed_quote = _compatible_quote(effective_exchange, st.session_state["quote"])
+if fixed_quote != st.session_state["quote"]:
+    st.session_state["quote"] = fixed_quote
+    st.toast(f"Adjusted quote to {fixed_quote} for {effective_exchange} discovery", icon="🔧")
+
+if int(st.session_state.get("discover_cap", 0)) <= 0:
+    st.session_state["discover_cap"] = 100
 
 # ----------------------------- MODE
 with expander("Mode"):
@@ -567,7 +596,7 @@ with expander("Gates"):
              index=["Spike Hunter","Early MACD Cross","Confirm Rally","None"].index(st.session_state.get("preset","Spike Hunter")),
              horizontal=True, key="preset")
 
-    # Apply presets (non-destructive for user-changed values later in the session)
+    # Presets (non-destructive for subsequent tweaks)
     if st.session_state["preset"]=="Spike Hunter":
         st.session_state.update({"gate_mode":"ANY","hard_filter":False,"lookback_candles":3,"min_pct":3.0,
                                  "use_vol_spike":True,"vol_mult":1.10,"use_rsi":False,"use_macd":False,
@@ -596,6 +625,7 @@ with expander("Gates"):
     with c1:
         st.toggle("Volume spike ×", key="use_vol_spike", value=st.session_state.get("use_vol_spike", True))
         st.slider("Spike multiple ×", 1.0, 5.0, float(st.session_state.get("vol_mult", 1.10)), 0.05, key="vol_mult")
+        st.slider("Volume window (bars)", 5, 60, int(st.session_state.get("vol_window", 20)), 1, key="vol_window")
     with c2:
         st.toggle("RSI", key="use_rsi", value=st.session_state.get("use_rsi", False))
         st.slider("Min RSI", 40, 90, int(st.session_state.get("min_rsi", 55)), 1, key="min_rsi")
@@ -694,26 +724,42 @@ else:
     if st.session_state["use_watch"] and st.session_state["watchlist"].strip():
         pairs=[p.strip().upper() for p in st.session_state["watchlist"].split(",") if p.strip()]
     else:
-        pairs=list_products(effective_exchange, st.session_state["quote"])
-        pairs=[p for p in pairs if p.endswith(f"-{st.session_state['quote']}")]
+        all_avail=list_products(effective_exchange, st.session_state["quote"])
+        pre_cap = len([p for p in all_avail if p.endswith(f"-{st.session_state['quote']}")])
         cap=max(0, min(500, int(st.session_state.get("discover_cap", DEFAULTS["discover_cap"]))))
+        pairs=[p for p in all_avail if p.endswith(f"-{st.session_state['quote']}")]
         pairs=pairs[:cap] if cap>0 else []
+        st.caption(f"Discovery pool: available={pre_cap} | cap={cap} | using={len(pairs)} on {effective_exchange} {st.session_state['quote']}")
 
-# WebSocket start
-if pairs and st.session_state.get("mode","REST only").startswith("WebSocket") and effective_exchange=="Coinbase" and WS_AVAILABLE:
-    start_ws_if_needed(effective_exchange, pairs, int(st.session_state.get("ws_chunk",5)))
+# WebSocket lifecycle + queue drain
+want_ws = (pairs and st.session_state.get("mode","REST only").startswith("WebSocket")
+           and effective_exchange=="Coinbase" and WS_AVAILABLE)
+
+try:
+    while True:
+        pid, px = st.session_state["ws_q"].get_nowait()
+        prices = st.session_state.get("ws_prices", {})
+        prices[pid] = px
+        st.session_state["ws_prices"] = prices
+except queue.Empty:
+    pass
+
+if want_ws: start_ws(effective_exchange, pairs, int(st.session_state.get("ws_chunk",5)))
+else: stop_ws()
 
 # ----------------------------- Build rows + diagnostics
-diag_available=len(pairs); diag_capped=len(pairs)
+diag_available=len(pairs)
 diag_fetched=0; diag_skip_bars=0; diag_skip_api=0
 
 rows=[]
+_min_bars = int(st.session_state.get("min_bars", 30))
+
 for pid in pairs:
-    dft = df_for_tf(effective_exchange, pid, st.session_state["sort_tf"])
+    dft = df_for_tf_cached(effective_exchange, pid, st.session_state["sort_tf"])
     if dft is None:
         diag_skip_api += 1
         continue
-    if len(dft) < int(st.session_state.get("min_bars", 30)):
+    if len(dft) < _min_bars:
         diag_skip_bars += 1
         continue
     diag_fetched += 1
@@ -739,7 +785,9 @@ for pid in pairs:
     meta, passed, chips, enabled_cnt = build_gate_eval(dft, dict(
         lookback_candles=int(st.session_state["lookback_candles"]),
         min_pct=float(st.session_state["min_pct"]),
-        use_vol_spike=st.session_state["use_vol_spike"], vol_mult=float(st.session_state["vol_mult"]), vol_window=DEFAULTS["vol_window"],
+        use_vol_spike=st.session_state["use_vol_spike"],
+        vol_mult=float(st.session_state["vol_mult"]),
+        vol_window=int(st.session_state.get("vol_window", 20)),
         use_rsi=st.session_state["use_rsi"], rsi_len=int(st.session_state.get("rsi_len", 14)), min_rsi=int(st.session_state["min_rsi"]),
         use_macd=st.session_state["use_macd"], macd_fast=int(st.session_state.get("macd_fast", 12)),
         macd_slow=int(st.session_state.get("macd_slow", 26)), macd_sig=int(st.session_state.get("macd_sig", 9)), min_mhist=float(st.session_state["min_mhist"]),
@@ -766,7 +814,7 @@ for pid in pairs:
         is_green=(passed>=K); is_yellow=(passed>=Y and passed<K)
 
     if st.session_state.get("hard_filter", False):
-        if mode in {"ALL","ANY"} and not include: 
+        if mode in {"ALL","ANY"} and not include:
             continue
         if mode=="Custom (K/Y)" and not (is_green or is_yellow):
             continue
@@ -782,7 +830,7 @@ for pid in pairs:
     })
 
 # ----------------------------- Diagnostics & Tables
-st.caption(f"Diagnostics — Available: {diag_available} • Capped: {diag_capped} • Fetched OK: {diag_fetched} • "
+st.caption(f"Diagnostics — Available (after cap): {diag_available} • Fetched OK: {diag_fetched} • "
            f"Skipped (bars): {diag_skip_bars} • Skipped (API): {diag_skip_api} • Shown: {len(rows)}")
 
 df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=["Pair"])
@@ -795,8 +843,7 @@ else:
 
     st.subheader("📌 Top-10 (greens only)")
     top10=df[df["_green"]].sort_values(chg_col, ascending=False, na_position="last").head(10).drop(columns=["_green","_yellow"])
-    st.data_editor(top10 if not top10.empty else pd.DataFrame(columns=top10.columns if not top10.empty else []),
-                   use_container_width=True, hide_index=True, disabled=True)
+    st.data_editor(top10, use_container_width=True, hide_index=True, disabled=True)
 
     st.subheader("📑 All pairs")
     st.data_editor(df.drop(columns=["_green","_yellow"]), use_container_width=True, hide_index=True, disabled=True)
@@ -830,13 +877,26 @@ def lr_note_event(kind:str, exchange:str, pair:str, when:Optional[str], link:str
     if any(ev.get("id")==ev_id for ev in st.session_state["lr_events"]): return
     st.session_state["lr_events"].insert(0, {"id":ev_id,"kind":kind,"exchange":exchange,"pair":pair,"when":when,"link":link,"ts":dt.datetime.utcnow().isoformat()+"Z"})
     st.session_state["lr_unacked"] += 1
-    # alerts
     subject=f"[Listing Radar] {kind}: {exchange} {pair}" + (f" at {when}" if when else "")
     body=f"{kind} detected\nExchange: {exchange}\nPair: {pair}\nWhen: {when or 'unknown'}\nLink: {link or 'n/a'}"
-    if st.session_state.get("email_to"):
-        send_email_alert(subject, body, st.session_state["email_to"])
-    if st.session_state.get("webhook_url"):
-        post_webhook(st.session_state["webhook_url"], {"title": subject, "details": body})
+    if st.session_state.get("email_to"): send_email_alert(subject, body, st.session_state["email_to"])
+    if st.session_state.get("webhook_url"): post_webhook(st.session_state["webhook_url"], {"title": subject, "details": body})
+
+def lr_extract_upcoming_from_text(txt:str) -> List[Tuple[str, Optional[str], Optional[str]]]:
+    out=[]
+    for ln in re.split(r"[\r\n]+", txt):
+        # skip obvious HTML tags to reduce noise
+        if "<" in ln and ">" in ln:  continue
+        low = ln.lower()
+        if any(k in low for k in ["will list","trading opens","trading will open","launches","goes live","lists "]):
+            when = None
+            m = re.search(r"(\d{4}[-/]\d{1,2}[-/]\d{1,2}(?:[ T]\d{1,2}:\d{2}(?::\d{2})?)?)", ln)
+            if m: when = m.group(1)
+            sym = None
+            sm = re.search(r"\b([A-Z0-9]{2,10})[-/ ](USD|USDC|USDT|BTC|ETH|EUR)\b", ln)
+            if sm: sym = sm.group(0).replace(" ","-").replace("/","-")
+            out.append((ln.strip(), when, sym))
+    return out
 
 def lr_scan_new_listings():
     if not st.session_state.get("lr_enabled"): return
@@ -857,17 +917,6 @@ def lr_scan_new_listings():
             lr_note_event("NEW", exch, sy, None, "")
         st.session_state["lr_baseline"][exch] = current
 
-def lr_extract_upcoming_from_text(txt:str) -> List[Tuple[str, Optional[str]]]:
-    out=[]
-    lines=re.split(r"[\r\n]+", txt)
-    for ln in lines:
-        low=ln.lower()
-        if any(k in low for k in ["will list","trading opens","trading will open","launches","goes live","lists "]):
-            m=re.search(r"(\d{4}[-/]\d{1,2}[-/]\d{1,2}([ T]\d{1,2}:\d{2}(:\d{2})?)?)", ln)
-            when=m.group(1) if m else None
-            out.append((ln.strip(), when))
-    return out
-
 def lr_scan_upcoming():
     if not st.session_state.get("lr_enabled"): return
     now = time.time()
@@ -882,9 +931,10 @@ def lr_scan_upcoming():
             txt=r.text
             found=lr_extract_upcoming_from_text(txt)
             horizon = dt.datetime.utcnow() + dt.timedelta(hours=int(st.session_state.get("lr_upcoming_window_h",48)))
-            for snippet, when in found:
-                sym_m=re.search(r"([A-Z0-9]{2,10})[-/ ](USD|USDC|USDT|BTC|ETH|EUR)\b", snippet)
-                pair=sym_m.group(0).replace(" ","-").replace("/","-") if sym_m else "UNKNOWN"
+            for snippet, when, pair_guess in found:
+                pair = pair_guess or "UNKNOWN"
+                if pair == "UNKNOWN":
+                    continue  # skip low-confidence noise
                 when_iso=None
                 if when:
                     try:
@@ -917,4 +967,3 @@ if remaining <= 0:
     st.rerun()
 else:
     st.caption(f"Auto-refresh every {int(st.session_state.get('refresh_sec',30))}s (next in {max(0,remaining)}s)")
-
