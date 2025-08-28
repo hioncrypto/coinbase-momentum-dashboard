@@ -791,6 +791,32 @@ _tf = st.session_state["sort_tf"]
 # Use cached TF fn if present
 _tf_func = (globals().get("df_for_tf_cached") or globals().get("df_for_tf"))
 
+# ---- DEBUG: probe the first 30 pairs and report why they fail before gates
+try:
+    _probe_ids = pairs[:30]
+    _reason_api = 0
+    _reason_bars = 0
+    _reason_ok = 0
+    for _pid in _probe_ids:
+        try:
+            _d = _tf_func(effective_exchange, _pid, _tf)
+        except Exception:
+            _d = None
+        if _d is None:
+            _reason_api += 1
+            continue
+        if len(_d) < _min_bars:
+            _reason_bars += 1
+            continue
+        _reason_ok += 1
+    st.caption(
+        f"Debug • probe({_tf}) of {len(_probe_ids)}: "
+        f"OK={_reason_ok} | API_FAIL={_reason_api} | TOO_FEW_BARS={_reason_bars} "
+        f"(min_bars={_min_bars})"
+    )
+except Exception as _e:
+    st.caption(f"Debug • probe failed: {type(_e).__name__}: {_e}")
+
 for pid in pairs:
     dft = None
     try:
@@ -896,49 +922,6 @@ for pid in pairs:
             "_yellow": is_yellow,
         }
     )
-
-# If nothing survived, do a second pass that force-relaxes gates so SOMETHING renders
-second_pass_used = False
-if not rows and diag_available > 0:
-    second_pass_used = True
-    preview = []
-    sample = pairs[:50]  # keep it snappy
-    reasons = []
-    for pid in sample:
-        dft = None
-        try:
-            dft = _tf_func(effective_exchange, pid, _tf)
-        except Exception:
-            dft = None
-        if dft is None:
-            reasons.append((pid, "API_FAIL"))
-            continue
-        if len(dft) < _min_bars:
-            reasons.append((pid, f"TOO_FEW_BARS({len(dft)}<{_min_bars})"))
-            continue
-        last = float(dft["close"].iloc[-1])
-        first = float(dft["close"].iloc[0])
-        chg = (last / first - 1.0) * 100.0
-        preview.append({"Pair": pid, "Price": last, f"% Change ({_tf})": chg, "Bars": len(dft)})
-    # show a slim preview frame if available
-    if preview:
-        st.warning(
-            "No rows passed your gates. Showing raw discovery preview (gates disabled) for a quick sanity check."
-        )
-        prev_df = pd.DataFrame(preview).sort_values(by=f"% Change ({_tf})", ascending=False, na_position="last")
-        st.dataframe(prev_df, use_container_width=True, hide_index=True)
-    # brief reason dump
-    if preview or reasons:
-        st.caption(
-            f"Second-pass sample: checked={len(sample)} • "
-            + ", ".join(
-                [
-                    f"API_FAIL={sum(1 for _,r in reasons if r=='API_FAIL')}",
-                    f"TOO_FEW_BARS={sum(1 for _,r in reasons if r.startswith('TOO_FEW_BARS'))}",
-                    f"OK={sum(1 for _,r in reasons if r.startswith('OK'))}",
-                ]
-            )
-        )
 
 # ----------------------------- Diagnostics & Tables
 st.caption(
