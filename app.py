@@ -752,15 +752,6 @@ else:
         cap = max(0, min(500, int(st.session_state.get("discover_cap", DEFAULTS["discover_cap"]))))
         pairs = pairs[:cap] if cap > 0 else []
 
-# ---- DEBUG: show a small sample of discovered IDs so we know iteration isn't broken
-try:
-    _sample = pairs[:25]
-    if _sample:
-        st.caption("Debug • first 25 discovered pairs: " + ", ".join(_sample))
-    else:
-        st.error("Debug • discovery returned an empty list (check exchange/quote/cap).")
-except Exception as _e:
-    st.error(f"Debug • failed to render discovery sample: {type(_e).__name__}: {_e}")
 
 # WebSocket lifecycle + queue drain
 want_ws = (pairs and st.session_state.get("mode","REST only").startswith("WebSocket")
