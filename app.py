@@ -624,7 +624,7 @@ with expander("Mode"):
     )
 # ----------------------------- TIMEFRAMES
 with expander("Timeframes"):
-    # initialize once to avoid the "widget created with a default AND session_state" warning
+    # seed once to avoid "default + session_state" warning
     if "sort_tf" not in st.session_state:
         st.session_state["sort_tf"] = DEFAULTS["sort_tf"]
     if "sort_desc" not in st.session_state:
@@ -632,23 +632,12 @@ with expander("Timeframes"):
     if "min_bars" not in st.session_state:
         st.session_state["min_bars"] = DEFAULTS["min_bars"]
 
-    st.selectbox(
-        "Primary sort timeframe",
-        TF_LIST,
-        index=TF_LIST.index(st.session_state["sort_tf"]),
-        key="sort_tf"
-    )
-    st.checkbox(
-        "Sort descending (largest first)",
-        key="sort_desc",
-        value=st.session_state["sort_desc"]
-    )
-    st.slider(
-        "Minimum bars required (per pair)",
-        5, 200,
-        key="min_bars",
-        step=1
-    )
+    # IMPORTANT: do NOT pass index/value — key alone uses session_state
+    st.selectbox("Primary sort timeframe", TF_LIST, key="sort_tf")
+    st.checkbox("Sort descending (largest first)", key="sort_desc")
+    st.slider("Minimum bars required (per pair)", 5, 200, key="min_bars", step=1)
+
+
 # ----------------------------- GATES
 with expander("Gates"):
     st.radio("Preset", ["Spike Hunter","Early MACD Cross","Confirm Rally","None"],
