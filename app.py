@@ -542,7 +542,11 @@ with expander("Market"):
         st.info("This exchange is coming soon. Using Coinbase for data.")
     st.selectbox("Quote currency", QUOTES, index=QUOTES.index(st.session_state["quote"]), key="quote")
     st.checkbox("Use watchlist only (ignore discovery)", key="use_watch", value=st.session_state.get("use_watch", False))
-    st.text_area("Watchlist", st.session_state.get("watchlist", DEFAULTS["watchlist"]), key="watchlist")
+    # ensure a value once, then let the widget own it
+if "watchlist" not in st.session_state:
+    st.session_state["watchlist"] = DEFAULTS["watchlist"]
+st.text_area("Watchlist", key="watchlist")
+
     st.slider(f"Pairs to discover (0–500)", 0, 500,
               int(st.session_state.get("discover_cap", DEFAULTS["discover_cap"])), 10, key="discover_cap")
 
