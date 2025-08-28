@@ -603,7 +603,7 @@ with expander("Market"):
 # ----------------------------- MODE
 # ----------------------------- MODE
 with expander("Mode"):
-    # Data source radio
+    # Data source
     st.radio(
         "Data source",
         ["REST only", "WebSocket + REST (hybrid)"],
@@ -612,17 +612,16 @@ with expander("Mode"):
         key="mode",
     )
 
-    # initialize once, then let the widget own it (prevents yellow warning)
+    # seed once, then let the widget own it
     if "ws_chunk" not in st.session_state:
-        st.session_state["ws_chunk"] = 5  # default
+        st.session_state["ws_chunk"] = 5
 
     st.slider(
         "WS subscribe chunk (Coinbase)",
         2, 20,
         key="ws_chunk",
-        step=1
+        step=1,
     )
-# ----------------------------- TIMEFRAMES
 # ----------------------------- TIMEFRAMES
 with expander("Timeframes"):
     # initialize once to avoid the "widget created with a default AND session_state" warning
