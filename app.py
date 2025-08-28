@@ -864,46 +864,18 @@ for pid in pairs:
         "_yellow": False,
     })
 # ----------------------------- Diagnostics & Tables
-
-# ----------------------------- Diagnostics & Tables
 st.caption(
     f"Diagnostics — Available(after cap): {diag_available} • "
     f"Fetched OK: {diag_fetched} • Skipped(bars): {diag_skip_bars} • "
-    f"Skipped(API): {diag_skip_api} • Raw rows len={len(rows)}"
+    f"Skipped(API): {diag_skip_api} • Built rows={len(rows)}"
 )
 
-# BRUTE-FORCE VIEW: ignore all gates/hard filter and render a preview table from raw candles.
-st.subheader("🧪 Brute-force preview (filters ignored)")
-_tf = st.session_state.get("sort_tf", "1h")
-_min_bars = int(st.session_state.get("min_bars", 30))
-_tf_func = (globals().get("df_for_tf_cached") or globals().get("df_for_tf"))
-
-preview = []
-api_fail = 0
-too_few = 0
-
-for pid in pairs[:50]:  # cap to keep it fast
-    try:
-        dft = _tf_func(effective_exchange, pid, _tf)
-    except Exception:
-        dft = None
-    if dft is None or dft.empty:
-        api_fail += 1
-        continue
-    if len(dft) < _min_bars:
-        too_few += 1
-        continue
-    last = float(dft["close"].iloc[-1])
-    first = float(dft["close"].iloc[0])
-    chg = (last / first - 1.0) * 100.0
-    preview.append({"Pair": pid, "Price": last, f"% Change ({_tf})": chg, "Bars": len(dft)})
-
-if preview:
-    df_preview = pd.DataFrame(preview).sort_values(by=f"% Change ({_tf})", ascending=False, na_position="last")
-    st.dataframe(df_preview, use_container_width=True, hide_index=True)
-    st.caption(f"Brute-force preview • rendered={len(df_preview)} • API_FAIL={api_fail} • TOO_FEW_BARS={too_few}")
+if rows:
+    df = pd.DataFrame(rows)
+    st.subheader("📑 All discovered pairs (no gates)")
+    st.dataframe(df, use_container_width=True, hide_index=True)
 else:
-    st.error("No data even in brute-force preview. Lower 'Minimum bars' in Timeframes, switch TF to 1h, and confirm REST only.")
+    st.error("No rows were built. Try setting TF=1h and Min bars=5–12 to confirm candles load.")
 
 # ----------------------------- Listing Radar engine
 def lr_parse_quotes(csv_text: str) -> set:
