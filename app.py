@@ -604,14 +604,16 @@ with expander("Market"):
     st.text_area("Watchlist", key="watchlist")
 
     # Discovery cap
-    st.slider(
-        "Pairs to discover (0–500)",
-        0,
-        500,
-        int(st.session_state.get("discover_cap", DEFAULTS["discover_cap"])),
-        10,
-        key="discover_cap",
-    )
+    # initialize once, then let the widget own it (prevents warning)
+if "discover_cap" not in st.session_state:
+    st.session_state["discover_cap"] = DEFAULTS["discover_cap"]
+
+st.slider(
+    f"Pairs to discover (0–500) • Available: {len(avail)}",
+    0, 500,
+    key="discover_cap",
+    step=10,
+)
 
 # === Auto-fix exchange/quote mismatch for discovery ===
 def _compatible_quote(exch: str, quote: str) -> str:
