@@ -889,23 +889,23 @@ for pid in pairs:
     )
 
 # ----------------------------- Diagnostics & Tables
-# ----------------------------- Diagnostics & Tables
 st.caption(
     f"Diagnostics — Available(after cap): {diag_available} • "
     f"Fetched OK: {diag_fetched} • Skipped(bars): {diag_skip_bars} • "
     f"Skipped(API): {diag_skip_api} • Raw rows len={len(rows)}"
 )
 
-# Fallback: if rows is empty, try a raw preview ignoring gates
+# Debug rows length
+st.write("DEBUG rows length:", len(rows))
+
+# Fallback: if rows is empty, show raw preview ignoring gates
 if not rows:
     st.warning("No rows passed gates. Showing raw preview instead (filters ignored).")
     raw_preview = []
     _tf = st.session_state["sort_tf"]
-    _tf_func = (globals().get("df_for_tf_cached") or globals().get("df_for_tf"))
-
     for pid in pairs[:50]:  # cap preview for speed
         try:
-            dft = _tf_func(effective_exchange, pid, _tf)
+            dft = df_for_tf(effective_exchange, pid, _tf)
             if dft is None or dft.empty:
                 continue
             last = float(dft["close"].iloc[-1])
@@ -922,7 +922,7 @@ if not rows:
         st.error("Even raw preview found nothing. Try lowering min bars, switching TF, or checking API.")
 
 else:
-    # Normal render path with rows
+    # Normal render path
     df = pd.DataFrame(rows).sort_values(
         by=f"% Change ({st.session_state['sort_tf']})",
         ascending=not st.session_state["sort_desc"],
@@ -945,7 +945,6 @@ else:
         f"TF: {st.session_state['sort_tf']} • Gate Mode: {st.session_state['gate_mode']} • "
         f"Hard filter: {'On' if st.session_state['hard_filter'] else 'Off'}"
     )
-
 
 # ----------------------------- Listing Radar engine
 def lr_parse_quotes(csv_text: str) -> set:
