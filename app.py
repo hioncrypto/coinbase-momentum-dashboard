@@ -535,23 +535,55 @@ def expander(title: str):
     return st.sidebar.expander(title, expanded=not st.session_state.get("collapse_all", False))
 
 # ----------------------------- MARKET
+# ----------------------------- MARKET
 with expander("Market"):
-    st.selectbox("Exchange", EXCHANGES, index=EXCHANGES.index(st.session_state["exchange"]), key="exchange")
-    effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"] else st.session_state["exchange"]
+    # Exchange selection
+    st.selectbox(
+        "Exchange",
+        EXCHANGES,
+        index=EXCHANGES.index(st.session_state["exchange"]),
+        key="exchange",
+    )
+
+    # Effective exchange (fallback if "coming soon")
+    effective_exchange = (
+        "Coinbase" if "coming soon" in st.session_state["exchange"] else st.session_state["exchange"]
+    )
     if "coming soon" in st.session_state["exchange"]:
         st.info("This exchange is coming soon. Using Coinbase for data.")
-    st.selectbox("Quote currency", QUOTES, index=QUOTES.index(st.session_state["quote"]), key="quote")
-    st.checkbox("Use watchlist only (ignore discovery)", key="use_watch", value=st.session_state.get("use_watch", False))
+
+    # Quote selection
+    st.selectbox(
+        "Quote currency",
+        QUOTES,
+        index=QUOTES.index(st.session_state["quote"]),
+        key="quote",
+    )
+
+    # Watchlist controls (no Streamlit warning anymore)
+    st.checkbox(
+        "Use watchlist only (ignore discovery)",
+        key="use_watch",
+        value=st.session_state.get("use_watch", False),
+    )
     # ensure a value once, then let the widget own it
-if "watchlist" not in st.session_state:
-    st.session_state["watchlist"] = DEFAULTS["watchlist"]
-st.text_area("Watchlist", key="watchlist")
+    if "watchlist" not in st.session_state:
+        st.session_state["watchlist"] = DEFAULTS["watchlist"]
+    st.text_area("Watchlist", key="watchlist")
 
-    st.slider(f"Pairs to discover (0–500)", 0, 500,
-              int(st.session_state.get("discover_cap", DEFAULTS["discover_cap"])), 10, key="discover_cap")
+    # Discovery cap
+    st.slider(
+        "Pairs to discover (0–500)",
+        0,
+        500,
+        int(st.session_state.get("discover_cap", DEFAULTS["discover_cap"])),
+        10,
+        key="discover_cap",
+    )
 
-# Auto-fix exchange/quote mismatch so discovery isn’t empty
+# === Auto-fix exchange/quote mismatch for discovery ===
 def _compatible_quote(exch: str, quote: str) -> str:
+    # Preferred quotes per exchange
     prefs = {
         "Coinbase": ["USD", "USDC", "EUR", "BTC", "ETH"],
         "Binance":  ["USDT", "USDC", "BTC", "ETH", "EUR"],
@@ -559,12 +591,14 @@ def _compatible_quote(exch: str, quote: str) -> str:
     q = (quote or "").strip().upper()
     if exch not in prefs:
         return q or "USD"
+    # Quick test: does this exchange actually have pairs for this quote?
     try:
         avail = list_products(exch, q)
         if any(p.endswith(f"-{q}") for p in avail):
             return q
     except Exception:
         pass
+    # Pick the first quote that has any pairs
     for cand in prefs[exch]:
         try:
             avail = list_products(exch, cand)
@@ -574,13 +608,17 @@ def _compatible_quote(exch: str, quote: str) -> str:
             continue
     return q or prefs[exch][0]
 
+# If user selected a coming-soon exchange, effective_exchange is Coinbase.
+# Make sure the quote matches the effective exchange automatically.
 fixed_quote = _compatible_quote(effective_exchange, st.session_state["quote"])
 if fixed_quote != st.session_state["quote"]:
     st.session_state["quote"] = fixed_quote
     st.toast(f"Adjusted quote to {fixed_quote} for {effective_exchange} discovery", icon="🔧")
 
+# Guard against discovery cap being zero
 if int(st.session_state.get("discover_cap", 0)) <= 0:
     st.session_state["discover_cap"] = 100
+
 
 # ----------------------------- MODE
 with expander("Mode"):
