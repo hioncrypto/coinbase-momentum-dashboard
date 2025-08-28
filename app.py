@@ -603,8 +603,15 @@ with expander("Market"):
 # ----------------------------- MODE
 with expander("Mode"):
     st.radio("Data source", ["REST only","WebSocket + REST (hybrid)"],
-             index=0 if st.session_state.get("mode","REST only")=="REST only" else 1, horizontal=True, key="mode")
-    st.slider("WS subscribe chunk (Coinbase)", 2, 20, int(st.session_state.get("ws_chunk",5)), 1, key="ws_chunk")
+             index=0 if st.session_state.get("mode","REST only")=="REST only" else 1,
+             horizontal=True, key="mode")
+
+    # initialize once, then let the widget own it
+    if "ws_chunk" not in st.session_state:
+        st.session_state["ws_chunk"] = 5  # default value
+
+    st.slider("WS subscribe chunk (Coinbase)", 2, 20, key="ws_chunk", step=1)
+
 
 # ----------------------------- TIMEFRAMES
 with expander("Timeframes"):
@@ -739,7 +746,7 @@ sync_state_to_query_params()
 # ----------------------------- Header label
 st.markdown(f"<div style='font-size:1.3rem;font-weight:700;margin:4px 0 10px 2px;'>Timeframe: {st.session_state['sort_tf']}</div>", unsafe_allow_html=True)
 
-# ----------------------------- Discovery pool
+
 # ----------------------------- Discovery pool
 if st.session_state["use_my_pairs"]:
     pairs = [p.strip().upper() for p in st.session_state.get("my_pairs", "").split(",") if p.strip()]
@@ -888,7 +895,7 @@ for pid in pairs:
         }
     )
 
-# ----------------------------- Diagnostics & Tables
+
 # ----------------------------- Diagnostics & Tables
 st.caption(
     f"Diagnostics — Available(after cap): {diag_available} • "
