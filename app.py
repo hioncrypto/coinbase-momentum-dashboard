@@ -822,14 +822,24 @@ if want_ws: start_ws(effective_exchange, pairs, int(st.session_state.get("ws_chu
 else: stop_ws()
 
 # ----------------------------- Build rows + diagnostics
-diag_available=len(pairs)
-diag_fetched=0; diag_skip_bars=0; diag_skip_api=0
+diag_available = len(pairs)
+diag_fetched = 0
+diag_skip_bars = 0
+diag_skip_api = 0
 
-rows=[]
+rows = []
 _min_bars = int(st.session_state.get("min_bars", 30))
+_tf = st.session_state["sort_tf"]
+
+# Use cached TF fn if present
+_tf_func = (globals().get("df_for_tf_cached") or globals().get("df_for_tf"))
 
 for pid in pairs:
-    dft = df_for_tf_cached(effective_exchange, pid, st.session_state["sort_tf"])
+    dft = None
+    try:
+        dft = _tf_func(effective_exchange, pid, _tf)
+    except Exception:
+        dft = None
     if dft is None:
         diag_skip_api += 1
         continue
@@ -840,68 +850,138 @@ for pid in pairs:
     dft = dft.tail(400).copy()
 
     last_price = float(dft["close"].iloc[-1])
-    if effective_exchange=="Coinbase" and st.session_state["ws_prices"].get(pid):
+    if effective_exchange == "Coinbase" and st.session_state["ws_prices"].get(pid):
         last_price = float(st.session_state["ws_prices"][pid])
 
     first_price = float(dft["close"].iloc[0])
-    pct_display = (last_price/first_price - 1.0) * 100.0
+    pct_display = (last_price / first_price - 1.0) * 100.0
 
-    basis=st.session_state["basis"]
-    amt = dict(Hourly=st.session_state["amount_hourly"],
-               Daily=st.session_state["amount_daily"],
-               Weekly=st.session_state["amount_weekly"])[basis]
-    histdf=get_hist(effective_exchange, pid, basis, amt)
-    if histdf is None or len(histdf)<10:
-        athp,athd,atlp,atld=np.nan,"—",np.nan,"—"
+    basis = st.session_state["basis"]
+    amt = dict(
+        Hourly=st.session_state["amount_hourly"],
+        Daily=st.session_state["amount_daily"],
+        Weekly=st.session_state["amount_weekly"],
+    )[basis]
+    histdf = get_hist(effective_exchange, pid, basis, amt)
+    if histdf is None or len(histdf) < 10:
+        athp, athd, atlp, atld = np.nan, "—", np.nan, "—"
     else:
-        aa=ath_atl_info(histdf); athp,athd,atlp,atld=aa["From ATH %"],aa["ATH date"],aa["From ATL %"],aa["ATL date"]
+        aa = ath_atl_info(histdf)
+        athp, athd, atlp, atld = aa["From ATH %"], aa["ATH date"], aa["From ATL %"], aa["ATL date"]
 
-    meta, passed, chips, enabled_cnt = build_gate_eval(dft, dict(
-        lookback_candles=int(st.session_state["lookback_candles"]),
-        min_pct=float(st.session_state["min_pct"]),
-        use_vol_spike=st.session_state["use_vol_spike"],
-        vol_mult=float(st.session_state["vol_mult"]),
-        vol_window=int(st.session_state.get("vol_window", 20)),
-        use_rsi=st.session_state["use_rsi"], rsi_len=int(st.session_state.get("rsi_len", 14)), min_rsi=int(st.session_state["min_rsi"]),
-        use_macd=st.session_state["use_macd"], macd_fast=int(st.session_state.get("macd_fast", 12)),
-        macd_slow=int(st.session_state.get("macd_slow", 26)), macd_sig=int(st.session_state.get("macd_sig", 9)), min_mhist=float(st.session_state["min_mhist"]),
-        use_atr=st.session_state["use_atr"], atr_len=int(st.session_state.get("atr_len", 14)), min_atr=float(st.session_state["min_atr"]),
-        use_trend=st.session_state["use_trend"], pivot_span=int(st.session_state["pivot_span"]), trend_within=int(st.session_state["trend_within"]),
-        use_roc=st.session_state["use_roc"], min_roc=float(st.session_state["min_roc"]),
-        use_macd_cross=st.session_state.get("use_macd_cross", True),
-        macd_cross_bars=int(st.session_state.get("macd_cross_bars", 5)),
-        macd_cross_only_bull=st.session_state.get("macd_cross_only_bull", True),
-        macd_cross_below_zero=st.session_state.get("macd_cross_below_zero", True),
-        macd_hist_confirm_bars=int(st.session_state.get("macd_hist_confirm_bars", 3)),
-    ))
+    meta, passed, chips, enabled_cnt = build_gate_eval(
+        dft,
+        dict(
+            lookback_candles=int(st.session_state["lookback_candles"]),
+            min_pct=float(st.session_state["min_pct"]),
+            use_vol_spike=st.session_state["use_vol_spike"],
+            vol_mult=float(st.session_state["vol_mult"]),
+            vol_window=int(st.session_state.get("vol_window", 20)),
+            use_rsi=st.session_state["use_rsi"],
+            rsi_len=int(st.session_state.get("rsi_len", 14)),
+            min_rsi=int(st.session_state["min_rsi"]),
+            use_macd=st.session_state["use_macd"],
+            macd_fast=int(st.session_state.get("macd_fast", 12)),
+            macd_slow=int(st.session_state.get("macd_slow", 26)),
+            macd_sig=int(st.session_state.get("macd_sig", 9)),
+            min_mhist=float(st.session_state["min_mhist"]),
+            use_atr=st.session_state["use_atr"],
+            atr_len=int(st.session_state.get("atr_len", 14)),
+            min_atr=float(st.session_state["min_atr"]),
+            use_trend=st.session_state["use_trend"],
+            pivot_span=int(st.session_state["pivot_span"]),
+            trend_within=int(st.session_state["trend_within"]),
+            use_roc=st.session_state["use_roc"],
+            min_roc=float(st.session_state["min_roc"]),
+            use_macd_cross=st.session_state.get("use_macd_cross", True),
+            macd_cross_bars=int(st.session_state.get("macd_cross_bars", 5)),
+            macd_cross_only_bull=st.session_state.get("macd_cross_only_bull", True),
+            macd_cross_below_zero=st.session_state.get("macd_cross_below_zero", True),
+            macd_hist_confirm_bars=int(st.session_state.get("macd_hist_confirm_bars", 3)),
+        ),
+    )
 
-    mode = st.session_state.get("gate_mode","ANY")
-    if mode=="ALL":
-        include=(enabled_cnt>0 and passed==enabled_cnt)
-        is_green=include; is_yellow=(0<passed<enabled_cnt)
-    elif mode=="ANY":
-        include=(passed>=1)
-        is_green=include; is_yellow=False
+    mode = st.session_state.get("gate_mode", "ANY")
+    if mode == "ALL":
+        include = (enabled_cnt > 0 and passed == enabled_cnt)
+        is_green = include
+        is_yellow = (0 < passed < enabled_cnt)
+    elif mode == "ANY":
+        include = (passed >= 1)
+        is_green = include
+        is_yellow = False
     else:  # Custom (K/Y)
-        K=int(st.session_state["K_green"]); Y=int(st.session_state["Y_yellow"])
-        include=True
-        is_green=(passed>=K); is_yellow=(passed>=Y and passed<K)
+        K = int(st.session_state["K_green"])
+        Y = int(st.session_state["Y_yellow"])
+        include = True
+        is_green = (passed >= K)
+        is_yellow = (passed >= Y and passed < K)
 
     if st.session_state.get("hard_filter", False):
-        if mode in {"ALL","ANY"} and not include:
+        if mode in {"ALL", "ANY"} and not include:
             continue
-        if mode=="Custom (K/Y)" and not (is_green or is_yellow):
+        if mode == "Custom (K/Y)" and not (is_green or is_yellow):
             continue
 
-    rows.append({
-        "Pair": pid,
-        "Price": last_price,
-        f"% Change ({st.session_state['sort_tf']})": pct_display,
-        f"Δ% (last {max(1,int(st.session_state['lookback_candles']))} bars)": meta["delta_pct"],
-        "From ATH %": athp, "ATH date": athd, "From ATL %": atlp, "ATL date": atld,
-        "Gates": chips, "Strong Buy": "YES" if is_green else "—",
-        "_green": is_green, "_yellow": is_yellow
-    })
+    rows.append(
+        {
+            "Pair": pid,
+            "Price": last_price,
+            f"% Change ({_tf})": pct_display,
+            f"Δ% (last {max(1, int(st.session_state['lookback_candles']))} bars)": meta["delta_pct"],
+            "From ATH %": athp,
+            "ATH date": athd,
+            "From ATL %": atlp,
+            "ATL date": atld,
+            "Gates": chips,
+            "Strong Buy": "YES" if is_green else "—",
+            "_green": is_green,
+            "_yellow": is_yellow,
+        }
+    )
+
+# If nothing survived, do a second pass that force-relaxes gates so SOMETHING renders
+second_pass_used = False
+if not rows and diag_available > 0:
+    second_pass_used = True
+    preview = []
+    sample = pairs[:50]  # keep it snappy
+    reasons = []
+    for pid in sample:
+        dft = None
+        try:
+            dft = _tf_func(effective_exchange, pid, _tf)
+        except Exception:
+            dft = None
+        if dft is None:
+            reasons.append((pid, "API_FAIL"))
+            continue
+        if len(dft) < _min_bars:
+            reasons.append((pid, f"TOO_FEW_BARS({len(dft)}<{_min_bars})"))
+            continue
+        last = float(dft["close"].iloc[-1])
+        first = float(dft["close"].iloc[0])
+        chg = (last / first - 1.0) * 100.0
+        preview.append({"Pair": pid, "Price": last, f"% Change ({_tf})": chg, "Bars": len(dft)})
+    # show a slim preview frame if available
+    if preview:
+        st.warning(
+            "No rows passed your gates. Showing raw discovery preview (gates disabled) for a quick sanity check."
+        )
+        prev_df = pd.DataFrame(preview).sort_values(by=f"% Change ({_tf})", ascending=False, na_position="last")
+        st.dataframe(prev_df, use_container_width=True, hide_index=True)
+    # brief reason dump
+    if preview or reasons:
+        st.caption(
+            f"Second-pass sample: checked={len(sample)} • "
+            + ", ".join(
+                [
+                    f"API_FAIL={sum(1 for _,r in reasons if r=='API_FAIL')}",
+                    f"TOO_FEW_BARS={sum(1 for _,r in reasons if r.startswith('TOO_FEW_BARS'))}",
+                    f"OK={sum(1 for _,r in reasons if r.startswith('OK'))}",
+                ]
+            )
+        )
 
 # ----------------------------- Diagnostics & Tables
 st.caption(
@@ -911,36 +991,8 @@ st.caption(
 
 df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=["Pair"])
 
-if df.empty:
-    # Fallback: show a raw discovery preview ignoring gates so the screen isn't blank.
-    preview = []
-    _min_bars = int(st.session_state.get("min_bars", 30))
-    tf = st.session_state["sort_tf"]
-
-    # Use whichever TF function exists (cached in newer file, uncached in older file)
-    _tf_func = (globals().get("df_for_tf_cached") or globals().get("df_for_tf"))
-
-    for pid in pairs[:50]:  # cap preview to keep it snappy
-        try:
-            dft = _tf_func(effective_exchange, pid, tf)
-        except Exception:
-            dft = None
-        if dft is None or len(dft) < _min_bars:
-            continue
-        last = float(dft["close"].iloc[-1])
-        first = float(dft["close"].iloc[0])
-        chg = (last/first - 1.0) * 100.0
-        preview.append({"Pair": pid, "Price": last, f"% Change ({tf})": chg, "Bars": len(dft)})
-
-    if preview:
-        st.warning("Showing raw discovery preview (gates disabled). Your gate settings or hard filter hid everything above.")
-        prev_df = pd.DataFrame(preview).sort_values(by=f"% Change ({tf})", ascending=False, na_position="last")
-        st.dataframe(prev_df, use_container_width=True, hide_index=True)
-    else:
-        st.error("No rows even in raw preview. Lower 'Minimum bars' in Timeframes or switch TF (try 1h), then refresh.")
-else:
-    # Normal render
-    chg_col = f"% Change ({st.session_state['sort_tf']})"
+if not df.empty:
+    chg_col = f"% Change ({_tf})"
     df = df.sort_values(chg_col, ascending=not st.session_state["sort_desc"], na_position="last").reset_index(drop=True)
     df.insert(0, "#", df.index + 1)
 
@@ -953,9 +1005,17 @@ else:
 
     st.caption(
         f"Pairs shown: {len(df)} • Exchange: {effective_exchange} • Quote: {st.session_state['quote']} "
-        f"• TF: {st.session_state['sort_tf']} • Gate Mode: {st.session_state['gate_mode']} • "
+        f"• TF: {_tf} • Gate Mode: {st.session_state['gate_mode']} • "
         f"Hard filter: {'On' if st.session_state['hard_filter'] else 'Off'}"
     )
+else:
+    # If the second-pass preview ran, we've already shown something above; otherwise give a clear hint.
+    if not second_pass_used:
+        st.info(
+            "No rows to show. Try Gate Mode=ANY, Hard filter=Off, lower Min Δ, shorten Δ lookback, "
+            "reduce Minimum bars, or switch TF (try 1h)."
+        )
+
 # ----------------------------- Listing Radar engine
 def lr_parse_quotes(csv_text: str) -> set:
     return set(x.strip().upper() for x in (csv_text or "").split(",") if x.strip())
