@@ -849,13 +849,13 @@ diag_skip_api = 0
 
 rows = []
 _tf = st.session_state.get("sort_tf", "1h")
-
 for pid in pairs:
     _tf_func = globals().get("df_for_tf_cached") or globals().get("df_for_tf")
-dft = _tf_func(effective_exchange, pid, _tf) if _tf_func else None
+    dft = _tf_func(effective_exchange, pid, _tf) if _tf_func else None
     if dft is None or dft.empty:
         diag_skip_api += 1
         continue
+
     if len(dft) < int(st.session_state.get("min_bars", 30)):
         diag_skip_bars += 1
         continue
