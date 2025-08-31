@@ -945,6 +945,7 @@ for pid in pairs:
     })
 
 # ----------------------------- Diagnostics & Tables
+# ----------------------------- Diagnostics & Tables
 st.caption(
     f"Diagnostics — Available: {diag_available} • Capped: {diag_capped} • "
     f"Fetched OK: {diag_fetched} • Skipped (bars): {diag_skip_bars} • Skipped (API): {diag_skip_api} • "
@@ -954,25 +955,39 @@ st.caption(
 if not rows:
     st.error("No rows built at all. Set TF=1h and Min bars=5–12 to sanity check.")
 else:
-    chg_col = f\"% Change ({st.session_state['sort_tf']})\"
-    df_all = pd.DataFrame(rows).sort_values(chg_col, ascending=not st.session_state.get(\"sort_desc\", True), na_position=\"last\").reset_index(drop=True)
-    df_all.insert(0, \"#\", df_all.index + 1)
+    chg_col = f"% Change ({st.session_state['sort_tf']})"
+    df_all = (
+        pd.DataFrame(rows)
+        .sort_values(chg_col, ascending=not st.session_state.get("sort_desc", True), na_position="last")
+        .reset_index(drop=True)
+    )
+    df_all.insert(0, "#", df_all.index + 1)
 
     # Apply 'Hard filter' only at presentation time
-    df = df_all[df_all[\"_show\"]] if st.session_state.get(\"hard_filter\", False) else df_all
+    df = df_all[df_all["_show"]] if st.session_state.get("hard_filter", False) else df_all
 
-    st.subheader(\"📌 Top-10 (greens only)\")
-    top10 = df[df[\"_green\"]].sort_values(chg_col, ascending=False, na_position=\"last\").head(10).drop(columns=[\"_green\",\"_yellow\",\"_show\"], errors=\"ignore\")
-    st.data_editor(top10 if not top10.empty else pd.DataFrame(columns=top10.columns if hasattr(top10, \"columns\") else []),
-                   use_container_width=True, hide_index=True, disabled=True)
+    st.subheader("📌 Top-10 (greens only)")
+    top10 = (
+        df[df["_green"]]
+        .sort_values(chg_col, ascending=False, na_position="last")
+        .head(10)
+        .drop(columns=["_green", "_yellow", "_show"], errors="ignore")
+    )
+    st.data_editor(
+        top10 if not top10.empty else pd.DataFrame(columns=top10.columns if hasattr(top10, "columns") else []),
+        use_container_width=True, hide_index=True, disabled=True
+    )
 
-    st.subheader(\"📑 All pairs\")
-    st.data_editor(df.drop(columns=[\"_green\",\"_yellow\",\"_show\"], errors=\"ignore\"), use_container_width=True, hide_index=True, disabled=True)
+    st.subheader("📑 All pairs")
+    st.data_editor(
+        df.drop(columns=["_green", "_yellow", "_show"], errors="ignore"),
+        use_container_width=True, hide_index=True, disabled=True
+    )
 
     st.caption(
-        f\"Pairs shown: {len(df)} • Exchange: {effective_exchange} • Quote: {st.session_state['quote']} • "
-        f\"TF: {st.session_state['sort_tf']} • Gate Mode: {st.session_state.get('gate_mode','ANY')} • "
-        f\"Hard filter: {'On' if st.session_state.get('hard_filter', False) else 'Off'}\"
+        f"Pairs shown: {len(df)} • Exchange: {effective_exchange} • Quote: {st.session_state['quote']} "
+        f"• TF: {st.session_state['sort_tf']} • Gate Mode: {st.session_state.get('gate_mode','ANY')} • "
+        f"Hard filter: {'On' if st.session_state.get('hard_filter', False) else 'Off'}"
     )
 
 
