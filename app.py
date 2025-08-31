@@ -842,47 +842,34 @@ else: stop_ws()
 
 # ----------------------------- Build rows + diagnostics
 diag_available = len(pairs)
+diag_capped = len(pairs)
 diag_fetched = 0
 diag_skip_bars = 0
 diag_skip_api = 0
 
 rows = []
-
-# time frame + min bars
 _tf = st.session_state.get("sort_tf", "1h")
-_min_bars = int(st.session_state.get("min_bars", 30))
-_tf_func = (globals().get("df_for_tf_cached") or globals().get("df_for_tf"))
 
 for pid in pairs:
-    # fetch candles for the selected TF
-    try:
-        dft = _tf_func(effective_exchange, pid, _tf)
-    except Exception:
-        dft = None
-
+    dft = df_for_tf(effective_exchange, pid, _tf)
     if dft is None or dft.empty:
         diag_skip_api += 1
         continue
-
-    if len(dft) < _min_bars:
+    if len(dft) < int(st.session_state.get("min_bars", 30)):
         diag_skip_bars += 1
         continue
 
     diag_fetched += 1
     dft = dft.tail(400).copy()
 
-    # last price (prefer WS if available for Coinbase)
     last_price = float(dft["close"].iloc[-1])
-    if effective_exchange == "Coinbase":
-        _ws_px = st.session_state.get("ws_prices", {}).get(pid)
-        if _ws_px:
-            last_price = float(_ws_px)
+    if effective_exchange == "Coinbase" and st.session_state.get("ws_prices", {}).get(pid):
+        last_price = float(st.session_state["ws_prices"][pid])
 
-    # simple percent change across this TF window
     first_price = float(dft["close"].iloc[0])
     pct_display = (last_price / first_price - 1.0) * 100.0
 
-    # optional ATH/ATL info based on user's History depth settings
+    # ATH/ATL (unchanged)
     basis = st.session_state.get("basis", "Daily")
     amt = dict(
         Hourly=st.session_state.get("amount_hourly", 24),
@@ -893,34 +880,101 @@ for pid in pairs:
     if histdf is None or len(histdf) < 10:
         athp, athd, atlp, atld = np.nan, "—", np.nan, "—"
     else:
-        aa = ath_atl_info(histdf)
-        athp, athd, atlp, atld = aa["From ATH %"], aa["ATH date"], aa["From ATL %"], aa["ATL date"]
+        aa = ath_atl_info(histdf); athp, athd, atlp, atld = aa["From ATH %"], aa["ATH date"], aa["From ATL %"], aa["ATL date"]
 
-    # We are IGNORING all gates here; provide neutral placeholders so renderers don't crash
+    # Evaluate gates (same as before)
+    meta, passed, chips, enabled_cnt = build_gate_eval(dft, dict(
+        lookback_candles=int(st.session_state.get("lookback_candles", DEFAULTS["lookback_candles"])),
+        min_pct=float(st.session_state.get("min_pct", DEFAULTS["min_pct"])),
+        use_vol_spike=st.session_state.get("use_vol_spike", DEFAULTS["use_vol_spike"]),
+        vol_mult=float(st.session_state.get("vol_mult", DEFAULTS["vol_mult"])),
+        vol_window=DEFAULTS["vol_window"],
+        use_rsi=st.session_state.get("use_rsi", DEFAULTS["use_rsi"]),
+        rsi_len=int(st.session_state.get("rsi_len", 14)),
+        min_rsi=int(st.session_state.get("min_rsi", DEFAULTS["min_rsi"])),
+        use_macd=st.session_state.get("use_macd", DEFAULTS["use_macd"]),
+        macd_fast=int(st.session_state.get("macd_fast", 12)),
+        macd_slow=int(st.session_state.get("macd_slow", 26)),
+        macd_sig=int(st.session_state.get("macd_sig", 9)),
+        min_mhist=float(st.session_state.get("min_mhist", DEFAULTS["min_mhist"])),
+        use_atr=st.session_state.get("use_atr", DEFAULTS["use_atr"]),
+        atr_len=int(st.session_state.get("atr_len", 14)),
+        min_atr=float(st.session_state.get("min_atr", DEFAULTS["min_atr"])),
+        use_trend=st.session_state.get("use_trend", DEFAULTS["use_trend"]),
+        pivot_span=int(st.session_state.get("pivot_span", DEFAULTS["pivot_span"])),
+        trend_within=int(st.session_state.get("trend_within", DEFAULTS["trend_within"])),
+        use_roc=st.session_state.get("use_roc", DEFAULTS["use_roc"]),
+        min_roc=float(st.session_state.get("min_roc", DEFAULTS["min_roc"])),
+        use_macd_cross=st.session_state.get("use_macd_cross", DEFAULTS["use_macd_cross"]),
+        macd_cross_bars=int(st.session_state.get("macd_cross_bars", DEFAULTS["macd_cross_bars"])),
+        macd_cross_only_bull=st.session_state.get("macd_cross_only_bull", DEFAULTS["macd_cross_only_bull"]),
+        macd_cross_below_zero=st.session_state.get("macd_cross_below_zero", DEFAULTS["macd_cross_below_zero"]),
+        macd_hist_confirm_bars=int(st.session_state.get("macd_hist_confirm_bars", DEFAULTS["macd_hist_confirm_bars"])),
+    ))
+
+    mode = st.session_state.get("gate_mode", "ANY")
+    if mode == "ALL":
+        include = (enabled_cnt > 0 and passed == enabled_cnt)
+        is_green = include; is_yellow = (0 < passed < enabled_cnt)
+    elif mode == "ANY":
+        include = (passed >= 1)
+        is_green = include; is_yellow = False
+    else:  # Custom (K/Y)
+        K = int(st.session_state.get("K_green", DEFAULTS["K_green"]))
+        Y = int(st.session_state.get("Y_yellow", DEFAULTS["Y_yellow"]))
+        include = True
+        is_green = (passed >= K); is_yellow = (passed >= Y and passed < K)
+
+    # IMPORTANT CHANGE:
+    # Don't skip rows here. Just mark whether they'd be shown under Hard filter.
+    show_flag = True
+    if st.session_state.get("hard_filter", False):
+        if mode in {"ALL", "ANY"} and not include:
+            show_flag = False
+        if mode == "Custom (K/Y)" and not (is_green or is_yellow):
+            show_flag = False
+
     rows.append({
         "Pair": pid,
         "Price": last_price,
         f"% Change ({_tf})": pct_display,
-        f"Δ% (last {max(1, int(st.session_state.get('lookback_candles', 1)))} bars)": np.nan,
+        f"Δ% (last {max(1,int(st.session_state.get('lookback_candles',1)))} bars)": meta["delta_pct"],
         "From ATH %": athp, "ATH date": athd, "From ATL %": atlp, "ATL date": atld,
-        "Gates": "—",
-        "Strong Buy": "—",
-        "_green": False,
-        "_yellow": False,
+        "Gates": chips, "Strong Buy": "YES" if is_green else "—",
+        "_green": is_green, "_yellow": is_yellow, "_show": show_flag
     })
+
 # ----------------------------- Diagnostics & Tables
 st.caption(
-    f"Diagnostics — Available(after cap): {diag_available} • "
-    f"Fetched OK: {diag_fetched} • Skipped(bars): {diag_skip_bars} • "
-    f"Skipped(API): {diag_skip_api} • Built rows={len(rows)}"
+    f"Diagnostics — Available: {diag_available} • Capped: {diag_capped} • "
+    f"Fetched OK: {diag_fetched} • Skipped (bars): {diag_skip_bars} • Skipped (API): {diag_skip_api} • "
+    f"Built rows: {len(rows)}"
 )
 
-if rows:
-    df = pd.DataFrame(rows)
-    st.subheader("📑 All discovered pairs (no gates)")
-    st.dataframe(df, use_container_width=True, hide_index=True)
+if not rows:
+    st.error("No rows built at all. Set TF=1h and Min bars=5–12 to sanity check.")
 else:
-    st.error("No rows were built. Try setting TF=1h and Min bars=5–12 to confirm candles load.")
+    chg_col = f\"% Change ({st.session_state['sort_tf']})\"
+    df_all = pd.DataFrame(rows).sort_values(chg_col, ascending=not st.session_state.get(\"sort_desc\", True), na_position=\"last\").reset_index(drop=True)
+    df_all.insert(0, \"#\", df_all.index + 1)
+
+    # Apply 'Hard filter' only at presentation time
+    df = df_all[df_all[\"_show\"]] if st.session_state.get(\"hard_filter\", False) else df_all
+
+    st.subheader(\"📌 Top-10 (greens only)\")
+    top10 = df[df[\"_green\"]].sort_values(chg_col, ascending=False, na_position=\"last\").head(10).drop(columns=[\"_green\",\"_yellow\",\"_show\"], errors=\"ignore\")
+    st.data_editor(top10 if not top10.empty else pd.DataFrame(columns=top10.columns if hasattr(top10, \"columns\") else []),
+                   use_container_width=True, hide_index=True, disabled=True)
+
+    st.subheader(\"📑 All pairs\")
+    st.data_editor(df.drop(columns=[\"_green\",\"_yellow\",\"_show\"], errors=\"ignore\"), use_container_width=True, hide_index=True, disabled=True)
+
+    st.caption(
+        f\"Pairs shown: {len(df)} • Exchange: {effective_exchange} • Quote: {st.session_state['quote']} • "
+        f\"TF: {st.session_state['sort_tf']} • Gate Mode: {st.session_state.get('gate_mode','ANY')} • "
+        f\"Hard filter: {'On' if st.session_state.get('hard_filter', False) else 'Off'}\"
+    )
+
 
 # ----------------------------- Listing Radar engine
 def lr_parse_quotes(csv_text: str) -> set:
