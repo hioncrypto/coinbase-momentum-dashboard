@@ -638,72 +638,268 @@ with expander("Timeframes"):
     st.slider("Minimum bars required (per pair)", 5, 200, key="min_bars", step=1)
 
 # ----------------------------- Gates
+# ----------------------------- GATES
+with expander("Gates"):
+    # Preset
+    st.radio(
+        "Preset",
+        ["Spike Hunter","Early MACD Cross","Confirm Rally","None"],
+        index=["Spike Hunter","Early MACD Cross","Confirm Rally","None"].index(
+            st.session_state.get("preset","Spike Hunter")
+        ),
+        horizontal=True,
+        key="preset"
+    )
+
+    # Apply presets (non-destructive; you can still tweak after)
+    if st.session_state["preset"] == "Spike Hunter":
+        st.session_state.update({
+            "gate_mode":"ANY", "hard_filter":False,
+            "lookback_candles":3, "min_pct":3.0,
+            "use_vol_spike":True, "vol_mult":1.10,
+            "use_rsi":False, "use_macd":False,
+            "use_trend":False, "use_roc":False,
+            "use_macd_cross":False
+        })
+    elif st.session_state["preset"] == "Early MACD Cross":
+        st.session_state.update({
+            "gate_mode":"ANY", "hard_filter":False,
+            "lookback_candles":3, "min_pct":3.0,
+            "use_vol_spike":True, "vol_mult":1.10,
+            "use_rsi":True, "min_rsi":50,
+            "use_macd":False, "use_trend":False, "use_roc":False,
+            "use_macd_cross":True, "macd_cross_bars":5,
+            "macd_cross_only_bull":True,
+            "macd_cross_below_zero":True,
+            "macd_hist_confirm_bars":3
+        })
+    elif st.session_state["preset"] == "Confirm Rally":
+        st.session_state.update({
+            "gate_mode":"Custom (K/Y)", "hard_filter":True,
+            "lookback_candles":2, "min_pct":5.0,
+            "use_vol_spike":True, "vol_mult":1.20,
+            "use_rsi":True, "min_rsi":60,
+            "use_macd":True, "min_mhist":0.0,
+            "use_trend":True, "pivot_span":4, "trend_within":48,
+            "use_roc":False, "use_macd_cross":False,
+            "K_green":3, "Y_yellow":2
+        })
+
+    # Gate mode + hard filter
+    st.radio(
+        "Gate Mode",
+        ["ALL","ANY","Custom (K/Y)"],
+        index=["ALL","ANY","Custom (K/Y)"].index(
+            st.session_state.get("gate_mode","ANY")
+        ),
+        horizontal=True,
+        key="gate_mode"
+    )
+    st.toggle(
+        "Hard filter (hide non-passers)",
+        key="hard_filter",
+        value=st.session_state.get("hard_filter", False)
+    )
+
+    # Global deltas
+    st.slider(
+        "Δ lookback (candles)",
+        0, 100, int(st.session_state.get("lookback_candles", 3)), 1,
+        key="lookback_candles"
+    )
+    st.slider(
+        "Min +% change (Δ gate)",
+        0.0, 50.0, float(st.session_state.get("min_pct", 3.0)), 0.5,
+        key="min_pct"
+    )
+
+    # Individual gates
+    c1,c2,c3 = st.columns(3)
+    with c1:
+        st.toggle("Volume spike ×", key="use_vol_spike",
+                  value=st.session_state.get("use_vol_spike", True))
+        st.slider("Spike multiple ×", 1.0, 5.0,
+                  float(st.session_state.get("vol_mult", 1.10)), 0.05,
+                  key="vol_mult")
+    with c2:
+        st.toggle("RSI", key="use_rsi", value=st.session_state.get("use_rsi", False))
+        st.slider("Min RSI", 40, 90, int(st.session_state.get("min_rsi", 55)), 1,
+                  key="min_rsi")
+    with c3:
+        st.toggle("MACD hist", key="use_macd",
+                  value=st.session_state.get("use_macd", False))
+        st.slider("Min MACD hist", 0.0, 2.0,
+                  float(st.session_state.get("min_mhist", 0.0)), 0.05,
+                  key="min_mhist")
+
+    c4,c5,c6 = st.columns(3)
+    with c4:
+        st.toggle("ATR %", key="use_atr", value=st.session_state.get("use_atr", False))
+        st.slider("Min ATR %", 0.0, 10.0,
+                  float(st.session_state.get("min_atr", 0.5)), 0.1,
+                  key="min_atr")
+    with c5:
+        st.toggle("Trend breakout (up)", key="use_trend",
+                  value=st.session_state.get("use_trend", False))
+        st.slider("Pivot span (bars)", 2, 10,
+                  int(st.session_state.get("pivot_span", 4)), 1,
+                  key="pivot_span")
+        st.slider("Breakout within (bars)", 5, 96,
+                  int(st.session_state.get("trend_within", 48)), 1,
+                  key="trend_within")
+    with c6:
+        st.toggle("ROC (rate of change)", key="use_roc",
+                  value=st.session_state.get("use_roc", False))
+        st.slider("Min ROC %", 0.0, 50.0,
+                  float(st.session_state.get("min_roc", 1.0)), 0.5,
+                  key="min_roc")
+
+    st.markdown("**MACD Cross (early entry)**")
+    c7,c8,c9,c10 = st.columns(4)
+    with c7:
+        st.toggle("Enable MACD Cross", key="use_macd_cross",
+                  value=st.session_state.get("use_macd_cross", True))
+    with c8:
+        st.slider("Cross within last (bars)", 1, 10,
+                  int(st.session_state.get("macd_cross_bars", 5)), 1,
+                  key="macd_cross_bars")
+    with c9:
+        st.toggle("Bullish only", key="macd_cross_only_bull",
+                  value=st.session_state.get("macd_cross_only_bull", True))
+    with c10:
+        st.toggle("Prefer below zero", key="macd_cross_below_zero",
+                  value=st.session_state.get("macd_cross_below_zero", True))
+    st.slider("Histogram > 0 within (bars)", 0, 10,
+              int(st.session_state.get("macd_hist_confirm_bars", 3)), 1,
+              key="macd_hist_confirm_bars")
+
+    st.markdown("---")
+    st.subheader("Color rules (Custom only)")
+    st.selectbox(
+        "Gates needed to turn green (K)",
+        list(range(1,8)),
+        index=int(st.session_state.get("K_green", 3))-1,
+        key="K_green"
+    )
+    st.selectbox(
+        "Yellow needs ≥ Y (but < K)",
+        list(range(0, int(st.session_state.get("K_green", 3)))),
+        index=min(int(st.session_state.get("Y_yellow", 2)),
+                  int(st.session_state.get("K_green", 3))-1),
+        key="Y_yellow"
+    )
+
+# Quick kill switch for all filters/gates (UI lives in the Gates section)
+st.session_state["bypass_filters"] = st.sidebar.checkbox(
+    "Bypass all gates/filters", value=False
+)
 
 def build_gate_eval(df_tf: pd.DataFrame, settings: dict) -> Tuple[dict, int, str, int]:
     """
-    Evaluate gates for a given timeframe dataframe.
-
-    Returns:
-        meta (dict): metadata about evaluation
-        passed (int): number of gates passed
-        chips (str): formatted chips string
-        enabled (int): number of gates enabled
+    Returns: meta, passed_count, chips_str, enabled_count
+    Gates: Δ, Volume×, ROC, Trend, RSI, MACD hist, ATR%, MACD Cross
     """
     n = len(df_tf)
+    lb = max(1, min(int(settings.get("lookback_candles", 3)), 100, n-1))
+    last_close = float(df_tf["close"].iloc[-1])
+    ref_close  = float(df_tf["close"].iloc[-lb])
+    delta_pct  = (last_close/ref_close - 1.0) * 100.0
+    g_delta    = bool(delta_pct >= float(settings.get("min_pct", 0.0)))
 
-    # Force Δ lookback to exactly 1 bar (per your requirement)
-    lb = 1 if n > 1 else 1
+    macd_line, signal_line, hist = macd_core(
+        df_tf["close"],
+        int(settings.get("macd_fast", 12)),
+        int(settings.get("macd_slow", 26)),
+        int(settings.get("macd_sig", 9)),
+    )
 
-    chips = []
-    passed = 0
-    enabled = 0
-    meta = {}
+    chips=[]; passed=0; enabled=0
+    def chip(name, enabled_flag, ok, extra=""):
+        if not enabled_flag:
+            chips.append(f"{name}–")
+        else:
+            chips.append(f"{name}{'✅' if ok else '❌'}{extra}")
 
-    # --- Δ % change gate ---
-    if settings.get("chg_enabled", False):
-        enabled += 1
-        chg = 100 * (df_tf["close"].iloc[-1] / df_tf["close"].iloc[-lb] - 1.0)
-        meta["chg"] = round(chg, 2)
-        ok = chg >= settings.get("chg_min", 0.0)
-        if ok:
-            passed += 1
-        chips.append(chip("Δ%", ok, f"{chg:.2f}%"))
+    # Δ (always enabled)
+    passed += int(g_delta); enabled += 1
+    chip("Δ", True, g_delta, f"({delta_pct:+.2f}%)")
 
-    # --- Volume spike gate ---
-    if settings.get("vol_enabled", False):
-        enabled += 1
-        vol = df_tf["volume"].iloc[-1]
-        avg_vol = df_tf["volume"].iloc[-lb:].mean()
-        spike_multiple = vol / avg_vol if avg_vol > 0 else 0
-        meta["vol_spike"] = round(spike_multiple, 2)
-        ok = spike_multiple >= settings.get("vol_min_mult", 1.1)
-        if ok:
-            passed += 1
-        chips.append(chip("Vol", ok, f"{spike_multiple:.2f}×"))
+    # Volume spike ×
+    if settings.get("use_vol_spike", False):
+        volx=volume_spike(df_tf, int(settings.get("vol_window", 20)))
+        ok=bool(pd.notna(volx) and volx >= float(settings.get("vol_mult", 1.10)))
+        passed+=int(ok); enabled+=1; chip(" V", True, ok, f"({volx:.2f}×)" if pd.notna(volx) else "")
+    else: chip(" V", False, False)
 
-    # --- RSI gate ---
-    if settings.get("rsi_enabled", False) and "rsi" in df_tf:
-        enabled += 1
-        rsi = df_tf["rsi"].iloc[-1]
-        meta["rsi"] = round(rsi, 2)
-        ok = rsi >= settings.get("rsi_min", 50)
-        if ok:
-            passed += 1
-        chips.append(chip("RSI", ok, f"{rsi:.1f}"))
+    # ROC
+    if settings.get("use_roc", False):
+        roc=(df_tf["close"].iloc[-1]/df_tf["close"].iloc[-lb]-1.0)*100.0 if n>lb else np.nan
+        ok=bool(pd.notna(roc) and roc >= float(settings.get("min_roc", 1.0)))
+        passed+=int(ok); enabled+=1; chip(" R", True, ok, f"({roc:+.2f}%)" if pd.notna(roc) else "")
+    else: chip(" R", False, False)
 
-    # --- MACD histogram gate ---
-    if settings.get("macd_enabled", False) and "macd_hist" in df_tf:
-        enabled += 1
-        macd_hist = df_tf["macd_hist"].iloc[-1]
-        meta["macd_hist"] = round(macd_hist, 3)
-        ok = macd_hist >= settings.get("macd_min", 0.0)
-        if ok:
-            passed += 1
-        chips.append(chip("MACD", ok, f"{macd_hist:.3f}"))
+    # Trend breakout
+    if settings.get("use_trend", False):
+        ok=trend_breakout_up(df_tf, span=int(settings.get("pivot_span",4)),
+                             within_bars=int(settings.get("trend_within",48)))
+        passed+=int(ok); enabled+=1; chip(" T", True, ok)
+    else: chip(" T", False, False)
 
-    chips_str = " ".join(chips)
-    return meta, passed, chips_str, enabled
+    # RSI
+    if settings.get("use_rsi", False):
+        rcur=float(rsi(df_tf["close"], int(settings.get("rsi_len",14))).iloc[-1])
+        ok=bool(rcur >= float(settings.get("min_rsi",55)))
+        passed+=int(ok); enabled+=1; chip(" S", True, ok, f"({rcur:.1f})")
+    else: chip(" S", False, False)
 
+    # MACD histogram
+    if settings.get("use_macd", False):
+        mh=float(hist.iloc[-1]); ok=bool(mh >= float(settings.get("min_mhist",0.0)))
+        passed+=int(ok); enabled+=1; chip(" M", True, ok, f"({mh:.3f})")
+    else: chip(" M", False, False)
+
+    # ATR %
+    if settings.get("use_atr", False):
+        atr_pct=float((atr(df_tf, int(settings.get("atr_len",14))) / (df_tf["close"]+1e-12) * 100.0).iloc[-1])
+        ok=bool(atr_pct >= float(settings.get("min_atr",0.5)))
+        passed+=int(ok); enabled+=1; chip(" A", True, ok, f"({atr_pct:.2f}%)")
+    else: chip(" A", False, False)
+
+    # MACD Cross
+    cross_meta = {"ok": False, "bars_ago": None, "below_zero": None}
+    if settings.get("use_macd_cross", True):
+        bars=int(settings.get("macd_cross_bars",5))
+        only_bull=bool(settings.get("macd_cross_only_bull", True))
+        need_below=bool(settings.get("macd_cross_below_zero", True))
+        conf=int(settings.get("macd_hist_confirm_bars",3))
+
+        ok=False; bars_ago=None; below=None
+        for i in range(1, min(bars+1, len(hist))):
+            prev = macd_line.iloc[-i-1] - signal_line.iloc[-i-1]
+            now  = macd_line.iloc[-i]   - signal_line.iloc[-i]
+            crossed_up = (prev < 0 and now > 0)
+            crossed_dn = (prev > 0 and now < 0)
+            hit = crossed_up if only_bull else (crossed_up or crossed_dn)
+            if not hit: continue
+            if need_below:
+                if macd_line.iloc[-i] > 0 or signal_line.iloc[-i] > 0:
+                    continue
+                below=True
+            else:
+                below = (macd_line.iloc[-i] < 0 and signal_line.iloc[-i] < 0)
+            if conf>0:
+                conf_ok = any(hist.iloc[-k] > 0 for k in range(i, min(i+conf, len(hist))))
+                if not conf_ok:
+                    continue
+            ok=True; bars_ago=i; break
+
+        cross_meta.update({"ok": ok, "bars_ago": bars_ago, "below_zero": below})
+        passed+=int(ok); enabled+=1
+        chip(" C", True, ok, f" ({bars_ago} bars ago)" if bars_ago is not None else f" (≤{bars})")
+    else: chip(" C", False, False)
+
+    meta={"delta_pct": delta_pct, "macd_cross": cross_meta}
+    return meta, passed, " ".join(chips), enabled
 
 # ----------------------------- INDICATOR LENGTHS
 with expander("Indicator lengths"):
