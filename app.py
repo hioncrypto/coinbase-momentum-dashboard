@@ -713,7 +713,6 @@ with expander("Indicator lengths"):
     st.slider("MACD signal", 3, 50, int(st.session_state.get("macd_sig", 9)), 1, key="macd_sig")
     st.slider("ATR length", 5, 50, int(st.session_state.get("atr_len", 14)), 1, key="atr_len")
 
-# ----------------------------- HISTORY DEPTH
 # ----------------------------- HISTORY DEPTH (for ATH/ATL)
 with expander("History depth (for ATH/ATL)"):
     # New: master switch to avoid long history fetches unless you want them
@@ -861,6 +860,8 @@ diag_fetched += 1
     pct_display = (last_price / first_price - 1.0) * 100.0
 
     # ATH/ATL
+    # ATH/ATL (optional to avoid long-range fetch during discovery)
+if st.session_state.get("do_ath", False):
     basis = st.session_state.get("basis", "Daily")
     amt = dict(
         Hourly=st.session_state.get("amount_hourly", 24),
@@ -868,14 +869,24 @@ diag_fetched += 1
         Weekly=st.session_state.get("amount_weekly", 12),
     )[basis]
     histdf = get_hist(effective_exchange, pid, basis, amt)
-    if histdf is None or len(histdf) < 10:
-        athp, athd, atlp, atld = np.nan, "—", np.nan, "—"
-    else:
-        aa = ath_atl_info(histdf)
-        athp, athd, atlp, atld = aa["From ATH %"], aa["ATH date"], aa["From ATL %"], aa["ATL date"]
+else:
+    histdf = None
 
-    # Gate evaluation
-    meta, passed, chips, enabled_cnt = build_gate_eval(dft, dict(
+if histdf is None or len(histdf) < 10:
+        athp, athd, atlp, atld = (
+        aa["From ATH %"], aa["ATH date"], aa["From ATL %"], aa["ATL date"]
+    )
+
+    # Debug: show raw discovery results before any filters/gates
+    if 'avail' in locals() and avail is not None and not avail.empty:
+        st.subheader("Raw discovered pairs (before filters)")
+        st.write(avail.head(25))  # show first 25 rows
+    else:
+        st.warning("No pairs discovered before filters.")
+
+# Gate evaluation
+meta, passed, chips, enabled_cnt = build_gate_eval(dft, dist)
+
         lookback_candles=int(st.session_state.get("lookback_candles", 3)),
         min_pct=float(st.session_state.get("min_pct", 3.0)),
         use_vol_spike=st.session_state.get("use_vol_spike", True),
