@@ -23,27 +23,83 @@ except Exception:
     WS_AVAILABLE = False
 
 # ----------------------------- Constants
-# ---- Helper: per-TF dataframe (used by discovery/gates)
-def df_for_tf(exchange: str, pair: str, tf: str):
-    # --- API helper: fetch OHLCV candles ----------------------------------------
-def get_df(exchange: str, pair: str, tf: str, limit: int | None = None) -> pd.DataFrame | None:
-    ...
-    # (the whole function I gave you)
+# ----------------------------- Constants
 
+# --- Helper: per-TF dataframe (used by discovery/gates)
+def df_for_tf(exchange: str, pair: str, tf: str):
     """
     Return a small dataframe (~1 day of bars) for `pair` at timeframe `tf`.
-    This wraps your existing single-pair OHLCV fetcher.
     """
     try:
-        bars = one_day_window_bars(tf)  # e.g., 1h->24, 4h->6, 12h->2, 1d->1, etc.
-        # IMPORTANT: Call your existing candle fetcher here.
-        # If your fetcher function name differs, just change the next line's name & signature.
+        bars = one_day_window_bars(tf)  # e.g., 1h->24, 4h->6, 12h->2, 1d->1
         df = get_df(exchange, pair, tf, limit=bars)
         if df is None or getattr(df, "empty", True):
             return None
         return df
     except Exception:
         return None
+
+
+# --- API helper: fetch OHLCV candles ----------------------------------------
+def get_df(exchange: str, pair: str, tf: str, limit: int | None = None) -> pd.DataFrame | None:
+    """
+    Return a pandas DataFrame of OHLCV for `pair` at timeframe `tf`.
+
+    For Coinbase:
+      - Endpoint: /products/{product_id}/candles
+      - Params: granularity (seconds), start, end (ISO8601)
+      - Response rows: [time, low, high, open, close, volume]
+      - Max 300 candles per request. We compute start/end to respect `limit`.
+
+    Columns returned (ascending by time):
+      time (datetime64[ns, UTC]), open, high, low, close, volume
+    """
+    # Map timeframe -> seconds
+    tf_seconds = ALL_TFS.get(tf)
+    if tf_seconds is None:
+        return None
+
+    # Default to ~1 day’s worth of bars if no limit given
+    want = int(limit) if (limit is not None and limit > 0) else 96
+    want = max(1, min(300, want))
+
+    # Compute time window
+    end_dt = datetime.now(timezone.utc)
+    start_dt = end_dt - timedelta(seconds=tf_seconds * want)
+
+    if exchange.lower().startswith("coinbase"):
+        base = "https://api.exchange.coinbase.com"
+        url = f"{base}/products/{pair}/candles"
+        params = {
+            "granularity": tf_seconds,
+            "start": start_dt.isoformat().replace("+00:00", "Z"),
+            "end": end_dt.isoformat().replace("+00:00", "Z"),
+        }
+        headers = {
+            "User-Agent": "coinbase-momentum-dashboard/1.0",
+            "Accept": "application/json",
+        }
+        try:
+            r = requests.get(url, params=params, headers=headers, timeout=15)
+            if r.status_code != 200:
+                return None
+            data = r.json()
+            if not data:
+                return None
+
+            # Coinbase format: [ time, low, high, open, close, volume ]
+            df = pd.DataFrame(data, columns=["time", "low", "high", "open", "close", "volume"])
+            df["time"] = pd.to_datetime(df["time"], unit="s", utc=True)
+            df = df.sort_values("time").reset_index(drop=True)
+
+            # Reorder to OHLCV
+            df = df[["time", "open", "high", "low", "close", "volume"]]
+            return df if not df.empty else None
+        except Exception:
+            return None
+
+    # For unsupported exchanges
+    return None
 
 TF_LIST = ["15m","1h","4h","6h","12h","1d"]
 ALL_TFS = {"15m":900,"1h":3600,"4h":14400,"6h":21600,"12h":43200,"1d":86400}
