@@ -27,7 +27,9 @@ TF_LIST = ["15m","1h","4h","6h","12h","1d"]
 ALL_TFS = {"15m":900,"1h":3600,"4h":14400,"6h":21600,"12h":43200,"1d":86400}
 QUOTES = ["USD","USDC","USDT","BTC","ETH","EUR"]
 EXCHANGES = ["Coinbase","Binance","Kraken (coming soon)","KuCoin (coming soon)"]
-
+def one_day_window_bars(tf: str) -> int:
+    """Bars that cover ~1 day for the given timeframe."""
+    return {"15m": 96, "1h": 24, "4h": 6, "6h": 4, "12h": 2, "1d": 1}.get(tf, 24)
 CB_BASE = "https://api.exchange.coinbase.com"
 BN_BASE = "https://api.binance.com"
 
@@ -497,7 +499,6 @@ def build_gate_eval(df_tf: pd.DataFrame, settings: dict) -> Tuple[dict, int, str
     meta={"delta_pct": delta_pct, "macd_cross": cross_meta}
     return meta, passed, " ".join(chips), enabled
 
-# ----------------------------- Page CSS
 # ----------------------------- Page & CSS
 st.markdown(f"""
 <style>
@@ -601,7 +602,6 @@ with expander("Market"):
         step=10,
     )
 # ----------------------------- MODE
-# ----------------------------- MODE
 with expander("Mode"):
     # Data source
     st.radio(
@@ -637,126 +637,73 @@ with expander("Timeframes"):
     st.checkbox("Sort descending (largest first)", key="sort_desc")
     st.slider("Minimum bars required (per pair)", 5, 200, key="min_bars", step=1)
 
+# ----------------------------- Gates
 
-# ----------------------------- GATES
-# ----------------------------- GATES
-with expander("Gates"):
-    # seed once, then let widgets own state (prevents yellow warnings)
-    for k, v in {
-        "preset": "None",
-        "gate_mode": "ANY",
-        "hard_filter": False,
-        "lookback_candles": DEFAULTS["lookback_candles"],
-        "min_pct": DEFAULTS["min_pct"],
-        "use_vol_spike": DEFAULTS["use_vol_spike"],
-        "vol_mult": DEFAULTS["vol_mult"],
-        "use_rsi": DEFAULTS["use_rsi"],
-        "min_rsi": DEFAULTS["min_rsi"],
-        "use_macd": DEFAULTS["use_macd"],
-        "min_mhist": DEFAULTS["min_mhist"],
-        "use_atr": DEFAULTS["use_atr"],
-        "min_atr": DEFAULTS["min_atr"],
-        "use_trend": DEFAULTS["use_trend"],
-        "pivot_span": DEFAULTS["pivot_span"],
-        "trend_within": DEFAULTS["trend_within"],
-        "use_roc": DEFAULTS["use_roc"],
-        "min_roc": DEFAULTS["min_roc"],
-        "use_macd_cross": DEFAULTS["use_macd_cross"],
-        "macd_cross_bars": DEFAULTS["macd_cross_bars"],
-        "macd_cross_only_bull": DEFAULTS["macd_cross_only_bull"],
-        "macd_cross_below_zero": DEFAULTS["macd_cross_below_zero"],
-        "macd_hist_confirm_bars": DEFAULTS["macd_hist_confirm_bars"],
-        "K_green": DEFAULTS["K_green"],
-        "Y_yellow": DEFAULTS["Y_yellow"],
-    }.items():
-        if k not in st.session_state:
-            st.session_state[k] = v
+def build_gate_eval(df_tf: pd.DataFrame, settings: dict) -> Tuple[dict, int, str, int]:
+    """
+    Evaluate gates for a given timeframe dataframe.
 
-    # Preset (NO index/value here)
-    st.radio(
-        "Preset",
-        ["Spike Hunter","Early MACD Cross","Confirm Rally","None"],
-        key="preset"
-    )
+    Returns:
+        meta (dict): metadata about evaluation
+        passed (int): number of gates passed
+        chips (str): formatted chips string
+        enabled (int): number of gates enabled
+    """
+    n = len(df_tf)
 
-    # Apply preset by updating OTHER keys, never reassign 'preset'
-    ps = st.session_state["preset"]
-    if ps == "Spike Hunter":
-        st.session_state.update({
-            "gate_mode":"ANY","hard_filter":False,
-            "lookback_candles":3,"min_pct":3.0,
-            "use_vol_spike":True,"vol_mult":1.10,
-            "use_rsi":False,"use_macd":False,
-            "use_trend":False,"use_roc":False,
-            "use_macd_cross":False
-        })
-    elif ps == "Early MACD Cross":
-        st.session_state.update({
-            "gate_mode":"ANY","hard_filter":False,
-            "lookback_candles":3,"min_pct":3.0,
-            "use_vol_spike":True,"vol_mult":1.10,
-            "use_rsi":True,"min_rsi":50,
-            "use_macd":False,"use_trend":False,"use_roc":False,
-            "use_macd_cross":True,"macd_cross_bars":5,
-            "macd_cross_only_bull":True,"macd_cross_below_zero":True,
-            "macd_hist_confirm_bars":3
-        })
-    elif ps == "Confirm Rally":
-        st.session_state.update({
-            "gate_mode":"Custom (K/Y)","hard_filter":True,
-            "lookback_candles":2,"min_pct":5.0,
-            "use_vol_spike":True,"vol_mult":1.20,
-            "use_rsi":True,"min_rsi":60,
-            "use_macd":True,"min_mhist":0.0,
-            "use_trend":True,"pivot_span":4,"trend_within":48,
-            "use_roc":False,"use_macd_cross":False,
-            "K_green":3,"Y_yellow":2
-        })
-    # ps == "None": leave current toggles as-is
+    # Force Δ lookback to exactly 1 bar (per your requirement)
+    lb = 1 if n > 1 else 1
 
-    # Gate Mode (NO index/value)
-    st.radio("Gate Mode", ["ALL","ANY","Custom (K/Y)"], key="gate_mode", horizontal=True)
-    st.toggle("Hard filter (hide non-passers)", key="hard_filter")
+    chips = []
+    passed = 0
+    enabled = 0
+    meta = {}
 
-    st.slider("Δ lookback (candles)", 0, 100, key="lookback_candles", step=1)
-    st.slider("Min +% change (Δ gate)", 0.0, 50.0, key="min_pct", step=0.5)
+    # --- Δ % change gate ---
+    if settings.get("chg_enabled", False):
+        enabled += 1
+        chg = 100 * (df_tf["close"].iloc[-1] / df_tf["close"].iloc[-lb] - 1.0)
+        meta["chg"] = round(chg, 2)
+        ok = chg >= settings.get("chg_min", 0.0)
+        if ok:
+            passed += 1
+        chips.append(chip("Δ%", ok, f"{chg:.2f}%"))
 
-    c1,c2,c3 = st.columns(3)
-    with c1:
-        st.toggle("Volume spike ×", key="use_vol_spike")
-        st.slider("Spike multiple ×", 1.0, 5.0, key="vol_mult", step=0.05)
-    with c2:
-        st.toggle("RSI", key="use_rsi")
-        st.slider("Min RSI", 40, 90, key="min_rsi", step=1)
-    with c3:
-        st.toggle("MACD hist", key="use_macd")
-        st.slider("Min MACD hist", 0.0, 2.0, key="min_mhist", step=0.05)
+    # --- Volume spike gate ---
+    if settings.get("vol_enabled", False):
+        enabled += 1
+        vol = df_tf["volume"].iloc[-1]
+        avg_vol = df_tf["volume"].iloc[-lb:].mean()
+        spike_multiple = vol / avg_vol if avg_vol > 0 else 0
+        meta["vol_spike"] = round(spike_multiple, 2)
+        ok = spike_multiple >= settings.get("vol_min_mult", 1.1)
+        if ok:
+            passed += 1
+        chips.append(chip("Vol", ok, f"{spike_multiple:.2f}×"))
 
-    c4,c5,c6 = st.columns(3)
-    with c4:
-        st.toggle("ATR %", key="use_atr")
-        st.slider("Min ATR %", 0.0, 10.0, key="min_atr", step=0.1)
-    with c5:
-        st.toggle("Trend breakout (up)", key="use_trend")
-        st.slider("Pivot span (bars)", 2, 10, key="pivot_span", step=1)
-        st.slider("Breakout within (bars)", 5, 96, key="trend_within", step=1)
-    with c6:
-        st.toggle("ROC (rate of change)", key="use_roc")
-        st.slider("Min ROC %", 0.0, 50.0, key="min_roc", step=0.5)
+    # --- RSI gate ---
+    if settings.get("rsi_enabled", False) and "rsi" in df_tf:
+        enabled += 1
+        rsi = df_tf["rsi"].iloc[-1]
+        meta["rsi"] = round(rsi, 2)
+        ok = rsi >= settings.get("rsi_min", 50)
+        if ok:
+            passed += 1
+        chips.append(chip("RSI", ok, f"{rsi:.1f}"))
 
-    st.markdown("**MACD Cross (early entry)**")
-    c7,c8,c9,c10 = st.columns(4)
-    with c7:  st.toggle("Enable MACD Cross", key="use_macd_cross")
-    with c8:  st.slider("Cross within last (bars)", 1, 10, key="macd_cross_bars", step=1)
-    with c9:  st.toggle("Bullish only", key="macd_cross_only_bull")
-    with c10: st.toggle("Prefer below zero", key="macd_cross_below_zero")
-    st.slider("Histogram > 0 within (bars)", 0, 10, key="macd_hist_confirm_bars", step=1)
+    # --- MACD histogram gate ---
+    if settings.get("macd_enabled", False) and "macd_hist" in df_tf:
+        enabled += 1
+        macd_hist = df_tf["macd_hist"].iloc[-1]
+        meta["macd_hist"] = round(macd_hist, 3)
+        ok = macd_hist >= settings.get("macd_min", 0.0)
+        if ok:
+            passed += 1
+        chips.append(chip("MACD", ok, f"{macd_hist:.3f}"))
 
-    st.markdown("---")
-    st.subheader("Color rules (Custom only)")
-    st.selectbox("Gates needed to turn green (K)", list(range(1,8)), key="K_green")
-    st.selectbox("Yellow needs ≥ Y (but < K)", list(range(0, st.session_state["K_green"])), key="Y_yellow")
-# ----------------------------- INDICATOR LENGTHS
+    chips_str = " ".join(chips)
+    return meta, passed, chips_str, enabled
+
 
 # ----------------------------- INDICATOR LENGTHS
 with expander("Indicator lengths"):
@@ -767,14 +714,47 @@ with expander("Indicator lengths"):
     st.slider("ATR length", 5, 50, int(st.session_state.get("atr_len", 14)), 1, key="atr_len")
 
 # ----------------------------- HISTORY DEPTH
+# ----------------------------- HISTORY DEPTH (for ATH/ATL)
 with expander("History depth (for ATH/ATL)"):
-    st.selectbox("Basis", ["Hourly","Daily","Weekly"], index=["Hourly","Daily","Weekly"].index(st.session_state.get("basis","Daily")), key="basis")
-    if st.session_state["basis"]=="Hourly":
-        st.slider("Hours (≤72)", 1, 72, int(st.session_state.get("amount_hourly", 24)), 1, key="amount_hourly")
-    elif st.session_state["basis"]=="Daily":
-        st.slider("Days (≤365)", 1, 365, int(st.session_state.get("amount_daily", 90)), 1, key="amount_daily")
+    # New: master switch to avoid long history fetches unless you want them
+    st.toggle(
+        "Compute ATH/ATL",
+        key="do_ath",
+        value=st.session_state.get("do_ath", False),
+        help="Turn off to skip long-range history requests while you’re debugging discovery."
+    )
+
+    st.selectbox(
+        "Basis",
+        ["Hourly", "Daily", "Weekly"],
+        index=["Hourly", "Daily", "Weekly"].index(st.session_state.get("basis", "Daily")),
+        key="basis"
+    )
+
+    if st.session_state["basis"] == "Hourly":
+        st.slider(
+            "Hours (≤72)",
+            1, 72,
+            int(st.session_state.get("amount_hourly", 24)),
+            1,
+            key="amount_hourly"
+        )
+    elif st.session_state["basis"] == "Daily":
+        st.slider(
+            "Days (≤365)",
+            1, 365,
+            int(st.session_state.get("amount_daily", 90)),
+            1,
+            key="amount_daily"
+        )
     else:
-        st.slider("Weeks (≤52)", 1, 52, int(st.session_state.get("amount_weekly", 12)), 1, key="amount_weekly")
+        st.slider(
+            "Weeks (≤52)",
+            1, 52,
+            int(st.session_state.get("amount_weekly", 12)),
+            1,
+            key="amount_weekly"
+        )
 
 # ----------------------------- DISPLAY
 with expander("Display"):
@@ -853,16 +833,25 @@ _tf = st.session_state.get("sort_tf", "1h")
 for pid in pairs:
     _tf_func = globals().get("df_for_tf_cached") or globals().get("df_for_tf")
     dft = _tf_func(effective_exchange, pid, _tf) if _tf_func else None
-    if dft is None or dft.empty:
-        diag_skip_api += 1
-        continue
+    if dft is None:
+    diag_skip_api += 1
+    continue
 
-    if len(dft) < int(st.session_state.get("min_bars", 30)):
-        diag_skip_bars += 1
-        continue
+# cap to at most ~1 day of bars for the active TF
+_tf = st.session_state.get("sort_tf", "1h")
+bars_cap = one_day_window_bars(_tf)
 
-    diag_fetched += 1
-    dft = dft.tail(400).copy()
+# keep only the most recent ≤1 day (+1 keeps one prior bar for Δ math)
+dft = dft.tail(bars_cap + 1).copy()
+
+# clamp the "Minimum bars" so it can't exceed the 1-day window
+min_bars = int(st.session_state.get("min_bars", 30))
+min_bars = max(1, min(min_bars, bars_cap))
+if len(dft) < min_bars:
+    diag_skip_bars += 1
+    continue
+
+diag_fetched += 1
 
     last_price = float(dft["close"].iloc[-1])
     if effective_exchange == "Coinbase" and st.session_state.get("ws_prices", {}).get(pid):
