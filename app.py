@@ -23,6 +23,23 @@ except Exception:
     WS_AVAILABLE = False
 
 # ----------------------------- Constants
+# ---- Helper: per-TF dataframe (used by discovery/gates)
+def df_for_tf(exchange: str, pair: str, tf: str):
+    """
+    Return a small dataframe (~1 day of bars) for `pair` at timeframe `tf`.
+    This wraps your existing single-pair OHLCV fetcher.
+    """
+    try:
+        bars = one_day_window_bars(tf)  # e.g., 1h->24, 4h->6, 12h->2, 1d->1, etc.
+        # IMPORTANT: Call your existing candle fetcher here.
+        # If your fetcher function name differs, just change the next line's name & signature.
+        df = get_df(exchange, pair, tf, limit=bars)
+        if df is None or getattr(df, "empty", True):
+            return None
+        return df
+    except Exception:
+        return None
+
 TF_LIST = ["15m","1h","4h","6h","12h","1d"]
 ALL_TFS = {"15m":900,"1h":3600,"4h":14400,"6h":21600,"12h":43200,"1d":86400}
 QUOTES = ["USD","USDC","USDT","BTC","ETH","EUR"]
