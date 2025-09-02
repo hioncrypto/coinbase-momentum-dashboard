@@ -25,6 +25,11 @@ except Exception:
 # ----------------------------- Constants
 # ---- Helper: per-TF dataframe (used by discovery/gates)
 def df_for_tf(exchange: str, pair: str, tf: str):
+    # --- API helper: fetch OHLCV candles ----------------------------------------
+def get_df(exchange: str, pair: str, tf: str, limit: int | None = None) -> pd.DataFrame | None:
+    ...
+    # (the whole function I gave you)
+
     """
     Return a small dataframe (~1 day of bars) for `pair` at timeframe `tf`.
     This wraps your existing single-pair OHLCV fetcher.
