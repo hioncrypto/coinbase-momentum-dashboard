@@ -637,7 +637,6 @@ with expander("Timeframes"):
     st.checkbox("Sort descending (largest first)", key="sort_desc")
     st.slider("Minimum bars required (per pair)", 5, 200, key="min_bars", step=1)
 
-# ----------------------------- Gates
 # ----------------------------- GATES
 with expander("Gates"):
     # Preset
@@ -987,10 +986,11 @@ st.markdown(f"<div style='font-size:1.3rem;font-weight:700;margin:4px 0 10px 2px
 
 
 # ----------------------------- Discovery pool
-if st.session_state["use_my_pairs"]:
+# ----------------------------- Discovery pool
+if st.session_state.get("use_my_pairs", False):
     pairs = [p.strip().upper() for p in st.session_state.get("my_pairs", "").split(",") if p.strip()]
 else:
-    if st.session_state["use_watch"] and st.session_state["watchlist"].strip():
+    if st.session_state.get("use_watch", False) and st.session_state.get("watchlist", "").strip():
         pairs = [p.strip().upper() for p in st.session_state["watchlist"].split(",") if p.strip()]
     else:
         pairs = list_products(effective_exchange, st.session_state["quote"])
@@ -998,22 +998,25 @@ else:
         cap = max(0, min(500, int(st.session_state.get("discover_cap", DEFAULTS["discover_cap"]))))
         pairs = pairs[:cap] if cap > 0 else []
 
+# --- Debug: show what we’re about to scan (raw pairs), before any filters/gates
+if st.session_state.get("debug_pairs", True):
+    cap_dbg = max(0, min(500, int(st.session_state.get("discover_cap", DEFAULTS["discover_cap"]))))
+    st.subheader("Raw discovery pool (before filters)")
+    st.caption(
+        f"available={len(pairs)} | cap={cap_dbg} | using={len(pairs)} "
+        f"on {effective_exchange} {st.session_state['quote']}"
+    )
+    st.write(pd.DataFrame({"pair": pairs}).head(30))
 
 # WebSocket lifecycle + queue drain
-want_ws = (pairs and st.session_state.get("mode","REST only").startswith("WebSocket")
-           and effective_exchange=="Coinbase" and WS_AVAILABLE)
-
-try:
-    while True:
-        pid, px = st.session_state["ws_q"].get_nowait()
-        prices = st.session_state.get("ws_prices", {})
-        prices[pid] = px
-        st.session_state["ws_prices"] = prices
-except queue.Empty:
-    pass
-
-if want_ws: start_ws(effective_exchange, pairs, int(st.session_state.get("ws_chunk",5)))
-else: stop_ws()
+want_ws = (
+    pairs
+    and st.session_state.get("mode", "REST only").startswith("WebSocket")
+    and effective_exchange == "Coinbase"
+    and WS_AVAILABLE
+)
+if want_ws:
+    start_ws_if_needed(effective_exchange, pairs, int(st.session_state.get("ws_chunk", 5)))
 
 # ----------------------------- Build rows + diagnostics
 diag_available = len(pairs)
@@ -1023,94 +1026,105 @@ diag_skip_bars = 0
 diag_skip_api = 0
 
 rows = []
-_tf = st.session_state.get("sort_tf", "1h")
 
 for pid in pairs:
-    _tf_func = globals().get("df_for_tf_cached") or globals().get("df_for_tf")
-    dft = _tf_func(effective_exchange, pid, _tf) if _tf_func else None
+    dft = df_for_tf(effective_exchange, pid, st.session_state["sort_tf"])
+
+    # --- Debug: print reason for skipping each pair
     if dft is None:
-    diag_skip_api += 1
-    continue
+        if st.session_state.get("debug_pairs", True):
+            st.write(f"probe({st.session_state['sort_tf']}) {pid}: API_FAIL")
+        diag_skip_api += 1
+        continue
 
-# cap to at most ~1 day of bars for the active TF
-_tf = st.session_state.get("sort_tf", "1h")
-bars_cap = one_day_window_bars(_tf)
+    min_bars_req = int(st.session_state.get("min_bars", 30))
+    if len(dft) < min_bars_req:
+        if st.session_state.get("debug_pairs", True):
+            st.write(
+                f"probe({st.session_state['sort_tf']}) {pid}: "
+                f"TOO_FEW_BARS={len(dft)} (min_bars={min_bars_req})"
+            )
+        diag_skip_bars += 1
+        continue
 
-# keep only the most recent ≤1 day (+1 keeps one prior bar for Δ math)
-dft = dft.tail(bars_cap + 1).copy()
+    # past skip checks
+    diag_fetched += 1
+    dft = dft.tail(400).copy()
 
-# clamp the "Minimum bars" so it can't exceed the 1-day window
-min_bars = int(st.session_state.get("min_bars", 30))
-min_bars = max(1, min(min_bars, bars_cap))
-if len(dft) < min_bars:
-    diag_skip_bars += 1
-    continue
-
-diag_fetched += 1
-
+    # Latest price (prefer WS on Coinbase if available)
     last_price = float(dft["close"].iloc[-1])
-    if effective_exchange == "Coinbase" and st.session_state.get("ws_prices", {}).get(pid):
-        last_price = float(st.session_state["ws_prices"][pid])
+    if effective_exchange == "Coinbase":
+        ws_px = st.session_state.get("ws_prices", {}).get(pid)
+        if ws_px:
+            last_price = float(ws_px)
 
+    # Timeframe change % from first bar in window
     first_price = float(dft["close"].iloc[0])
-    pct_display = (last_price / first_price - 1.0) * 100.0
+    pct_display = (last_price / (first_price + 1e-12) - 1.0) * 100.0
 
-    # ATH/ATL
-    # ATH/ATL (optional to avoid long-range fetch during discovery)
-if st.session_state.get("do_ath", False):
-    basis = st.session_state.get("basis", "Daily")
-    amt = dict(
-        Hourly=st.session_state.get("amount_hourly", 24),
-        Daily=st.session_state.get("amount_daily", 90),
-        Weekly=st.session_state.get("amount_weekly", 12),
-    )[basis]
-    histdf = get_hist(effective_exchange, pid, basis, amt)
-else:
-    histdf = None
-
-if histdf is None or len(histdf) < 10:
-        athp, athd, atlp, atld = (
-        aa["From ATH %"], aa["ATH date"], aa["From ATL %"], aa["ATL date"]
-    )
-
-    # Debug: show raw discovery results before any filters/gates
-    if 'avail' in locals() and avail is not None and not avail.empty:
-        st.subheader("Raw discovered pairs (before filters)")
-        st.write(avail.head(25))  # show first 25 rows
+    # ----------------------------- ATH/ATL (optional to save time)
+    if st.session_state.get("do_ath", False):
+        basis = st.session_state.get("basis", "Daily")
+        amt = dict(
+            Hourly=st.session_state.get("amount_hourly", 24),
+            Daily=st.session_state.get("amount_daily", 90),
+            Weekly=st.session_state.get("amount_weekly", 12),
+        )[basis]
+        histdf = get_hist(effective_exchange, pid, basis, amt)
     else:
-        st.warning("No pairs discovered before filters.")
+        histdf = None
 
-# Gate evaluation
-meta, passed, chips, enabled_cnt = build_gate_eval(dft, dist)
+    if histdf is None or len(histdf) < 10:
+        athp, athd, atlp, atld = np.nan, "—", np.nan, "—"
+    else:
+        aa = ath_atl_info(histdf)
+        athp, athd, atlp, atld = (
+            aa["From ATH %"],
+            aa["ATH date"],
+            aa["From ATL %"],
+            aa["ATL date"],
+        )
 
+    # ----------------------------- Gate evaluation
+    dist = dict(
         lookback_candles=int(st.session_state.get("lookback_candles", 3)),
         min_pct=float(st.session_state.get("min_pct", 3.0)),
-        use_vol_spike=st.session_state.get("use_vol_spike", True),
+
+        use_vol_spike=bool(st.session_state.get("use_vol_spike", True)),
         vol_mult=float(st.session_state.get("vol_mult", 1.10)),
-        vol_window=DEFAULTS["vol_window"],
-        use_rsi=st.session_state.get("use_rsi", False),
+        vol_window=int(DEFAULTS.get("vol_window", 20)),
+
+        use_rsi=bool(st.session_state.get("use_rsi", False)),
         rsi_len=int(st.session_state.get("rsi_len", 14)),
         min_rsi=int(st.session_state.get("min_rsi", 55)),
-        use_macd=st.session_state.get("use_macd", False),
+
+        use_macd=bool(st.session_state.get("use_macd", False)),
         macd_fast=int(st.session_state.get("macd_fast", 12)),
         macd_slow=int(st.session_state.get("macd_slow", 26)),
         macd_sig=int(st.session_state.get("macd_sig", 9)),
         min_mhist=float(st.session_state.get("min_mhist", 0.0)),
-        use_atr=st.session_state.get("use_atr", False),
+
+        use_atr=bool(st.session_state.get("use_atr", False)),
         atr_len=int(st.session_state.get("atr_len", 14)),
         min_atr=float(st.session_state.get("min_atr", 0.5)),
-        use_trend=st.session_state.get("use_trend", False),
+
+        use_trend=bool(st.session_state.get("use_trend", False)),
         pivot_span=int(st.session_state.get("pivot_span", 4)),
         trend_within=int(st.session_state.get("trend_within", 48)),
-        use_roc=st.session_state.get("use_roc", False),
-        min_roc=float(st.session_state.get("min_roc", 1.0)),
-        use_macd_cross=st.session_state.get("use_macd_cross", True),
-        macd_cross_bars=int(st.session_state.get("macd_cross_bars", 5)),
-        macd_cross_only_bull=st.session_state.get("macd_cross_only_bull", True),
-        macd_cross_below_zero=st.session_state.get("macd_cross_below_zero", True),
-        macd_hist_confirm_bars=int(st.session_state.get("macd_hist_confirm_bars", 3)),
-    ))
 
+        use_roc=bool(st.session_state.get("use_roc", False)),
+        min_roc=float(st.session_state.get("min_roc", 1.0)),
+
+        use_macd_cross=bool(st.session_state.get("use_macd_cross", True)),
+        macd_cross_bars=int(st.session_state.get("macd_cross_bars", 5)),
+        macd_cross_only_bull=bool(st.session_state.get("macd_cross_only_bull", True)),
+        macd_cross_below_zero=bool(st.session_state.get("macd_cross_below_zero", True)),
+        macd_hist_confirm_bars=int(st.session_state.get("macd_hist_confirm_bars", 3)),
+    )
+
+    meta, passed, chips, enabled_cnt = build_gate_eval(dft, dist)
+
+    # Color/Include logic
     mode = st.session_state.get("gate_mode", "ANY")
     if mode == "ALL":
         include = (enabled_cnt > 0 and passed == enabled_cnt)
@@ -1121,84 +1135,89 @@ meta, passed, chips, enabled_cnt = build_gate_eval(dft, dist)
         is_green = include
         is_yellow = False
     else:  # Custom (K/Y)
-        K = int(st.session_state.get("K_green", DEFAULTS["K_green"]))
-        Y = int(st.session_state.get("Y_yellow", DEFAULTS["Y_yellow"]))
+        K = int(st.session_state.get("K_green", 3))
+        Y = int(st.session_state.get("Y_yellow", 2))
         include = True
         is_green = (passed >= K)
         is_yellow = (passed >= Y and passed < K)
 
-    # Do NOT filter here. Mark visibility and filter at render time.
-    show_flag = True
     if st.session_state.get("hard_filter", False):
         if mode in {"ALL", "ANY"} and not include:
-            show_flag = False
+            continue
         if mode == "Custom (K/Y)" and not (is_green or is_yellow):
-            show_flag = False
+            continue
 
-    rows.append({
-        "Pair": pid,
-        "Price": last_price,
-        f"% Change ({_tf})": pct_display,
-        f"Δ% (last {max(1, int(st.session_state.get('lookback_candles', 1)))} bars)": meta["delta_pct"],
-        "From ATH %": athp, "ATH date": athd, "From ATL %": atlp, "ATL date": atld,
-        "Gates": chips, "Strong Buy": "YES" if is_green else "—",
-        "_green": is_green, "_yellow": is_yellow, "_show": show_flag
-    })
+    rows.append(
+        {
+            "Pair": pid,
+            "Price": last_price,
+            f"% Change ({st.session_state['sort_tf']})": pct_display,
+            f"Δ% (last {max(1, int(st.session_state.get('lookback_candles', 3)))} bars)": meta["delta_pct"],
+            "From ATH %": athp,
+            "ATH date": athd,
+            "From ATL %": atlp,
+            "ATL date": atld,
+            "Gates": chips,
+            "Strong Buy": "YES" if is_green else "—",
+            "_green": is_green,
+            "_yellow": is_yellow,
+        }
+    )
 
-# ===== DEBUG PROBE (place stays here, outside loop) =====
-st.info(
-    f"DEBUG — pairs={len(pairs)} | fetched={diag_fetched} | "
-    f"skip_api={diag_skip_api} | skip_bars={diag_skip_bars} | rows_built={len(rows)}"
-)
-st.caption(f"First 10 pairs: {pairs[:10] if pairs else '[]'}")
-st.dataframe(pd.DataFrame(rows).head(20), use_container_width=True)
-# ===== end DEBUG PROBE =====
+# --- Per-run summary line (concise)
+if st.session_state.get("debug_pairs", True):
+    st.write(
+        f"Debug • probe({st.session_state['sort_tf']}) of {len(pairs)}: "
+        f"OK={diag_fetched} | API_FAIL={diag_skip_api} | "
+        f"TOO_FEW_BARS={diag_skip_bars} "
+        f"(min_bars={int(st.session_state.get('min_bars', 30))})"
+    )
 
 # ----------------------------- Diagnostics & Tables
 st.caption(
     f"Diagnostics — Available: {diag_available} • Capped: {diag_capped} • "
-    f"Fetched OK: {diag_fetched} • Skipped (bars): {diag_skip_bars} • Skipped (API): {diag_skip_api} • "
-    f"Built rows: {len(rows)}"
+    f"Fetched OK: {diag_fetched} • Skipped (bars): {diag_skip_bars} • "
+    f"Skipped (API): {diag_skip_api} • Shown: {len(rows)}"
 )
 
-if not rows:
-    st.error("No rows built at all. Set TF=1h and Min bars=5–12 to sanity check.")
-else:
-    chg_col = f"% Change ({st.session_state['sort_tf']})"
-    df_all = (
-        pd.DataFrame(rows)
-        .sort_values(chg_col, ascending=not st.session_state.get("sort_desc", True), na_position="last")
-        .reset_index(drop=True)
+df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=["Pair"])
+if df.empty:
+    st.info(
+        "No rows to show. Try ANY mode, lower Min Δ, shorten lookback, "
+        "reduce Minimum bars, enable Volume spike/MACD Cross, or increase discovery cap."
     )
-    df_all.insert(0, "#", df_all.index + 1)
-
-    # Apply 'Hard filter' only at presentation time
-    df = df_all[df_all["_show"]] if st.session_state.get("hard_filter", False) else df_all
+else:
+    chg_col = f\"% Change ({st.session_state['sort_tf']})\"
+    df = df.sort_values(chg_col, ascending=not st.session_state.get("sort_desc", True), na_position="last").reset_index(drop=True)
+    df.insert(0, "#", df.index + 1)
 
     st.subheader("📌 Top-10 (greens only)")
     top10 = (
         df[df["_green"]]
         .sort_values(chg_col, ascending=False, na_position="last")
         .head(10)
-        .drop(columns=["_green", "_yellow", "_show"], errors="ignore")
+        .drop(columns=["_green", "_yellow"])
     )
     st.data_editor(
-        top10 if not top10.empty else pd.DataFrame(columns=top10.columns if hasattr(top10, "columns") else []),
-        use_container_width=True, hide_index=True, disabled=True
+        top10 if not top10.empty else pd.DataFrame(columns=top10.columns if not top10.empty else []),
+        use_container_width=True,
+        hide_index=True,
+        disabled=True,
     )
 
     st.subheader("📑 All pairs")
     st.data_editor(
-        df.drop(columns=["_green", "_yellow", "_show"], errors="ignore"),
-        use_container_width=True, hide_index=True, disabled=True
+        df.drop(columns=["_green", "_yellow"]),
+        use_container_width=True,
+        hide_index=True,
+        disabled=True,
     )
 
     st.caption(
         f"Pairs shown: {len(df)} • Exchange: {effective_exchange} • Quote: {st.session_state['quote']} "
-        f"• TF: {st.session_state['sort_tf']} • Gate Mode: {st.session_state.get('gate_mode','ANY')} • "
-        f"Hard filter: {'On' if st.session_state.get('hard_filter', False) else 'Off'}"
+        f"• TF: {st.session_state['sort_tf']} • Gate Mode: {st.session_state.get('gate_mode','ANY')} "
+        f"• Hard filter: {'On' if st.session_state.get('hard_filter', False) else 'Off'}"
     )
-
 
 # ----------------------------- Listing Radar engine
 def lr_parse_quotes(csv_text: str) -> set:
