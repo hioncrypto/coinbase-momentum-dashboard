@@ -1187,7 +1187,8 @@ if df.empty:
         "reduce Minimum bars, enable Volume spike/MACD Cross, or increase discovery cap."
     )
 else:
-    chg_col = f\"% Change ({st.session_state['sort_tf']})\"
+    chg_col = f"% Change ({st.session_state['sort_tf']})"
+
     df = df.sort_values(chg_col, ascending=not st.session_state.get("sort_desc", True), na_position="last").reset_index(drop=True)
     df.insert(0, "#", df.index + 1)
 
