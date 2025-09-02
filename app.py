@@ -1003,7 +1003,6 @@ st.markdown(f"<div style='font-size:1.3rem;font-weight:700;margin:4px 0 10px 2px
 
 
 # ----------------------------- Discovery pool
-# ----------------------------- Discovery pool
 if st.session_state.get("use_my_pairs", False):
     pairs = [p.strip().upper() for p in st.session_state.get("my_pairs", "").split(",") if p.strip()]
 else:
