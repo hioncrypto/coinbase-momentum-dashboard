@@ -1154,8 +1154,13 @@ diag_too_few = 0
 
 valid_rows = []   # accumulates rows for pairs that have usable data
 
-for pid in pairs:
+for idx, pid in enumerate(pairs):
+
     # Try to fetch ~1 day of bars for the sort timeframe
+        # Throttle API calls a bit to avoid 429 rate-limits
+    if idx % 8 == 0 and idx > 0:
+        time.sleep(0.25)
+
     try:
         dft = df_for_tf(effective_exchange, pid, sort_tf)
     except Exception:
