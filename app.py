@@ -1151,6 +1151,7 @@ else:
 # --- Debug: show what we’re about to scan (raw pairs), before any filters/gates
 # --- Discovery / probe loop (robust) ---------------------------------------
 # Show the raw discovery pool if you keep the debug flag
+# --- Debug: show what we're about to scan (raw pairs), before any filters/gates
 if st.session_state.get("debug_pairs", True):
     cap = max(0, min(500, int(st.session_state.get("discover_cap", DEFAULTS["discover_cap"]))))
     st.subheader("Raw discovery pool (before filters)")
@@ -1170,8 +1171,7 @@ valid_rows = []   # accumulates rows for pairs that have usable data
 
 for idx, pid in enumerate(pairs):
 
-    # Try to fetch ~1 day of bars for the sort timeframe
-        # Throttle API calls a bit to avoid 429 rate-limits
+    # Throttle API calls a bit to avoid 429 rate-limits
     if idx % 8 == 0 and idx > 0:
         time.sleep(0.25)
 
@@ -1211,10 +1211,11 @@ if st.session_state.get("debug_pairs", True):
 
 # If nothing survived the probe, stop early so later code doesn’t choke
 if avail.empty:
-    st.warning("No pairs returned candles from the API at the selected timeframe. "
-               "Try a different timeframe or lower your filters.")
-    # You can `st.stop()` if you prefer a hard stop:
-    # st.stop()
+    st.warning(
+        "No pairs returned candles from the API at the selected timeframe. "
+        "Try a different timeframe or lower your filters."
+    )
+    # st.stop()  # optional hard stop
 
 # WebSocket lifecycle + queue drain
 want_ws = (
