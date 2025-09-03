@@ -22,21 +22,35 @@ try:
 except Exception:
     WS_AVAILABLE = False
 
-# ----------------------------- Constants
+# ----------------------------- Constants -----------------------------
 
-# --- Helper: per-TF dataframe (used by discovery/gates)
-def df_for_tf(exchange: str, pair: str, tf: str):
+def one_day_window_bars(tf: str) -> int:
     """
-    Return a small dataframe (~1 day of bars) for `pair` at timeframe `tf`.
+    Bars to fetch for a ~N-day window per timeframe.
+    We use ~2 days for 1h/4h/12h so 'Minimum bars' filters can pass.
     """
+    return {
+        "15m": 96,   # ~1 day (96 * 15m)
+        "1h": 48,    # ~2 days (was 24)
+        "4h": 12,    # ~2 days (was 6)
+        "12h": 4,    # ~2 days (was 2)
+        "1d": 2,     # ~2 days (was 1)
+    }.get(tf, 24)
+
+
+def df_for_tf(exchange: str, pair: str, tf: str) -> pd.DataFrame | None:
+    """
+    Return a small dataframe (~1–2 days of bars) for `pair` at timeframe `tf`.
+    """
+    bars = one_day_window_bars(tf)
     try:
-        bars = one_day_window_bars(tf)  # e.g., 1h->24, 4h->6, 12h->2, 1d->1
         df = get_df(exchange, pair, tf, limit=bars)
-        if df is None or getattr(df, "empty", True):
-            return None
-        return df
     except Exception:
         return None
+
+    if df is None or getattr(df, "empty", True):
+        return None
+    return df
 
 # --- API helper: fetch OHLCV candles ----------------------------------------
 def get_df(exchange: str, pair: str, tf: str, limit: int | None = None) -> pd.DataFrame | None:
