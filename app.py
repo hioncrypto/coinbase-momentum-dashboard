@@ -23,7 +23,6 @@ except Exception:
     WS_AVAILABLE = False
 
 # ----------------------------- Constants
-# ----------------------------- Constants
 
 # --- Helper: per-TF dataframe (used by discovery/gates)
 def df_for_tf(exchange: str, pair: str, tf: str):
@@ -1076,14 +1075,67 @@ else:
         pairs = pairs[:cap] if cap > 0 else []
 
 # --- Debug: show what we’re about to scan (raw pairs), before any filters/gates
+# --- Discovery / probe loop (robust) ---------------------------------------
+# Show the raw discovery pool if you keep the debug flag
 if st.session_state.get("debug_pairs", True):
-    cap_dbg = max(0, min(500, int(st.session_state.get("discover_cap", DEFAULTS["discover_cap"]))))
+    cap = max(0, min(500, int(st.session_state.get("discover_cap", DEFAULTS["discover_cap"]))))
     st.subheader("Raw discovery pool (before filters)")
-    st.caption(
-        f"available={len(pairs)} | cap={cap_dbg} | using={len(pairs)} "
-        f"on {effective_exchange} {st.session_state['quote']}"
-    )
+    st.caption(f"available={len(pairs)} | cap={cap} | using={len(pairs)} on {effective_exchange} {st.session_state['quote']}")
     st.write(pd.DataFrame({"pair": pairs}).head(30))
+
+# We will probe each pair at the sort timeframe and keep only those that
+# actually return candles. This avoids API_FAIL spam and junk symbols.
+sort_tf = st.session_state["sort_tf"]
+chg_col = f"% Change ({sort_tf})"    # used later in display tables
+
+diag_ok = 0
+diag_api_fail = 0
+diag_too_few = 0
+
+valid_rows = []   # accumulates rows for pairs that have usable data
+
+for pid in pairs:
+    # Try to fetch ~1 day of bars for the sort timeframe
+    try:
+        dft = df_for_tf(effective_exchange, pid, sort_tf)
+    except Exception:
+        dft = None
+
+    # Skip if the API didn’t return candles
+    if dft is None or getattr(dft, "empty", True):
+        diag_api_fail += 1
+        continue
+
+    # Require a minimum number of bars (you can tune this if you like)
+    if len(dft) < max(12, one_day_window_bars(sort_tf) // 4):
+        diag_too_few += 1
+        continue
+
+    # Compute simple % change over the fetched window (used later in tables)
+    try:
+        pct = (dft["close"].iloc[-1] - dft["close"].iloc[0]) / max(1e-9, dft["close"].iloc[0]) * 100.0
+    except Exception:
+        pct = np.nan
+
+    valid_rows.append({"pair": pid, chg_col: pct})
+    diag_ok += 1
+
+# Materialize the “available with data” table
+avail = pd.DataFrame(valid_rows) if valid_rows else pd.DataFrame(columns=["pair", chg_col])
+
+# Optional: quick debug of the probe results summary
+if st.session_state.get("debug_pairs", True):
+    st.write(
+        f"Debug • probe({sort_tf}) of {len(pairs)}: "
+        f"OK={diag_ok} | API_FAIL={diag_api_fail} | TOO_FEW_BARS={diag_too_few} (min_bars≈{one_day_window_bars(sort_tf)})"
+    )
+
+# If nothing survived the probe, stop early so later code doesn’t choke
+if avail.empty:
+    st.warning("No pairs returned candles from the API at the selected timeframe. "
+               "Try a different timeframe or lower your filters.")
+    # You can `st.stop()` if you prefer a hard stop:
+    # st.stop()
 
 # WebSocket lifecycle + queue drain
 want_ws = (
