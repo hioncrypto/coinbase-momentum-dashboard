@@ -38,9 +38,69 @@ def df_for_tf(exchange: str, pair: str, tf: str):
     except Exception:
         return None
 
-
 # --- API helper: fetch OHLCV candles ----------------------------------------
 def get_df(exchange: str, pair: str, tf: str, limit: int | None = None) -> pd.DataFrame | None:
+    """
+    Return a pandas DataFrame of OHLCV for `pair` at timeframe `tf`.
+
+    Coinbase Exchange:
+      GET https://api.exchange.coinbase.com/products/{product_id}/candles?granularity=SECONDS
+      Response rows: [ time, low, high, open, close, volume ]
+      (Omit start/end to receive the latest candles; up to ~300 rows.)
+
+    Columns returned (ascending by time):
+      time (datetime64[ns, UTC]), open, high, low, close, volume
+    """
+    tf_seconds = ALL_TFS.get(tf)
+    if tf_seconds is None:
+        return None
+
+    want = int(limit) if (limit is not None and limit > 0) else 96
+    want = max(1, min(300, want))
+
+    if exchange.lower().startswith("coinbase"):
+        base = "https://api.exchange.coinbase.com"
+        url = f"{base}/products/{pair}/candles"
+        params = {"granularity": tf_seconds}
+        headers = {
+            "User-Agent": "coinbase-momentum-dashboard/1.0",
+            "Accept": "application/json",
+        }
+
+        # Small, polite retry for 429/5xx
+        for attempt in range(3):
+            try:
+                r = requests.get(url, params=params, headers=headers, timeout=15)
+                if r.status_code == 200:
+                    data = r.json()
+                    if not data:
+                        return None
+                    # Coinbase format: [ time, low, high, open, close, volume ]
+                    df = pd.DataFrame(data, columns=["time", "low", "high", "open", "close", "volume"])
+                    df["time"] = pd.to_datetime(df["time"], unit="s", utc=True)
+                    df = df.sort_values("time").reset_index(drop=True)
+                    df = df[["time", "open", "high", "low", "close", "volume"]]
+                    # Keep only the latest `want` bars
+                    if len(df) > want:
+                        df = df.iloc[-want:].reset_index(drop=True)
+                    return df if not df.empty else None
+
+                # Handle rate limit / transient server errors with a short backoff
+                if r.status_code in (429, 500, 502, 503, 504):
+                    time.sleep(0.6 * (attempt + 1))
+                    continue
+
+                # Other non-200: treat as failure for this pair
+                return None
+
+            except Exception:
+                # Network/JSON issues – retry a couple of times
+                time.sleep(0.4 * (attempt + 1))
+
+        return None
+
+    # Unsupported exchange: not implemented yet
+    return None
     """
     Return a pandas DataFrame of OHLCV for `pair` at timeframe `tf`.
 
