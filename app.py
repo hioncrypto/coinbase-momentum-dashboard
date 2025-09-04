@@ -1107,7 +1107,9 @@ with expander("History depth (for ATH/ATL)"):
 # ------------------------- Build tables / display -------------------------
 # `avail` should already exist from the probe step; make it safely if not.
 chg_col = f"% Change ({st.session_state['sort_tf']})"
-if 'avail' not in locals():
+
+# Make sure `avail` exists and is a DataFrame
+if 'avail' not in locals() or not isinstance(avail, pd.DataFrame):
     avail = pd.DataFrame(columns=['pair', chg_col])
 
 # Sort by % change (desc when "Sort descending" is on)
@@ -1188,12 +1190,13 @@ if st.session_state.get("debug_pairs", True):
 # We will probe each pair at the sort timeframe and keep only those that
 # actually return candles. No 'minimum bars' filter anymore.
 sort_tf = st.session_state["sort_tf"]
-chg_col = f"% Change ({sort_tf})"  # used later in display tables
+chg_col = f"% Change ({sort_tf})"   # used later in display tables
 
 diag_ok = 0
 diag_api_fail = 0
+diag_too_few = 0
 
-valid_rows = []  # accumulates rows for pairs that have usable data
+valid_rows = []   # accumulates rows for pairs that have usable data
 
 for idx, pid in enumerate(pairs):
     # Throttle API calls a bit to avoid 429 rate-limits (tweak if needed)
@@ -1211,6 +1214,11 @@ for idx, pid in enumerate(pairs):
         diag_api_fail += 1
         continue
 
+    # Accept as long as we got at least ONE bar (no min-bars gate)
+    if len(dft) < 1:
+        diag_too_few += 1
+        continue
+
     # Compute simple % change over the fetched window (used later in tables)
     try:
         pct = (dft["close"].iloc[-1] - dft["close"].iloc[0]) / max(1e-9, dft["close"].iloc[0]) * 100.0
@@ -1219,6 +1227,23 @@ for idx, pid in enumerate(pairs):
 
     valid_rows.append({"pair": pid, chg_col: pct})
     diag_ok += 1
+
+# Materialize the “available with data” table
+avail = pd.DataFrame(valid_rows) if valid_rows else pd.DataFrame(columns=["pair", chg_col])
+
+# Optional: quick debug of the probe results summary
+if st.session_state.get("debug_pairs", True):
+    st.write(
+        f"Debug • probe({sort_tf}) of {len(pairs)}: "
+        f"OK={diag_ok} | API_FAIL={diag_api_fail} | TOO_FEW_BARS={diag_too_few} (min_bars≈1)"
+    )
+
+# If nothing survived the probe, stop early so later code doesn’t choke
+if avail.empty:
+    st.warning("No pairs returned candles from the API at the selected timeframe. "
+               "Try a different timeframe or lower your filters.")
+    # st.stop()  # uncomment if you prefer a hard stop
+
 
 # Materialize the “available with data” table
 avail = pd.DataFrame(valid_rows) if valid_rows else pd.DataFrame(columns=["pair", chg_col])
