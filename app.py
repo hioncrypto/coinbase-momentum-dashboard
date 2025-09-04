@@ -774,19 +774,23 @@ with expander("Mode"):
         step=1,
     )
 # ----------------------------- TIMEFRAMES
+# ----------------------------- TIMEFRAMES
 with expander("Timeframes"):
-    # seed once to avoid "default + session_state" warning
-    if "sort_tf" not in st.session_state:
-        st.session_state["sort_tf"] = DEFAULTS["sort_tf"]
-    if "sort_desc" not in st.session_state:
-        st.session_state["sort_desc"] = DEFAULTS["sort_desc"]
-    if "min_bars" not in st.session_state:
-        st.session_state["min_bars"] = DEFAULTS["min_bars"]
+    st.selectbox(
+        "Primary sort timeframe",
+        TF_LIST,
+        index=TF_LIST.index(st.session_state["sort_tf"]),
+        key="sort_tf"
+    )
+    st.checkbox(
+        "Sort descending (largest first)",
+        key="sort_desc",
+        value=st.session_state.get("sort_desc", True)
+    )
 
-    # IMPORTANT: do NOT pass index/value — key alone uses session_state
-    st.selectbox("Primary sort timeframe", TF_LIST, key="sort_tf")
-    st.checkbox("Sort descending (largest first)", key="sort_desc")
-    st.slider("Minimum bars required (per pair)", 5, 200, key="min_bars", step=1)
+    # Minimum bars requirement removed (hard-set to 1 so nothing gets filtered out on length)
+    st.session_state["min_bars"] = 1
+    st.caption("Minimum bars requirement removed for debugging.")
 
 # ----------------------------- GATES
 with expander("Gates"):
@@ -1152,29 +1156,31 @@ else:
 # --- Discovery / probe loop (robust) ---------------------------------------
 # Show the raw discovery pool if you keep the debug flag
 # --- Debug: show what we're about to scan (raw pairs), before any filters/gates
+# --- Debug: show what we're about to scan (raw pairs), before any filters/gates
 if st.session_state.get("debug_pairs", True):
     cap = max(0, min(500, int(st.session_state.get("discover_cap", DEFAULTS["discover_cap"]))))
     st.subheader("Raw discovery pool (before filters)")
-    st.caption(f"available={len(pairs)} | cap={cap} | using={len(pairs)} on {effective_exchange} {st.session_state['quote']}")
+    st.caption(
+        f"available={len(pairs)} | cap={cap} | using={len(pairs)} on {effective_exchange} {st.session_state['quote']}"
+    )
     st.write(pd.DataFrame({"pair": pairs}).head(30))
 
 # We will probe each pair at the sort timeframe and keep only those that
-# actually return candles. This avoids API_FAIL spam and junk symbols.
+# actually return candles. No 'minimum bars' filter anymore.
 sort_tf = st.session_state["sort_tf"]
-chg_col = f"% Change ({sort_tf})"    # used later in display tables
+chg_col = f"% Change ({sort_tf})"  # used later in display tables
 
 diag_ok = 0
 diag_api_fail = 0
-diag_too_few = 0
 
-valid_rows = []   # accumulates rows for pairs that have usable data
+valid_rows = []  # accumulates rows for pairs that have usable data
 
 for idx, pid in enumerate(pairs):
-
-    # Throttle API calls a bit to avoid 429 rate-limits
+    # Throttle API calls a bit to avoid 429 rate-limits (tweak if needed)
     if idx % 8 == 0 and idx > 0:
         time.sleep(0.25)
 
+    # Fetch a small window for this timeframe
     try:
         dft = df_for_tf(effective_exchange, pid, sort_tf)
     except Exception:
@@ -1183,11 +1189,6 @@ for idx, pid in enumerate(pairs):
     # Skip if the API didn’t return candles
     if dft is None or getattr(dft, "empty", True):
         diag_api_fail += 1
-        continue
-
-    # Require a minimum number of bars (you can tune this if you like)
-    if len(dft) < max(12, one_day_window_bars(sort_tf) // 4):
-        diag_too_few += 1
         continue
 
     # Compute simple % change over the fetched window (used later in tables)
@@ -1206,16 +1207,17 @@ avail = pd.DataFrame(valid_rows) if valid_rows else pd.DataFrame(columns=["pair"
 if st.session_state.get("debug_pairs", True):
     st.write(
         f"Debug • probe({sort_tf}) of {len(pairs)}: "
-        f"OK={diag_ok} | API_FAIL={diag_api_fail} | TOO_FEW_BARS={diag_too_few} (min_bars≈{one_day_window_bars(sort_tf)})"
+        f"OK={diag_ok} | API_FAIL={diag_api_fail}"
     )
 
 # If nothing survived the probe, stop early so later code doesn’t choke
 if avail.empty:
     st.warning(
         "No pairs returned candles from the API at the selected timeframe. "
-        "Try a different timeframe or lower your filters."
+        "Try a different timeframe or check rate limits."
     )
-    # st.stop()  # optional hard stop
+    # st.stop()  # uncomment if you want a hard stop here
+
 
 # WebSocket lifecycle + queue drain
 want_ws = (
