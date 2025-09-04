@@ -1104,6 +1104,26 @@ with expander("History depth (for ATH/ATL)"):
             1,
             key="amount_weekly"
         )
+# ------------------------- Build tables / display -------------------------
+# `avail` should already exist from the probe step; make it safely if not.
+chg_col = f"% Change ({st.session_state['sort_tf']})"
+if 'avail' not in locals():
+    avail = pd.DataFrame(columns=['pair', chg_col])
+
+# Sort by % change (desc when "Sort descending" is on)
+if not avail.empty and chg_col in avail.columns:
+    avail = avail.sort_values(
+        chg_col,
+        ascending=not st.session_state.get("sort_desc", True)
+    ).reset_index(drop=True)
+
+# Top-10 section
+st.subheader("Top-10 (greens only)")
+st.dataframe(avail.head(10), use_container_width=True)
+
+# All pairs section
+st.subheader("All pairs")
+st.dataframe(avail, use_container_width=True)
 
 # ----------------------------- DISPLAY
 with expander("Display"):
