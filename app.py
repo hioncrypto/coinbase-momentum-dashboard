@@ -1105,6 +1105,15 @@ with expander("History depth (for ATH/ATL)"):
             key="amount_weekly"
         )
 # ------------------------- Build tables / display -------------------------
+# Safety guard: make sure 'avail' exists and has the expected % Change column
+chg_col = f"% Change ({st.session_state['sort_tf']})"
+if 'avail' not in locals() or avail is None:
+    avail = pd.DataFrame({"pair": pairs, chg_col: np.nan})
+elif avail.empty:
+    avail = pd.DataFrame({"pair": pairs, chg_col: np.nan})
+elif chg_col not in avail.columns:
+    avail[chg_col] = np.nan
+
 # `avail` should already exist from the probe step; make it safely if not.
 chg_col = f"% Change ({st.session_state['sort_tf']})"
 
