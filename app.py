@@ -1186,6 +1186,33 @@ if st.session_state.get("debug_pairs", True):
         f"available={len(pairs)} | cap={cap} | using={len(pairs)} on {effective_exchange} {st.session_state['quote']}"
     )
     st.write(pd.DataFrame({"pair": pairs}).head(30))
+    # ---------- TEMP: HARD-BYPASS TO PROVE TABLES ----------
+sort_tf = st.session_state["sort_tf"]
+chg_col = f"% Change ({sort_tf})"
+
+# Always fabricate 'avail' from the pairs so tables are never blank
+avail = pd.DataFrame({"pair": pairs})
+avail[chg_col] = np.nan
+
+# Try to compute % change for a small sample to confirm the API path works
+sample_n = min(8, len(pairs))
+ok, fail = 0, 0
+for pid in pairs[:sample_n]:
+    try:
+        dft = df_for_tf(effective_exchange, pid, sort_tf)
+        if dft is not None and not getattr(dft, "empty", True):
+            pct = (dft["close"].iloc[-1] - dft["close"].iloc[0]) / max(1e-9, dft["close"].iloc[0]) * 100.0
+            avail.loc[avail["pair"] == pid, chg_col] = pct
+            ok += 1
+        else:
+            fail += 1
+    except Exception:
+        fail += 1
+
+st.subheader("Debug — probe summary & first rows")
+st.write(f"sample fetch: OK={ok}  FAIL={fail}  | timeframe={sort_tf}  | exchange={effective_exchange}")
+st.write(avail.head(20))
+
 # We will probe each pair at the sort timeframe and keep only those that
 # actually return candles. No 'minimum bars' filter anymore.
 sort_tf = st.session_state["sort_tf"]
