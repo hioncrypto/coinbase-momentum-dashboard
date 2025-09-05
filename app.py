@@ -1227,6 +1227,22 @@ for idx, pid in enumerate(pairs):
 
     valid_rows.append({"pair": pid, chg_col: pct})
     diag_ok += 1
+# --- DEBUG: show what the probe produced ------------------------------------
+st.subheader("Debug — probe summary & first rows")
+st.write(
+    f"probe({sort_tf}) • pairs={len(pairs)} | "
+    f"OK={diag_ok} | API_FAIL={diag_api_fail} | TOO_FEW_BARS={diag_too_few}"
+)
+
+# (We haven't created 'avail' yet — show the staged rows that will become it)
+if valid_rows:
+    st.write(pd.DataFrame(valid_rows).head(25))
+else:
+    st.info(
+        "No rows collected from probe. That means every pair either returned no "
+        "candles or an API error in the chosen timeframe."
+    )
+# ----------------------------------------------------------------------------- 
 
 # Materialize the “available with data” table
 avail = pd.DataFrame(valid_rows) if valid_rows else pd.DataFrame(columns=["pair", chg_col])
