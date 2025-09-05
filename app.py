@@ -1186,54 +1186,56 @@ if st.session_state.get("debug_pairs", True):
         f"available={len(pairs)} | cap={cap} | using={len(pairs)} on {effective_exchange} {st.session_state['quote']}"
     )
     st.write(pd.DataFrame({"pair": pairs}).head(30))
-# === Probe + build 'avail' (no gates; no min-bars) ===========================
-sort_tf = st.session_state.get("sort_tf", "1h")
-chg_col = f"% Change ({sort_tf})"  # column title used later
+# We will probe each pair at the sort timeframe and keep only those that
+# actually return candles. No 'minimum bars' filter anymore.
+sort_tf = st.session_state["sort_tf"]
+chg_col = f"% Change ({sort_tf})"    # used later in display tables
 
-diag_ok = 0
-diag_api_fail = 0
-diag_too_few = 0  # kept for display; we aren't enforcing min-bars now
+diag_ok = 0         # how many pairs returned candles
+diag_api_fail = 0   # how many returned nothing / errored
 
-valid_rows = []
+valid_rows = []     # accumulates rows for pairs that have usable data
 
 for idx, pid in enumerate(pairs):
-    # Light throttle to avoid 429s
+    # Throttle calls a bit to avoid rate limits
     if idx % 8 == 0 and idx > 0:
         time.sleep(0.25)
 
-    # pull ~1 day window for this timeframe/pair
     try:
         dft = df_for_tf(effective_exchange, pid, sort_tf)
     except Exception:
         dft = None
 
-    # skip if API returned nothing
+    # Skip if the API didn’t return candles
     if dft is None or getattr(dft, "empty", True):
         diag_api_fail += 1
         continue
 
-    # simple % change over fetched window
+    # Compute simple % change over the fetched window
     try:
-        p0 = float(dft["close"].iloc[0])
-        p1 = float(dft["close"].iloc[-1])
-        pct = (p1 - p0) / max(1e-9, p0) * 100.0
+        pct = (dft["close"].iloc[-1] - dft["close"].iloc[0]) / max(1e-9, dft["close"].iloc[0]) * 100.0
     except Exception:
         pct = np.nan
 
     valid_rows.append({"pair": pid, chg_col: pct})
     diag_ok += 1
 
-# materialize 'avail'
-avail = pd.DataFrame(valid_rows) if valid_rows else pd.DataFrame(columns=["pair", chg_col])
-
-# quick debug so you can see exactly what's happening
-if st.session_state.get("debug_pairs", True):
-    st.subheader("Debug — probe summary & first rows")
-    st.write(
-        f"probe({sort_tf}) of {len(pairs)}: "
-        f"OK={diag_ok} | API_FAIL={diag_api_fail} | TOO_FEW_BARS={diag_too_few} (min_bars≈1)"
+# Build 'avail' for the rest of the app
+if valid_rows:
+    avail = pd.DataFrame(valid_rows)
+else:
+    # Fallback: show raw pairs so tables aren't empty
+    st.warning(
+        "No pairs returned candles from the API at the selected timeframe. "
+        "Showing raw pairs without % change so you can still see rows."
     )
-    st.write(avail.head(25))
+    avail = pd.DataFrame({"pair": pairs, chg_col: np.nan})
+
+# Optional: quick probe summary so you can see what's happening
+st.caption(
+    f"Debug • probe({sort_tf}) of {len(pairs)}: "
+    f"OK={diag_ok} | API_FAIL={diag_api_fail}"
+)
 
 # We will probe each pair at the sort timeframe and keep only those that
 # actually return candles. No 'minimum bars' filter anymore.
