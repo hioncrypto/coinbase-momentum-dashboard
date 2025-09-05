@@ -1106,35 +1106,41 @@ with expander("History depth (for ATH/ATL)"):
         )
 # ------------------------- Build tables / display -------------------------
 # Safety guard: make sure 'avail' exists and has the expected % Change column
-chg_col = f"% Change ({st.session_state['sort_tf']})"
-if 'avail' not in locals() or avail is None:
-    avail = pd.DataFrame({"pair": pairs, chg_col: np.nan})
-elif avail.empty:
-    avail = pd.DataFrame({"pair": pairs, chg_col: np.nan})
-elif chg_col not in avail.columns:
+# ----------------------------- Build tables / display -----------------------------
+
+# Read sorting preferences
+sort_tf   = st.session_state.get("sort_tf", "1h")
+sort_desc = st.session_state.get("sort_desc", True)
+chg_col   = f"% Change ({sort_tf})"
+
+# Ensure 'avail' exists and is a DataFrame
+try:
+    _is_df = isinstance(avail, pd.DataFrame)
+except NameError:
+    _is_df = False
+
+if not _is_df:
+    base_pairs = pairs if 'pairs' in locals() else []
+    avail = pd.DataFrame({"pair": base_pairs})
+
+# Ensure the % change column exists
+if chg_col not in avail.columns:
     avail[chg_col] = np.nan
 
-# `avail` should already exist from the probe step; make it safely if not.
-chg_col = f"% Change ({st.session_state['sort_tf']})"
+# Sort (descending when the toggle is on)
+if not avail.empty:
+    avail = (
+        avail.sort_values(chg_col, ascending=not sort_desc)
+             .reset_index(drop=True)
+    )
 
-# Make sure `avail` exists and is a DataFrame
-if 'avail' not in locals() or not isinstance(avail, pd.DataFrame):
-    avail = pd.DataFrame(columns=['pair', chg_col])
-
-# Sort by % change (desc when "Sort descending" is on)
-if not avail.empty and chg_col in avail.columns:
-    avail = avail.sort_values(
-        chg_col,
-        ascending=not st.session_state.get("sort_desc", True)
-    ).reset_index(drop=True)
-
-# Top-10 section
+# ---- Tables
 st.subheader("Top-10 (greens only)")
 st.dataframe(avail.head(10), use_container_width=True)
 
-# All pairs section
 st.subheader("All pairs")
 st.dataframe(avail, use_container_width=True)
+
 
 # ----------------------------- DISPLAY
 with expander("Display"):
