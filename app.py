@@ -1116,6 +1116,38 @@ diag_api_fail = 0
 diag_too_few = 0
 
 valid_rows = []   # accumulates rows for pairs that have usable data
+# --- Ensure `pairs` exists before probing -------------------------------------
+try:
+    _ = pairs  # does `pairs` already exist?
+except NameError:
+    # Build the discovery list the same way the app does elsewhere
+    if st.session_state.get("use_my_pairs"):
+        pairs = [
+            p.strip().upper()
+            for p in st.session_state.get("my_pairs", "").split(",")
+            if p.strip()
+        ]
+    elif st.session_state.get("use_watch") and st.session_state.get("watchlist", "").strip():
+        pairs = [
+            p.strip().upper()
+            for p in st.session_state["watchlist"].split(",")
+            if p.strip()
+        ]
+    else:
+        # Full discovery from the exchange, capped
+        q = st.session_state["quote"]
+        pairs = list_products(effective_exchange, q)
+        pairs = [p for p in pairs if p.endswith(f"-{q}")]
+        cap = max(0, min(500, int(st.session_state.get("discover_cap", DEFAULTS["discover_cap"]))))
+        pairs = pairs[:cap] if cap > 0 else []
+
+# If still empty, short-circuit with a friendly message
+if not pairs:
+    st.warning("No pairs to scan. Add some in **Manage My Pairs** or enable a watchlist.")
+    avail = pd.DataFrame(columns=["pair", f"% Change ({st.session_state.get('sort_tf','1h')})"])
+    st.dataframe(avail.head(10))
+    st.stop()
+# ------------------------------------------------------------------------------ 
 
 for idx, pid in enumerate(pairs):
     # Throttle API calls a bit to avoid 429 rate-limits
