@@ -1104,37 +1104,72 @@ with expander("History depth (for ATH/ATL)"):
             1,
             key="amount_weekly"
         )
-# ------------------------- Build tables / display -------------------------
-# Safety guard: make sure 'avail' exists and has the expected % Change column
 # ----------------------------- Build tables / display -----------------------------
 
-# Read sorting preferences
-sort_tf   = st.session_state.get("sort_tf", "1h")
-sort_desc = st.session_state.get("sort_desc", True)
-chg_col   = f"% Change ({sort_tf})"
+# We'll probe each pair at the sort timeframe and keep only those that
+# actually return candles. No 'minimum bars' filter anymore.
+sort_tf = st.session_state.get("sort_tf", "1h")
+chg_col = f"% Change ({sort_tf})"    # used later in display tables
 
-# Ensure 'avail' exists and is a DataFrame
-try:
-    _is_df = isinstance(avail, pd.DataFrame)
-except NameError:
-    _is_df = False
+diag_ok = 0
+diag_api_fail = 0
+diag_too_few = 0
 
-if not _is_df:
-    base_pairs = pairs if 'pairs' in locals() else []
-    avail = pd.DataFrame({"pair": base_pairs})
+valid_rows = []   # accumulates rows for pairs that have usable data
 
-# Ensure the % change column exists
-if chg_col not in avail.columns:
-    avail[chg_col] = np.nan
+for idx, pid in enumerate(pairs):
+    # Throttle API calls a bit to avoid 429 rate-limits
+    if idx % 8 == 0 and idx > 0:
+        time.sleep(0.25)
+
+    # Fetch ~1 day (or your window logic inside df_for_tf)
+    try:
+        dft = df_for_tf(effective_exchange, pid, sort_tf)
+    except Exception:
+        dft = None
+
+    # Skip if the API didn’t return candles
+    if dft is None or getattr(dft, "empty", True):
+        diag_api_fail += 1
+        continue
+
+    # (Optional) require a small floor so garbage isn’t included
+    try:
+        min_needed = max(12, one_day_window_bars(sort_tf) // 4)
+    except Exception:
+        min_needed = 12
+    if len(dft) < min_needed:
+        diag_too_few += 1
+        continue
+
+    # Compute simple % change over the fetched window
+    try:
+        pct = (dft["close"].iloc[-1] - dft["close"].iloc[0]) / max(1e-9, dft["close"].iloc[0]) * 100.0
+    except Exception:
+        pct = np.nan
+
+    valid_rows.append({"pair": pid, chg_col: pct})
+    diag_ok += 1
+
+# Materialize the “available with data” table
+avail = pd.DataFrame(valid_rows) if valid_rows else pd.DataFrame(columns=["pair", chg_col])
+
+# Debug summary + a peek at rows
+if st.session_state.get("debug_pairs", True):
+    st.subheader("Debug — probe summary & first rows")
+    st.caption(
+        f"sample fetch: OK={diag_ok} FAIL={diag_api_fail} | timeframe={sort_tf} | exchange={effective_exchange}"
+    )
+    st.dataframe(avail.head(25))
 
 # Sort (descending when the toggle is on)
-if not avail.empty:
+if not avail.empty and chg_col in avail.columns:
     avail = (
-        avail.sort_values(chg_col, ascending=not sort_desc)
+        avail.sort_values(chg_col, ascending=not st.session_state.get("sort_desc", True))
              .reset_index(drop=True)
     )
 
-# ---- Tables
+# Tables
 st.subheader("Top-10 (greens only)")
 st.dataframe(avail.head(10), use_container_width=True)
 
