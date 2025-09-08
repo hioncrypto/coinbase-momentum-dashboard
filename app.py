@@ -1110,7 +1110,7 @@ with expander("History depth (for ATH/ATL)"):
             1,
             key="amount_weekly"
         )
- # ------------------------------ TIMEFRAMES ------------------------------
+# ------------------------------ TIMEFRAMES ------------------------------
 # ------------------------- TIMEFRAMES -------------------------
 # Allowed timeframes
 tf_options = ["15m", "1h"]
