@@ -774,22 +774,28 @@ with expander("Mode"):
         step=1,
     )
 # ----------------------------- TIMEFRAMES
-# ----------------------------- TIMEFRAMES
 with expander("Timeframes"):
-    st.selectbox(
+    # Only allow 15m and 1h in the UI
+    tf_options = ["15m", "1h"]
+
+    # Resolve current value safely
+    current_tf = st.session_state.get("sort_tf", "1h")
+    if current_tf not in tf_options:
+        current_tf = "1h"
+
+    st.session_state["sort_tf"] = st.selectbox(
         "Primary sort timeframe",
-        TF_LIST,
-        index=TF_LIST.index(st.session_state["sort_tf"]),
-        key="sort_tf"
-    )
-    st.checkbox(
-        "Sort descending (largest first)",
-        key="sort_desc",
-        value=st.session_state.get("sort_desc", True)
+        tf_options,
+        index=tf_options.index(current_tf),
+        key="sort_tf",  # keep the same key so downstream code still works
     )
 
-    # Minimum bars requirement removed (hard-set to 1 so nothing gets filtered out on length)
-    st.session_state["min_bars"] = 1
+    st.toggle(
+        "Sort descending (largest first)",
+        key="sort_desc",
+        value=st.session_state.get("sort_desc", True),
+    )
+
     st.caption("Minimum bars requirement removed for debugging.")
 
 # ----------------------------- GATES
