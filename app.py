@@ -508,22 +508,27 @@ with expander("Mode"):
         st.session_state["ws_chunk"] = 5
     st.slider("WS subscribe chunk (Coinbase)", 2, 20, key="ws_chunk", step=1)
 
-# TIMEFRAMES (single, cleaned)
 with expander("Timeframes"):
-    current_tf = st.session_state.get("sort_tf", "1h")
-    if current_tf not in TF_LIST: current_tf = "1h"
-    # Seed once, then let the widget manage the key
-if "sort_tf" not in st.session_state or st.session_state["sort_tf"] not in TF_LIST:
-    st.session_state["sort_tf"] = "1h"
+    tf_options = ["15m", "1h"]
 
-st.selectbox(
-    "Primary sort timeframe",
-    TF_LIST,
-    index=TF_LIST.index(st.session_state["sort_tf"]),
-    key="sort_tf",   # widget now manages session_state["sort_tf"]
-)
+    if "sort_tf" not in st.session_state or st.session_state["sort_tf"] not in tf_options:
+        st.session_state["sort_tf"] = "1h"
 
-    st.toggle("Sort descending (largest first)", key="sort_desc", value=st.session_state.get("sort_desc", True))
+    st.selectbox(
+        "Primary sort timeframe",
+        tf_options,
+        index=tf_options.index(st.session_state["sort_tf"]),
+        key="sort_tf",
+    )
+
+    st.toggle(
+        "Sort descending (largest first)",
+        key="sort_desc",
+        value=st.session_state.get("sort_desc", True),
+    )
+
+    st.caption("Minimum bars requirement set to 1 so greens/yellows can appear.")
+
     st.caption("Minimum bars requirement set to 1 so greens/yellows can appear even on short windows.")
 
 # GATES
