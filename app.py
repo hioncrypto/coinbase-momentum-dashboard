@@ -1124,8 +1124,7 @@ with expander("Timeframes"):
         current_tf = "1h"
         st.session_state["sort_tf"] = current_tf
 
-    # Build the widget. IMPORTANT: do NOT assign the return value;
-    # just give it the key that matches session_state.
+    # Build the widget. IMPORTANT: do NOT assign the return value
     st.selectbox(
         "Primary sort timeframe",
         tf_options,
@@ -1141,8 +1140,9 @@ with expander("Timeframes"):
 
     st.caption("Minimum bars requirement removed for debugging.")
 
-# -------------------- Build tables / display --------------------
-# Compose a clean DataFrame of results with the columns we want to show
+# ---------------- Build tables / display ----------------
+# Compose a clean DataFrame of results ...
+
 
 sort_tf = st.session_state.get("sort_tf", "1h")
 chg_col = f"% Change ({st.session_state['sort_tf']})"
