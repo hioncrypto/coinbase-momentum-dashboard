@@ -1114,35 +1114,26 @@ sort_tf = st.session_state.get("sort_tf", "1h")
 # Compose a clean DataFrame of results with the columns we want to show
 
 sort_tf = st.session_state.get("sort_tf", "1h")
-chg_col = f"% Change ({sort_tf})"
+chg_col = f"% Change ({st.session_state['sort_tf']})"
 
-# If the probe loop built rows, they should be in valid_rows; fall back to pairs-only
-if 'valid_rows' in locals() and valid_rows:
-    avail = pd.DataFrame(valid_rows)
+# Only create avail if pairs already exists
+if 'pairs' in locals() and pairs:
+    if 'avail' not in locals() or not isinstance(avail, pd.DataFrame):
+        avail = pd.DataFrame({"pair": pairs, chg_col: np.nan})
+    elif avail.empty:
+        avail = pd.DataFrame({"pair": pairs, chg_col: np.nan})
+    elif chg_col not in avail.columns:
+        avail[chg_col] = np.nan
 else:
-    # no rows computed; show skeleton with NaNs so headers render
-    avail = pd.DataFrame({"pair": pairs, chg_col: np.nan})
+    avail = pd.DataFrame(columns=["pair", chg_col])
 
-# Make sure the % Change column exists
-if chg_col not in avail.columns:
-    avail[chg_col] = np.nan
+# Sort by % change (desc when "Sort descending" is on)
+if not avail.empty and chg_col in avail.columns:
+    avail = avail.sort_values(
+        chg_col,
+        ascending=not st.session_state.get("sort_desc", True)
+    ).reset_index(drop=True)
 
-# Add the other display columns (keep if probe already produced them)
-display_cols = [
-    "pair", "Price", chg_col, "Δ% (last 3 bars)",
-    "From ATH %", "ATH date", "From ATL %", "ATL date",
-    "Gates", "Strong Buy"
-]
-for c in display_cols:
-    if c not in avail.columns:
-        avail[c] = np.nan
-
-# Nice ordering
-avail = avail[display_cols]
-
-# Sorting: honor the "Sort descending" toggle, default to desc on % Change
-desc = bool(st.session_state.get("sort_desc", True))
-avail = avail.sort_values(chg_col, ascending=not desc, na_position="last").reset_index(drop=True)
 
 # ---------- Debug: show sample (so the table doesn't look “dim” while empty) ----------
 st.subheader("Debug — probe summary & first rows")
