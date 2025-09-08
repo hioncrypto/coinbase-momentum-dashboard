@@ -1110,35 +1110,36 @@ with expander("History depth (for ATH/ATL)"):
             1,
             key="amount_weekly"
         )
-# ------------------------------ TIMEFRAMES ------------------------------
-# ------------------------- TIMEFRAMES -------------------------
-# Allowed timeframes
-tf_options = ["15m", "1h"]
+# ---------------- TIMEFRAMES ----------------
+with expander("Timeframes"):
+    # Only allow 15m and 1h in the UI
+    tf_options = ["15m", "1h"]
 
-# Work out a safe current value
-current_tf = st.session_state.get("sort_tf", "1h")
-if current_tf not in tf_options:
-    current_tf = "1h"
+    # Seed session state safely
+    if "sort_tf" not in st.session_state:
+        st.session_state["sort_tf"] = "1h"
 
-# 1) Seed the key BEFORE creating the widget (important)
-if "sort_tf" not in st.session_state or st.session_state["sort_tf"] not in tf_options:
-    st.session_state["sort_tf"] = current_tf
+    current_tf = st.session_state.get("sort_tf", "1h")
+    if current_tf not in tf_options:
+        current_tf = "1h"
+        st.session_state["sort_tf"] = current_tf
 
-# 2) Create the widget; DO NOT assign its return into session_state
-st.selectbox(
-    "Primary sort timeframe",
-    tf_options,
-    index=tf_options.index(st.session_state["sort_tf"]),
-    key="sort_tf",
-)
+    # Build the widget. IMPORTANT: do NOT assign the return value;
+    # just give it the key that matches session_state.
+    st.selectbox(
+        "Primary sort timeframe",
+        tf_options,
+        index=tf_options.index(current_tf),
+        key="sort_tf",
+    )
 
-st.toggle(
-    "Sort descending (largest first)",
-    key="sort_desc",
-    value=st.session_state.get("sort_desc", True),
-)
+    st.toggle(
+        "Sort descending (largest first)",
+        key="sort_desc",
+        value=st.session_state.get("sort_desc", True),
+    )
 
-st.caption("Minimum bars requirement removed for debugging.")
+    st.caption("Minimum bars requirement removed for debugging.")
 
 # -------------------- Build tables / display --------------------
 # Compose a clean DataFrame of results with the columns we want to show
