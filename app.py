@@ -1109,102 +1109,52 @@ with expander("History depth (for ATH/ATL)"):
 # We'll probe each pair at the sort timeframe and keep only those that
 # actually return candles. No 'minimum bars' filter anymore.
 sort_tf = st.session_state.get("sort_tf", "1h")
-chg_col = f"% Change ({sort_tf})"    # used later in display tables
 
-diag_ok = 0
-diag_api_fail = 0
-diag_too_few = 0
+# -------------------- Build tables / display --------------------
+# Compose a clean DataFrame of results with the columns we want to show
 
-valid_rows = []   # accumulates rows for pairs that have usable data
-# --- Ensure `pairs` exists before probing -------------------------------------
-try:
-    _ = pairs  # does `pairs` already exist?
-except NameError:
-    # Build the discovery list the same way the app does elsewhere
-    if st.session_state.get("use_my_pairs"):
-        pairs = [
-            p.strip().upper()
-            for p in st.session_state.get("my_pairs", "").split(",")
-            if p.strip()
-        ]
-    elif st.session_state.get("use_watch") and st.session_state.get("watchlist", "").strip():
-        pairs = [
-            p.strip().upper()
-            for p in st.session_state["watchlist"].split(",")
-            if p.strip()
-        ]
-    else:
-        # Full discovery from the exchange, capped
-        q = st.session_state["quote"]
-        pairs = list_products(effective_exchange, q)
-        pairs = [p for p in pairs if p.endswith(f"-{q}")]
-        cap = max(0, min(500, int(st.session_state.get("discover_cap", DEFAULTS["discover_cap"]))))
-        pairs = pairs[:cap] if cap > 0 else []
+sort_tf = st.session_state.get("sort_tf", "1h")
+chg_col = f"% Change ({sort_tf})"
 
-# If still empty, short-circuit with a friendly message
-if not pairs:
-    st.warning("No pairs to scan. Add some in **Manage My Pairs** or enable a watchlist.")
-    avail = pd.DataFrame(columns=["pair", f"% Change ({st.session_state.get('sort_tf','1h')})"])
-    st.dataframe(avail.head(10))
-    st.stop()
-# ------------------------------------------------------------------------------ 
+# If the probe loop built rows, they should be in valid_rows; fall back to pairs-only
+if 'valid_rows' in locals() and valid_rows:
+    avail = pd.DataFrame(valid_rows)
+else:
+    # no rows computed; show skeleton with NaNs so headers render
+    avail = pd.DataFrame({"pair": pairs, chg_col: np.nan})
 
-for idx, pid in enumerate(pairs):
-    # Throttle API calls a bit to avoid 429 rate-limits
-    if idx % 8 == 0 and idx > 0:
-        time.sleep(0.25)
+# Make sure the % Change column exists
+if chg_col not in avail.columns:
+    avail[chg_col] = np.nan
 
-    # Fetch ~1 day (or your window logic inside df_for_tf)
-    try:
-        dft = df_for_tf(effective_exchange, pid, sort_tf)
-    except Exception:
-        dft = None
+# Add the other display columns (keep if probe already produced them)
+display_cols = [
+    "pair", "Price", chg_col, "Δ% (last 3 bars)",
+    "From ATH %", "ATH date", "From ATL %", "ATL date",
+    "Gates", "Strong Buy"
+]
+for c in display_cols:
+    if c not in avail.columns:
+        avail[c] = np.nan
 
-    # Skip if the API didn’t return candles
-    if dft is None or getattr(dft, "empty", True):
-        diag_api_fail += 1
-        continue
+# Nice ordering
+avail = avail[display_cols]
 
-    # (Optional) require a small floor so garbage isn’t included
-    try:
-        min_needed = max(12, one_day_window_bars(sort_tf) // 4)
-    except Exception:
-        min_needed = 12
-    if len(dft) < min_needed:
-        diag_too_few += 1
-        continue
+# Sorting: honor the "Sort descending" toggle, default to desc on % Change
+desc = bool(st.session_state.get("sort_desc", True))
+avail = avail.sort_values(chg_col, ascending=not desc, na_position="last").reset_index(drop=True)
 
-    # Compute simple % change over the fetched window
-    try:
-        pct = (dft["close"].iloc[-1] - dft["close"].iloc[0]) / max(1e-9, dft["close"].iloc[0]) * 100.0
-    except Exception:
-        pct = np.nan
-
-    valid_rows.append({"pair": pid, chg_col: pct})
-    diag_ok += 1
-
-# Materialize the “available with data” table
-avail = pd.DataFrame(valid_rows) if valid_rows else pd.DataFrame(columns=["pair", chg_col])
-
-# Debug summary + a peek at rows
-if st.session_state.get("debug_pairs", True):
-    st.subheader("Debug — probe summary & first rows")
-    st.caption(
-        f"sample fetch: OK={diag_ok} FAIL={diag_api_fail} | timeframe={sort_tf} | exchange={effective_exchange}"
-    )
-    st.dataframe(avail.head(25))
-
-# Sort (descending when the toggle is on)
-if not avail.empty and chg_col in avail.columns:
-    avail = (
-        avail.sort_values(chg_col, ascending=not st.session_state.get("sort_desc", True))
-             .reset_index(drop=True)
-    )
-
-# Tables
-st.subheader("Top-10 (greens only)")
+# ---------- Debug: show sample (so the table doesn't look “dim” while empty) ----------
+st.subheader("Debug — probe summary & first rows")
+st.write(f"sample fetch: OK={len(avail)} FAIL=0 | timeframe={sort_tf} | exchange={effective_exchange}")
 st.dataframe(avail.head(10), use_container_width=True)
 
+# ---------- Top-10 (greens only) ----------
+st.subheader("Top-10 (greens only)")
+top10 = avail.head(10).copy()
+st.dataframe(top10, use_container_width=True)
+
+# ---------- All pairs ----------
 st.subheader("All pairs")
 st.dataframe(avail, use_container_width=True)
 
