@@ -1433,7 +1433,13 @@ want_ws = (
     and WS_AVAILABLE
 )
 if want_ws:
-    start_ws_if_needed(effective_exchange, pairs, int(st.session_state.get("ws_chunk", 5)))
+    # WebSocket lifecycle (guard in case WS helpers are not present)
+want_ws = st.session_state.get("mode", "REST only").startswith("WebSocket")
+if want_ws and 'start_ws_if_needed' in globals():
+    try:
+        start_ws_if_needed(effective_exchange, pairs, int(st.session_state.get("ws_chunk", 5)))
+    except Exception:
+        pass
 
 # ----------------------------- Build rows + diagnostics
 diag_available = len(pairs)
