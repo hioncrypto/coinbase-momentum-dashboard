@@ -1111,9 +1111,7 @@ with expander("History depth (for ATH/ATL)"):
             key="amount_weekly"
         )
  # ------------------------------ TIMEFRAMES ------------------------------
-with expander("Timeframes"):
-    # Only allow 15m and 1h in the UI
-   # ------------------------- TIMEFRAMES -------------------------
+# ------------------------- TIMEFRAMES -------------------------
 # Allowed timeframes
 tf_options = ["15m", "1h"]
 
@@ -1141,13 +1139,6 @@ st.toggle(
 )
 
 st.caption("Minimum bars requirement removed for debugging.")
- 
-       
-# ----------------------------- Build tables / display -----------------------------
-
-# We'll probe each pair at the sort timeframe and keep only those that
-# actually return candles. No 'minimum bars' filter anymore.
-sort_tf = st.session_state.get("sort_tf", "1h")
 
 # -------------------- Build tables / display --------------------
 # Compose a clean DataFrame of results with the columns we want to show
