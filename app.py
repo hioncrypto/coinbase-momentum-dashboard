@@ -1113,32 +1113,35 @@ with expander("History depth (for ATH/ATL)"):
  # ------------------------------ TIMEFRAMES ------------------------------
 with expander("Timeframes"):
     # Only allow 15m and 1h in the UI
-    tf_options = ["15m", "1h"]
+   # ------------------------- TIMEFRAMES -------------------------
+# Allowed timeframes
+tf_options = ["15m", "1h"]
 
-    # Resolve current value safely (default to 1h if missing/invalid)
-    current_tf = st.session_state.get("sort_tf", "1h")
-    if current_tf not in tf_options:
-        current_tf = "1h"
+# Work out a safe current value
+current_tf = st.session_state.get("sort_tf", "1h")
+if current_tf not in tf_options:
+    current_tf = "1h"
 
-    # Seed the key once BEFORE creating the widget (avoid APIException)
-    if "sort_tf" not in st.session_state:
-        st.session_state["sort_tf"] = current_tf
+# 1) Seed the key BEFORE creating the widget (important)
+if "sort_tf" not in st.session_state or st.session_state["sort_tf"] not in tf_options:
+    st.session_state["sort_tf"] = current_tf
 
-    # Build the widget; do NOT assign back to session_state here
-    st.selectbox(
-        "Primary sort timeframe",
-        tf_options,
-        index=tf_options.index(st.session_state["sort_tf"]),
-        key="sort_tf",
-    )
+# 2) Create the widget; DO NOT assign its return into session_state
+st.selectbox(
+    "Primary sort timeframe",
+    tf_options,
+    index=tf_options.index(st.session_state["sort_tf"]),
+    key="sort_tf",
+)
 
-    st.toggle(
-        "Sort descending (largest first)",
-        key="sort_desc",
-        value=st.session_state.get("sort_desc", True),
-    )
+st.toggle(
+    "Sort descending (largest first)",
+    key="sort_desc",
+    value=st.session_state.get("sort_desc", True),
+)
 
-    st.caption("Minimum bars requirement removed for debugging.")
+st.caption("Minimum bars requirement removed for debugging.")
+ 
        
 # ----------------------------- Build tables / display -----------------------------
 
