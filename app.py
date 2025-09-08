@@ -1218,27 +1218,63 @@ with expander("Notifications"):
     st.text_input("Email recipient (optional)", st.session_state.get("email_to",""), key="email_to")
     st.text_input("Webhook URL (optional)", st.session_state.get("webhook_url",""), key="webhook_url")
 
-# ----------------------------- LISTING RADAR
+# # ----------------------------- LISTING RADAR -----------------------------
 with expander("Listing Radar"):
+    # Small badge when there are unseen alerts (optional)
     if st.session_state.get("lr_unacked", 0) > 0:
-        st.markdown('<span class="blink-badge">New/Upcoming listings</span>', unsafe_allow_html=True)
-    st.toggle("Enable Listing Radar", key="lr_enabled", value=st.session_state.get("lr_enabled", False))
+        st.markdown(
+            '<span class="blink-badge">New/Upcoming listings</span>',
+            unsafe_allow_html=True,
+        )
+
+    st.toggle(
+        "Enable Listing Radar",
+        key="lr_enabled",
+        value=st.session_state.get("lr_enabled", False),
+    )
+
     cA, cB = st.columns(2)
     with cA:
-        st.toggle("Watch Coinbase", key="lr_watch_coinbase", value=st.session_state.get("lr_watch_coinbase", True))
-        st.toggle("Watch Binance", key="lr_watch_binance", value=st.session_state.get("lr_watch_binance", True))
-        st.text_input("Quotes to watch (CSV)", st.session_state.get("lr_watch_quotes", "USD, USDT, USDC"), key="lr_watch_quotes")
-        st.slider("Poll interval (seconds)", 10, 120, int(st.session_state.get("lr_poll_sec", 30)), 5, key="lr_poll_sec")
+        st.text_area(
+            "Announcement feeds (comma-separated)",
+            value=st.session_state.get(
+                "lr_feeds",
+                # defaults you were using
+                "https://blog.coinbase.com/feed, https://www.binance.com/en/support/announcement",
+            ),
+            key="lr_feeds",
+            height=100,
+        )
+        st.text_input(
+            "Quotes to watch (CSV)",
+            value=st.session_state.get("lr_quotes", "USD, USDT, USDC"),
+            key="lr_quotes",
+        )
+
     with cB:
-        st.text_area("Announcement feeds (comma-separated)", st.session_state.get("lr_feeds", ", ".join(DEFAULT_FEEDS)), key="lr_feeds")
-        st.slider("Re-scan feeds every (seconds)", 60, 900, int(st.session_state.get("lr_upcoming_sec", 300)), 30, key="lr_upcoming_sec")
-        st.slider("Upcoming alert window (hours)", 6, 168, int(st.session_state.get("lr_upcoming_window_h", 48)), 6, key="lr_upcoming_window_h")
+        st.slider(
+            "Poll interval (seconds)",
+            15, 600,
+            st.session_state.get("lr_poll", 30),
+            key="lr_poll",
+        )
+        st.slider(
+            "Re-scan feeds every (seconds)",
+            60, 3600,
+            st.session_state.get("lr_rescan", 300),
+            key="lr_rescan",
+        )
+        st.slider(
+            "Upcoming alert window (hours)",
+            1, 72,
+            st.session_state.get("lr_window", 48),
+            key="lr_window",
+        )
+
+    # Quick way to clear the “new” counter (optional)
     if st.button("Acknowledge all alerts"):
         st.session_state["lr_unacked"] = 0
-        st.success("Alerts acknowledged.")
 
-# persist to URL
-sync_state_to_query_params()
 
 # ----------------------------- Header label
 st.markdown(f"<div style='font-size:1.3rem;font-weight:700;margin:4px 0 10px 2px;'>Timeframe: {st.session_state['sort_tf']}</div>", unsafe_allow_html=True)
