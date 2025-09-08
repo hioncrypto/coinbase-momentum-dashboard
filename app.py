@@ -1140,14 +1140,30 @@ st.subheader("Debug — probe summary & first rows")
 st.write(f"sample fetch: OK={len(avail)} FAIL=0 | timeframe={sort_tf} | exchange={effective_exchange}")
 st.dataframe(avail.head(10), use_container_width=True)
 
-# ---------- Top-10 (greens only) ----------
+# ----------- Top-10 (greens only) -----------
 st.subheader("Top-10 (greens only)")
 top10 = avail.head(10).copy()
-st.dataframe(top10, use_container_width=True)
 
-# ---------- All pairs ----------
+def highlight_rows(row):
+    if row[chg_col] >= 5:      # strong gain
+        return ['background-color: green; color: white'] * len(row)
+    elif row[chg_col] >= 2:    # near signal
+        return ['background-color: yellow; color: black'] * len(row)
+    else:
+        return [''] * len(row)
+
+st.dataframe(
+    top10.style.apply(highlight_rows, axis=1),
+    use_container_width=True
+)
+
+# ----------- All pairs -----------
 st.subheader("All pairs")
-st.dataframe(avail, use_container_width=True)
+st.dataframe(
+    avail.style.apply(highlight_rows, axis=1),
+    use_container_width=True
+)
+
 
 
 # ----------------------------- DISPLAY
