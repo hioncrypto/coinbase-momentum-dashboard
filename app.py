@@ -800,9 +800,9 @@ for idx, pid in enumerate(pairs):
         macd_hist_confirm_bars=int(st.session_state.get("macd_hist_confirm_bars", 3)),
     )
 
-       meta, passed, chips, enabled_cnt = build_gate_eval(dft, dist)
+        meta, passed, chips, enabled_cnt = build_gate_eval(dft, dist)
 
-    # Color/Include logic
+    # Color / include logic
     mode = st.session_state.get("gate_mode", "ANY")
 
     if mode == "ALL":
@@ -822,7 +822,7 @@ for idx, pid in enumerate(pairs):
         is_green  = (passed >= K)
         is_yellow = (passed >= Y and passed < K)
 
-    # HARD FILTER
+    # Hard filter
     if st.session_state.get("hard_filter", False):
         if mode in {"ALL", "ANY"} and not include:
             diag_fetched += 1
@@ -832,6 +832,21 @@ for idx, pid in enumerate(pairs):
             continue
 
     rows.append({
+        "Pair": pid,
+        "Price": last_price,
+        f"% Change ({sort_tf})": pct_display,
+        f"Δ% (last {max(1, int(st.session_state.get('lookback_candles', 3)))} bars)": meta["delta_pct"],
+        "From ATH %": athp,
+        "ATH date": athd,
+        "From ATL %": atlp,
+        "ATL date": atld,
+        "Gates": chips,
+        # changed column: Strong Buy instead of Signal
+        "Strong Buy": ("YES" if is_green else ("WATCH" if is_yellow else "—")),
+        "_green": is_green,
+        "_yellow": is_yellow,
+    })
+
         "Pair": pid,
         "Price": last_price,
         f"% Change ({sort_tf})": pct_display,
