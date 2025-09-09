@@ -736,100 +736,22 @@ chg_col = f"% Change ({sort_tf})"
 rows = []
 diag_fetched = diag_skip_api = diag_skip_bars = 0
 min_bars_req = int(st.session_state.get("min_bars", 1))
+# replace your current rows.append({...}) with this, keeping it INSIDE the for-loop
+rows.append({
+    "Pair": pid,
+    "Price": last_price,
+    "% Change ({})".format(sort_tf): pct_display,
+    "Δ% (last {} bars)".format(max(1, int(st.session_state.get("lookback_candles", 3)))): meta["delta_pct"],
+    "From ATH %": athp,
+    "ATH date": athd,
+    "From ATL %": atlp,
+    "ATL date": atld,
+    "Gates": chips,
+    "Strong Buy": ("YES" if is_green else ("WATCH" if is_yellow else "—")),
+    "_green": is_green,
+    "_yellow": is_yellow,
+})
 
-792: for idx, pid in enumerate(pairs):
-793:     if idx % 8 == 0 and idx > 0:
-794:         time.sleep(0.25)
-795:
-796:     # fetch candles for this pair
-797:     try:
-798:         dft = df_for_tf(effective_exchange, pid, sort_tf)
-799:     except Exception:
-800:         dft = None
-801:     if dft is None or getattr(dft, "empty", True):
-802:         diag_skip_api += 1
-803:         continue
-804:
-805:     # compute price / pct for this pair
-806:     last_price  = float(dft["close"].iloc[-1])
-807:     first_price = float(dft["close"].iloc[0])
-808:     pct_display = (last_price / (first_price + 1e-12) - 1.0) * 100.0
-809:
-810:     # optional ATH/ATL (keep your existing hist code if you want)
-811:     athp, athd, atlp, atld = np.nan, "—", np.nan, "—"
-812:     # (if you already computed these earlier in the loop, keep that and delete this line)
-813:
-814:     # -------- GATE EVAL (begins) --------
-815:     dist = dict(
-816:         lookback_candles=int(st.session_state.get("lookback_candles", 3)),
-817:         min_pct=float(st.session_state.get("min_pct", 3.0)),
-818:         use_vol_spike=bool(st.session_state.get("use_vol_spike", True)),
-819:         vol_mult=float(st.session_state.get("vol_mult", 1.10)),
-820:         vol_window=int(DEFAULTS.get("vol_window", 20)),
-821:         use_rsi=bool(st.session_state.get("use_rsi", False)),
-822:         rsi_len=int(st.session_state.get("rsi_len", 14)),
-823:         min_rsi=int(st.session_state.get("min_rsi", 55)),
-824:         use_macd=bool(st.session_state.get("use_macd", False)),
-825:         macd_fast=int(st.session_state.get("macd_fast", 12)),
-826:         macd_slow=int(st.session_state.get("macd_slow", 26)),
-827:         macd_sig=int(st.session_state.get("macd_sig", 9)),
-828:         min_mhist=float(st.session_state.get("min_mhist", 0.0)),
-829:         use_atr=bool(st.session_state.get("use_atr", False)),
-830:         atr_len=int(st.session_state.get("atr_len", 14)),
-831:         min_atr=float(st.session_state.get("min_atr", 0.5)),
-832:         use_trend=bool(st.session_state.get("use_trend", False)),
-833:         pivot_span=int(st.session_state.get("pivot_span", 4)),
-834:         trend_within=int(st.session_state.get("trend_within", 48)),
-835:         use_roc=bool(st.session_state.get("use_roc", False)),
-836:         min_roc=float(st.session_state.get("min_roc", 1.0)),
-837:         use_macd_cross=bool(st.session_state.get("use_macd_cross", True)),
-838:         macd_cross_bars=int(st.session_state.get("macd_cross_bars", 5)),
-839:         macd_cross_only_bull=bool(st.session_state.get("macd_cross_only_bull", True)),
-840:         macd_cross_below_zero=bool(st.session_state.get("macd_cross_below_zero", True)),
-841:         macd_hist_confirm_bars=int(st.session_state.get("macd_hist_confirm_bars", 3)),
-842:     )
-843:
-844:     meta, passed, chips, enabled_cnt = build_gate_eval(dft, dist)
-845:
-846:     mode = st.session_state.get("gate_mode", "ANY")
-847:     if mode == "ALL":
-848:         include   = (enabled_cnt > 0 and passed == enabled_cnt)
-849:         is_green  = include
-850:         is_yellow = (0 < passed < enabled_cnt)
-851:     elif mode == "ANY":
-852:         include   = (passed >= 1)
-853:         is_green  = (passed >= 1)
-854:         is_yellow = (0 < passed < enabled_cnt)
-855:     else:
-856:         K = int(st.session_state.get("K_green", 3))
-857:         Y = int(st.session_state.get("Y_yellow", 2))
-858:         include   = True
-859:         is_green  = (passed >= K)
-860:         is_yellow = (passed >= Y and passed < K)
-861:
-862:     if st.session_state.get("hard_filter", False):
-863:         if mode in {"ALL", "ANY"} and not include:
-864:             diag_fetched += 1
-865:             continue
-866:         if mode == "Custom (K/Y)" and not (is_green or is_yellow):
-867:             diag_fetched += 1
-868:             continue
-869:     # -------- GATE EVAL (ends) --------
-870:
-871:     rows.append({
-872:         "Pair": pid,
-873:         "Price": last_price,
-874:         f"% Change ({sort_tf})": pct_display,
-875:         f"Δ% (last {max(1, int(st.session_state.get('lookback_candles', 3)))} bars)": meta["delta_pct"],
-876:         "From ATH %": athp,
-877:         "ATH date": athd,
-878:         "From ATL %": atlp,
-879:         "ATL date": atld,
-880:         "Gates": chips,
-881:         "Strong Buy": ("YES" if is_green else ("WATCH" if is_yellow else "—")),
-882:         "_green": is_green,
-883:         "_yellow": is_yellow,
-884:     })
 
     })
 
