@@ -553,6 +553,11 @@ with expander("Gates"):
     st.radio("Preset", ["Spike Hunter", "Early MACD Cross", "Confirm Rally", "None"],
              index=["Spike Hunter", "Early MACD Cross", "Confirm Rally", "None"].index(st.session_state.get("preset", "Spike Hunter")),
              horizontal=True, key="preset")
+    st.markdown(
+    "**Tips (How gates work):** Gate Mode 'ALL' = pass every enabled gate. 'ANY' = pass at least one. 'Custom (K/Y)' = green if passes ≥ K, yellow if Y ≤ passes < K. "
+    "Hard filter hides non-passers. Δ and ROC both compare price over a window; using both with strict thresholds can exclude everything. "
+    "MACD Cross with 'Bullish only' and 'Prefer below zero' ignores crosses above 0 by design. Volume spike needs vol_window+1 bars."
+)
 
     # lightweight presets
     if st.session_state["preset"] == "Spike Hunter":
