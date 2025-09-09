@@ -533,6 +533,7 @@ with expander("Timeframes"):
 
     st.selectbox(
         "Primary sort timeframe",
+        st.caption("Tips: 15m is noisier but reacts fast; 1h is steadier. Some gates need enough bars (e.g., volume spike needs vol_window+1). Sorting is by % change in this timeframe.")
         tf_options,
         index=tf_options.index(st.session_state["sort_tf"]),
         key="sort_tf",
