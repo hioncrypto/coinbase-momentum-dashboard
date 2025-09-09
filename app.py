@@ -634,17 +634,34 @@ with expander("Indicator lengths"):
     st.slider("ATR length", 5, 50, int(st.session_state.get("atr_len", 14)), 1, key="atr_len")
 
 # ATH/ATL history
+# ----------------------------- ATH/ATL history
 with expander("History depth (for ATH/ATL)"):
-    st.caption("Tips: Turn this on to compute From ATH/ATL % and dates. More history = slower. Weekly is resampled from daily.")
+    st.caption(
+        "Tips: Turn this on to compute From ATH/ATL % and dates. "
+        "More history = slower. Weekly is resampled from daily."
+    )
 
-    st.selectbox("Basis", ["Hourly", "Daily", "Weekly"], index=["Hourly", "Daily", "Weekly"].index(st.session_state.get("basis", "Daily")), key="basis")
+    do_ath = st.toggle("Compute ATH/ATL", key="do_ath", value=st.session_state.get("do_ath", False))
 
-    if st.session_state["basis"] == "Hourly":
+    # Use a unique key to avoid duplicate-key collisions with any other 'basis' widget
+    basis = st.selectbox(
+        "Basis",
+        ["Hourly", "Daily", "Weekly"],
+        index=["Hourly", "Daily", "Weekly"].index(st.session_state.get("ath_basis", "Daily")),
+        key="ath_basis",
+    )
+
+    # Range sliders per basis (keep existing state keys so the rest of the app still works)
+    if basis == "Hourly":
         st.slider("Hours (≤72)", 1, 72, int(st.session_state.get("amount_hourly", 24)), 1, key="amount_hourly")
-    elif st.session_state["basis"] == "Daily":
+    elif basis == "Daily":
         st.slider("Days (≤365)", 1, 365, int(st.session_state.get("amount_daily", 90)), 1, key="amount_daily")
-    else:
+    else:  # Weekly
         st.slider("Weeks (≤52)", 1, 52, int(st.session_state.get("amount_weekly", 12)), 1, key="amount_weekly")
+
+    # Optional: mirror into 'basis' in session_state (this does NOT create a widget),
+    # so any downstream code that reads st.session_state["basis"] keeps working.
+    st.session_state["basis"] = basis
 
 
 # Display
