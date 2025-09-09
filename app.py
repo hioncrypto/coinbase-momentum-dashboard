@@ -636,14 +636,17 @@ with expander("Indicator lengths"):
 # ATH/ATL history
 with expander("History depth (for ATH/ATL)"):
     st.caption("Tips: Turn this on to compute From ATH/ATL % and dates. More history = slower. Weekly is resampled from daily.")
+
     st.toggle("Compute ATH/ATL", key="do_ath", value=st.session_state.get("do_ath", False))
     st.selectbox("Basis", ["Hourly", "Daily", "Weekly"], index=["Hourly", "Daily", "Weekly"].index(st.session_state.get("basis", "Daily")), key="basis")
+
     if st.session_state["basis"] == "Hourly":
         st.slider("Hours (≤72)", 1, 72, int(st.session_state.get("amount_hourly", 24)), 1, key="amount_hourly")
     elif st.session_state["basis"] == "Daily":
         st.slider("Days (≤365)", 1, 365, int(st.session_state.get("amount_daily", 90)), 1, key="amount_daily")
     else:
         st.slider("Weeks (≤52)", 1, 52, int(st.session_state.get("amount_weekly", 12)), 1, key="amount_weekly")
+
 
 # Display
 with expander("Display"):
