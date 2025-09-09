@@ -661,6 +661,7 @@ with expander("Notifications"):
 
 # Listing Radar
 with expander("Listing Radar"):
+    st.caption("Tips: 'New' listings are detected by symbol diffs. 'Upcoming' is scraped from feed text within your window and can be noisy. 'Quotes to watch' filters pairs of interest.")
     if st.session_state.get("lr_unacked", 0) > 0:
         st.markdown('<span class="blink-badge">New/Upcoming listings</span>', unsafe_allow_html=True)
 
