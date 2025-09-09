@@ -796,8 +796,8 @@ for pid in pairs:
 
     # ATH/ATL placeholders (skip long history to keep this block self-contained)
     if st.session_state.get("do_ath", False):
-    basis = st.session_state.get("basis", "Daily")
-    amt = dict(
+        basis = st.session_state.get("basis", "Daily")
+        amt = dict(
         Hourly=st.session_state.get("amount_hourly", 24),
         Daily=st.session_state.get("amount_daily", 90),
         Weekly=st.session_state.get("amount_weekly", 12),
