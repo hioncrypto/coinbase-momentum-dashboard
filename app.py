@@ -737,21 +737,20 @@ rows = []
 diag_fetched = diag_skip_api = diag_skip_bars = 0
 min_bars_req = int(st.session_state.get("min_bars", 1))
 # replace your current rows.append({...}) with this, keeping it INSIDE the for-loop
-rows.append({
-    "Pair": pid,
-    "Price": last_price,
-    "% Change ({})".format(sort_tf): pct_display,
-    "Δ% (last {} bars)".format(max(1, int(st.session_state.get("lookback_candles", 3)))): meta["delta_pct"],
-    "From ATH %": athp,
-    "ATH date": athd,
-    "From ATL %": atlp,
-    "ATL date": atld,
-    "Gates": chips,
-    "Strong Buy": ("YES" if is_green else ("WATCH" if is_yellow else "—")),
-    "_green": is_green,
-    "_yellow": is_yellow,
-})
-
+    rows.append({
+        "Pair": pid,
+        "Price": last_price,
+        "% Change ({})".format(sort_tf): pct_display,
+        "Δ% (last {} bars)".format(max(1, int(st.session_state.get("lookback_candles", 3)))): meta["delta_pct"],
+        "From ATH %": athp,
+        "ATH date": athd,
+        "From ATL %": atlp,
+        "ATL date": atld,
+        "Gates": chips,
+        "Strong Buy": ("YES" if is_green else ("WATCH" if is_yellow else "—")),
+        "_green": is_green,
+        "_yellow": is_yellow,
+    })
 
     })
 
