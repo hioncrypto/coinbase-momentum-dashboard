@@ -800,38 +800,52 @@ for idx, pid in enumerate(pairs):
         macd_hist_confirm_bars=int(st.session_state.get("macd_hist_confirm_bars", 3)),
     )
 
-    meta, passed, chips, enabled_cnt = build_gate_eval(dft, dist)
+       meta, passed, chips, enabled_cnt = build_gate_eval(dft, dist)
 
     # Color/Include logic
     mode = st.session_state.get("gate_mode", "ANY")
 
-if mode == "ALL":
-    include   = (enabled_cnt > 0 and passed == enabled_cnt)
-    is_green  = include
-    is_yellow = (0 < passed < enabled_cnt)
+    if mode == "ALL":
+        include   = (enabled_cnt > 0 and passed == enabled_cnt)
+        is_green  = include
+        is_yellow = (0 < passed < enabled_cnt)
 
-elif mode == "ANY":
-    include   = (passed >= 1)
-    # show yellow when some but not all enabled gates pass
-    is_green  = (passed >= 1)
-    is_yellow = (0 < passed < enabled_cnt)
+    elif mode == "ANY":
+        include   = (passed >= 1)
+        is_green  = (passed >= 1)
+        is_yellow = (0 < passed < enabled_cnt)
 
-else:  # Custom (K/Y)
-    K = int(st.session_state.get("K_green", 3))
-    Y = int(st.session_state.get("Y_yellow", 2))
-    include   = True
-    is_green  = (passed >= K)
-    is_yellow = (passed >= Y and passed < K)
+    else:  # Custom (K/Y)
+        K = int(st.session_state.get("K_green", 3))
+        Y = int(st.session_state.get("Y_yellow", 2))
+        include   = True
+        is_green  = (passed >= K)
+        is_yellow = (passed >= Y and passed < K)
 
+    # HARD FILTER
     if st.session_state.get("hard_filter", False):
-        if mode in {"ALL", "ANY"} and not include: 
-            diag_fetched += 1  # we did fetch, just hidden
+        if mode in {"ALL", "ANY"} and not include:
+            diag_fetched += 1
             continue
         if mode == "Custom (K/Y)" and not (is_green or is_yellow):
             diag_fetched += 1
             continue
 
-    rows.append(dict(
+    rows.append({
+        "Pair": pid,
+        "Price": last_price,
+        f"% Change ({sort_tf})": pct_display,
+        f"Δ% (last {max(1, int(st.session_state.get('lookback_candles', 3)))} bars)": meta["delta_pct"],
+        "From ATH %": athp,
+        "ATH date": athd,
+        "From ATL %": atlp,
+        "ATL date": atld,
+        "Gates": chips,
+        "Signal": ("GREEN" if is_green else ("YELLOW" if is_yellow else "")),
+        "_green": is_green,
+        "_yellow": is_yellow,
+    })
+
         Pair=pid,
         Price=last_price,
         **{chg_col: pct_display},
