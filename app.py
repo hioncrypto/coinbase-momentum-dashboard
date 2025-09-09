@@ -506,9 +506,11 @@ with expander("Market"):
     st.slider(f"Pairs to discover (0–500) • Available: {len(avail_pairs)}", 0, 500, key="discover_cap", step=10)
 
 # MODE
-# Initialize session state value once, before the sidebar UI
+# one-time init, place this a little above the sidebar blocks
 if "mode" not in st.session_state:
     st.session_state["mode"] = "REST only"
+if "ws_chunk" not in st.session_state:
+    st.session_state["ws_chunk"] = 5
 
 with expander("Mode"):
     st.radio(
@@ -521,10 +523,8 @@ with expander("Mode"):
         """Tips: REST is pull-only. WebSocket + REST streams faster prices (Coinbase only) for a subset. "WS chunk" controls how many tickers subscribe at once."""
     )
 
-    if "ws_chunk" not in st.session_state:
-        st.session_state["ws_chunk"] = 5
-
-    st.slider("
+    st.slider("WS subscribe chunk (Coinbase)", 2, 20, key="ws_chunk", step=1)
+    
 with expander("Timeframes"):
     tf_options = ["15m", "1h"]
 
