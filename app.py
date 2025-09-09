@@ -867,11 +867,16 @@ else:
     st.subheader("📑 All pairs")
     st.dataframe(df.drop(columns=["_green", "_yellow"]).style.apply(highlight_rows, axis=1), use_container_width=True)
 
-    st.caption(
-        f"Pairs shown: {len(df)} • Exchange: {effective_exchange} • Quote: {st.session_state['quote']} "
-        f"• TF: {st.session_state['sort_tf']} • Gate Mode: {st.session_state.get('gate_mode','ANY')} "
-        f"• Hard filter: {'On' if st.session_state.get('hard_filter', False) else 'Off'}"
-    )
+    q  = st.session_state.get("quote", "USD")
+tf = st.session_state.get("sort_tf", "1h")
+gm = st.session_state.get("gate_mode", "ANY")
+hf = "On" if st.session_state.get("hard_filter", False) else "Off"
+
+st.caption(
+    f"Pairs shown: {len(df)} • Exchange: {effective_exchange} • Quote: {q} "
+    f"• TF: {tf} • Gate Mode: {gm} • Hard filter: {hf}"
+)
+
 
 # ----------------------------- Listing Radar engine -----------------------------
 def lr_parse_quotes(csv_text: str) -> set:
