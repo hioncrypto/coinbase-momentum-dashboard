@@ -803,7 +803,7 @@ with expander("History depth (for ATH/ATL)"):
     st.toggle("Compute ATH/ATL", key="do_ath", value=st.session_state.get("do_ath", False))
 
     st.selectbox(
-        "Basis",
+        "ath_basis",
         ["Hourly", "Daily", "Weekly"],
         index=["Hourly", "Daily", "Weekly"].index(st.session_state.get("basis", "Daily")),
         key="basis",
