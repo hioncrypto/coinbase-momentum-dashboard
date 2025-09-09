@@ -822,7 +822,7 @@ for idx, pid in enumerate(pairs):
         is_green  = (passed >= K)
         is_yellow = (passed >= Y and passed < K)
 
-    # Hard filter
+    # Hard filter (must be inside the loop so 'continue' is legal)
     if st.session_state.get("hard_filter", False):
         if mode in {"ALL", "ANY"} and not include:
             diag_fetched += 1
@@ -841,11 +841,12 @@ for idx, pid in enumerate(pairs):
         "From ATL %": atlp,
         "ATL date": atld,
         "Gates": chips,
-        # changed column: Strong Buy instead of Signal
+        # Column rename you wanted: 'Strong Buy' instead of 'Signal'
         "Strong Buy": ("YES" if is_green else ("WATCH" if is_yellow else "—")),
         "_green": is_green,
         "_yellow": is_yellow,
     })
+
 
         "Pair": pid,
         "Price": last_price,
