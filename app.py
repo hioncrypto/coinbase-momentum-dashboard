@@ -178,6 +178,11 @@ def _init_runtime():
 _init_runtime()
 init_persisted_state()
 
+# Safety seeds so f-strings and widgets never KeyError on cold start
+for k, d in [("exchange", "Coinbase"), ("quote", "USD"), ("sort_tf", "1h")]:
+    st.session_state.setdefault(k, d)
+
+
 # ----------------------------- Indicators -----------------------------
 def ema(s: pd.Series, span: int) -> pd.Series: return s.astype("float64").ewm(span=span, adjust=False).mean()
 
