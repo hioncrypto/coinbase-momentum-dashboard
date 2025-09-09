@@ -625,8 +625,8 @@ with expander("Gates"):
     st.selectbox("Yellow needs ≥ Y (but < K)", list(range(0, int(st.session_state.get("K_green", 3)))), index=min(int(st.session_state.get("Y_yellow", 2)), int(st.session_state.get("K_green", 3)) - 1), key="Y_yellow")
 
 # Indicator lengths
-    st.caption("Tips: Longer lengths smooth signals (slower, fewer false positives). Shorter lengths are more reactive but noisier.")
 with expander("Indicator lengths"):
+    st.caption("Tips: Longer lengths smooth signals (slower, fewer false positives). Shorter lengths are more reactive but noisier.")
     st.slider("RSI length", 5, 50, int(st.session_state.get("rsi_len", 14)), 1, key="rsi_len")
     st.slider("MACD fast EMA", 3, 50, int(st.session_state.get("macd_fast", 12)), 1, key="macd_fast")
     st.slider("MACD slow EMA", 5, 100, int(st.session_state.get("macd_slow", 26)), 1, key="macd_slow")
