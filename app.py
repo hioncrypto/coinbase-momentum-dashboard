@@ -483,6 +483,7 @@ with expander("Market"):
         st.info("This exchange is coming soon. Using Coinbase for data.")
 
     st.selectbox("Quote currency", QUOTES, index=QUOTES.index(st.session_state["quote"]), key="quote")
+    st.caption("Tips: Use watchlist or My Pairs to restrict discovery. Quote filters pairs like BTC-USD vs BTC-USDT. 'Pairs to discover' caps how many symbols we scan.")
     st.checkbox("Use watchlist only (ignore discovery)", key="use_watch", value=st.session_state.get("use_watch", False))
 
     if "watchlist" not in st.session_state:
