@@ -806,7 +806,7 @@ elif basis == "Daily":
 else:  # Weekly
     st.slider("Weeks (≤52)", 1, 52, int(st.session_state.get("amount_weekly", 12)), 1, key="amount_weekly")
 
-    )[basis]
+    )
     histdf = get_hist(effective_exchange, pid, basis, amt)
     if histdf is not None and len(histdf) >= 10:
         aa = ath_atl_info(histdf)
