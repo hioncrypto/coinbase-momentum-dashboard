@@ -857,54 +857,57 @@ with expander("History depth (for ATH/ATL)"):
         macd_hist_confirm_bars=int(st.session_state.get("macd_hist_confirm_bars", 3)),
     )
 
-    meta, passed, chips, enabled_cnt = build_gate_eval(dft, dist)
+    # ---- Color / Include logic (no `continue`, just guard the append) ----
+mode = st.session_state.get("gate_mode", "ANY")
 
-    # Color / include logic
-    mode = st.session_state.get("gate_mode", "ANY")
-    if mode == "ALL":
-        include = (enabled_cnt > 0 and passed == enabled_cnt)
-        is_green = include
-        is_yellow = (0 < passed < enabled_cnt)
-    elif mode == "ANY":
-        include = (passed >= 1)
-        # show yellow when some but not all enabled gates pass
-        is_green = (passed >= 1)
-        is_yellow = (0 < passed < enabled_cnt)
+# Default states
+include = True
+is_green = False
+is_yellow = False
+
+if mode == "ALL":
+    include = (enabled_cnt > 0 and passed == enabled_cnt)
+    is_green = include
+    is_yellow = (0 < passed < enabled_cnt)
+elif mode == "ANY":
+    include = (passed >= 1)
+    is_green = include
+    is_yellow = False
+else:  # Custom (K/Y)
+    K = int(st.session_state.get("K_green", 3))
+    Y = int(st.session_state.get("Y_yellow", 2))
+    is_green = (passed >= K)
+    is_yellow = (passed >= Y and passed < K)
+    # include means “allowed to show” even if hard_filter is off
+    include = True
+
+# If hard filter is ON, only keep rows that qualify; otherwise keep everything.
+keep_row = True
+if st.session_state.get("hard_filter", False):
+    if mode in {"ALL", "ANY"}:
+        keep_row = include
     else:  # Custom (K/Y)
-        K = int(st.session_state.get("K_green", 3))
-        Y = int(st.session_state.get("Y_yellow", 2))
-        include = True
-        is_green = (passed >= K)
-        is_yellow = (passed >= Y and passed < K)
+        keep_row = (is_green or is_yellow)
 
-    # Hard filter inside the loop so 'continue' is legal
-    if st.session_state.get("hard_filter", False):
-        if mode in {"ALL", "ANY"} and not include:
-            diag_fetched += 1
-            continue
-        if mode == "Custom (K/Y)" and not (is_green or is_yellow):
-            diag_fetched += 1
-            continue
+if keep_row:
+    rows.append(
+        {
+            "Pair": pid,
+            "Price": last_price,
+            f"% Change ({st.session_state['sort_tf']})": pct_display,
+            f"Δ% (last {max(1, int(st.session_state.get('lookback_candles', 3)))} bars)": meta["delta_pct"],
+            "From ATH %": athp,
+            "ATH date": athd,
+            "From ATL %": atlp,
+            "ATL date": atld,
+            "Gates": chips,
+            "Strong Buy": "YES" if is_green else "—",
+            "_green": is_green,
+            "_yellow": is_yellow,
+        }
+    )
+# else: skip adding the row without using `continue`
 
-    diag_fetched += 1
-
-    # Append one row per pair. Use format() to avoid nested f-string brace issues.
-    row = {
-        "Pair": pid,
-        "Price": last_price,
-        "% Change ({})".format(sort_tf): pct_display,
-        "Δ% (last {} bars)".format(
-            max(1, int(st.session_state.get("lookback_candles", 3)))
-        ): meta["delta_pct"],
-        "From ATH %": athp,
-        "ATH date": athd,
-        "From ATL %": atlp,
-        "ATL date": atld,
-        "Gates": chips,
-        "Strong Buy": ("YES" if is_green else ("WATCH" if is_yellow else "—")),
-        "_green": is_green,
-        "_yellow": is_yellow,
-    }
     rows.append(row)
 
 # ----------------------------- Diagnostics & Tables
