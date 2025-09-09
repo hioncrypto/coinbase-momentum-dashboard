@@ -881,31 +881,32 @@ else:  # Custom (K/Y)
     # include means “allowed to show” even if hard_filter is off
     include = True
 
-# If hard filter is ON, only keep rows that qualify; otherwise keep everything.
+# … earlier: meta, passed, chips, enabled_cnt = build_gate_eval(...)
+# … earlier: compute is_green, is_yellow, include based on mode
+
 keep_row = True
 if st.session_state.get("hard_filter", False):
     if mode in {"ALL", "ANY"}:
         keep_row = include
-    else:  # Custom (K/Y)
+    else:
         keep_row = (is_green or is_yellow)
 
 if keep_row:
-    rows.append(
-        {
-            "Pair": pid,
-            "Price": last_price,
-            f"% Change ({st.session_state['sort_tf']})": pct_display,
-            f"Δ% (last {max(1, int(st.session_state.get('lookback_candles', 3)))} bars)": meta["delta_pct"],
-            "From ATH %": athp,
-            "ATH date": athd,
-            "From ATL %": atlp,
-            "ATL date": atld,
-            "Gates": chips,
-            "Strong Buy": "YES" if is_green else "—",
-            "_green": is_green,
-            "_yellow": is_yellow,
-        }
-    )
+    rows.append({
+        "Pair": pid,
+        "Price": last_price,
+        f"% Change ({st.session_state['sort_tf']})": pct_display,
+        f"Δ% (last {max(1, int(st.session_state.get('lookback_candles', 3)))} bars)": meta["delta_pct"],
+        "From ATH %": athp,
+        "ATH date": athd,
+        "From ATL %": atlp,
+        "ATL date": atld,
+        "Gates": chips,
+        "Strong Buy": "YES" if is_green else "—",
+        "_green": is_green,
+        "_yellow": is_yellow,
+    })
+
 # else: skip adding the row without using `continue`
 
     rows.append(row)
