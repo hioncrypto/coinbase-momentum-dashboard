@@ -796,11 +796,16 @@ for pid in pairs:
 
     # ATH/ATL placeholders (skip long history to keep this block self-contained)
     if st.session_state.get("do_ath", False):
-        basis = st.session_state.get("basis", "Daily")
-        amt = dict(
-        Hourly=st.session_state.get("amount_hourly", 24),
-        Daily=st.session_state.get("amount_daily", 90),
-        Weekly=st.session_state.get("amount_weekly", 12),
+        # Read the selected basis once
+basis = st.session_state.get("basis", "Daily")
+
+if basis == "Hourly":
+    st.slider("Hours (≤72)", 1, 72, int(st.session_state.get("amount_hourly", 24)), 1, key="amount_hourly")
+elif basis == "Daily":
+    st.slider("Days (≤365)", 1, 365, int(st.session_state.get("amount_daily", 90)), 1, key="amount_daily")
+else:  # Weekly
+    st.slider("Weeks (≤52)", 1, 52, int(st.session_state.get("amount_weekly", 12)), 1, key="amount_weekly")
+
     )[basis]
     histdf = get_hist(effective_exchange, pid, basis, amt)
     if histdf is not None and len(histdf) >= 10:
