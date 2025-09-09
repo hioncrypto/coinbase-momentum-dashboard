@@ -508,6 +508,7 @@ with expander("Market"):
 # MODE
 with expander("Mode"):
     st.radio("Data source", ["REST only", "WebSocket + REST (hybrid)"],
+             st.caption("Tips: REST is pull-only. WebSocket + REST streams faster prices (Coinbase only) for a subset. 'WS chunk' controls how many tickers subscribe at once.")
              index=0 if st.session_state.get("mode", "REST only") == "REST only" else 1,
              horizontal=True, key="mode")
     if "ws_chunk" not in st.session_state:
