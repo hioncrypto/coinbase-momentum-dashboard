@@ -734,14 +734,120 @@ sort_tf = st.session_state["sort_tf"]
 chg_col = f"% Change ({sort_tf})"
 
 rows = []
-diag_fetched = diag_skip_api = diag_skip_bars = 0
-min_bars_req = int(st.session_state.get("min_bars", 1))
-# replace your current rows.append({...}) with this, keeping it INSIDE the for-loop
-    rows.append({
+# ----------------------------- Build rows / display ----------------
+
+# Compose rows with proper gate logic and stable indentation
+diag_available = len(pairs)
+diag_capped = len(pairs)
+diag_fetched = 0
+diag_skip_bars = 0
+diag_skip_api = 0
+
+rows = []
+
+# Use the selected timeframe label once
+sort_tf = st.session_state.get("sort_tf", "1h")
+
+for pid in pairs:
+    # Throttle a touch to avoid rate limits
+    try:
+        dft = df_for_tf(effective_exchange, pid, sort_tf)
+    except Exception:
+        dft = None
+
+    if dft is None or getattr(dft, "empty", True):
+        diag_skip_api += 1
+        continue
+
+    # Accept as long as we got at least one bar
+    if len(dft) < 1:
+        diag_skip_bars += 1
+        continue
+
+    # Price and % change over the fetched window
+    last_price = float(dft["close"].iloc[-1])
+    first_price = float(dft["close"].iloc[0])
+    pct_display = (last_price / (first_price + 1e-12) - 1.0) * 100.0
+
+    # ATH/ATL placeholders (skip long history to keep this block self-contained)
+    athp, athd, atlp, atld = np.nan, "—", np.nan, "—"
+
+    # Gate parameters bundled from UI state
+    dist = dict(
+        lookback_candles=int(st.session_state.get("lookback_candles", 3)),
+        min_pct=float(st.session_state.get("min_pct", 3.0)),
+
+        use_vol_spike=bool(st.session_state.get("use_vol_spike", True)),
+        vol_mult=float(st.session_state.get("vol_mult", 1.10)),
+        vol_window=int(DEFAULTS.get("vol_window", 20)),
+
+        use_rsi=bool(st.session_state.get("use_rsi", False)),
+        rsi_len=int(st.session_state.get("rsi_len", 14)),
+        min_rsi=int(st.session_state.get("min_rsi", 55)),
+
+        use_macd=bool(st.session_state.get("use_macd", False)),
+        macd_fast=int(st.session_state.get("macd_fast", 12)),
+        macd_slow=int(st.session_state.get("macd_slow", 26)),
+        macd_sig=int(st.session_state.get("macd_sig", 9)),
+        min_mhist=float(st.session_state.get("min_mhist", 0.0)),
+
+        use_atr=bool(st.session_state.get("use_atr", False)),
+        atr_len=int(st.session_state.get("atr_len", 14)),
+        min_atr=float(st.session_state.get("min_atr", 0.5)),
+
+        use_trend=bool(st.session_state.get("use_trend", False)),
+        pivot_span=int(st.session_state.get("pivot_span", 4)),
+        trend_within=int(st.session_state.get("trend_within", 48)),
+
+        use_roc=bool(st.session_state.get("use_roc", False)),
+        min_roc=float(st.session_state.get("min_roc", 1.0)),
+
+        use_macd_cross=bool(st.session_state.get("use_macd_cross", True)),
+        macd_cross_bars=int(st.session_state.get("macd_cross_bars", 5)),
+        macd_cross_only_bull=bool(st.session_state.get("macd_cross_only_bull", True)),
+        macd_cross_below_zero=bool(st.session_state.get("macd_cross_below_zero", True)),
+        macd_hist_confirm_bars=int(st.session_state.get("macd_hist_confirm_bars", 3)),
+    )
+
+    meta, passed, chips, enabled_cnt = build_gate_eval(dft, dist)
+
+    # Color / include logic
+    mode = st.session_state.get("gate_mode", "ANY")
+    if mode == "ALL":
+        include = (enabled_cnt > 0 and passed == enabled_cnt)
+        is_green = include
+        is_yellow = (0 < passed < enabled_cnt)
+    elif mode == "ANY":
+        include = (passed >= 1)
+        # show yellow when some but not all enabled gates pass
+        is_green = (passed >= 1)
+        is_yellow = (0 < passed < enabled_cnt)
+    else:  # Custom (K/Y)
+        K = int(st.session_state.get("K_green", 3))
+        Y = int(st.session_state.get("Y_yellow", 2))
+        include = True
+        is_green = (passed >= K)
+        is_yellow = (passed >= Y and passed < K)
+
+    # Hard filter inside the loop so 'continue' is legal
+    if st.session_state.get("hard_filter", False):
+        if mode in {"ALL", "ANY"} and not include:
+            diag_fetched += 1
+            continue
+        if mode == "Custom (K/Y)" and not (is_green or is_yellow):
+            diag_fetched += 1
+            continue
+
+    diag_fetched += 1
+
+    # Append one row per pair. Use format() to avoid nested f-string brace issues.
+    row = {
         "Pair": pid,
         "Price": last_price,
         "% Change ({})".format(sort_tf): pct_display,
-        "Δ% (last {} bars)".format(max(1, int(st.session_state.get("lookback_candles", 3)))): meta["delta_pct"],
+        "Δ% (last {} bars)".format(
+            max(1, int(st.session_state.get("lookback_candles", 3)))
+        ): meta["delta_pct"],
         "From ATH %": athp,
         "ATH date": athd,
         "From ATL %": atlp,
@@ -750,41 +856,10 @@ min_bars_req = int(st.session_state.get("min_bars", 1))
         "Strong Buy": ("YES" if is_green else ("WATCH" if is_yellow else "—")),
         "_green": is_green,
         "_yellow": is_yellow,
-    })
+    }
+    rows.append(row)
 
-    })
-
-
-        "Pair": pid,
-        "Price": last_price,
-        f"% Change ({sort_tf})": pct_display,
-        f"Δ% (last {max(1, int(st.session_state.get('lookback_candles', 3)))} bars)": meta["delta_pct"],
-        "From ATH %": athp,
-        "ATH date": athd,
-        "From ATL %": atlp,
-        "ATL date": atld,
-        "Gates": chips,
-        "Signal": ("GREEN" if is_green else ("YELLOW" if is_yellow else "")),
-        "_green": is_green,
-        "_yellow": is_yellow,
-    })
-
-        Pair=pid,
-        Price=last_price,
-        **{chg_col: pct_display},
-        **{f"Δ% (last {max(1, int(st.session_state.get('lookback_candles', 3)))} bars)": meta["delta_pct"]},
-        **{"From ATH %": athp, "ATH date": athd, "From ATL %": atlp, "ATL date": atld},
-        Gates=chips,
-        Signal=("GREEN" if is_green else ("YELLOW" if is_yellow else "")),
-        _green=is_green, _yellow=is_yellow
-    ))
-    diag_fetched += 1
-
-# ----------------------------- Tables -----------------------------
-st.caption(
-    f"Diagnostics — Pairs considered: {len(pairs)} • Fetched: {diag_fetched} • "
-    f"Skipped (API): {diag_skip_api} • Skipped (bars<{st.session_state.get('min_bars',1)}): {diag_skip_bars}"
-)
+# ----------------------------- Diagnostics & Tables
 
 df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=["Pair"])
 if df.empty:
