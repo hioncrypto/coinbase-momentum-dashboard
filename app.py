@@ -876,7 +876,7 @@ else:
             return ['background-color: yellow; color: black'] * len(row)
         return [''] * len(row)
 
-    st.subheader("📌 Top-10 (greens only)")
+    st.subheader("📌 Top-10")
     top10 = df[df["_green"]].sort_values(chg_col, ascending=False, na_position="last").head(10).drop(columns=["_green", "_yellow"])
     st.dataframe(top10.style.apply(highlight_rows, axis=1), use_container_width=True)
 
