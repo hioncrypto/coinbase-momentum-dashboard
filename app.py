@@ -804,20 +804,24 @@ for idx, pid in enumerate(pairs):
 
     # Color/Include logic
     mode = st.session_state.get("gate_mode", "ANY")
-    if mode == "ALL":
-        include = (enabled_cnt > 0 and passed == enabled_cnt)
-        is_green = include
-        is_yellow = (0 < passed < enabled_cnt)
-    elif mode == "ANY":
-        include = (passed >= 1)
-        is_green = include
-        is_yellow = False
-    else:  # Custom (K/Y)
-        K = int(st.session_state.get("K_green", 3))
-        Y = int(st.session_state.get("Y_yellow", 2))
-        include = True
-        is_green = (passed >= K)
-        is_yellow = (passed >= Y and passed < K)
+
+if mode == "ALL":
+    include   = (enabled_cnt > 0 and passed == enabled_cnt)
+    is_green  = include
+    is_yellow = (0 < passed < enabled_cnt)
+
+elif mode == "ANY":
+    include   = (passed >= 1)
+    # show yellow when some but not all enabled gates pass
+    is_green  = (passed >= 1)
+    is_yellow = (0 < passed < enabled_cnt)
+
+else:  # Custom (K/Y)
+    K = int(st.session_state.get("K_green", 3))
+    Y = int(st.session_state.get("Y_yellow", 2))
+    include   = True
+    is_green  = (passed >= K)
+    is_yellow = (passed >= Y and passed < K)
 
     if st.session_state.get("hard_filter", False):
         if mode in {"ALL", "ANY"} and not include: 
