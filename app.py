@@ -795,6 +795,22 @@ for pid in pairs:
     pct_display = (last_price / (first_price + 1e-12) - 1.0) * 100.0
 
     # ATH/ATL placeholders (skip long history to keep this block self-contained)
+    if st.session_state.get("do_ath", False):
+    basis = st.session_state.get("basis", "Daily")
+    amt = dict(
+        Hourly=st.session_state.get("amount_hourly", 24),
+        Daily=st.session_state.get("amount_daily", 90),
+        Weekly=st.session_state.get("amount_weekly", 12),
+    )[basis]
+    histdf = get_hist(effective_exchange, pid, basis, amt)
+    if histdf is not None and len(histdf) >= 10:
+        aa = ath_atl_info(histdf)
+        athp, athd, atlp, atld = (
+            aa["From ATH %"], aa["ATH date"], aa["From ATL %"], aa["ATL date"]
+        )
+    else:
+        athp, athd, atlp, atld = np.nan, "—", np.nan, "—"
+else:
     athp, athd, atlp, atld = np.nan, "—", np.nan, "—"
 
     # Gate parameters bundled from UI state
