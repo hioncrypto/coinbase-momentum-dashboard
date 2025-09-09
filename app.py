@@ -650,6 +650,7 @@ with expander("History depth (for ATH/ATL)"):
 
 # Display
 with expander("Display"):
+    st.caption("Tips: Font scale changes overall sizing. Useful on small screens.")
     st.slider("Font size (global)", 0.8, 1.6, float(st.session_state.get("font_scale", 1.0)), 0.05, key="font_scale")
 
 # Notifications
