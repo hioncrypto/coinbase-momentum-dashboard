@@ -795,33 +795,30 @@ for pid in pairs:
     pct_display = (last_price / (first_price + 1e-12) - 1.0) * 100.0
 
     # ATH/ATL placeholders (skip long history to keep this block self-contained)
-    if st.session_state.get("do_ath", False):
-        # Read the selected basis once
-basis = st.session_state.get("basis", "Daily")
+    # ATH/ATL history
+with expander("History depth (for ATH/ATL)"):
+    st.caption(
+        "Tips: Turn this on to compute From ATH/ATL % and dates. More history = slower. Weekly is resampled from daily."
+    )
 
-if basis == "Hourly":
-    st.slider("Hours (≤72)", 1, 72, int(st.session_state.get("amount_hourly", 24)), 1, key="amount_hourly")
-elif basis == "Daily":
-    st.slider("Days (≤365)", 1, 365, int(st.session_state.get("amount_daily", 90)), 1, key="amount_daily")
-else:  # Weekly
-    st.slider("Weeks (≤52)", 1, 52, int(st.session_state.get("amount_weekly", 12)), 1, key="amount_weekly")
+    st.toggle("Compute ATH/ATL", key="do_ath", value=st.session_state.get("do_ath", False))
 
     st.selectbox(
-    "Basis",
-    ["Hourly", "Daily", "Weekly"],
-    index=["Hourly", "Daily", "Weekly"].index(st.session_state.get("basis", "Daily")),
-    key="basis",
-)
-    histdf = get_hist(effective_exchange, pid, basis, amt)
-    if histdf is not None and len(histdf) >= 10:
-        aa = ath_atl_info(histdf)
-        athp, athd, atlp, atld = (
-            aa["From ATH %"], aa["ATH date"], aa["From ATL %"], aa["ATL date"]
-        )
-    else:
-        athp, athd, atlp, atld = np.nan, "—", np.nan, "—"
-else:
-    athp, athd, atlp, atld = np.nan, "—", np.nan, "—"
+        "Basis",
+        ["Hourly", "Daily", "Weekly"],
+        index=["Hourly", "Daily", "Weekly"].index(st.session_state.get("basis", "Daily")),
+        key="basis",
+    )
+
+    basis = st.session_state.get("basis", "Daily")
+
+    if basis == "Hourly":
+        st.slider("Hours (≤72)", 1, 72, int(st.session_state.get("amount_hourly", 24)), 1, key="amount_hourly")
+    elif basis == "Daily":
+        st.slider("Days (≤365)", 1, 365, int(st.session_state.get("amount_daily", 90)), 1, key="amount_daily")
+    else:  # Weekly
+        st.slider("Weeks (≤52)", 1, 52, int(st.session_state.get("amount_weekly", 12)), 1, key="amount_weekly")
+
 
     # Gate parameters bundled from UI state
     dist = dict(
