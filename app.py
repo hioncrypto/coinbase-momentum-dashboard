@@ -911,7 +911,27 @@ if mode == "ALL":
     is_green = include
     is_yellow = (0 < passed < enabled_cnt)
 elif mode == "ANY":
-    include = (passed >= 1)
+    # thresholds from UI (defaults if not set)
+k_required = int(st.session_state.get("K_green", 3))     # gates needed to turn GREEN
+y_required = int(st.session_state.get("Y_yellow", 2))    # gates needed to be YELLOW (< K)
+
+# color states
+is_green  = passed >= k_required
+is_yellow = (not is_green) and (passed >= y_required)
+
+# decide whether to keep the row, based on Mode
+# (Adjust the mode names if yours differ.)
+include = True
+if st.session_state.get("hard_filter", False):
+    if mode in {"ALL", "ANY"}:
+        include = True
+    elif mode in {"K/Y", "Custom"}:
+        include = is_green or is_yellow
+    elif mode in {"K only", "Green only"}:
+        include = is_green
+    else:
+        include = True
+
     is_green = include
     is_yellow = False
 else:  # Custom (K/Y)
