@@ -912,13 +912,12 @@ if mode == "ALL":
     include  = (enabled_cnt > 0 and passed == enabled_cnt)
     is_green = include
     is_yellow = (0 < passed < enabled_cnt)
-
+    
 # Everything else (ANY / K-Y / etc.)
 else:
     # thresholds from UI (defaults if not set)
     k_required = int(st.session_state.get("K_green", 3))
     y_required = int(st.session_state.get("Y_yellow", 2))
-
     # color states
     is_green  = passed >= k_required
     is_yellow = (not is_green) and (passed >= y_required)
