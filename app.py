@@ -818,7 +818,7 @@ with expander("History depth (for ATH/ATL)"):
     )
 
    do_ath = st.toggle("Compute ATH/ATL", key="ath_toggle", value=st.session_state.get("ath_toggle", st.session_state.get("do_ath", False)))
-st.session_state["do_ath"] = do_ath  # mirror to legacy key so downstream code still works
+     st.session_state["do_ath"] = do_ath  # mirror to legacy key so downstream code still works
 
     st.selectbox(
         "ath_basis",
