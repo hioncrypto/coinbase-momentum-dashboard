@@ -817,7 +817,8 @@ with expander("History depth (for ATH/ATL)"):
         "Tips: Turn this on to compute From ATH/ATL % and dates. More history = slower. Weekly is resampled from daily."
     )
 
-    st.toggle("Compute ATH/ATL", key="do_ath", value=st.session_state.get("do_ath", False))
+   do_ath = st.toggle("Compute ATH/ATL", key="ath_toggle", value=st.session_state.get("ath_toggle", st.session_state.get("do_ath", False)))
+st.session_state["do_ath"] = do_ath  # mirror to legacy key so downstream code still works
 
     st.selectbox(
         "ath_basis",
