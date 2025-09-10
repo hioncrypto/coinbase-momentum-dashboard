@@ -907,6 +907,7 @@ is_green = False
 is_yellow = False
 
 # Strict ALL mode
+# Strict ALL mode
 if mode == "ALL":
     include  = (enabled_cnt > 0 and passed == enabled_cnt)
     is_green = include
@@ -915,14 +916,33 @@ if mode == "ALL":
 # Everything else (ANY / K-Y / etc.)
 else:
     # thresholds from UI (defaults if not set)
-    k_required = int(st.session_state.get("K_green", 3))
-    y_required = int(st.session_state.get("Y_yellow", 2))
+    k_required = int(st.session_state.get("K_green", 3))   # gates needed to turn GREEN
+    y_required = int(st.session_state.get("Y_yellow", 2))  # gates needed to be YELLOW (< K)
+
     # color states
     is_green  = passed >= k_required
     is_yellow = (not is_green) and (passed >= y_required)
 
     # base include; refined by hard_filter below
     include = True
+
+    # Apply hard filter
+    if st.session_state.get("hard_filter", False):
+        if mode in {"ALL", "ANY"}:
+            keep_row = include
+        else:
+            keep_row = (is_green or is_yellow)
+    else:
+        keep_row = True
+
+    if keep_row:
+        # your rows.append({...}) block goes here
+        rows.append({
+            "Pair": pid,
+            "Price": last_price,
+            # ... keep your existing fields ...
+        })
+
 
     if st.session_state.get("hard_filter", False):
         if mode in {"ALL", "ANY"}:
