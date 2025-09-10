@@ -809,33 +809,55 @@ for pid in pairs:
     pct_display = (last_price / (first_price + 1e-12) - 1.0) * 100.0
 
     # ATH/ATL placeholders (skip long history to keep this block self-contained)
-   # ATH/ATL history
+   # --- ATH/ATL history ---
 with expander("History depth (for ATH/ATL)"):
     st.caption(
-        "Tips: Turn this on to compute From ATH/ATL % and dates. More history = slower. Weekly is resampled from daily."
+        "Tips: Turn this on to compute From ATH/ATL % and dates. More history = slower. "
+        "Weekly is resampled from daily."
     )
 
-    # ✅ Unique key to avoid duplicates, mirror into 'do_ath' so old code still works
+    # Unique key for the toggle; mirror to legacy 'do_ath' for downstream code
     do_ath = st.toggle(
         "Compute ATH/ATL",
-        key="ath_toggle",
-        value=st.session_state.get("ath_toggle", st.session_state.get("do_ath", False)),
+        key="athatl_toggle",
+        value=st.session_state.get("athatl_toggle", st.session_state.get("do_ath", False)),
     )
     st.session_state["do_ath"] = do_ath
 
+    # Unique key for basis select (avoid generic 'basis')
     basis = st.selectbox(
-        "Basis",
+        "ATH/ATL basis",
         ["Hourly", "Daily", "Weekly"],
-        index=["Hourly", "Daily", "Weekly"].index(st.session_state.get("basis", "Daily")),
-        key="basis",
+        index=["Hourly", "Daily", "Weekly"].index(st.session_state.get("athatl_basis", "Daily")),
+        key="athatl_basis",
     )
 
+    # Sliders with unique keys per branch
     if basis == "Hourly":
-        st.slider("Hours (≤72)", 1, 72, int(st.session_state.get("amount_hourly", 24)), 1, key="amount_hourly")
+        st.slider(
+            "Hours (≤72)",
+            1, 72,
+            int(st.session_state.get("athatl_amount_hourly", 24)),
+            1,
+            key="athatl_amount_hourly",
+        )
     elif basis == "Daily":
-        st.slider("Days (≤365)", 1, 365, int(st.session_state.get("amount_daily", 90)), 1, key="amount_daily")
-    else:  # Weekly
-        st.slider("Weeks (≤52)", 1, 52, int(st.session_state.get("amount_weekly", 12)), 1, key="amount_weekly")
+        st.slider(
+            "Days (≤365)",
+            1, 365,
+            int(st.session_state.get("athatl_amount_daily", 90)),
+            1,
+            key="athatl_amount_daily",
+        )
+    else:
+        st.slider(
+            "Weeks (≤52)",
+            1, 52,
+            int(st.session_state.get("athatl_amount_weekly", 12)),
+            1,
+            key="athatl_amount_weekly",
+        )
+
 
 
 
