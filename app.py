@@ -835,7 +835,8 @@ with expander("History depth (for ATH/ATL)"):
     elif basis == "Daily":
         st.slider("Days (≤365)", 1, 365, int(st.session_state.get("amount_daily", 90)), 1, key="amount_daily")
     else:  # Weekly
-        st.slider("Weeks (≤52)", 1, 52, int(st.session_state.get("amount_weekly", 12)), 1, key="amount_w_
+        st.slider("Weeks (≤52)", 1, 52, int(st.session_state.get("amount_weekly", 12)), 1, key="amount_weekly")
+
 
 
     # Gate parameters bundled from UI state
