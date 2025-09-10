@@ -916,8 +916,8 @@ if mode == "ALL":
 # Everything else (ANY / K-Y / etc.)
 else:
     # thresholds from UI (defaults if not set)
-    k_required = int(st.session_state.get("K_green", 3))   # gates needed to turn GREEN
-    y_required = int(st.session_state.get("Y_yellow", 2))  # gates needed to be YELLOW (< K)
+    k_required = int(st.session_state.get("K_green", 3))
+    y_required = int(st.session_state.get("Y_yellow", 2))
 
     # color states
     is_green  = passed >= k_required
@@ -925,6 +925,7 @@ else:
 
     # base include; refined by hard_filter below
     include = True
+
 
     # Apply hard filter
     if st.session_state.get("hard_filter", False):
