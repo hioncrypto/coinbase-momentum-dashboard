@@ -925,6 +925,14 @@ else:
     # base include; refined by hard_filter below
     include = True
 
+    if st.session_state.get("hard_filter", False):
+        if mode in {"ALL", "ANY"}:
+            include = True
+        elif mode in {"K/Y", "Custom"}:
+            include = (is_green or is_yellow)
+        else:
+            include = True
+
 if st.session_state.get("hard_filter", False):
     if mode in {"ALL", "ANY"}:
         include = True
