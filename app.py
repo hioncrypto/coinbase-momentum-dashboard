@@ -1009,7 +1009,6 @@ else:  # Custom (K/Y)
     rows.append({
         "Pair": pid,
         "Price": last_price,
-        ...
     })
 
 
