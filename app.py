@@ -1002,28 +1002,29 @@ else:  # Custom (K/Y)
     else:
         keep_row = True
 
-    if not keep_row:
-          # ---- End row filter & colors ----
-    # (We already did: if not keep_row: continue)
+        if not keep_row:
+        continue
+    # ---- End row filter & colors ----
 
     row = {
         "Pair": pid,
         "Price": last_price,
-
-        # Displayed 1h change text you already compute for the table
         "% Change (1h)": pct_display,
-
-        # Momentum over the last N bars (N is the UI lookback; meta["delta_pct"] was in your code)
         f"Δ% (last {max(1, int(st.session_state.get('lookback_candles', 3)))} bars)": meta.get("delta_pct"),
-
-        # ATH / ATL info (you already populate these variables upstream)
         "From ATH %": athp,
         "ATH date": athd,
         "From ATL %": atlp,
         "ATL date": atld,
-
-        # Gates / badges string you were showing (e.g., ✓, ✗, etc.)
         "Gates": chips,
+        "Strong Buy": "YES" if is_green else ("YELLOW" if is_yellow else ""),
+        "_green": is_green,
+        "_yellow": is_yellow,
+        "_passed": passed,
+        "_k_req": k_required,
+        "_y_req": y_required,
+    }
+
+    rows.append(row)
 
         # Human-friendly signal column
         "Strong Buy": "YES" if is_green else ("YELLOW" if is_yellow else ""),
