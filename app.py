@@ -973,32 +973,45 @@ else:  # Custom (K/Y)
     include = True
 
 # … earlier: meta, passed, chips, enabled_cnt = build_gate_eval(...)
-# … earlier: compute is_green, is_yellow, include based on mode
+    meta, passed, chips, enabled_cnt = build_gate_eval(dft, dist)
 
-keep_row = True
-if st.session_state.get("hard_filter", False):
-    if mode in {"ALL", "ANY"}:
-        keep_row = include
+    # ---- Row filter & colors (MUST be after build_gate_eval and before rows.append) ----
+    if mode == "ALL":
+        # ALL: keep only if every enabled gate passed
+        include   = (enabled_cnt > 0 and passed == enabled_cnt)
+        is_green  = include
+        is_yellow = (0 < passed < enabled_cnt)
     else:
-        keep_row = (is_green or is_yellow)
+        # ANY / K-Y / custom: thresholds from sidebar (with safe defaults)
+        k_required = int(st.session_state.get("K_green", 3))   # gates needed to be GREEN
+        y_required = int(st.session_state.get("Y_yellow", 2))  # gates needed to be YELLOW (< K)
 
-if keep_row:
+        # color states
+        is_green  = (passed >= k_required)
+        is_yellow = (not is_green) and (passed >= y_required)
+
+        # base include (refined below by hard_filter)
+        include = True
+
+    # hard filter (drop rows that don't qualify)
+    if st.session_state.get("hard_filter", False):
+        if mode in {"ALL", "ANY"}:
+            keep_row = include
+        else:
+            keep_row = (is_green or is_yellow)
+    else:
+        keep_row = True
+
+    if not keep_row:
+        continue
+    # ---- End row filter & colors ----
+
     rows.append({
         "Pair": pid,
         "Price": last_price,
-        f"% Change ({st.session_state['sort_tf']})": pct_display,
-        f"Δ% (last {max(1, int(st.session_state.get('lookback_candles', 3)))} bars)": meta["delta_pct"],
-        "From ATH %": athp,
-        "ATH date": athd,
-        "From ATL %": atlp,
-        "ATL date": atld,
-        "Gates": chips,
-        "Strong Buy": "YES" if is_green else "—",
-        "_green": is_green,
-        "_yellow": is_yellow,
+        ...
     })
 
-# else: skip adding the row without using `continue`
 
     rows.append(row)
 
