@@ -1027,9 +1027,17 @@ else:  # Custom (K/Y)
     rows.append(row)
 
         # Human-friendly signal column
+           row = {
+        "Pair": pid,
+        "Price": last_price,
+        "% Change (1h)": pct_display,
+        f"Δ% (last {max(1, int(st.session_state.get('lookback_candles', 3)))} bars)": meta.get("delta_pct"),
+        "From ATH %": athp,
+        "ATH date": athd,
+        "From ATL %": atlp,
+        "ATL date": atld,
+        "Gates": chips,
         "Strong Buy": "YES" if is_green else ("YELLOW" if is_yellow else ""),
-
-        # Hidden helper flags (useful for filtering/sorting/formatting later)
         "_green": is_green,
         "_yellow": is_yellow,
         "_passed": passed,
@@ -1038,6 +1046,7 @@ else:  # Custom (K/Y)
     }
 
     rows.append(row)
+
 
 
 
