@@ -1003,16 +1003,24 @@ else:  # Custom (K/Y)
         keep_row = True
 
     if not keep_row:
-        continue
-    # ---- End row filter & colors ----
-
-    rows.append({
+        # ---- End row filter & colors ----
+if keep_row:
+    row = {
         "Pair": pid,
         "Price": last_price,
-    })
-
-
+        # add the actual fields you want here (no "...")
+        # e.g. "% Change (1h)": pct_1h,
+        #       "From ATH %": athp,
+        #       "ATH date": athd,
+        #       "From ATL %": atlp,
+        #       "ATL date": atld,
+        #       "Gates": chips,
+        #       "Strong Buy": "YES" if is_green else "",
+        #       "_green": is_green,
+        #       "_yellow": is_yellow,
+    }
     rows.append(row)
+
 
 # ----------------------------- Diagnostics & Tables
 
