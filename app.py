@@ -563,6 +563,25 @@ st.markdown("""
 
   /* 3) Spinner: hide it so it can’t ghost the table */
   div[data-testid="stSpinner"] { display: none !important; }
+  /* Bring back color for the top sidebar buttons */
+section[data-testid="stSidebar"] button {
+  background: #1f6feb !important;     /* blue pill */
+  color: #ffffff !important;
+  border: 1px solid rgba(255,255,255,0.18) !important;
+  border-radius: 10px !important;
+}
+
+/* Hover state so it doesn’t look dead */
+section[data-testid="stSidebar"] button:hover {
+  filter: brightness(1.08) !important;
+}
+
+/* Keep your expander header highlight (already present, but restating doesn’t hurt) */
+section[data-testid="stSidebar"] details summary {
+  background: rgba(30,144,255,0.18) !important;
+  border-radius: 8px !important;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
