@@ -983,7 +983,7 @@ for pid in pairs:
         "From ATL %": atlp,
         "ATL date": atld,
         "Gates": chips,
-        "Signal": "GREEN" if is_green else ("YELLOW" if is_yellow else ""),
+        "Signal": "Strong Buy" if is_green else ("Watch" if is_yellow else "—"),
         "_green": is_green,
         "_yellow": is_yellow,
         "_passed": passed,
