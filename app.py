@@ -986,7 +986,7 @@ else:
 
     def highlight_rows(row):
         sig = row.get("Signal", "")
-        if sig == "GREEN":
+        if sig == "Strong Buy":
             return ['background-color: green; color: white'] * len(row)
         if sig == "YELLOW":
             return ['background-color: yellow; color: black'] * len(row)
