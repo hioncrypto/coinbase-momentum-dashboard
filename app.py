@@ -538,36 +538,31 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# Then add a second, plain (non-f) CSS block so we don't have to double braces everywhere
 st.markdown("""
 <style>
-  /* Optional: if you DON'T care about Material Icons, delete these two lines */
-  @import url('https://fonts.googleapis.com/icon?family=Material+Icons');
-  .material-icons, [class*="material-icons"] { font-family: "Material Icons" !important; -webkit-font-smoothing: antialiased; }
-
-  /* Sidebar expander visual */
-  section[data-testid="stSidebar"] details summary {
-    background: rgba(30,144,255,0.18)!important; border-radius: 8px; display:flex; align-items:center; gap:6px;
-  }
-
-  /* Listing radar badge */
-  @keyframes blinkRB { 0%{background:#e74c3c;} 50%{background:#3498db;} 100%{background:#e74c3c;} }
-  .blink-badge { display:inline-block; padding:3px 8px; color:white; border-radius:8px; font-weight:700; animation: blinkRB 1.1s linear infinite; }
-
-  /* Kill dataframe/editor dimming and transitions */
-  div[data-testid="stDataFrame"] div[role="grid"],
-  div[data-testid="stDataFrame"] div[role="grid"] * {
-    opacity: 1 !important;
-    filter: none !important;
-    transition: none !important;
-    animation: none !important;
-  }
+  /* 1) Grid and editor: never fade, never animate */
+  div[data-testid="stDataFrame"],
+  div[data-testid="stDataFrame"] *,
+  div[data-testid="stDataEditor"],
   div[data-testid="stDataEditor"] * {
     opacity: 1 !important;
     filter: none !important;
     transition: none !important;
     animation: none !important;
+    will-change: auto !important;
   }
+
+  /* 2) Streamlit's busy overlay: also never fade */
+  [aria-busy="true"],
+  [aria-busy="true"] * {
+    opacity: 1 !important;
+    filter: none !important;
+    transition: none !important;
+    animation: none !important;
+  }
+
+  /* 3) Spinner: hide it so it can’t ghost the table */
+  div[data-testid="stSpinner"] { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
