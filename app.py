@@ -540,9 +540,15 @@ st.markdown(f"""
   .material-icons, [class*="material-icons"] {{ font-family: "Material Icons" !important; -webkit-font-smoothing: antialiased; }}
   @keyframes blinkRB {{ 0%{{background:#e74c3c;}} 50%{{background:#3498db;}} 100%{{background:#e74c3c;}} }}
   .blink-badge {{ display:inline-block; padding:3px 8px; color:white; border-radius:8px; font-weight:700; animation: blinkRB 1.1s linear infinite; }}
-  div[data-testid="stDataFrame"], div[data-testid="stDataEditor"] * {{ opacity:1!important; filter:none!important; transition:none!important; }}
+   div[data-testid="stDataFrame"] div[role="grid"],
+  div[data-testid="stDataFrame"] div[role="grid"] * {
+      opacity: 1 !important;
+      filter: none !important;
+      transition: none !important;
+  }
 </style>
 """, unsafe_allow_html=True)
+
 
 st.title("Crypto Tracker by hioncrypto")
 
