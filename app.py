@@ -720,9 +720,18 @@ with expander("Display"):
 
 # Notifications
 with expander("Notifications"):
-    st.caption("Email requires SMTP in st.secrets; webhook posts JSON to your endpoint.")
+    st.caption("Tips: Email requires SMTP in st.secrets; webhook posts JSON to your endpoint.")
     st.text_input("Email recipient (optional)", st.session_state.get("email_to", ""), key="email_to")
     st.text_input("Webhook URL (optional)", st.session_state.get("webhook_url", ""), key="webhook_url")
+
+    # Test button for sanity check
+    if st.button("Send test email now"):
+        ok, msg = send_email_alert(
+            subject="[Crypto Tracker] Test alert",
+            body="This is a test from your Streamlit Cloud app.",
+            recipient=st.session_state.get("email_to", "")
+        )
+        st.success(msg) if ok else st.error(msg)
 
 # Listing Radar
 with expander("Listing Radar"):
