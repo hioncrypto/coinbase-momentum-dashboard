@@ -1148,10 +1148,18 @@ if st.session_state.get("lr_enabled"):
 
 # ----------------------------- Persist URL state & auto-refresh -----------------------------
 sync_state_to_query_params()
-remaining = int(st.session_state.get("refresh_sec", 30)) - int(time.time() - st.session_state.get("last_refresh", time.time()))
+
+remaining = int(st.session_state.get("refresh_sec", 30)) - int(
+    time.time() - st.session_state.get("last_refresh", time.time())
+)
 if remaining <= 0:
     st.session_state["last_refresh"] = time.time()
     st.rerun()
 else:
-    st.caption(f"Auto-refresh every {int(st.session_state.get('refresh_sec', 30))}s (next in {max(0, remaining)}s)")
+    st.caption(
+        f"Auto-refresh every {int(st.session_state.get('refresh_sec', 30))}s "
+        f"(next in {max(0, remaining)}s)"
+    )
 
+# Extra line to show you it’s alive without ghosting
+st.caption(f"Last update: {dt.datetime.utcnow().strftime('%H:%M:%S')} UTC")
