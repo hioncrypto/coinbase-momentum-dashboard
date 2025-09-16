@@ -1021,11 +1021,13 @@ else:
 
     # --- Top 10 section ---
     st.subheader("📌 Top-10")
+    st.caption(f"Last updated: {dt.datetime.utcnow().strftime('%H:%M:%S')} UTC • Refresh: {st.session_state.get('refresh_sec', 30)}s")
     top10 = df[df["_green"]].sort_values(chg_col, ascending=False, na_position="last").head(10).drop(columns=["_green", "_yellow"])
     st.dataframe(top10.style.apply(highlight_rows, axis=1), use_container_width=True)
 
     # --- All pairs section ---
     st.subheader("📑 All pairs")
+    st.caption(f"Last updated: {dt.datetime.utcnow().strftime('%H:%M:%S')} UTC • Refresh: {st.session_state.get('refresh_sec', 30)}s")
     st.dataframe(df.drop(columns=["_green", "_yellow"]).style.apply(highlight_rows, axis=1), use_container_width=True)
 
     # --- Footer info ---
