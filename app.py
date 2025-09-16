@@ -1004,8 +1004,6 @@ for pid in pairs:
 
 # ----------------------------- Diagnostics & Tables -----------------------------
 df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=["Pair"])
-# Recreate the Signal column for coloring
-if not df.empty and "_green" in df.columns and "_yellow" in df.columns:
 
 if df.empty:
     st.info("No rows to show. Try ANY mode, lower Min Δ, shorten lookback, set Minimum bars to 1, or increase discovery cap.")
