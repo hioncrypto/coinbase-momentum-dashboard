@@ -1012,12 +1012,12 @@ else:
     df.insert(0, "#", df.index + 1)
 
     def highlight_rows(row):
-    sig = row.get("Signal", "")
-    if sig == "Strong Buy":
+        sig = row.get("Signal", "")
+        if sig == "Strong Buy":
         return ['background-color: green; color: white'] * len(row)
-    if sig == "Watch":
+        if sig == "Watch":
         return ['background-color: yellow; color: black'] * len(row)
-    return [''] * len(row)
+        return [''] * len(row)
 
     # --- Top 10 section ---
     st.subheader("📌 Top-10")
