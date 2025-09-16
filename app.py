@@ -1173,5 +1173,6 @@ else:
         f"(next in {max(0, remaining)}s)"
     )
 
-# Extra line to show you it’s alive without ghosting
-st.caption(f"Last update: {dt.datetime.utcnow().strftime('%H:%M:%S')} UTC")
+# Show a heartbeat so you know it really reran
+import datetime as dt
+st.caption(f"Last updated: {dt.datetime.utcnow().strftime('%H:%M:%S')} UTC")
