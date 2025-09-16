@@ -1014,9 +1014,9 @@ else:
     def highlight_rows(row):
         sig = row.get("Signal", "")
         if sig == "Strong Buy":
-        return ['background-color: green; color: white'] * len(row)
+            return ['background-color: green; color: white'] * len(row)
         if sig == "Watch":
-        return ['background-color: yellow; color: black'] * len(row)
+            return ['background-color: yellow; color: black'] * len(row)
         return [''] * len(row)
 
     # --- Top 10 section ---
