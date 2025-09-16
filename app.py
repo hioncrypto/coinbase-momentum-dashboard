@@ -1004,44 +1004,57 @@ for pid in pairs:
 
 # ----------------------------- Diagnostics & Tables -----------------------------
 df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=["Pair"])
+
 if df.empty:
-    st.info("No rows to show. Try ANY mode, lower Min Δ, shorten lookback, set Minimum bars to 1, or increase discovery cap.")
+    # Show a spinner + caption while nothing has populated yet
+    st.markdown(
+        """
+        <div id="loading-spinner">
+            <div class="icon"></div>
+            Loading your pairs…
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 else:
+    # Sort and prep table
     df = df.sort_values(chg_col, ascending=not st.session_state.get("sort_desc", True), na_position="last").reset_index(drop=True)
     df.insert(0, "#", df.index + 1)
 
     def highlight_rows(row):
         sig = row.get("Signal", "")
-        if sig == "Strong Buy":
+        if sig == "GREEN":
             return ['background-color: green; color: white'] * len(row)
         if sig == "YELLOW":
             return ['background-color: yellow; color: black'] * len(row)
         return [''] * len(row)
 
+    # --- Top 10 section ---
     st.subheader("📌 Top-10")
-st.caption(
-    f"Last updated: {dt.datetime.utcnow().strftime('%H:%M:%S')} UTC • Refresh: {st.session_state.get('refresh_sec', 30)}s"
-)
-top10 = df[df["_green"]].sort_values(chg_col, ascending=False, na_position="last").head(10).drop(columns=["_green", "_yellow"])
-st.dataframe(top10.style.apply(highlight_rows, axis=1), use_container_width=True)
+    st.caption(
+        f"Last updated: {dt.datetime.utcnow().strftime('%H:%M:%S')} UTC • Refresh: {st.session_state.get('refresh_sec', 30)}s"
+    )
+    top10 = df[df["_green"]].sort_values(chg_col, ascending=False, na_position="last").head(10).drop(columns=["_green", "_yellow"])
+    st.dataframe(top10.style.apply(highlight_rows, axis=1), use_container_width=True)
 
-st.subheader("📑 All pairs")
-st.caption(
-    f"Last updated: {dt.datetime.utcnow().strftime('%H:%M:%S')} UTC • Refresh: {st.session_state.get('refresh_sec', 30)}s"
-)
-st.dataframe(df.drop(columns=["_green", "_yellow"]).style.apply(highlight_rows, axis=1), use_container_width=True)
+    # --- All pairs section ---
+    st.subheader("📑 All pairs")
+    st.caption(
+        f"Last updated: {dt.datetime.utcnow().strftime('%H:%M:%S')} UTC • Refresh: {st.session_state.get('refresh_sec', 30)}s"
+    )
+    st.dataframe(df.drop(columns=["_green", "_yellow"]).style.apply(highlight_rows, axis=1), use_container_width=True)
 
-q = st.session_state.get("quote", "USD")
-tf = st.session_state.get("sort_tf", "1h")
-gm = st.session_state.get("gate_mode", "ANY")
-hf = "On" if st.session_state.get("hard_filter", False) else "Off"
-effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"] else st.session_state["exchange"]
+    # --- Footer info ---
+    q = st.session_state.get("quote", "USD")
+    tf = st.session_state.get("sort_tf", "1h")
+    gm = st.session_state.get("gate_mode", "ANY")
+    hf = "On" if st.session_state.get("hard_filter", False) else "Off"
+    effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"] else st.session_state["exchange"]
 
-st.caption(
-    f"Pairs shown: {len(df)} • Exchange: {effective_exchange} • Quote: {q} "
-    f"• TF: {tf} • Gate Mode: {gm} • Hard filter: {hf}"
-)
-
+    st.caption(
+        f"Pairs shown: {len(df)} • Exchange: {effective_exchange} • Quote: {q} "
+        f"• TF: {tf} • Gate Mode: {gm} • Hard filter: {hf}"
+    )
 # ----------------------------- Listing Radar engine -----------------------------
 def lr_parse_quotes(csv_text: str) -> set:
     return set(x.strip().upper() for x in (csv_text or "").split(",") if x.strip())
