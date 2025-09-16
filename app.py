@@ -760,7 +760,7 @@ with expander("History depth (for ATH/ATL)"):
 # Display
 with expander("Display"):
     st.slider("Font size (global)", 0.8, 1.6, float(st.session_state.get("font_scale", 1.0)), 0.05, key="font_scale")
-
+    st.slider("Auto-refresh (seconds)", 5, 120, int(st.session_state.get("refresh_sec", 30)), 1, key="refresh_sec")
 # Notifications
 with expander("Notifications"):
     st.caption("Tips: Email requires SMTP in st.secrets; webhook posts JSON to your endpoint.")
