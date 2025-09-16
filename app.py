@@ -551,7 +551,19 @@ st.markdown("""
     animation: none !important;
     will-change: auto !important;
   }
+  /* 2) Streamlit busy overlay: also never fade */
+  [aria-busy="true"],
+  [aria-busy="true"] * {
+    opacity: 1 !important;
+    filter: none !important;
+    transition: none !important;
+    animation: none !important;
+  }
 
+  /* 3) Hide the spinner entirely */
+  div[data-testid="stSpinner"] {
+    display: none !important;
+  }
   /* 2) Streamlit's busy overlay: also never fade */
   [aria-busy="true"],
   [aria-busy="true"] * {
