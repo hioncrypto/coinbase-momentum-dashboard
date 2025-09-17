@@ -895,29 +895,36 @@ first_price = float(dft["close"].iloc[0])
 pct_display = (last_price / (first_price + 1e-12) - 1.0) * 100.0
 
 
-    # Gather gate settings
+        # Gather gate settings (ALL 4-SPACE INDENTS, NO TABS)
     gate_settings = dict(
         lookback_candles=int(st.session_state.get("lookback_candles", 3)),
         min_pct=float(st.session_state.get("min_pct", 3.0)),
+
         use_vol_spike=bool(st.session_state.get("use_vol_spike", True)),
         vol_mult=float(st.session_state.get("vol_mult", 1.10)),
         vol_window=int(st.session_state.get("vol_window", 20)),
+
         use_rsi=bool(st.session_state.get("use_rsi", False)),
         rsi_len=int(st.session_state.get("rsi_len", 14)),
         min_rsi=int(st.session_state.get("min_rsi", 55)),
+
         use_macd=bool(st.session_state.get("use_macd", False)),
         macd_fast=int(st.session_state.get("macd_fast", 12)),
         macd_slow=int(st.session_state.get("macd_slow", 26)),
         macd_sig=int(st.session_state.get("macd_sig", 9)),
         min_mhist=float(st.session_state.get("min_mhist", 0.0)),
+
         use_atr=bool(st.session_state.get("use_atr", False)),
         atr_len=int(st.session_state.get("atr_len", 14)),
         min_atr=float(st.session_state.get("min_atr", 0.5)),
+
         use_trend=bool(st.session_state.get("use_trend", False)),
         pivot_span=int(st.session_state.get("pivot_span", 4)),
         trend_within=int(st.session_state.get("trend_within", 48)),
+
         use_roc=bool(st.session_state.get("use_roc", False)),
         min_roc=float(st.session_state.get("min_roc", 1.0)),
+
         use_macd_cross=bool(st.session_state.get("use_macd_cross", True)),
         macd_cross_bars=int(st.session_state.get("macd_cross_bars", 5)),
         macd_cross_only_bull=bool(st.session_state.get("macd_cross_only_bull", True)),
@@ -928,28 +935,22 @@ pct_display = (last_price / (first_price + 1e-12) - 1.0) * 100.0
     # Evaluate gates
     meta, passed, chips, enabled_cnt = build_gate_eval(dft, gate_settings)
 
-    # Determine include + color
+    # Decide colors (GREEN/YELLOW) using your existing mode logic
     mode = st.session_state.get("gate_mode", "ANY")
-    is_green = False
-    is_yellow = False
-    include = True
+    hard_filter = bool(st.session_state.get("hard_filter", False))
+    k_required = int(st.session_state.get("K_green", 3))
+    y_required = int(st.session_state.get("Y_yellow", 2))
 
     if mode == "ALL":
         include = (enabled_cnt > 0 and passed == enabled_cnt)
         is_green = include
         is_yellow = (0 < passed < enabled_cnt)
-    elif mode == "ANY":
-        include = (passed >= 1)
-        is_green = (passed >= 1)
-        is_yellow = False
-    else:  # Custom (K/Y)
-        k_required = int(st.session_state.get("K_green", 3))
-        y_required = int(st.session_state.get("Y_yellow", 2))
+    else:
         is_green = (passed >= k_required)
         is_yellow = (not is_green) and (passed >= y_required)
         include = True
 
-    if st.session_state.get("hard_filter", False):
+    if hard_filter:
         if mode in {"ALL", "ANY"}:
             keep_row = include
         else:
@@ -957,40 +958,21 @@ pct_display = (last_price / (first_price + 1e-12) - 1.0) * 100.0
         if not keep_row:
             continue
 
-    # Optional ATH/ATL computation
-    athp = atlp = np.nan
-    athd = atld = ""
-    if st.session_state.get("do_ath", False):
-        # Fetch a longer window based on basis
-        basis = st.session_state.get("basis", "Daily")
-        if basis == "Hourly":
-            extra = max(1, min(72, int(st.session_state.get("amount_hourly", 24))))
-            hist_df = get_df(effective_exchange, pid, "1h", limit=extra)
-        elif basis == "Weekly":
-            days = max(1, min(365, int(st.session_state.get("amount_weekly", 12)) * 7))
-            hist_df = get_df(effective_exchange, pid, "1h", limit=days * 24 // 1)
-        else:
-            days = max(1, min(365, int(st.session_state.get("amount_daily", 90))))
-            hist_df = get_df(effective_exchange, pid, "1h", limit=days * 24 // 1)
-        if hist_df is not None and not hist_df.empty:
-            athp, athd, atlp, atld = compute_ath_atl(hist_df.rename(columns={"time": "time"}))
+    # Final “Signal” text used by the row styler
+    signal_text = "Strong Buy" if is_green else ("Watch" if is_yellow else "")
 
-    row = {
+    # Append row
+    rows.append({
         "Pair": pid,
         "Price": last_price,
         chg_col: pct_display,
         f"Δ% (last {max(1, int(st.session_state.get('lookback_candles', 3)))} bars)": meta.get("delta_pct"),
-        "From ATH %": athp,
-        "ATH date": athd,
-        "From ATL %": atlp,
-        "ATL date": atld,
         "Gates": chips,
-        "Signal": "Strong Buy" if is_green else ("Watch" if is_yellow else "—"),
+        "Signal": signal_text,
         "_green": is_green,
         "_yellow": is_yellow,
         "_passed": passed,
-    }
-    rows.append(row)
+    })
 
 # ----------------------------- Diagnostics & Tables -----------------------------
 df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=["Pair"])
