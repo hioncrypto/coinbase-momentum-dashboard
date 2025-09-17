@@ -531,16 +531,12 @@ def compute_ath_atl(df: pd.DataFrame) -> Tuple[float, str, float, str]:
     return from_ath, d_ath, from_atl, d_atl
 
 # ----------------------------- CSS -----------------------------
-# Keep this tiny f-string block ONLY for the dynamic font size
-st.markdown(f"""
-<style>
-  html, body {{ font-size: {float(st.session_state.get('font_scale', 1.0))}rem; }}
-</style>
-""", unsafe_allow_html=True)
-
 st.markdown("""
 <style>
-  /* 1) Grid and editor: never fade, never animate */
+  /* Base size */
+  html, body { font-size: 1rem; }
+
+  /* 1) Tables & editor: never dim, never animate */
   div[data-testid="stDataFrame"],
   div[data-testid="stDataFrame"] *,
   div[data-testid="stDataEditor"],
@@ -551,55 +547,40 @@ st.markdown("""
     animation: none !important;
     will-change: auto !important;
   }
-  /* 2) Streamlit busy overlay: also never fade */
+
+  /* 2) Streamlit busy overlay: no dim + DO NOT eat clicks */
   [aria-busy="true"],
   [aria-busy="true"] * {
     opacity: 1 !important;
     filter: none !important;
     transition: none !important;
     animation: none !important;
+    will-change: auto !important;
+    pointer-events: none !important;   /* stop overlay from intercepting clicks */
   }
 
-  /* 3) Hide the spinner entirely */
-  div[data-testid="stSpinner"] {
-    display: none !important;
+  /* 3) Sidebar stays interactive even when app is "busy" */
+  section[data-testid="stSidebar"],
+  section[data-testid="stSidebar"] * {
+    pointer-events: auto !important;
+    opacity: 1 !important;
+    filter: none !important;
+    transition: none !important;
+    animation: none !important;
+    position: relative;
+    z-index: 2;
   }
-  /* 2) Streamlit's busy overlay: also never fade */
-  [aria-busy="true"],
-  [aria-busy="true"] * {
+
+  /* 4) Spinner: remove the gray veil look */
+  div[data-testid="stSpinner"],
+  div[data-testid="stSpinner"] * {
     opacity: 1 !important;
     filter: none !important;
     transition: none !important;
     animation: none !important;
   }
-
-  /* 3) Spinner: hide it so it can’t ghost the table */
-  div[data-testid="stSpinner"] { display: none !important; }
-  /* Bring back color for the top sidebar buttons */
-section[data-testid="stSidebar"] button {
-  background: #1f6feb !important;     /* blue pill */
-  color: #ffffff !important;
-  border: 1px solid rgba(255,255,255,0.18) !important;
-  border-radius: 10px !important;
-}
-
-/* Hover state so it doesn’t look dead */
-section[data-testid="stSidebar"] button:hover {
-  filter: brightness(1.08) !important;
-}
-
-/* Keep your expander header highlight (already present, but restating doesn’t hurt) */
-section[data-testid="stSidebar"] details summary {
-  background: rgba(30,144,255,0.18) !important;
-  border-radius: 8px !important;
-}
-
 </style>
 """, unsafe_allow_html=True)
-
-
-
-st.title("Crypto Tracker by hioncrypto")
 
 # ----------------------------- Sidebar -----------------------------
 with st.sidebar:
