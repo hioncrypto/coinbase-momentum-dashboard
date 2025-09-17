@@ -882,9 +882,18 @@ for pid in pairs:
     if len(dft) < int(st.session_state.get("min_bars", 1)):
         continue
 
-    last_price = float(dft["close"].iloc[-1])
-    first_price = float(dft["close"].iloc[0])
-    pct_display = (last_price / (first_price + 1e-12) - 1.0) * 100.0
+    # Price and % change over the fetched window (prefer WS tick if available)
+last_price = float(dft["close"].iloc[-1])          # candle fallback
+px_ws = st.session_state.get("ws_prices", {}).get(pid)
+if px_ws:
+    try:
+        last_price = float(px_ws)                  # live tick from WebSocket
+    except Exception:
+        pass
+
+first_price = float(dft["close"].iloc[0])
+pct_display = (last_price / (first_price + 1e-12) - 1.0) * 100.0
+
 
     # Gather gate settings
     gate_settings = dict(
