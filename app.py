@@ -986,11 +986,28 @@ else:
             return ['background-color: yellow; color: black'] * len(row)
         return [''] * len(row)
 
-    # --- Top 10 section ---
-    st.subheader("📌 Top-10")
-    st.caption(f"Last updated: {dt.datetime.utcnow().strftime('%H:%M:%S')} UTC • Refresh: {st.session_state.get('refresh_sec', 30)}s")
-    top10 = df[df["_green"]].sort_values(chg_col, ascending=False, na_position="last").head(10).drop(columns=["_green", "_yellow"])
-    st.dataframe(top10.style.apply(highlight_rows, axis=1), use_container_width=True)
+   # --- Top 10 section ---
+# Ensure the boolean helper columns exist even if we're using the "Signal" text.
+if "Signal" in df.columns:
+    if "_green" not in df.columns:
+        df["_green"] = (df["Signal"] == "Strong Buy")
+    if "_yellow" not in df.columns:
+        df["_yellow"] = (df["Signal"] == "Watch")
+
+st.subheader("📈 Top-10")
+top10 = (
+    df[df["_green"]]
+    .sort_values(chg_col, ascending=False, na_position="last")
+    .head(10)
+    .drop(columns=["_green", "_yellow"], errors="ignore")
+)
+st.dataframe(top10.style.apply(highlight_rows, axis=1), use_container_width=True)
+
+# --- All pairs section ---
+st.subheader("📚 All pairs")
+st.dataframe(df.drop(columns=["_green", "_yellow"], errors="ignore").style.apply(highlight_rows, axis=1),
+             use_container_width=True)
+
 
     # --- All pairs section ---
     st.subheader("📑 All pairs")
