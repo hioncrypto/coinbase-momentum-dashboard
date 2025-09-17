@@ -1016,11 +1016,11 @@ st.caption(f"Last updated: {dt.datetime.utcnow().strftime('%H:%M:%S')} UTC • R
 st.dataframe(df.drop(columns=["_green", "_yellow"]).style.apply(highlight_rows, axis=1), use_container_width=True)
 
     # --- Footer info ---
-    q = st.session_state.get("quote", "USD")
-    tf = st.session_state.get("sort_tf", "1h")
-    gm = st.session_state.get("gate_mode", "ANY")
-    hf = "On" if st.session_state.get("hard_filter", False) else "Off"
-    effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"] else st.session_state["exchange"]
+q = st.session_state.get("quote", "USD")
+tf = st.session_state.get("sort_tf", "1h")
+gm = st.session_state.get("gate_mode", "ANY")
+hf = "On" if st.session_state.get("hard_filter", False) else "Off"
+effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"] else st.session_state["exchange"]
 
     st.caption(
         f"Pairs shown: {len(df)} • Exchange: {effective_exchange} • Quote: {q} "
