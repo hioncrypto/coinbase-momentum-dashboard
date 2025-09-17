@@ -896,7 +896,7 @@ pct_display = (last_price / (first_price + 1e-12) - 1.0) * 100.0
 
 
     # Gather gate settings
-gate_settings = dict(
+    gate_settings = dict(
         lookback_candles=int(st.session_state.get("lookback_candles", 3)),
         min_pct=float(st.session_state.get("min_pct", 3.0)),
         use_vol_spike=bool(st.session_state.get("use_vol_spike", True)),
@@ -926,7 +926,7 @@ gate_settings = dict(
     )
 
     # Evaluate gates
-        meta, passed, chips, enabled_cnt = build_gate_eval(dft, gate_settings)
+    meta, passed, chips, enabled_cnt = build_gate_eval(dft, gate_settings)
 
     # Determine include + color
     mode = st.session_state.get("gate_mode", "ANY")
