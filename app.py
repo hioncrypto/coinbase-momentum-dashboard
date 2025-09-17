@@ -581,6 +581,25 @@ st.markdown("""
   }
 </style>
 """, unsafe_allow_html=True)
+st.markdown("""
+<style>
+/* Sidebar buttons (radio + selectbox highlight) */
+section[data-testid="stSidebar"] .stRadio label div[data-testid="stMarkdownContainer"],
+section[data-testid="stSidebar"] .stSelectbox div[data-baseweb="select"] {
+    background-color: #1f77ff !important;  /* Blue background */
+    color: white !important;               /* White text */
+    border-radius: 6px;
+    padding: 4px 8px;
+}
+
+/* Keep hover effect */
+section[data-testid="stSidebar"] .stRadio label:hover div[data-testid="stMarkdownContainer"],
+section[data-testid="stSidebar"] .stSelectbox div[data-baseweb="select"]:hover {
+    background-color: #0055cc !important;  /* Darker blue on hover */
+}
+</style>
+""", unsafe_allow_html=True)
+
 
 # ----------------------------- Sidebar -----------------------------
 with st.sidebar:
