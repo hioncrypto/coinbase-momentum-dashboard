@@ -997,27 +997,21 @@ if "Signal" in df.columns:
 
 # --- Top-10 ---
 st.subheader("📌 Top-10")
-chg_col = f"% Change ({st.session_state.get('sort_tf','1h')})"
-
-has_green = ("_green" in df.columns) and bool(df["_green"].any())
-if has_green:
-    top10 = df.loc[df["_green"]].sort_values(chg_col, ascending=False, na_position="last").head(10)
-else:
-    top10 = df.sort_values(chg_col, ascending=False, na_position="last").head(10)
-
-cols_to_drop = [c for c in ["_green", "_yellow"] if c in top10.columns]
-st.dataframe(
-    top10.drop(columns=cols_to_drop).style.apply(highlight_rows, axis=1),
-    use_container_width=True
+chg_col = f"% Change ({st.session_state.get('sort_tf', '1h')})"
+ts = f"Last updated: {dt.datetime.utcnow().strftime('%H:%M:%S')} UTC • Refresh: {st.session_state.get('refresh_sec', 30)}s"
+top10 = (
+    df.loc[df["_green"]]
+      .sort_values(chg_col, ascending=False, na_position="last")
+      .head(10)
 )
-
+st.caption(ts)
+st.dataframe(top10.style.apply(highlight_rows, axis=1).hide(axis="columns", subset=["_green", "_yellow"]), use_container_width=True)
 
 # --- All pairs section ---
-st.subheader("📚 All pairs")
-st.dataframe(
-    df.drop(columns=["_green", "_yellow"], errors="ignore").style.apply(highlight_rows, axis=1),
-    use_container_width=True
-)
+st.subheader("📑 All pairs")
+st.caption(ts)
+st.dataframe(df.style.apply(highlight_rows, axis=1).hide(axis="columns", subset=["_green", "_yellow"]), use_container_width=True)
+
 
     # --- All pairs section ---
 st.subheader("📑 All pairs")
