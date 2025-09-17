@@ -1005,9 +1005,10 @@ st.dataframe(top10.style.apply(highlight_rows, axis=1), use_container_width=True
 
 # --- All pairs section ---
 st.subheader("📚 All pairs")
-st.dataframe(df.drop(columns=["_green", "_yellow"], errors="ignore").style.apply(highlight_rows, axis=1),
-             use_container_width=True)
-
+st.dataframe(
+    df.drop(columns=["_green", "_yellow"], errors="ignore").style.apply(highlight_rows, axis=1),
+    use_container_width=True
+)
 
     # --- All pairs section ---
     st.subheader("📑 All pairs")
