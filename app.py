@@ -926,7 +926,7 @@ gate_settings = dict(
     )
 
     # Evaluate gates
-    meta, passed, chips, enabled_cnt = build_gate_eval(dft, gate_settings)
+        meta, passed, chips, enabled_cnt = build_gate_eval(dft, gate_settings)
 
     # Determine include + color
     mode = st.session_state.get("gate_mode", "ANY")
