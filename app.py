@@ -1022,9 +1022,9 @@ gm = st.session_state.get("gate_mode", "ANY")
 hf = "On" if st.session_state.get("hard_filter", False) else "Off"
 effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"] else st.session_state["exchange"]
 
-    st.caption(
-        f"Pairs shown: {len(df)} • Exchange: {effective_exchange} • Quote: {q} "
-        f"• TF: {tf} • Gate Mode: {gm} • Hard filter: {hf}"
+st.caption(
+    f"Pairs shown: {len(df)} • Exchange: {effective_exchange} • Quote: {q} "
+    f"• TF: {tf} • Gate Mode: {gm} • Hard filter: {hf}"
     )
 
 # ----------------------------- Listing Radar engine -----------------------------
