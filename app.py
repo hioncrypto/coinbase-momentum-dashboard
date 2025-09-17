@@ -882,20 +882,12 @@ for pid in pairs:
     if len(dft) < int(st.session_state.get("min_bars", 1)):
         continue
 
-    # Price and % change over the fetched window (prefer WS tick if available)
-last_price = float(dft["close"].iloc[-1])          # candle fallback
-px_ws = st.session_state.get("ws_prices", {}).get(pid)
-if px_ws:
-    try:
-        last_price = float(px_ws)                  # live tick from WebSocket
-    except Exception:
-        pass
+    # basic price/pct for the table
+    last_price = float(dft["close"].iloc[-1])
+    first_price = float(dft["close"].iloc[0])
+    pct_display = (last_price / (first_price + 1e-12) - 1.0) * 100.0
 
-first_price = float(dft["close"].iloc[0])
-pct_display = (last_price / (first_price + 1e-12) - 1.0) * 100.0
-
-
-        # Gather gate settings (ALL 4-SPACE INDENTS, NO TABS)
+    # -------- gates settings (4 spaces indent, no tabs) --------
     gate_settings = dict(
         lookback_candles=int(st.session_state.get("lookback_candles", 3)),
         min_pct=float(st.session_state.get("min_pct", 3.0)),
@@ -932,11 +924,11 @@ pct_display = (last_price / (first_price + 1e-12) - 1.0) * 100.0
         macd_hist_confirm_bars=int(st.session_state.get("macd_hist_confirm_bars", 3)),
     )
 
-    # Evaluate gates
+    # evaluate gates for this pair/timeframe
     meta, passed, chips, enabled_cnt = build_gate_eval(dft, gate_settings)
 
-    # Decide colors (GREEN/YELLOW) using your existing mode logic
-    mode = st.session_state.get("gate_mode", "ANY")
+    # decide GREEN/YELLOW from settings
+    mode = st.session_state.get("gate_mode", "ANY")  # "ANY" or "ALL"
     hard_filter = bool(st.session_state.get("hard_filter", False))
     k_required = int(st.session_state.get("K_green", 3))
     y_required = int(st.session_state.get("Y_yellow", 2))
@@ -958,21 +950,24 @@ pct_display = (last_price / (first_price + 1e-12) - 1.0) * 100.0
         if not keep_row:
             continue
 
-    # Final “Signal” text used by the row styler
     signal_text = "Strong Buy" if is_green else ("Watch" if is_yellow else "")
 
-    # Append row
     rows.append({
         "Pair": pid,
         "Price": last_price,
-        chg_col: pct_display,
+        f"% Change ({sort_tf})": pct_display,
         f"Δ% (last {max(1, int(st.session_state.get('lookback_candles', 3)))} bars)": meta.get("delta_pct"),
+        "From ATH %": meta.get("athp", None),
+        "ATH date": meta.get("athd", None),
+        "From ATL %": meta.get("atlp", None),
+        "ATL date": meta.get("atld", None),
         "Gates": chips,
         "Signal": signal_text,
         "_green": is_green,
         "_yellow": is_yellow,
         "_passed": passed,
     })
+
 
 # ----------------------------- Diagnostics & Tables -----------------------------
 df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=["Pair"])
