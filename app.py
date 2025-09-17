@@ -978,13 +978,14 @@ else:
     df = df.sort_values(chg_col, ascending=not st.session_state.get("sort_desc", True), na_position="last").reset_index(drop=True)
     df.insert(0, "#", df.index + 1)
 
-    def highlight_rows(row):
-        sig = row.get("Signal", "")
-        if sig == "Strong Buy":
-            return ['background-color: green; color: white'] * len(row)
-        if sig == "Watch":
-            return ['background-color: yellow; color: black'] * len(row)
-        return [''] * len(row)
+    # Row coloring that works with BOTH label styles
+def highlight_rows(row):
+    sig = str(row.get("Signal", "")).strip()
+    if sig in ("Strong Buy", "GREEN"):
+        return ['background-color: #0b7c26; color: white'] * len(row)
+    if sig in ("Watch", "YELLOW"):
+        return ['background-color: #e7c71f; color: black'] * len(row)
+    return [''] * len(row)
 
    # --- Top 10 section ---
 # Ensure the boolean helper columns exist even if we're using the "Signal" text.
