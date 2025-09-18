@@ -807,7 +807,8 @@ if st.button("Acknowledge all alerts"):
 
 st.session_state["refresh_sec"] = st.number_input(
     "Auto refresh (seconds)",
-    min_value=0, max_value=300,
+    min_value=0,
+    max_value=300,
     value=st.session_state.get("refresh_sec", 30),
     step=5,
 )
