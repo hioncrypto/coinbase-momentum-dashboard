@@ -27,6 +27,8 @@ st_autorefresh(interval=st.session_state.get("refresh_sec", 30) * 1000, key="dat
 
 # ----------------------------- App setup -----------------------------
 st.set_page_config(page_title="Crypto Tracker by hioncrypto", layout="wide")
+st_autorefresh(interval=st.session_state.get("refresh_sec", 30) * 1000, key="data_refresh")
+
 
 WS_AVAILABLE = True
 try:
