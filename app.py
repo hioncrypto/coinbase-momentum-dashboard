@@ -1010,6 +1010,22 @@ st.dataframe(
     top10.drop(columns=cols_to_drop).style.apply(highlight_rows, axis=1),
     use_container_width=True
 )
+# --- row coloring helpers (drop right in above "All pairs section") ---
+# Normalize Signal text and create helper flags (robust to GREEN / Strong Buy / Watch / YELLOW)
+if "Signal" in df.columns:
+    sig_norm = df["Signal"].astype(str).str.strip().str.upper()
+    if "_green" not in df.columns:
+        df["_green"] = sig_norm.isin(["STRONG BUY", "GREEN"])
+    if "_yellow" not in df.columns:
+        df["_yellow"] = sig_norm.isin(["WATCH", "YELLOW"])
+
+def highlight_rows(row):
+    s = str(row.get("Signal", "")).strip().upper()
+    if s in ("STRONG BUY", "GREEN"):
+        return ['background-color: #16a34a; color: white'] * len(row)  # green
+    if s in ("WATCH", "YELLOW"):
+        return ['background-color: #eab308; color: black'] * len(row)  # yellow
+    return [''] * len(row)
 
 # --- All pairs section ---
 st.subheader("📑 All pairs")
