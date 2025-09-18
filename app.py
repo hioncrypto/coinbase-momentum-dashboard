@@ -770,13 +770,14 @@ with expander("Listing Radar"):
 cA, cB = st.columns(2)
 
 # Auto-refresh input
+st.number_input(
     "Auto refresh (seconds)",
     min_value=0,
     max_value=300,
     value=st.session_state.get("refresh_sec", 30),
     step=5,
+    key="refresh_sec",
 )
-# Header label
 st.markdown(f"<div style='font-size:1.3rem;font-weight:700;margin:4px 0 10px 2px;'>Timeframe: {st.session_state['sort_tf']}</div>", unsafe_allow_html=True)
 
 # ----------------------------- Discovery pool -----------------------------
