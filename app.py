@@ -22,12 +22,24 @@ import numpy as np
 import pandas as pd
 import requests
 import streamlit as st
-# Auto-refresh every 15 seconds
-st_autorefresh = st.experimental_rerun if hasattr(st, "experimental_rerun") else None
-if st_autorefresh is None:
-    from streamlit_autorefresh import st_autorefresh
+# --- Auto-refresh without extra packages (reloads the page) ---
+import time
+import streamlit as st
 
-st_autorefresh(interval=15000, key="data_refresh")
+# seconds between refreshes; you can wire this to your sidebar if you like
+REFRESH_SEC = int(st.session_state.get("refresh_sec", 30))
+
+st.markdown(
+    f"""
+    <script>
+      setTimeout(function() {{
+        window.location.reload();
+      }}, {REFRESH_SEC * 1000});
+    </script>
+    """,
+    unsafe_allow_html=True,
+)
+# --------------------------------------------------------------
 
 
 # ----------------------------- App setup -----------------------------
