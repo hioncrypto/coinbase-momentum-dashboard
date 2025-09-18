@@ -22,24 +22,6 @@ import numpy as np
 import pandas as pd
 import requests
 import streamlit as st
-# --- Auto-refresh without extra packages (reloads the page) ---
-import time
-import streamlit as st
-
-# seconds between refreshes; you can wire this to your sidebar if you like
-REFRESH_SEC = int(st.session_state.get("refresh_sec", 30))
-
-st.markdown(
-    f"""
-    <script>
-      setTimeout(function() {{
-        window.location.reload();
-      }}, {REFRESH_SEC * 1000});
-    </script>
-    """,
-    unsafe_allow_html=True,
-)
-# --------------------------------------------------------------
 
 
 # ----------------------------- App setup -----------------------------
