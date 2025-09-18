@@ -808,10 +808,12 @@ with cB:
 if st.button("Acknowledge all alerts"):
     st.session_state["lr_unacked"] = 0
 
-st.number_input(
+st.session_state["refresh_sec"] = st.number_input(
     "Auto refresh (seconds)",
-    min_value=0, max_value=300, value=30, step=5,
-    key="refresh_sec",
+    min_value=0, max_value=300,
+    value=st.session_state.get("refresh_sec", 30),
+    step=5,
+)
 # Header label
 st.markdown(f"<div style='font-size:1.3rem;font-weight:700;margin:4px 0 10px 2px;'>Timeframe: {st.session_state['sort_tf']}</div>", unsafe_allow_html=True)
 
@@ -1080,7 +1082,13 @@ st.caption(
     f"Pairs shown: {len(df)} • Exchange: {effective_exchange} • Quote: {q} "
     f"• TF: {tf} • Gate Mode: {gm} • Hard filter: {hf}"
     )
-
+# Manual auto-refresh (no external package)
+_refresh = int(st.session_state.get("refresh_sec", 0) or 0)
+if _refresh > 0:
+    st.caption(f"⟳ Auto-refreshing every {_refresh}s")
+    import time
+    time.sleep(_refresh)
+    st.experimental_rerun()
 # ----------------------------- Listing Radar engine -----------------------------
 def lr_parse_quotes(csv_text: str) -> set:
     return set(x.strip().upper() for x in (csv_text or "").split(",") if x.strip())
