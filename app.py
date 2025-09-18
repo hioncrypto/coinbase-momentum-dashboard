@@ -22,6 +22,13 @@ import numpy as np
 import pandas as pd
 import requests
 import streamlit as st
+# Auto-refresh every 15 seconds
+st_autorefresh = st.experimental_rerun if hasattr(st, "experimental_rerun") else None
+if st_autorefresh is None:
+    from streamlit_autorefresh import st_autorefresh
+
+st_autorefresh(interval=15000, key="data_refresh")
+
 
 # ----------------------------- App setup -----------------------------
 st.set_page_config(page_title="Crypto Tracker by hioncrypto", layout="wide")
