@@ -22,8 +22,7 @@ import numpy as np
 import pandas as pd
 import requests
 import streamlit as st
-st_autorefresh(interval=st.session_state.get("refresh_sec", 30) * 1000, key="data_refresh")
-
+from streamlit_autorefresh import st_autorefresh
 
 # ----------------------------- App setup -----------------------------
 st.set_page_config(page_title="Crypto Tracker by hioncrypto", layout="wide")
