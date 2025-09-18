@@ -1013,14 +1013,12 @@ st.dataframe(
 
 # --- All pairs section ---
 st.subheader("📑 All pairs")
+ts = f"Last updated: {dt.datetime.utcnow().strftime('%H:%M:%S')} UTC • Refresh: {st.session_state.get('refresh_sec', 30)}s"
 st.caption(ts)
-st.dataframe(df.style.apply(highlight_rows, axis=1).hide(axis="columns", subset=["_green", "_yellow"]), use_container_width=True)
-
-
-    # --- All pairs section ---
-st.subheader("📑 All pairs")
-st.caption(f"Last updated: {dt.datetime.utcnow().strftime('%H:%M:%S')} UTC • Refresh: {st.session_state.get('refresh_sec', 30)}s")
-st.dataframe(df.drop(columns=["_green", "_yellow"]).style.apply(highlight_rows, axis=1), use_container_width=True)
+st.dataframe(
+    df.style.apply(highlight_rows, axis=1).hide(axis="columns", subset=["_green", "_yellow"]),
+    use_container_width=True
+)
 
     # --- Footer info ---
 q = st.session_state.get("quote", "USD")
