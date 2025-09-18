@@ -779,8 +779,8 @@ with expander("Listing Radar"):
         st.slider("Upcoming scan every (seconds)", 60, 3600, st.session_state.get("lr_upcoming_sec", DEFAULTS["lr_upcoming_sec"]), key="lr_upcoming_sec")
         st.slider("Upcoming alert window (hours)", 1, 72, st.session_state.get("lr_upcoming_window_h", DEFAULTS["lr_upcoming_window_h"]), key="lr_upcoming_window_h")
 
-    if st.button("Acknowledge all alerts"):
-    st.session_state["lr_unacked"] = 0
+        if st.button("Acknowledge all alerts"):
+            st.session_state["lr_unacked"] = 0
 
 st.number_input(
     "Auto refresh (seconds)", min_value=0, max_value=300, value=30, step=5, key="refresh_sec"
