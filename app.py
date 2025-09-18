@@ -25,6 +25,15 @@ import streamlit as st
 
 # ----------------------------- App setup -----------------------------
 st.set_page_config(page_title="Crypto Tracker by hioncrypto", layout="wide")
+# --- Auto refresh (simple + safe) ---
+import datetime as dt
+import streamlit as st
+
+if "refresh_sec" not in st.session_state:
+    st.session_state["refresh_sec"] = 30   # change to 10–20s if you want faster
+
+st.autorefresh(interval=st.session_state["refresh_sec"] * 1000, key="auto_refresh")
+
 
 WS_AVAILABLE = True
 try:
