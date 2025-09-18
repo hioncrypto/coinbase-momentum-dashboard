@@ -770,7 +770,6 @@ with expander("Listing Radar"):
 cA, cB = st.columns(2)
 
 # Auto-refresh input
-st.session_state["refresh_sec"] = st.number_input(
     "Auto refresh (seconds)",
     min_value=0,
     max_value=300,
