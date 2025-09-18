@@ -781,7 +781,7 @@ with expander("Listing Radar"):
 
     if st.button("Acknowledge all alerts"):
         st.session_state["lr_unacked"] = 0
- st.number_input(
+        st.number_input(
     "Auto refresh (seconds)", min_value=0, max_value=300, value=30, step=5, key="refresh_sec"
 )
 
