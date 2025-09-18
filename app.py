@@ -770,23 +770,48 @@ with expander("Listing Radar"):
         st.markdown('<span class="blink-badge">New/Upcoming listings</span>', unsafe_allow_html=True)
 
     st.toggle("Enable Listing Radar", key="lr_enabled", value=st.session_state.get("lr_enabled", False))
-    cA, cB = st.columns(2)
-    with cA:
-        st.text_area("Announcement feeds (comma-separated)", value=st.session_state.get("lr_feeds", DEFAULTS["lr_feeds"]), key="lr_feeds", height=100)
-        st.text_input("Quotes to watch (CSV)", value=st.session_state.get("lr_watch_quotes", DEFAULTS["lr_watch_quotes"]), key="lr_watch_quotes")
-    with cB:
-        st.slider("Poll interval (seconds)", 15, 600, st.session_state.get("lr_poll_sec", DEFAULTS["lr_poll_sec"]), key="lr_poll_sec")
-        st.slider("Upcoming scan every (seconds)", 60, 3600, st.session_state.get("lr_upcoming_sec", DEFAULTS["lr_upcoming_sec"]), key="lr_upcoming_sec")
-        st.slider("Upcoming alert window (hours)", 1, 72, st.session_state.get("lr_upcoming_window_h", DEFAULTS["lr_upcoming_window_h"]), key="lr_upcoming_window_h")
+cA, cB = st.columns(2)
 
-    if st.button("Acknowledge all alerts"):
-        st.session_state["lr_unacked"] = 0
+with cA:
+    st.text_area(
+        "Announcement feeds (comma-separated)",
+        value=st.session_state.get("lr_feeds", DEFAULTS["lr_feeds"]),
+        key="lr_feeds",
+        height=100,
+    )
+    st.text_input(
+        "Quotes to watch (CSV)",
+        value=st.session_state.get("lr_watch_quotes", DEFAULTS["lr_watch_quotes"]),
+        key="lr_watch_quotes",
+    )
 
+with cB:
+    st.slider(
+        "Poll interval (seconds)",
+        15, 600,
+        st.session_state.get("lr_poll_sec", DEFAULTS["lr_poll_sec"]),
+        key="lr_poll_sec",
+    )
+    st.slider(
+        "Upcoming scan every (seconds)",
+        60, 3600,
+        st.session_state.get("lr_upcoming_sec", DEFAULTS["lr_upcoming_sec"]),
+        key="lr_upcoming_sec",
+    )
+    st.slider(
+        "Upcoming alert window (hours)",
+        1, 72,
+        st.session_state.get("lr_upcoming_window_h", DEFAULTS["lr_upcoming_window_h"]),
+        key="lr_upcoming_window_h",
+    )
 
-    st.number_input(
-    "Auto refresh (seconds)", min_value=0, max_value=300, value=30, step=5, key="refresh_sec"
-)
+if st.button("Acknowledge all alerts"):
+    st.session_state["lr_unacked"] = 0
 
+st.number_input(
+    "Auto refresh (seconds)",
+    min_value=0, max_value=300, value=30, step=5,
+    key="refresh_sec",
 # Header label
 st.markdown(f"<div style='font-size:1.3rem;font-weight:700;margin:4px 0 10px 2px;'>Timeframe: {st.session_state['sort_tf']}</div>", unsafe_allow_html=True)
 
