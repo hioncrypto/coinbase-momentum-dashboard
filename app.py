@@ -803,11 +803,20 @@ else:
     if st.session_state.get("use_watch", False) and st.session_state.get("watchlist", "").strip():
         pairs = [p.strip().upper() for p in st.session_state["watchlist"].split(",") if p.strip()]
     else:
-        effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"] else st.session_state["exchange"]
+        effective_exchange = (
+    "Coinbase"
+    if "coming soon" in st.session_state["exchange"].lower()
+    else st.session_state["exchange"]
+)
+
         pairs = list_products(effective_exchange, st.session_state["quote"])
         pairs = [p for p in pairs if p.endswith(f"-{st.session_state['quote']}")]
-        cap = max(0, min(500, int(st.session_state.get("discover_cap", DEFAULTS["discover_cap"]))))
-        pairs = pairs[:cap] if cap > 0 else []
+        # Apply discovery cap here (0 means "no cap")
+cap = int(st.session_state.get("discover_cap", DEFAULTS["discover_cap"]))
+cap = max(0, min(500, cap))
+if cap > 0:
+    pairs = pairs[:cap]
+
 
 # ----------------------------- WebSocket lifecycle -----------------------------
 def ws_worker(product_ids, endpoint="wss://ws-feed.exchange.coinbase.com"):
