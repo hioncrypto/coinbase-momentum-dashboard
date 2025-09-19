@@ -4,7 +4,7 @@
 # pandas>=2.0
 # numpy>=1.24
 # requests>=2.31
-# websocket-client>=1.6
+# websocket-client>=1.6 
 
 import json
 import time
@@ -22,7 +22,7 @@ import numpy as np
 import pandas as pd
 import requests
 import streamlit as st
-
+from streamlit_autorefresh import st_autorefresh
 # ----------------------------- App setup -----------------------------
 st.set_page_config(page_title="Crypto Tracker by hioncrypto", layout="wide")
 
