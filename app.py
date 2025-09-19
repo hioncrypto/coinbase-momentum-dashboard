@@ -330,6 +330,44 @@ def df_for_tf_cached(exchange: str, pair: str, tf: str, buster: int) -> Optional
         return get_df(exchange, pair, tf, limit=bars)
     except Exception:
         return None
+# ---------- ensure list_products is defined before sidebar uses it ----------
+def coinbase_list_products(quote: str) -> List[str]:
+    try:
+        r = requests.get(f"{CB_BASE}/products", timeout=25)
+        r.raise_for_status()
+        return sorted(
+            f"{p['base_currency']}-{p['quote_currency']}"
+            for p in r.json()
+            if p.get("quote_currency") == (quote or "").strip().upper()
+        )
+    except Exception:
+        return []
+
+def binance_list_products(quote: str) -> List[str]:
+    try:
+        r = requests.get(f"{BN_BASE}/api/v3/exchangeInfo", timeout=25)
+        r.raise_for_status()
+        out = []
+        q = (quote or "").strip().upper()
+        for s in r.json().get("symbols", []):
+            if s.get("status") != "TRADING":
+                continue
+            if s.get("quoteAsset", "").upper() == q:
+                out.append(f"{s['baseAsset']}-{q}")
+        return sorted(out)
+    except Exception:
+        return []
+
+def list_products(exchange: str, quote: str) -> List[str]:
+    ex = (exchange or "").strip().lower()
+    q = (quote or "").strip().upper()
+    if ex.startswith("coinbase"):
+        return coinbase_list_products(q)
+    if ex.startswith("binance"):
+        return binance_list_products(q)
+    # “coming soon” or unknown -> fall back to Coinbase for now
+    return coinbase_list_products(q)
+# ---------------------------------------------------------------------------
 
 # ----------------------------- Email/Webhook -----------------------------
 def send_email_alert(subject, body, recipient):
