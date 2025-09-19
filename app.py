@@ -862,7 +862,8 @@ sort_tf = st.session_state.get("sort_tf", "1h")
 chg_col = f"% Change ({sort_tf})"
 
 rows: List[Dict] = []
-
+# cache-buster forces df_for_tf to refresh on schedule
+cache_buster = int(time.time() // st.session_state.get("refresh_sec", 30))
 for pid in pairs:
     dft = df_for_tf(effective_exchange, pid, sort_tf)
     if dft is None or getattr(dft, "empty", True):
