@@ -1145,7 +1145,16 @@ sync_state_to_query_params()
 # Use Streamlit's autorefresh tied to the single refresh_sec control.
 # No manual sleep(), no st.rerun() loops.
 _interval_ms = int(max(1, int(st.session_state.get("refresh_sec", 30)))) * 1000
-st.autorefresh(interval=_interval_ms, key="heartbeat")
+if st_autorefresh:
+    # Preferred path when the helper exists
+    st_autorefresh(interval=_interval_ms, key="heartbeat")
+else:
+    # Fallback: JS heartbeat. No sleep(), no st.rerun(), no loops.
+    st.markdown(
+        f"<script>setTimeout(function(){{window.location.reload();}}, {_interval_ms});</script>",
+        unsafe_allow_html=True,
+    )
+
 
 # Heartbeat caption (explicit UTC)
 st.caption(f"Last updated: {dt.datetime.utcnow().strftime('%H:%M:%S')} UTC")
