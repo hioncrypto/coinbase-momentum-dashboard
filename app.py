@@ -22,9 +22,9 @@ import numpy as np
 import pandas as pd
 import requests
 import streamlit as st
+
 # ----------------------------- App setup -----------------------------
 st.set_page_config(page_title="Crypto Tracker by hioncrypto", layout="wide")
-
 
 WS_AVAILABLE = True
 try:
@@ -184,7 +184,6 @@ def _init_runtime():
     ss.setdefault("ws_q", queue.Queue())
     ss.setdefault("ws_prices", {})
     ss.setdefault("alert_seen", set())
-    ss.setdefault("last_refresh", time.time())
     # Listing Radar
     ss.setdefault("lr_baseline", {"Coinbase": set(), "Binance": set()})
     ss.setdefault("lr_events", [])
@@ -319,44 +318,18 @@ def get_df(exchange: str, pair: str, tf: str, limit: Optional[int] = None) -> Op
             return None
 
     return None
-@st.cache_data(ttl=15)   # cache expires every 15s so prices update
-def df_for_tf(exchange: str, pair: str, tf: str, _buster: int = 0) -> Optional[pd.DataFrame]:
-    bars = one_day_window_bars(tf)
-    _ = _buster  # no-op; included only to vary the cache key
+
+# ---------- Reliable caching: NO ttl, buster controls cadence ----------
+def _cache_buster_from_refresh() -> int:
+    return int(time.time() // max(1, int(st.session_state.get("refresh_sec", 30))))
+
+@st.cache_data(show_spinner=False)
+def df_for_tf_cached(exchange: str, pair: str, tf: str, buster: int) -> Optional[pd.DataFrame]:
     try:
+        bars = one_day_window_bars(tf)
         return get_df(exchange, pair, tf, limit=bars)
     except Exception:
         return None
-
-def coinbase_list_products(quote: str) -> List[str]:
-    try:
-        r = requests.get(f"{CB_BASE}/products", timeout=25)
-        r.raise_for_status()
-        return sorted(f"{p['base_currency']}-{p['quote_currency']}" for p in r.json() if p.get("quote_currency") == quote)
-    except Exception:
-        return []
-
-def binance_list_products(quote: str) -> List[str]:
-    try:
-        r = requests.get(f"{BN_BASE}/api/v3/exchangeInfo", timeout=25)
-        r.raise_for_status()
-        out = []
-        for s in r.json().get("symbols", []):
-            if s.get("status") != "TRADING":
-                continue
-            if s.get("quoteAsset") == quote:
-                out.append(f"{s['baseAsset']}-{quote}")
-        return sorted(out)
-    except Exception:
-        return []
-
-def list_products(exchange: str, quote: str) -> List[str]:
-    quote = (quote or "").strip().upper()
-    if exchange == "Coinbase":
-        return coinbase_list_products(quote)
-    if exchange == "Binance":
-        return binance_list_products(quote)
-    return []
 
 # ----------------------------- Email/Webhook -----------------------------
 def send_email_alert(subject, body, recipient):
@@ -465,16 +438,6 @@ def build_gate_eval(df_tf: pd.DataFrame, settings: dict) -> Tuple[dict, int, str
     else:
         chip(" M", False, False)
 
-    # ATR %
-    if settings.get("use_atr", False):
-        atr_pct = float((atr(df_tf, int(settings.get("atr_len", 14))) / (df_tf["close"] + 1e-12) * 100.0).iloc[-1])
-        ok = bool(atr_pct >= float(settings.get("min_atr", 0.5)))
-        passed += int(ok)
-        enabled += 1
-        chip(" A", True, ok, f"({atr_pct:.2f}%)")
-    else:
-        chip(" A", False, False)
-
     # MACD Cross
     cross_meta = {"ok": False, "bars_ago": None, "below_zero": None}
     if settings.get("use_macd_cross", True):
@@ -517,7 +480,6 @@ def build_gate_eval(df_tf: pd.DataFrame, settings: dict) -> Tuple[dict, int, str
 
 # ----------------------------- Optional ATH/ATL helpers -----------------------------
 def compute_ath_atl(df: pd.DataFrame) -> Tuple[float, str, float, str]:
-    # Input df must have columns ["time","open","high","low","close","volume"] sorted asc
     if df is None or df.empty:
         return np.nan, "", np.nan, ""
     last = float(df["close"].iloc[-1])
@@ -557,7 +519,7 @@ st.markdown("""
     transition: none !important;
     animation: none !important;
     will-change: auto !important;
-    pointer-events: none !important;   /* stop overlay from intercepting clicks */
+    pointer-events: none !important;
   }
 
   /* 3) Sidebar stays interactive even when app is "busy" */
@@ -754,7 +716,9 @@ with expander("History depth (for ATH/ATL)"):
 # Display
 with expander("Display"):
     st.slider("Font size (global)", 0.8, 1.6, float(st.session_state.get("font_scale", 1.0)), 0.05, key="font_scale")
+    # Single refresh control lives here. Do not duplicate this key anywhere else.
     st.slider("Auto-refresh (seconds)", 5, 120, int(st.session_state.get("refresh_sec", 30)), 1, key="refresh_sec")
+
 # Notifications
 with expander("Notifications"):
     st.caption("Tips: Email requires SMTP in st.secrets; webhook posts JSON to your endpoint.")
@@ -766,10 +730,9 @@ with expander("Listing Radar"):
     st.caption("‘New’ listings are detected by symbol diffs. ‘Upcoming’ scraped from feeds within a window.")
     if st.session_state.get("lr_unacked", 0) > 0:
         st.markdown('<span class="blink-badge">New/Upcoming listings</span>', unsafe_allow_html=True)
-
     st.toggle("Enable Listing Radar", key="lr_enabled", value=st.session_state.get("lr_enabled", False))
-cA, cB = st.columns(2)
 
+cA, cB = st.columns(2)
 st.markdown(f"<div style='font-size:1.3rem;font-weight:700;margin:4px 0 10px 2px;'>Timeframe: {st.session_state['sort_tf']}</div>", unsafe_allow_html=True)
 
 # ----------------------------- Discovery pool -----------------------------
@@ -783,7 +746,6 @@ else:
         pairs = list_products(effective_exchange, st.session_state["quote"])
         pairs = [p for p in pairs if p.endswith(f"-{st.session_state['quote']}")]
         cap = max(0, min(500, int(st.session_state.get("discover_cap", DEFAULTS["discover_cap"]))))
-
         pairs = pairs[:cap] if cap > 0 else []
 
 # ----------------------------- WebSocket lifecycle -----------------------------
@@ -862,10 +824,9 @@ sort_tf = st.session_state.get("sort_tf", "1h")
 chg_col = f"% Change ({sort_tf})"
 
 rows: List[Dict] = []
-# cache-buster forces df_for_tf to refresh on schedule
-cache_buster = int(time.time() // st.session_state.get("refresh_sec", 30))
+buster = _cache_buster_from_refresh()
 for pid in pairs:
-    dft = df_for_tf(effective_exchange, pid, sort_tf, cache_buster)
+    dft = df_for_tf_cached(effective_exchange, pid, sort_tf, buster)
     if dft is None or getattr(dft, "empty", True):
         continue
 
@@ -878,7 +839,7 @@ for pid in pairs:
     first_price = float(dft["close"].iloc[0])
     pct_display = (last_price / (first_price + 1e-12) - 1.0) * 100.0
 
-    # -------- gates settings (4 spaces indent, no tabs) --------
+    # -------- gates settings --------
     gate_settings = dict(
         lookback_candles=int(st.session_state.get("lookback_candles", 3)),
         min_pct=float(st.session_state.get("min_pct", 3.0)),
@@ -919,7 +880,7 @@ for pid in pairs:
     meta, passed, chips, enabled_cnt = build_gate_eval(dft, gate_settings)
 
     # decide GREEN/YELLOW from settings
-    mode = st.session_state.get("gate_mode", "ANY")  # "ANY" or "ALL"
+    mode = st.session_state.get("gate_mode", "ANY")  # "ANY" or "ALL" or "Custom (K/Y)"
     hard_filter = bool(st.session_state.get("hard_filter", False))
     k_required = int(st.session_state.get("K_green", 3))
     y_required = int(st.session_state.get("Y_yellow", 2))
@@ -928,16 +889,17 @@ for pid in pairs:
         include = (enabled_cnt > 0 and passed == enabled_cnt)
         is_green = include
         is_yellow = (0 < passed < enabled_cnt)
-    else:
+    elif mode == "ANY":
+        include = True
+        is_green = (passed >= 1)
+        is_yellow = (not is_green) and (passed >= 1)
+    else:  # Custom (K/Y)
+        include = True
         is_green = (passed >= k_required)
         is_yellow = (not is_green) and (passed >= y_required)
-        include = True
 
     if hard_filter:
-        if mode in {"ALL", "ANY"}:
-            keep_row = include
-        else:
-            keep_row = (is_green or is_yellow)
+        keep_row = include if mode in {"ALL", "ANY"} else (is_green or is_yellow)
         if not keep_row:
             continue
 
@@ -959,75 +921,57 @@ for pid in pairs:
         "_passed": passed,
     })
 
-
 # ----------------------------- Diagnostics & Tables -----------------------------
 df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=["Pair"])
+st.caption(f"⏱️ Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
 
 if df.empty:
     st.info("No rows to show. Try ANY mode, lower Min Δ, shorten lookback, set Minimum bars to 1, or increase discovery cap.")
 else:
+    chg_col = f"% Change ({st.session_state.get('sort_tf','1h')})"
     df = df.sort_values(chg_col, ascending=not st.session_state.get("sort_desc", True), na_position="last").reset_index(drop=True)
     df.insert(0, "#", df.index + 1)
 
-    # Row coloring that works with BOTH label styles
-def highlight_rows(row):
-    sig = str(row.get("Signal", "")).strip()
-    if sig in ("Strong Buy", "GREEN"):
-        return ['background-color: #0b7c26; color: white'] * len(row)
-    if sig in ("Watch", "YELLOW"):
-        return ['background-color: #e7c71f; color: black'] * len(row)
-    return [''] * len(row)
+    # Normalize Signal text and helper flags
+    if "Signal" in df.columns:
+        sig_norm = df["Signal"].astype(str).str.strip().str.upper()
+        df["_green"] = df["_green"] if "_green" in df.columns else sig_norm.isin(["STRONG BUY", "GREEN"])
+        df["_yellow"] = df["_yellow"] if "_yellow" in df.columns else sig_norm.isin(["WATCH", "YELLOW"])
 
-   # --- Top 10 section ---
-# Ensure the boolean helper columns exist even if we're using the "Signal" text.
-if "Signal" in df.columns:
-    if "_green" not in df.columns:
-        df["_green"] = (df["Signal"] == "Strong Buy")
-    if "_yellow" not in df.columns:
-        df["_yellow"] = (df["Signal"] == "Watch")
+    def _row_style(row):
+        s = str(row.get("Signal", "")).strip().upper()
+        if s == "STRONG BUY":
+            return ["background-color: #16a34a; color: white;"] * len(row)
+        if s == "WATCH":
+            return ["background-color: #eab308; color: black;"] * len(row)
+        return [""] * len(row)
 
-# --- Top-10 ---
-st.subheader("📌 Top-10")
-chg_col = f"% Change ({st.session_state.get('sort_tf','1h')})"
+    def _passed_style(v):
+        s = str(v).strip().lower()
+        truthy = s in {"1", "true", "yes", "y", "passed", "pass", "✔", "✅"}
+        return "background-color: #16a34a; color: white; font-weight: 600;" if truthy else ""
 
-has_green = ("_green" in df.columns) and bool(df["_green"].any())
-if has_green:
-    top10 = df.loc[df["_green"]].sort_values(chg_col, ascending=False, na_position="last").head(10)
-else:
-    top10 = df.sort_values(chg_col, ascending=False, na_position="last").head(10)
+    # Top-10
+    st.subheader("📌 Top-10")
+    top10 = df.loc[df["_green"]].sort_values(chg_col, ascending=False, na_position="last").head(10) if df["_green"].any() else df.sort_values(chg_col, ascending=False, na_position="last").head(10)
+    st.caption(f"⏱️ Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    st.table(
+        top10.style.apply(_row_style, axis=1)
+                  .hide(axis="columns", subset=[c for c in ["_green", "_yellow"] if c in top10.columns])
+    )
 
-cols_to_drop = [c for c in ["_green", "_yellow"] if c in top10.columns]
-st.dataframe(
-    top10.drop(columns=cols_to_drop).style.apply(highlight_rows, axis=1),
-    use_container_width=True
-)
-# --- row coloring helpers (drop right in above "All pairs section") ---
-# Normalize Signal text and create helper flags (robust to GREEN / Strong Buy / Watch / YELLOW)
-if "Signal" in df.columns:
-    sig_norm = df["Signal"].astype(str).str.strip().str.upper()
-    if "_green" not in df.columns:
-        df["_green"] = sig_norm.isin(["STRONG BUY", "GREEN"])
-    if "_yellow" not in df.columns:
-        df["_yellow"] = sig_norm.isin(["WATCH", "YELLOW"])
+    # All pairs
+    st.subheader("📑 All pairs")
+    st.caption(f"⏱️ Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    styler = df.style.apply(_row_style, axis=1)
+    if "_passed" in df.columns:
+        styler = styler.applymap(_passed_style, subset=["_passed"])
+    st.table(styler.hide(axis="columns", subset=[c for c in ["_green", "_yellow"] if c in df.columns]))
 
-def highlight_rows(row):
-    s = str(row.get("Signal", "")).strip().upper()
-    if s in ("STRONG BUY", "GREEN"):
-        return ['background-color: #16a34a; color: white'] * len(row)  # green
-    if s in ("WATCH", "YELLOW"):
-        return ['background-color: #eab308; color: black'] * len(row)  # yellow
-    return [''] * len(row)
+    # Column sanity hint
+    st.caption("Table columns include: ['Pair', 'Price', '% Change (1h)', 'Signal', '_passed', '_green', '_yellow', ...] — please verify exact names/typos.")
 
-# --- All pairs section ---
-st.subheader("📑 All pairs")
-ts = f"Last updated: {dt.datetime.utcnow().strftime('%H:%M:%S')} UTC • Refresh: {st.session_state.get('refresh_sec', 30)}s"
-st.caption(ts)
-st.dataframe(
-    df.style.apply(highlight_rows, axis=1).hide(axis="columns", subset=["_green", "_yellow"]),
-    use_container_width=True
-)
-
-    # --- Footer info ---
+# Footer
 q = st.session_state.get("quote", "USD")
 tf = st.session_state.get("sort_tf", "1h")
 gm = st.session_state.get("gate_mode", "ANY")
@@ -1037,14 +981,8 @@ effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"]
 st.caption(
     f"Pairs shown: {len(df)} • Exchange: {effective_exchange} • Quote: {q} "
     f"• TF: {tf} • Gate Mode: {gm} • Hard filter: {hf}"
-    )
-# Manual auto-refresh (no external package)
-_refresh = int(st.session_state.get("refresh_sec", 0) or 0)
-if _refresh > 0:
-    st.caption(f"⟳ Auto-refreshing every {_refresh}s")
-    import time
-    time.sleep(_refresh)
-    st.rerun()
+)
+
 # ----------------------------- Listing Radar engine -----------------------------
 def lr_parse_quotes(csv_text: str) -> set:
     return set(x.strip().upper() for x in (csv_text or "").split(",") if x.strip())
@@ -1103,11 +1041,6 @@ def lr_scan_new_listings():
     if not st.session_state.get("lr_enabled"):
         return
     quotes = lr_parse_quotes(st.session_state.get("lr_watch_quotes", "USD, USDT, USDC"))
-    now = time.time()
-    if now - st.session_state.get("lr_last_poll", 0) < int(st.session_state.get("lr_poll_sec", 30)):
-        return
-    st.session_state["lr_last_poll"] = now
-
     for exch, enabled in [("Coinbase", st.session_state.get("lr_watch_coinbase", True)),
                           ("Binance", st.session_state.get("lr_watch_binance", True))]:
         if not enabled:
@@ -1124,11 +1057,6 @@ def lr_scan_new_listings():
 def lr_scan_upcoming():
     if not st.session_state.get("lr_enabled"):
         return
-    now = time.time()
-    if now - st.session_state.get("lr_last_upcoming_poll", 0) < int(st.session_state.get("lr_upcoming_sec", 300)):
-        return
-    st.session_state["lr_last_upcoming_poll"] = now
-
     feeds = [u.strip() for u in st.session_state.get("lr_feeds", "").split(",") if u.strip()]
     for url in feeds:
         try:
@@ -1167,21 +1095,15 @@ if st.session_state.get("lr_enabled"):
         evdf = pd.DataFrame(st.session_state["lr_events"]).reindex(columns=["ts", "kind", "exchange", "pair", "when", "link"])
         st.data_editor(evdf, use_container_width=True, hide_index=True, disabled=True)
 
-# ----------------------------- Persist URL state & auto-refresh -----------------------------
+# ----------------------------- Persist URL state -----------------------------
 sync_state_to_query_params()
 
-remaining = int(st.session_state.get("refresh_sec", 30)) - int(
-    time.time() - st.session_state.get("last_refresh", time.time())
-)
-if remaining <= 0:
-    st.session_state["last_refresh"] = time.time()
-    st.rerun()
-else:
-    st.caption(
-        f"Auto-refresh every {int(st.session_state.get('refresh_sec', 30))}s "
-        f"(next in {max(0, remaining)}s)"
-    )
+# ----------------------------- Reliable auto-refresh -----------------------------
+# Use Streamlit's autorefresh tied to the single refresh_sec control.
+# No manual sleep(), no st.rerun() loops.
+_interval_ms = int(max(1, int(st.session_state.get("refresh_sec", 30)))) * 1000
+st.autorefresh(interval=_interval_ms, key="heartbeat")
 
-# Show a heartbeat so you know it really reran
-import datetime as dt
+# Heartbeat caption (explicit UTC)
 st.caption(f"Last updated: {dt.datetime.utcnow().strftime('%H:%M:%S')} UTC")
+
