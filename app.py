@@ -320,9 +320,9 @@ def get_df(exchange: str, pair: str, tf: str, limit: Optional[int] = None) -> Op
 
     return None
 @st.cache_data(ttl=15)   # cache expires every 15s so prices update
-@st.cache_data(ttl=15)
 def df_for_tf(exchange: str, pair: str, tf: str, _buster: int = 0) -> Optional[pd.DataFrame]:
     bars = one_day_window_bars(tf)
+    _ = _buster  # no-op; included only to vary the cache key
     try:
         return get_df(exchange, pair, tf, limit=bars)
     except Exception:
