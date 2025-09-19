@@ -1042,7 +1042,7 @@ if _refresh > 0:
     st.caption(f"⟳ Auto-refreshing every {_refresh}s")
     import time
     time.sleep(_refresh)
-    st.experimental_rerun()
+    st.rerun()
 # ----------------------------- Listing Radar engine -----------------------------
 def lr_parse_quotes(csv_text: str) -> set:
     return set(x.strip().upper() for x in (csv_text or "").split(",") if x.strip())
