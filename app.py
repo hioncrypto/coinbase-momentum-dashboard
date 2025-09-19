@@ -865,7 +865,7 @@ rows: List[Dict] = []
 # cache-buster forces df_for_tf to refresh on schedule
 cache_buster = int(time.time() // st.session_state.get("refresh_sec", 30))
 for pid in pairs:
-    dft = df_for_tf(effective_exchange, pid, sort_tf)
+    dft = df_for_tf(effective_exchange, pid, sort_tf, cache_buster)
     if dft is None or getattr(dft, "empty", True):
         continue
 
