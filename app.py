@@ -638,7 +638,7 @@ with expander("Market"):
     if "discover_cap" not in st.session_state:
         st.session_state["discover_cap"] = DEFAULTS["discover_cap"]
 
-   st.slider(f"Pairs to discover (0–500) • Available: {len(avail_pairs)}", 0, 500, key="discover_cap", step=10)
+st.slider(f"Pairs to discover (0–500) • Available: {len(avail_pairs)}", 0, 500, key="discover_cap", step=10)
 
 
 # MODE
