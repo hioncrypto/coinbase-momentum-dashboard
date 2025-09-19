@@ -649,17 +649,13 @@ def _sync_url_cb():
 discover_cap_value = st.slider(
     f"Pairs to discover (0–500) • Available: {len(avail_pairs)}",
     0, 500,
-    value=int(st.session_state.get("discover_cap", DEFAULTS["discover_cap"])),
     step=10,
     key="discover_cap",
     on_change=_sync_url_cb,   # push to URL the moment it changes
 )
 
-# interpret 0 as “no cap” instead of “no pairs”
-cap = int(discover_cap_value)
-if cap > 0:
-    pairs = pairs[:cap]
-# if cap == 0, leave pairs as-is (no cap)
+# DO NOT touch `pairs` here. It doesn't exist in this scope.
+# 0 will mean "no cap" later.
 
 
 # MODE
