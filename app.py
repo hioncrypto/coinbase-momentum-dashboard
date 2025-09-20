@@ -627,8 +627,6 @@ st.slider(
     on_change=sync_state_to_query_params,  # direct callback, no helper def
 )
 
-    effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"].lower() else st.session_state["exchange"]
-
         st.info("This exchange is coming soon. Using Coinbase for data.")
 
     st.selectbox("Quote currency", QUOTES, index=QUOTES.index(st.session_state["quote"]), key="quote")
