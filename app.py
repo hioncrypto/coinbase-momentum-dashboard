@@ -614,16 +614,17 @@ def expander(title: str):
 with expander("Market"):
     st.selectbox("Exchange", EXCHANGES, index=EXCHANGES.index(st.session_state["exchange"]), key="exchange")
     effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"] else st.session_state["exchange"]
-    def _sync_url_cb():
-    # write current state to the URL immediately, so JS reloads keep it
-    sync_state_to_query_params()
+    # ensure discover_cap exists
+if "discover_cap" not in st.session_state:
+    st.session_state["discover_cap"] = DEFAULTS["discover_cap"]
 
+# sidebar slider; push state to URL immediately so JS reloads keep it
 st.slider(
     f"Pairs to discover (0–500) • Available: {len(avail_pairs)}",
     0, 500,
     step=10,
     key="discover_cap",
-    on_change=_sync_url_cb,   # push to URL the moment it changes
+    on_change=sync_state_to_query_params,  # direct callback, no helper def
 )
 
     if "coming soon" in st.session_state["exchange"]:
