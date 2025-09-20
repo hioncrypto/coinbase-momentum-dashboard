@@ -613,6 +613,7 @@ def expander(title: str):
 # MARKET
 with expander("Market"):
     st.selectbox("Exchange", EXCHANGES, index=EXCHANGES.index(st.session_state["exchange"]), key="exchange")
+    effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"].lower() else st.session_state["exchange"]
     effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"] else st.session_state["exchange"]
     # ensure discover_cap exists
 if "discover_cap" not in st.session_state:
