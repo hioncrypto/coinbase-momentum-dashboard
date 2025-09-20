@@ -612,9 +612,6 @@ def expander(title: str):
 
 # MARKET
 with expander("Market"):
-    st.selectbox(
-       # MARKET
-with expander("Market"):
     st.selectbox("Exchange", EXCHANGES, index=EXCHANGES.index(st.session_state["exchange"]), key="exchange")
 
     # ensure discover_cap exists (define once)
@@ -630,25 +627,7 @@ with expander("Market"):
         key="use_watch",
         value=st.session_state.get("use_watch", False),
     )
- 
-        "Tips: Watchlist/My Pairs restrict discovery. Quote filters pairs like BTC-USD vs BTC-USDT."
-    )
 
-    st.checkbox(
-        "Use watchlist only (ignore discovery)",
-        key="use_watch",
-        value=st.session_state.get("use_watch", False),
-    )
-
-                 key="quote")
-    st.caption("Tips: Watchlist/My Pairs restrict discovery. Quote filters pairs like BTC-USD vs BTC-USDT.")
-    st.checkbox("Use watchlist only (ignore discovery)",
-                key="use_watch",
-                value=st.session_state.get("use_watch", False))
-
-    if "watchlist" not in st.session_state:
-        st.session_state["watchlist"] = DEFAULTS["watchlist"]
-    st.text_area("Watchlist", key="watchlist")
 
     # Available pool
     if st.session_state["use_watch"] and st.session_state["watchlist"].strip():
