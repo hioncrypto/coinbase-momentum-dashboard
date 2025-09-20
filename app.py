@@ -614,8 +614,6 @@ def expander(title: str):
 # MARKET
 with expander("Market"):
     st.selectbox("Exchange", EXCHANGES,
-                 index=EXCHANGES.index(st.session_state["exchange"]),
-                 key="exchange")
 
     # ensure discover_cap exists
     if "discover_cap" not in st.session_state or st.session_state["discover_cap"] is None:
