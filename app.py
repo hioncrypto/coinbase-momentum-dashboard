@@ -647,6 +647,7 @@ st.slider(
         avail_pairs = [p.strip().upper() for p in st.session_state["my_pairs"].split(",") if p.strip()]
         avail_pairs = [p for p in avail_pairs if p.endswith(f"-{st.session_state['quote']}")]
     else:
+        effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"].lower() else st.session_state["exchange"]
         avail_pairs = list_products(effective_exchange, st.session_state["quote"])
 
     if "discover_cap" not in st.session_state:
