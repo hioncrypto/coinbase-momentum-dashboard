@@ -611,26 +611,35 @@ def expander(title: str):
     return st.sidebar.expander(title, expanded=not st.session_state.get("collapse_all", False))
 
 # MARKET
-# MARKET
 with expander("Market"):
-    st.selectbox("Exchange", EXCHANGES,
-
-    # ensure discover_cap exists
-    if "discover_cap" not in st.session_state or st.session_state["discover_cap"] is None:
-        st.session_state["discover_cap"] = DEFAULTS["discover_cap"]
-
-    # sidebar slider; push state to URL immediately so JS reloads keep it
-    st.slider(
-        f"Pairs to discover (0–500) • Available: {len(avail_pairs)}",
-        0, 500,
-        step=10,
-        key="discover_cap",
-        on_change=sync_state_to_query_params,   # direct callback, no helper def
+    st.selectbox(
+        "Exchange",
+        EXCHANGES,
+        index=EXCHANGES.index(st.session_state["exchange"]),
+        key="exchange",
     )
 
-    # remaining sidebar controls (still inside the Market expander)
-    st.selectbox("Quote currency", QUOTES,
-                 index=QUOTES.index(st.session_state["quote"]),
+    # ensure discover_cap exists (define once)
+    if "discover_cap" not in st.session_state:
+        st.session_state["discover_cap"] = DEFAULTS["discover_cap"]
+
+    st.selectbox(
+        "Quote currency",
+        QUOTES,
+        index=QUOTES.index(st.session_state["quote"]),
+        key="quote",
+    )
+
+    st.caption(
+        "Tips: Watchlist/My Pairs restrict discovery. Quote filters pairs like BTC-USD vs BTC-USDT."
+    )
+
+    st.checkbox(
+        "Use watchlist only (ignore discovery)",
+        key="use_watch",
+        value=st.session_state.get("use_watch", False),
+    )
+
                  key="quote")
     st.caption("Tips: Watchlist/My Pairs restrict discovery. Quote filters pairs like BTC-USD vs BTC-USDT.")
     st.checkbox("Use watchlist only (ignore discovery)",
