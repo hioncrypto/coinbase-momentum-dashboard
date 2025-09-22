@@ -1055,7 +1055,7 @@ styler = df.style.apply(_row_style, axis=1)
 if "_passed" in df.columns:
     styler = styler.applymap(_passed_style, subset=["_passed"])
 
-_hidden_cols_all = [c for c in ["_green", "_yellow", "Signal_norm"] if c in df.columns]
+_hidden_cols_all = [c for c in ["_green", "_yellow"] if c in df.columns]
 st.table(styler.hide(axis="columns", subset=_hidden_cols_all))
        
 
