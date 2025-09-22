@@ -1014,12 +1014,23 @@ else:
 
     # Top-10
     st.subheader("📌 Top-10")
-    top10 = df.loc[df["_green"]].sort_values(chg_col, ascending=False, na_position="last").head(10) if df["_green"].any() else df.sort_values(chg_col, ascending=False, na_position="last").head(10)
-    st.caption(f"⏱️ Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
-    st.table(
-        top10.style.apply(_row_style, axis=1)
-                  .hide(axis="columns", subset=[c for c in ["_green", "_yellow"] if c in top10.columns])
-    )
+
+# Pick top 10 by your current sort column
+if df["_green"].any():
+    top10 = df.loc[df["_green"]].sort_values(chg_col, ascending=False, na_position="last").head(10)
+else:
+    top10 = df.sort_values(chg_col, ascending=False, na_position="last").head(10)
+
+# Renumber inside the Top-10 section so it shows 1..10
+top10 = top10.reset_index(drop=True)
+top10.insert(0, "#", top10.index + 1)
+
+st.caption(f"⏱️ Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+st.table(
+    top10.style.apply(_row_style, axis=1)
+               .hide(axis="columns", subset=[c for c in ["_green", "_yellow", "Signal_norm"] if c in top10.columns])
+)
+
 
     # All pairs
     st.subheader("📑 All pairs")
