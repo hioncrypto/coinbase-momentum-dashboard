@@ -1024,21 +1024,22 @@ rows.append({
     "_yellow": is_yellow,
     "_passed": passed,
 })
-
-    "Pair": pid,
-    "Price": last_price,
-    f"% Change ({sort_tf})": pct_display,
-    f"Δ% (last {max(1, int(st.session_state.get('lookback_candles', 3)))} bars)": meta.get("delta_pct"),
-    "From ATH %": meta.get("athp", None),
-    "ATH date": meta.get("athd", None),
-    "From ATL %": meta.get("atlp", None),
-    "ATL date": meta.get("atld", None),
-    "Gates": chips,
-    "Signal": signal_text,
-    "_green": is_green,
-    "_yellow": is_yellow,
-    "_passed": passed,
+    rows.append({
+        "Pair": pid,
+        "Price": last_price,
+        f"% Change ({sort_tf})": pct_display,
+        f"Δ% (last {max(1, int(st.session_state.get('lookback_candles', 3)))} bars)": meta.get("delta_pct"),
+        "From ATH %": meta.get("athp", None),
+        "ATH date": meta.get("athd", None),
+        "From ATL %": meta.get("atlp", None),
+        "ATL date": meta.get("atld", None),
+        "Gates": chips,
+        "Signal": signal_text,
+        "_green": is_green,
+        "_yellow": is_yellow,
+        "_passed": passed,
     })
+
 
 # ----------------------------- Diagnostics & Tables -----------------------------
 df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=["Pair"])
