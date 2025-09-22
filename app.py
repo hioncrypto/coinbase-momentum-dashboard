@@ -918,36 +918,64 @@ else:
     )
 
     # evaluate gates for this pair/timeframe using the live-adjusted df
-    meta, passed, chips, enabled_cnt = build_gate_eval(dft_live, gate_settings)
-
     # decide GREEN/YELLOW from settings
-    mode = st.session_state.get("gate_mode", "ANY")  # "ALL" or "ANY" or "Custom (K/Y)"
-    hard_filter = bool(st.session_state.get("hard_filter", False))
-    k_required = int(st.session_state.get("K_green", 3))
-    y_required = int(st.session_state.get("Y_yellow", 2))
+mode = st.session_state.get("gate_mode", "ANY")  # "ALL", "ANY", or "Custom (K/Y)"
+hard_filter = bool(st.session_state.get("hard_filter", False))
+k_required = int(st.session_state.get("K_green", 3))
+y_required = int(st.session_state.get("Y_yellow", 2))
 
-    if mode == "ALL":
-        include = (enabled_cnt > 0 and passed == enabled_cnt)
-        is_green = include
-        is_yellow = (0 < passed < enabled_cnt)
-    elif mode == "ANY":
-        include = True
-        is_green = (passed >= 1)
-        is_yellow = (not is_green) and (passed >= 1)
-    else:  # Custom (K/Y)
-        include = True
-        is_green = (passed >= k_required)
-        is_yellow = (not is_green) and (passed >= y_required)
+if mode == "ALL":
+    include = (enabled_cnt > 0 and passed == enabled_cnt)
+    is_green = include
+    is_yellow = (0 < passed < enabled_cnt)
+elif mode == "ANY":
+    include = True
+    is_green = (passed >= 1)
+    is_yellow = (not is_green) and (passed >= 1)
+else:  # Custom (K/Y)
+    include = True
+    is_green = (passed >= k_required)
+    is_yellow = (not is_green) and (passed >= y_required)
 
-    # hard filter can skip this row — this 'continue' MUST stay indented inside the loop
-    if hard_filter:
-        keep_row = include if mode in {"ALL", "ANY"} else (is_green or is_yellow)
-        if not keep_row:
-            continue
+# hard filter can skip this row
+if hard_filter:
+    keep_row = include if mode in {"ALL", "ANY"} else (is_green or is_yellow)
+    if not keep_row:
+        continue
 
-    signal_text = "Strong Buy" if is_green else ("Watch" if is_yellow else "")
+# final signal text used for styling and the "Signal" column
+signal_text = "Strong Buy" if is_green else ("Watch" if is_yellow else "")
 
-    rows.append({
+# choose the price you want to show in the table
+# prefer live price if you already calculated one; otherwise last close
+try:
+    last_price = float(dft_live["close"].iloc[-1])
+except Exception:
+    last_price = float(dft_live["close"].iloc[-1])  # fallback is still last close
+
+first_price = float(dft_live["close"].iloc[0])
+chg_col = f"% Change ({sort_tf})"
+pct_display = (last_price / (first_price + 1e-12) - 1.0) * 100.0
+
+# ensure rows list exists (only needed if not already defined above)
+rows = rows if "rows" in locals() or "rows" in globals() else []
+
+rows.append({
+    "Pair": pair,  # or pid if that’s your loop variable
+    "Price": last_price,
+    chg_col: pct_display,
+    f"Δ% (last {max(1, int(st.session_state.get('lookback_candles', 3)))} bars)": meta.get("delta_pct"),
+    "From ATH %": meta.get("athp"),
+    "ATH date": meta.get("athd"),
+    "From ATL %": meta.get("atlp"),
+    "ATL date": meta.get("atld"),
+    "Gates": chips,
+    "Signal": signal_text,
+    "_green": is_green,
+    "_yellow": is_yellow,
+    "_passed": passed,
+})
+
         "Pair": pid,
         "Price": last_price,
         f"% Change ({sort_tf})": pct_display,
