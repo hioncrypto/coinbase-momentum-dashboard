@@ -609,7 +609,15 @@ with st.sidebar:
 
 def expander(title: str):
     return st.sidebar.expander(title, expanded=not st.session_state.get("collapse_all", False))
-
+    # Slider lives inside Market so it shows in the sidebar
+    st.slider(
+        f"Pairs to discover (0–500) • Available: {len(avail_pairs)}",
+        0, 500,
+        value=int(st.session_state.get("discover_cap", DEFAULTS["discover_cap"])),
+        step=10,
+        key="discover_cap",
+        on_change=sync_state_to_query_params,
+    )
 # MARKET
 with expander("Market"):
     st.selectbox("Exchange", EXCHANGES, index=EXCHANGES.index(st.session_state["exchange"]), key="exchange")
