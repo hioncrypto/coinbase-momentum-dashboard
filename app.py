@@ -1047,15 +1047,6 @@ else:
     top10 = df.sort_values(chg_col, ascending=False, na_position="last").head(10)
 
 # Renumber inside the Top-10 section so it shows 1..10
-top10 = top10.reset_index(drop=True)
-
-st.caption(f"⏱️ Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
-
-_hidden_cols_top10 = [c for c in ["_green", "_yellow", "Signal_norm"] if c in top10.columns]
-st.table(
-    top10.style.apply(_row_style, axis=1)
-               .hide(axis="columns", subset=_hidden_cols_top10)
-)
 
 # --------------------- All pairs ---------------------
 st.subheader("📑 All pairs")
