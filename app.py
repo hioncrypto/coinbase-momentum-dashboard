@@ -1035,9 +1035,8 @@ top10 = top10[cols]
 _top10_display = top10.drop(columns=[c for c in ["_green", "_yellow", "Signal_norm"] if c in top10.columns])
 
 
-st.table(
-    _top10_display.style.apply(_row_style, axis=1)
-)
+_top10_display = top10.drop(columns=[c for c in ["_green", "_yellow", "Signal_norm"] if c in top10.columns])
+st.table(_top10_display.style.apply(_row_style, axis=1))
 
 
     # All pairs
@@ -1054,12 +1053,13 @@ else:
 st.subheader("📑 All pairs")
 st.caption(f"⏱️ Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
 
-styler = df.style.apply(_row_style, axis=1)
-if "_passed" in df.columns:
+_df_display = df.drop(columns=[c for c in ["_green", "_yellow", "Signal_norm"] if c in df.columns])
+
+styler = _df_display.style.apply(_row_style, axis=1)
+if "_passed" in _df_display.columns:
     styler = styler.applymap(_passed_style, subset=["_passed"])
 
-_hidden_cols_all = [c for c in ["_green", "_yellow"] if c in df.columns]
-st.table(styler.hide(axis="columns", subset=_hidden_cols_all))
+st.table(styler)
        
 
    # Column sanity hint
