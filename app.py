@@ -1033,12 +1033,37 @@ st.table(
 
 
     # All pairs
-        st.subheader("📑 All pairs")
-        st.caption(f"⏱️ Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
-        styler = df.style.apply(_row_style, axis=1)
-    if "_passed" in df.columns:
-        styler = styler.applymap(_passed_style, subset=["_passed"])
-        st.table(styler.hide(axis="columns", subset=[c for c in ["_green", "_yellow"] if c in df.columns]))
+st.subheader("📌 Top-10")
+
+# Pick top 10 by your current sort column
+if df["_green"].any():
+    top10 = df.loc[df["_green"]].sort_values(chg_col, ascending=False, na_position="last").head(10)
+else:
+    top10 = df.sort_values(chg_col, ascending=False, na_position="last").head(10)
+
+# Renumber inside the Top-10 section so it shows 1..10
+top10 = top10.reset_index(drop=True)
+top10.insert(0, "#", top10.index + 1)
+
+st.caption(f"⏱️ Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+
+_hidden_cols_top10 = [c for c in ["_green", "_yellow", "Signal_norm"] if c in top10.columns]
+st.table(
+    top10.style.apply(_row_style, axis=1)
+               .hide(axis="columns", subset=_hidden_cols_top10)
+)
+
+# --------------------- All pairs ---------------------
+st.subheader("📑 All pairs")
+st.caption(f"⏱️ Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+
+styler = df.style.apply(_row_style, axis=1)
+if "_passed" in df.columns:
+    styler = styler.applymap(_passed_style, subset=["_passed"])
+
+_hidden_cols_all = [c for c in ["_green", "_yellow", "Signal_norm"] if c in df.columns]
+st.table(styler.hide(axis="columns", subset=_hidden_cols_all))
+       
 
     # Column sanity hint
         st.caption("Table columns include: ['Pair', 'Price', '% Change (1h)', 'Signal', '_passed', '_green', '_yellow', ...] — please verify exact names/typos.")
