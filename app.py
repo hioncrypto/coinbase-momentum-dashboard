@@ -1052,12 +1052,21 @@ else:
 # --------------------- All pairs ---------------------
 st.subheader("📑 All pairs")
 st.caption(f"⏱️ Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
-
+# Make a display copy without helper columns
 _df_display = df.drop(columns=[c for c in ["_green", "_yellow", "Signal_norm"] if c in df.columns])
 
+# Style rows by Signal
 styler = _df_display.style.apply(_row_style, axis=1)
+
+# Local cell styler for the _passed column (avoids NameError)
 if "_passed" in _df_display.columns:
-    styler = styler.applymap(_passed_style, subset=["_passed"])
+    def __passed_style_local(v):
+        s = str(v).strip().lower()
+        truthy = s in {"1", "true", "yes", "y", "passed", "pass", "✔", "✅"}
+        return "background-color: #16a34a; color: white; font-weight: 600;" if truthy else ""
+    styler = styler.applymap(__passed_style_local, subset=["_passed"])
+
+st.table(styler)
 
 st.table(styler)
        
