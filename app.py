@@ -880,32 +880,6 @@ if want_ws:
 else:
     stop_ws()
 
-# ----------------------------- Build rows -----------------------------
-sort_tf = st.session_state.get("sort_tf", "1h")
-chg_col = f"% Change ({sort_tf})"
-
-rows: List[Dict] = []
-buster = _cache_buster_from_refresh()
-for pid in pairs:
-    dft = df_for_tf_cached(effective_exchange, pid, sort_tf, buster)
-    if dft is None or getattr(dft, "empty", True):
-        continue
-
-    # respect minimum bars if user raises it above 1
-    if len(dft) < int(st.session_state.get("min_bars", 1)):
-        continue
-
-    # basic price/pct for the table (prefer live price if available)
-    ws_px = st.session_state.get("ws_prices", {}).get(pid)
-if ws_px is not None:
-    last_price = float(ws_px)
-else:
-    last_price = float(dft["close"].iloc[-1])
-
-    first_price = float(dft["close"].iloc[0])
-    pct_display = (last_price / (first_price + 1e-12) - 1.0) * 100.0
-
-
     # -------- gates settings --------
     gate_settings = dict(
         lookback_candles=int(st.session_state.get("lookback_candles", 3)),
@@ -943,11 +917,11 @@ else:
         macd_hist_confirm_bars=int(st.session_state.get("macd_hist_confirm_bars", 3)),
     )
 
-    # evaluate gates for this pair/timeframe
-    meta, passed, chips, enabled_cnt = build_gate_eval(dft, gate_settings)
+    # evaluate gates for this pair/timeframe using the live-adjusted df
+    meta, passed, chips, enabled_cnt = build_gate_eval(dft_live, gate_settings)
 
     # decide GREEN/YELLOW from settings
-    mode = st.session_state.get("gate_mode", "ANY")  # "ANY" or "ALL" or "Custom (K/Y)"
+    mode = st.session_state.get("gate_mode", "ANY")  # "ALL" or "ANY" or "Custom (K/Y)"
     hard_filter = bool(st.session_state.get("hard_filter", False))
     k_required = int(st.session_state.get("K_green", 3))
     y_required = int(st.session_state.get("Y_yellow", 2))
@@ -965,6 +939,7 @@ else:
         is_green = (passed >= k_required)
         is_yellow = (not is_green) and (passed >= y_required)
 
+    # hard filter can skip this row — this 'continue' MUST stay indented inside the loop
     if hard_filter:
         keep_row = include if mode in {"ALL", "ANY"} else (is_green or is_yellow)
         if not keep_row:
@@ -973,6 +948,21 @@ else:
     signal_text = "Strong Buy" if is_green else ("Watch" if is_yellow else "")
 
     rows.append({
+        "Pair": pid,
+        "Price": last_price,
+        f"% Change ({sort_tf})": pct_display,
+        f"Δ% (last {max(1, int(st.session_state.get('lookback_candles', 3)))} bars)": meta.get("delta_pct"),
+        "From ATH %": meta.get("athp", None),
+        "ATH date": meta.get("athd", None),
+        "From ATL %": meta.get("atlp", None),
+        "ATL date": meta.get("atld", None),
+        "Gates": chips,
+        "Signal": signal_text,
+        "_green": is_green,
+        "_yellow": is_yellow,
+        "_passed": passed,
+    })
+
         "Pair": pid,
         "Price": last_price,
         f"% Change ({sort_tf})": pct_display,
