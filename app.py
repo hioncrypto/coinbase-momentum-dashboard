@@ -1038,7 +1038,6 @@ st.table(
 
 
     # All pairs
-st.subheader("📌 Top-10")
 
 # Pick top 10 by your current sort column
 if df["_green"].any():
