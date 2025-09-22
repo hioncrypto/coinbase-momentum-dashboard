@@ -1065,8 +1065,8 @@ _hidden_cols_all = [c for c in ["_green", "_yellow", "Signal_norm"] if c in df.c
 st.table(styler.hide(axis="columns", subset=_hidden_cols_all))
        
 
-    # Column sanity hint
-        st.caption("Table columns include: ['Pair', 'Price', '% Change (1h)', 'Signal', '_passed', '_green', '_yellow', ...] — please verify exact names/typos.")
+   # Column sanity hint
+st.caption("Table columns include: ['Pair', 'Price', '% Change (1h)', 'Signal', '_passed', '_green', '_yellow', ...] — please verify exact names/typos.")
 
 # Footer
 q = st.session_state.get("quote", "USD")
@@ -1079,6 +1079,7 @@ st.caption(
     f"Pairs shown: {len(df)} • Exchange: {effective_exchange} • Quote: {q} "
     f"• TF: {tf} • Gate Mode: {gm} • Hard filter: {hf}"
 )
+ 
 
 # ----------------------------- Listing Radar engine -----------------------------
 def lr_parse_quotes(csv_text: str) -> set:
