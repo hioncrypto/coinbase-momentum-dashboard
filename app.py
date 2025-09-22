@@ -1030,12 +1030,12 @@ top10 = top10.reset_index(drop=True)
 top10["#"] = np.arange(1, len(top10) + 1)
 cols = ["#"] + [c for c in top10.columns if c != "#"]
 top10 = top10[cols]
+# Hide helper columns by dropping them from the display copy
+_top10_display = top10.drop(columns=[c for c in ["_green", "_yellow", "Signal_norm"] if c in top10.columns])
 
 
-st.caption(f"⏱️ Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
 st.table(
-    top10.style.apply(_row_style, axis=1)
-               .hide(axis="columns", subset=[c for c in ["_green", "_yellow", "Signal_norm"] if c in top10.columns])
+    _top10_display.style.apply(_row_style, axis=1)
 )
 
 
