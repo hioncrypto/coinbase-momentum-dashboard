@@ -990,21 +990,23 @@ for pid in pairs:
     })
 
 # ensure rows list exists (only needed if not already defined above)
+# add one row for this pair
 rows.append({
-    "Pair": pair,  # or pid if that’s your loop variable
+    "Pair": pid,
     "Price": last_price,
-    chg_col: pct_display,
+    f"% Change ({sort_tf})": pct_display,
     f"Δ% (last {max(1, int(st.session_state.get('lookback_candles', 3)))} bars)": meta.get("delta_pct"),
-    "From ATH %": meta.get("athp", None),
-    "ATH date": meta.get("athd", None),
-    "From ATL %": meta.get("atlp", None),
-    "ATL date": meta.get("atld", None),
+    "From ATH %": meta.get("athp"),
+    "ATH date": meta.get("athd"),
+    "From ATL %": meta.get("atlp"),
+    "ATL date": meta.get("atld"),
     "Gates": chips,
     "Signal": signal_text,
     "_green": is_green,
     "_yellow": is_yellow,
     "_passed": passed,
 })
+
 
 
 rows.append({
