@@ -999,7 +999,7 @@ else:
         df["_green"] = df["_green"] if "_green" in df.columns else sig_norm.isin(["STRONG BUY", "GREEN"])
         df["_yellow"] = df["_yellow"] if "_yellow" in df.columns else sig_norm.isin(["WATCH", "YELLOW"])
 
-   def _row_style(row):
+def _row_style(row):
     # Color rows by the visible Signal column, so we don't rely on hidden helpers
     s = str(row.get("Signal", "")).strip().upper()
     if s == "STRONG BUY":
