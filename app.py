@@ -636,33 +636,26 @@ with expander("Market"):
         value=st.session_state.get("use_watch", False),
     )
 
-
-    # Available pool
-    if st.session_state["use_watch"] and st.session_state["watchlist"].strip():
+    # Available pool (for the 'Available: N' text)
+    if st.session_state["use_watch"] and st.session_state.get("watchlist", "").strip():
         avail_pairs = [p.strip().upper() for p in st.session_state["watchlist"].split(",") if p.strip()]
         avail_pairs = [p for p in avail_pairs if p.endswith(f"-{st.session_state['quote']}")]
-    elif st.session_state["use_my_pairs"]:
-        avail_pairs = [p.strip().upper() for p in st.session_state["my_pairs"].split(",") if p.strip()]
+    elif st.session_state.get("use_my_pairs", False):
+        avail_pairs = [p.strip().upper() for p in st.session_state.get("my_pairs", "").split(",") if p.strip()]
         avail_pairs = [p for p in avail_pairs if p.endswith(f"-{st.session_state['quote']}")]
     else:
         effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"].lower() else st.session_state["exchange"]
         avail_pairs = list_products(effective_exchange, st.session_state["quote"])
 
-    if "discover_cap" not in st.session_state:
-        st.session_state["discover_cap"] = DEFAULTS["discover_cap"]
-
-st.slider(
-    f"Pairs to discover (0–500) • Available: {len(avail_pairs)}",
-    0, 500,
-    step=10,
-    key="discover_cap",
-    on_change=sync_state_to_query_params,  # persist to URL so reloads keep it
-)
-
-
-# DO NOT touch `pairs` here. It doesn't exist in this scope.
-# 0 will mean "no cap" later.
-
+    # ✅ Slider belongs here, inside Market (sidebar)
+    st.slider(
+        f"Pairs to discover (0–500) • Available: {len(avail_pairs)}",
+        min_value=0, max_value=500,
+        value=int(st.session_state.get("discover_cap", DEFAULTS["discover_cap"])),
+        step=10,
+        key="discover_cap",
+        on_change=sync_state_to_query_params,
+    )
 
 # MODE
 if "mode" not in st.session_state:
