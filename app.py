@@ -1023,6 +1023,11 @@ else:
 
 # Renumber inside the Top-10 section so it shows 1..10
 top10 = top10.reset_index(drop=True)
+
+# If "#" column already exists, drop it before re-inserting
+if "#" in top10.columns:
+    top10 = top10.drop(columns=["#"])
+
 top10.insert(0, "#", top10.index + 1)
 
 st.caption(f"⏱️ Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
