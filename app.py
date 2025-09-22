@@ -959,10 +959,10 @@ pct_display = (last_price / (first_price + 1e-12) - 1.0) * 100.0
 for pid in pairs:
     dft = df_for_tf_cached(effective_exchange, pid, sort_tf, buster)
     if dft is None or getattr(dft, "empty", True):
-    continue
+        continue
 
     if len(dft) < int(st.session_state.get("min_bars", 1)):
-    continue
+        continue
 
     ws_px = st.session_state.get("ws_prices", {}).get(pid)
     if ws_px is not None:
