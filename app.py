@@ -896,14 +896,14 @@ for pid in pairs:
         continue
 
     # basic price/pct for the table (prefer live price if available)
-ws_px = st.session_state.get("ws_prices", {}).get(pid)
+    ws_px = st.session_state.get("ws_prices", {}).get(pid)
 if ws_px is not None:
     last_price = float(ws_px)
 else:
     last_price = float(dft["close"].iloc[-1])
 
-first_price = float(dft["close"].iloc[0])
-pct_display = (last_price / (first_price + 1e-12) - 1.0) * 100.0
+    first_price = float(dft["close"].iloc[0])
+    pct_display = (last_price / (first_price + 1e-12) - 1.0) * 100.0
 
 
     # -------- gates settings --------
