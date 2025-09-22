@@ -1033,15 +1033,15 @@ st.table(
 
 
     # All pairs
-    st.subheader("📑 All pairs")
-    st.caption(f"⏱️ Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
-    styler = df.style.apply(_row_style, axis=1)
+        st.subheader("📑 All pairs")
+        st.caption(f"⏱️ Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        styler = df.style.apply(_row_style, axis=1)
     if "_passed" in df.columns:
         styler = styler.applymap(_passed_style, subset=["_passed"])
-    st.table(styler.hide(axis="columns", subset=[c for c in ["_green", "_yellow"] if c in df.columns]))
+        st.table(styler.hide(axis="columns", subset=[c for c in ["_green", "_yellow"] if c in df.columns]))
 
     # Column sanity hint
-    st.caption("Table columns include: ['Pair', 'Price', '% Change (1h)', 'Signal', '_passed', '_green', '_yellow', ...] — please verify exact names/typos.")
+        st.caption("Table columns include: ['Pair', 'Price', '% Change (1h)', 'Signal', '_passed', '_green', '_yellow', ...] — please verify exact names/typos.")
 
 # Footer
 q = st.session_state.get("quote", "USD")
