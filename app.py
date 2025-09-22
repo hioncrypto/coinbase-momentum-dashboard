@@ -1000,12 +1000,14 @@ else:
         df["_yellow"] = df["_yellow"] if "_yellow" in df.columns else sig_norm.isin(["WATCH", "YELLOW"])
 
     def _row_style(row):
-        s = str(row.get("Signal", "")).strip().upper()
-        if s == "STRONG BUY":
-            return ["background-color: #16a34a; color: white;"] * len(row)
-        if s == "WATCH":
-            return ["background-color: #eab308; color: black;"] * len(row)
-        return [""] * len(row)
+    # Color rows by the visible Signal column, so we don't rely on hidden helpers
+    s = str(row.get("Signal", "")).strip().upper()
+    if s == "STRONG BUY":
+        return ["background-color: #16a34a; color: white;"] * len(row)
+    if s == "WATCH":
+        return ["background-color: #eab308; color: black;"] * len(row)
+    return [""] * len(row)
+
 
     def _passed_style(v):
         s = str(v).strip().lower()
