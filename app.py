@@ -940,8 +940,8 @@ else:  # Custom (K/Y)
 # hard filter can skip this row
 if hard_filter:
     keep_row = include if mode in {"ALL", "ANY"} else (is_green or is_yellow)
-    if not keep_row:
-        continue
+if not keep_row:
+    continue
 
 # final signal text used for styling and the "Signal" column
 signal_text = "Strong Buy" if is_green else ("Watch" if is_yellow else "")
