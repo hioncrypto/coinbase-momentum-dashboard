@@ -1024,7 +1024,7 @@ rows.append({
     "_yellow": is_yellow,
     "_passed": passed,
 })
- rows.append({
+     rows.append({
         "Pair": pid,
         "Price": last_price,
         f"% Change ({sort_tf})": pct_display,
