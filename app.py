@@ -956,9 +956,56 @@ except Exception:
 first_price = float(dft_live["close"].iloc[0])
 chg_col = f"% Change ({sort_tf})"
 pct_display = (last_price / (first_price + 1e-12) - 1.0) * 100.0
+for pid in pairs:
+    dft = df_for_tf_cached(effective_exchange, pid, sort_tf, buster)
+    if dft is None or getattr(dft, "empty", True):
+        continue
+
+    if len(dft) < int(st.session_state.get("min_bars", 1)):
+        continue
+
+    ws_px = st.session_state.get("ws_prices", {}).get(pid)
+    if ws_px is not None:
+        last_price = float(ws_px)
+    else:
+        last_price = float(dft["close"].iloc[-1])
+
+    first_price = float(dft["close"].iloc[0])
+    pct_display = (last_price / (first_price + 1e-12) - 1.0) * 100.0
+
+    rows.append({
+        "Pair": pid,
+        "Price": last_price,
+        chg_col: pct_display,
+        f"Δ% (last {max(1, int(st.session_state.get('lookback_candles', 3)))} bars)": meta.get("delta_pct"),
+        "From ATH %": meta.get("athp"),
+        "ATH date": meta.get("athd"),
+        "From ATL %": meta.get("atlp"),
+        "ATL date": meta.get("atld"),
+        "Gates": chips,
+        "Signal": signal_text,
+        "_green": is_green,
+        "_yellow": is_yellow,
+        "_passed": passed,
+    })
 
 # ensure rows list exists (only needed if not already defined above)
-rows = rows if "rows" in locals() or "rows" in globals() else []
+rows.append({
+    "Pair": pair,  # or pid if that’s your loop variable
+    "Price": last_price,
+    chg_col: pct_display,
+    f"Δ% (last {max(1, int(st.session_state.get('lookback_candles', 3)))} bars)": meta.get("delta_pct"),
+    "From ATH %": meta.get("athp", None),
+    "ATH date": meta.get("athd", None),
+    "From ATL %": meta.get("atlp", None),
+    "ATL date": meta.get("atld", None),
+    "Gates": chips,
+    "Signal": signal_text,
+    "_green": is_green,
+    "_yellow": is_yellow,
+    "_passed": passed,
+})
+
 
 rows.append({
     "Pair": pair,  # or pid if that’s your loop variable
