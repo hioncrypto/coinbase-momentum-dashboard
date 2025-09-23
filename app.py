@@ -1137,6 +1137,16 @@ st.subheader("📑 All pairs")
 st.caption(f"⏱️ Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
 
 # Make a display copy without helper columns
+# All Pairs final render
+
+# Row color helper
+def _row_style(row):
+    s = str(row.get("Signal", "")).strip().upper()
+    if s == "STRONG BUY":
+        return ["background-color: #16a34a; color: white;"] * len(row)
+    if s == "WATCH":
+        return ["background-color: #eab308; color: black;"] * len(row)
+    return [""] * len(row)
 # ---------------- All Pairs final render ----------------
 # Apply row styling
 _allpairs_styler = _df_display.style.apply(_row_style, axis=1)
