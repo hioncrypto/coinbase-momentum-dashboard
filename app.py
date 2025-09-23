@@ -1123,9 +1123,6 @@ if "_passed" in _df_display.columns:
 # Final render for All pairs (sortable headers; replaces st.table(styler))
 _allpairs_styler = styler
 render_sortable_styler(_allpairs_styler, table_id="allpairs_table", height=560)
-
-
-st.table(styler)
        
 
    # Column sanity hint
