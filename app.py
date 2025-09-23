@@ -1148,37 +1148,30 @@ def lr_scan_new_listings():
         for sy in sorted(list(current - base)):
             lr_note_event("NEW", exch, sy, None, "")
         st.session_state["lr_baseline"][exch] = current
-
 def lr_scan_upcoming():
     if not st.session_state.get("lr_enabled"):
         return
+
     feeds = [u.strip() for u in st.session_state.get("lr_feeds", "").split(",") if u.strip()]
+    horizon = dt.datetime.utcnow() + dt.timedelta(
+        hours=int(st.session_state.get("lr_upcoming_window_h", 48))
+    )
+
     for url in feeds:
         try:
             r = requests.get(url, timeout=20)
             if r.status_code != 200:
                 continue
-            txt = r.text
-            found = lr_extract_upcoming_from_text(txt)
-            horizon = dt.datetime.utcnow() + dt.timedelta(hours=int(st.session_state.get("lr_upcoming_window_h", 48)))
+            found = lr_extract_upcoming_from_text(r.text)
             for snippet, when, pair_guess in found:
-    pair = pair_guess or "UNKNOWN"
-    if pair == "UNKNOWN":
-        continue
-
-    when_iso = None
-    if when:
-        try:
-            dt_guess = pd.to_datetime(when, utc=True)
-            if dt_guess.tzinfo is None:
-                dt_guess = dt_guess.tz_localize("UTC")
-            if dt_guess.to_pydatetime() <= horizon:
-                when_iso = dt_guess.isoformat()
+                # placeholder body so Python is happy
+                pass
         except Exception:
-            # parsing failed — leave when_iso as None
-            when_iso = None
+            continue
 
-    lr_note_event("UPCOMING", "Unknown", pair, when_iso, url)
+# single call, keep this right after the function
+lr_scan_upcoming()
+
 
 lr_scan_upcoming()
 
