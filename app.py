@@ -31,10 +31,10 @@ except Exception:
 
 st.markdown("""
 <style>
-/* Let content stretch to full width in wide layout */
 .block-container { max-width: 100% !important; padding-left: 12px; padding-right: 12px; }
 </style>
 """, unsafe_allow_html=True)
+
 # ----------------------------- App setup -----------------------------
 st.set_page_config(page_title="Crypto Tracker by hioncrypto", layout="wide")
 
