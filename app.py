@@ -1162,24 +1162,25 @@ def lr_scan_upcoming():
             found = lr_extract_upcoming_from_text(txt)
             horizon = dt.datetime.utcnow() + dt.timedelta(hours=int(st.session_state.get("lr_upcoming_window_h", 48)))
             for snippet, when, pair_guess in found:
-                pair = pair_guess or "UNKNOWN"
-                if pair == "UNKNOWN":
-                    continue
-                when_iso = None
-if when:
-    try:
-        dt_guess = pd.to_datetime(when, utc=True)
-        if dt_guess.tzinfo is None:
-            dt_guess = dt_guess.tz_localize("UTC")
-        if dt_guess.to_pydatetime() <= horizon:
-            when_iso = dt_guess.isoformat()
-    except Exception:
-        # parsing failed — leave when_iso as None
-        when_iso = None
+for snippet, when, pair_guess in found:
+    pair = pair_guess or "UNKNOWN"
+    if pair == "UNKNOWN":
+        continue
 
-lr_note_event("UPCOMING", "Unknown", pair, when_iso, url)
+    when_iso = None
+    if when:
+        try:
+            dt_guess = pd.to_datetime(when, utc=True)
+            if dt_guess.tzinfo is None:
+                dt_guess = dt_guess.tz_localize("UTC")
+            if dt_guess.to_pydatetime() <= horizon:
+                when_iso = dt_guess.isoformat()
+        except Exception:
+            # parsing failed — leave when_iso as None
+            when_iso = None
 
-lr_scan_new_listings()
+    lr_note_event("UPCOMING", "Unknown", pair, when_iso, url)
+                
 lr_scan_upcoming()
 
 if st.session_state.get("lr_enabled"):
