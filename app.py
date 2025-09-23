@@ -784,8 +784,14 @@ with expander("Listing Radar"):
         st.markdown('<span class="blink-badge">New/Upcoming listings</span>', unsafe_allow_html=True)
     st.toggle("Enable Listing Radar", key="lr_enabled", value=st.session_state.get("lr_enabled", False))
 
-cA, cB = st.columns(2)
-st.markdown(f"<div style='font-size:1.3rem;font-weight:700;margin:4px 0 10px 2px;'>Timeframe: {st.session_state['sort_tf']}</div>", unsafe_allow_html=True)
+# ----------------------------- Discovery pool -----------------------------
+# Show current timeframe + sort direction
+sort_tf   = st.session_state.get("sort_tf", "1h")
+chg_col   = f"% Change ({sort_tf})"
+descending = bool(st.session_state.get("sort_desc", True))
+arrow = "↓" if descending else "↑"
+
+st.markdown(f"### Timeframe: **{sort_tf}** • Sorting: **{arrow} {chg_col}**")
 
 # ----------------------------- Discovery pool -----------------------------
 if st.session_state.get("use_my_pairs", False):
