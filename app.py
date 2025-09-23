@@ -1011,7 +1011,7 @@ def render_sortable_styler(styler, table_id: str, height: int = 480):
         html_table = styler.hide_index().to_html()
 
     html = f"""
-<div id="{table_id}" style="width:100%">{html_table}</div>
+<div id="{table_id}" class="vw-breakout" style="max-height:70vh; overflow:auto;">
 <script>
 (function() {{
   const root = document.getElementById('{table_id}');
