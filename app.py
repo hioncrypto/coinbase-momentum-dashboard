@@ -1137,39 +1137,28 @@ st.subheader("📑 All pairs")
 st.caption(f"⏱️ Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
 
 # Make a display copy without helper columns
-_df_display = df.drop(columns=[c for c in ["_green", "_yellow", "Signal_norm"] if c in df.columns])
+# ---------------- All Pairs final render ----------------
+# Apply row styling
+_allpairs_styler = _df_display.style.apply(_row_style, axis=1)
 
-# Style rows by Signal (keeps your green/yellow backgrounds)
-styler = _df_display.style.apply(_row_style, axis=1)
-
-# Local cell styler for the _passed column (avoids NameError)
+# If "_passed" column exists, apply its local styler
 if "_passed" in _df_display.columns:
     def __passed_style_local(v):
         s = str(v).strip().lower()
-        truthy = s in {"1", "true", "yes", "y", "passed", "pass", "✔", "✅"}
+        truthy = s in {"1", "true", "yes", "y", "passed", "pass", "✓", "✔"}
         return "background-color: #16a34a; color: white; font-weight: 600;" if truthy else ""
-    styler = styler.applymap(__passed_style_local, subset=["_passed"])
+    _allpairs_styler = _allpairs_styler.applymap(__passed_style_local, subset=["_passed"])
 
-# Final render for All pairs (sortable headers; replaces st.table(styler))
-_allpairs_styler = styler
-render_sortable_styler(_allpairs_styler, table_id="allpairs_table", height=560)
-       
-
-   # Column sanity hint
-st.caption("Table columns include: ['Pair', 'Price', '% Change (1h)', 'Signal', '_passed', '_green', '_yellow', ...] — please verify exact names/typos.")
-
-# Footer
-q = st.session_state.get("quote", "USD")
-tf = st.session_state.get("sort_tf", "1h")
-gm = st.session_state.get("gate_mode", "ANY")
-hf = "On" if st.session_state.get("hard_filter", False) else "Off"
-effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"] else st.session_state["exchange"]
-
-st.caption(
-    f"Pairs shown: {len(df)} • Exchange: {effective_exchange} • Quote: {q} "
-    f"• TF: {tf} • Gate Mode: {gm} • Hard filter: {hf}"
+# Render sortable, scrollable table
+render_sortable_styler(
+    _allpairs_styler,
+    table_id="allpairs_table",
+    height=560
 )
- 
+
+# -----------------------------------------------------------
+# (next section: Listing Radar engine continues here)
+
 
 # ----------------------------- Listing Radar engine -----------------------------
 def lr_parse_quotes(csv_text: str) -> set:
