@@ -975,7 +975,7 @@ for pid in pairs:
         "_enabled": enabled_cnt,
         "Chips": chips,
     })
-    def render_sortable_styler(styler, table_id: str, height: int = 480):
+   def render_sortable_styler(styler, table_id: str, height: int = 480):
     """
     Render a pandas Styler as HTML with clickable header sorting.
     Keeps your row background colors exactly as-is.
@@ -1025,6 +1025,7 @@ for pid in pairs:
 </script>
 """
     components.html(html, height=height, scrolling=True)
+
 
 # ----------------------------- Diagnostics & Tables -----------------------------
 df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=["Pair"])
