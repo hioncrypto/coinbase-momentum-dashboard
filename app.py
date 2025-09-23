@@ -31,9 +31,26 @@ except Exception:
 
 st.markdown("""
 <style>
-.block-container { max-width: 100% !important; padding-left: 12px; padding-right: 12px; }
+/* Make the main content truly full width in wide layout */
+[data-testid="stAppViewContainer"] > .main > div.block-container {
+  max-width: 100vw !important;
+  padding-left: 12px !important;
+  padding-right: 12px !important;
+}
+
+/* Ensure component iframes (used by render_sortable_styler) span the container */
+iframe[title="streamlit.components.v1.html"] {
+  width: 100% !important;
+}
+
+/* Optional: remove any max-width on generic element containers */
+div.element-container {
+  width: 100% !important;
+  max-width: 100% !important;
+}
 </style>
 """, unsafe_allow_html=True)
+
 
 # ----------------------------- App setup -----------------------------
 st.set_page_config(page_title="Crypto Tracker by hioncrypto", layout="wide")
