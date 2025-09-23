@@ -974,11 +974,20 @@ df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=["Pair"])
 st.caption(f"⏱️ Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
 
 if df.empty:
-    st.info("No rows to show. Try ANY mode, lower Min Δ, shorten lookback, set Minimum bars to 1, or increase discovery cap.")
+    st.info("No rows to show. ...")
 else:
-    chg_col = f"% Change ({st.session_state.get('sort_tf','1h')})"
-    df = df.sort_values(chg_col, ascending=not st.session_state.get("sort_desc", True), na_position="last").reset_index(drop=True)
+    # 🔽🔼 Sorting + arrow
+    sort_tf   = st.session_state.get("sort_tf", "1h")
+    chg_col   = f"% Change ({sort_tf})"
+    descending = bool(st.session_state.get("sort_desc", True))
+    arrow = "↓" if descending else "↑"
+
+    # apply sort
+    df = df.sort_values(chg_col, ascending=not descending, na_position="last").reset_index(drop=True)
     df.insert(0, "#", df.index + 1)
+
+    # now df is sorted + arrow variable ready to use in headers
+
 
     # Normalize Signal text and helper flags
     if "Signal" in df.columns:
