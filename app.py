@@ -1176,9 +1176,6 @@ def lr_scan_upcoming():
                     except Exception:
                         when_iso = None
                         lr_note_event("UPCOMING", "Unknown", pair, when_iso, url)
-                        except Exception:
-                            pass    
-                            
 
 lr_scan_new_listings()
 lr_scan_upcoming()
