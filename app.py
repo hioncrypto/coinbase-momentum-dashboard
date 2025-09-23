@@ -880,98 +880,94 @@ if want_ws:
 else:
     stop_ws()
 
-    # -------- gates settings --------
-    gate_settings = dict(
-        lookback_candles=int(st.session_state.get("lookback_candles", 3)),
-        min_pct=float(st.session_state.get("min_pct", 3.0)),
+# -------- gate settings (single snapshot) --------
+gate_settings = dict(
+    lookback_candles=int(st.session_state.get("lookback_candles", 3)),
+    min_pct=float(st.session_state.get("min_pct", 3.0)),
 
-        use_vol_spike=bool(st.session_state.get("use_vol_spike", True)),
-        vol_mult=float(st.session_state.get("vol_mult", 1.10)),
-        vol_window=int(st.session_state.get("vol_window", 20)),
+    use_vol_spike=bool(st.session_state.get("use_vol_spike", True)),
+    vol_mult=float(st.session_state.get("vol_mult", 1.10)),
+    vol_window=int(st.session_state.get("vol_window", 20)),
 
-        use_rsi=bool(st.session_state.get("use_rsi", False)),
-        rsi_len=int(st.session_state.get("rsi_len", 14)),
-        min_rsi=int(st.session_state.get("min_rsi", 55)),
+    use_rsi=bool(st.session_state.get("use_rsi", False)),
+    rsi_len=int(st.session_state.get("rsi_len", 14)),
+    min_rsi=int(st.session_state.get("min_rsi", 55)),
 
-        use_macd=bool(st.session_state.get("use_macd", False)),
-        macd_fast=int(st.session_state.get("macd_fast", 12)),
-        macd_slow=int(st.session_state.get("macd_slow", 26)),
-        macd_sig=int(st.session_state.get("macd_sig", 9)),
-        min_mhist=float(st.session_state.get("min_mhist", 0.0)),
+    use_macd=bool(st.session_state.get("use_macd", False)),
+    macd_fast=int(st.session_state.get("macd_fast", 12)),
+    macd_slow=int(st.session_state.get("macd_slow", 26)),
+    macd_sig=int(st.session_state.get("macd_sig", 9)),
+    min_mhist=float(st.session_state.get("min_mhist", 0.0)),
 
-        use_atr=bool(st.session_state.get("use_atr", False)),
-        atr_len=int(st.session_state.get("atr_len", 14)),
-        min_atr=float(st.session_state.get("min_atr", 0.5)),
+    use_trend=bool(st.session_state.get("use_trend", False)),
+    pivot_span=int(st.session_state.get("pivot_span", 4)),
+    trend_within=int(st.session_state.get("trend_within", 48)),
 
-        use_trend=bool(st.session_state.get("use_trend", False)),
-        pivot_span=int(st.session_state.get("pivot_span", 4)),
-        trend_within=int(st.session_state.get("trend_within", 48)),
+    use_roc=bool(st.session_state.get("use_roc", False)),
+    min_roc=float(st.session_state.get("min_roc", 1.0)),
 
-        use_roc=bool(st.session_state.get("use_roc", False)),
-        min_roc=float(st.session_state.get("min_roc", 1.0)),
+    use_macd_cross=bool(st.session_state.get("use_macd_cross", True)),
+    macd_cross_bars=int(st.session_state.get("macd_cross_bars", 5)),
+    macd_cross_only_bull=bool(st.session_state.get("macd_cross_only_bull", True)),
+    macd_cross_below_zero=bool(st.session_state.get("macd_cross_below_zero", True)),
+    macd_hist_confirm_bars=int(st.session_state.get("macd_hist_confirm_bars", 3)),
+)
 
-        use_macd_cross=bool(st.session_state.get("use_macd_cross", True)),
-        macd_cross_bars=int(st.session_state.get("macd_cross_bars", 5)),
-        macd_cross_only_bull=bool(st.session_state.get("macd_cross_only_bull", True)),
-        macd_cross_below_zero=bool(st.session_state.get("macd_cross_below_zero", True)),
-        macd_hist_confirm_bars=int(st.session_state.get("macd_hist_confirm_bars", 3)),
-    )
+# keep websocket section as-is if you still use it (start_ws/drain_ws_queue/stop_ws)
 
-    # evaluate gates for this pair/timeframe using the live-adjusted df
-    # decide GREEN/YELLOW from settings
-mode = st.session_state.get("gate_mode", "ANY")  # "ALL", "ANY", or "Custom (K/Y)"
+# -------- build rows once --------
+rows = []
+buster = _cache_buster_from_refresh()
+sort_tf = st.session_state.get("sort_tf", "1h")
+mode = st.session_state.get("gate_mode", "ANY")  # "ALL", "ANY", "Custom (K/Y)"
 hard_filter = bool(st.session_state.get("hard_filter", False))
 k_required = int(st.session_state.get("K_green", 3))
 y_required = int(st.session_state.get("Y_yellow", 2))
 
-if mode == "ALL":
-    include = (enabled_cnt > 0 and passed == enabled_cnt)
-    is_green = include
-    is_yellow = (0 < passed < enabled_cnt)
-elif mode == "ANY":
-    include = True
-    is_green = (passed >= 1)
-    is_yellow = (not is_green) and (passed >= 1)
-else:  # Custom (K/Y)
-    include = True
-    is_green = (passed >= k_required)
-    is_yellow = (not is_green) and (passed >= y_required)
-
-# hard filter can skip this row
-if hard_filter:
-    keep_row = include if mode in {"ALL", "ANY"} else (is_green or is_yellow)
-if not keep_row:
-    continue
-
-# final signal text used for styling and the "Signal" column
-signal_text = "Strong Buy" if is_green else ("Watch" if is_yellow else "")
-
-# choose the price you want to show in the table
-# prefer live price if you already calculated one; otherwise last close
-try:
-    last_price = float(dft_live["close"].iloc[-1])
-except Exception:
-    last_price = float(dft_live["close"].iloc[-1])  # fallback is still last close
-
-first_price = float(dft_live["close"].iloc[0])
-chg_col = f"% Change ({sort_tf})"
 for pid in pairs:
     dft = df_for_tf_cached(effective_exchange, pid, sort_tf, buster)
-
     if dft is None or getattr(dft, "empty", True):
         continue
-
     if len(dft) < int(st.session_state.get("min_bars", 1)):
         continue
 
-    ws_px = st.session_state.get("ws_prices", {}).get(pid)
-    if ws_px is not None:
-        last_price = float(ws_px)
-    else:
-        last_price = float(dft["close"].iloc[-1])
+    meta, passed, chips, enabled_cnt = build_gate_eval(dft, gate_settings)
 
+    if mode == "ALL":
+        include = (enabled_cnt > 0 and passed == enabled_cnt)
+        is_green = include
+        is_yellow = (0 < passed < enabled_cnt)
+    elif mode == "ANY":
+        include = True
+        is_green = (passed >= 1)
+        is_yellow = (not is_green) and (passed >= 1)
+    else:  # Custom (K/Y)
+        include = True
+        is_green = (passed >= k_required)
+        is_yellow = (not is_green) and (passed >= y_required)
+
+    if hard_filter:
+        if mode in {"ALL", "ANY"} and not include:
+            continue
+        if mode == "Custom (K/Y)" and not (is_green or is_yellow):
+            continue
+
+    ws_px = st.session_state.get("ws_prices", {}).get(pid)
+    last_price = float(ws_px) if ws_px is not None else float(dft["close"].iloc[-1])
     first_price = float(dft["close"].iloc[0])
-    pct_display = (last_price / (first_price + 1e-12) - 1.0) * 100.0
+    pct_change = (last_price / (first_price + 1e-12) - 1.0) * 100.0
+
+    signal_text = "Strong Buy" if is_green else ("Watch" if is_yellow else "")
+
+    rows.append({
+        "Pair": pid,
+        "Price": round(last_price, 6),
+        f"% Change ({sort_tf})": round(pct_change, 3),
+        "Signal": signal_text,
+        "_passed": passed,
+        "_enabled": enabled_cnt,
+        "Chips": chips,
+    })
 
 # ----------------------------- Diagnostics & Tables -----------------------------
 df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=["Pair"])
