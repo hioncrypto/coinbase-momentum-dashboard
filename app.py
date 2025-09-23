@@ -1148,6 +1148,9 @@ def _row_style(row):
         return ["background-color: #eab308; color: black;"] * len(row)
     return [""] * len(row)
 # ---------------- All Pairs final render ----------------
+# Make a display copy without helper columns
+hide_cols = [c for c in ["_green", "_yellow", "Signal_norm"] if c in df.columns]
+_df_display = df.drop(columns=hide_cols).reset_index(drop=True)
 # Apply row styling
 _allpairs_styler = _df_display.style.apply(_row_style, axis=1)
 
