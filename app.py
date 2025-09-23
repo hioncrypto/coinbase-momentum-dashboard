@@ -22,6 +22,7 @@ import numpy as np
 import pandas as pd
 import requests
 import streamlit as st
+import streamlit.components.v1 as components
 # Optional autorefresh helper; fall back to JS if not available
 try:
     from streamlit_autorefresh import st_autorefresh
