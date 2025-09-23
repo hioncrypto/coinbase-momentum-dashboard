@@ -1136,33 +1136,46 @@ else:
 st.subheader("📄 All pairs")
 st.caption(f"🕒 Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
 
-# Build the display DataFrame (hide helper cols if present)
-hide_cols = [c for c in ["_green", "_yellow", "signal_norm"] if c in df.columns]
-_df_display = df.drop(columns=hide_cols).reset_index(drop=True)
+# SAFETY: verify base df exists
+if 'df' not in locals():
+    st.error("Internal: 'df' is not defined at the All-pairs stage.")
+else:
+    # Debug the shapes so we can see what's going on
+    st.caption(f"DEBUG: base df shape {df.shape}")
 
-# Row color helper (white text on strong-green rows)
-def _row_style(row):
-    s = str(row.get("Signal", "")).strip().upper()
-    if s == "STRONG BUY":
-        return ["background-color: #16a34a; color: white; font-weight: 600;"] * len(row)
-    if s == "WATCH":
-        return ["background-color: #eab308; color: black;"] * len(row)
-    return [""] * len(row)
+    # Build the display DF (drop helper cols if present)
+    hide_cols = [c for c in ["_green", "_yellow", "signal_norm"] if c in df.columns]
+    _df_display = df.drop(columns=hide_cols).reset_index(drop=True)
+    st.caption(f"DEBUG: display df shape {_df_display.shape}")
 
-# Apply row styling
-_allpairs_styler = _df_display.style.apply(_row_style, axis=1)
+    # If there are literally no rows, show a friendly note
+    if _df_display.shape[0] == 0:
+        st.info("No rows to show (filters may have removed all rows). Try disabling 'Use My Pairs only' or loosening gates / watchlist.")
+    else:
+        # Row color helper
+        def _row_style(row):
+            s = str(row.get("Signal", "")).strip().upper()
+            if s == "STRONG BUY":
+                return ["background-color: #16a34a; color: white; font-weight: 600;"] * len(row)
+            if s == "WATCH":
+                return ["background-color: #eab308; color: black;"] * len(row)
+            return [""] * len(row)
 
-# If "_passed" exists, apply its local styler so truthy cells are green+bold
-if "_passed" in _df_display.columns:
-    def __passed_style_local(v):
-        s = str(v).strip().lower()
-        truthy = s in {"1", "true", "yes", "y", "passed", "pass", "✓", "✔"}
-        return "background-color: #16a34a; color: white; font-weight: 600;" if truthy else ""
-    _allpairs_styler = _allpairs_styler.applymap(__passed_style_local, subset=["_passed"])
+        _allpairs_styler = _df_display.style.apply(_row_style, axis=1)
 
-# Render sortable, scrollable table
-render_sortable_styler(_allpairs_styler, table_id="allpairs_table", height=560)
+        # If "_passed" column exists, style truthy cells green+bold
+        if "_passed" in _df_display.columns:
+            def __passed_style_local(v):
+                s = str(v).strip().lower()
+                return "background-color: #16a34a; color: white; font-weight: 600;" if s in {"1","true","yes","y","passed","pass","✓","✔"} else ""
+            _allpairs_styler = _allpairs_styler.applymap(__passed_style_local, subset=["_passed"])
 
+        # Try sortable table; fall back to a plain table if anything goes wrong
+        try:
+            render_sortable_styler(_allpairs_styler, table_id="allpairs_table", height=560)
+        except Exception as e:
+            st.warning(f"Sortable table failed. Falling back to a plain table. Error: {e}")
+            st.table(_df_display)
 
 # ----------------------------- Listing Radar engine -----------------------------
 def lr_parse_quotes(csv_text: str) -> set:
