@@ -1137,6 +1137,31 @@ st.subheader("📑 All pairs")
 st.caption(f"⏱️ Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
 
 # Make a display copy without helper columns
+hide_cols = [c for c in ["_green", "_yellow", "Signal_norm"] if c in df.columns]
+_df_display = df.drop(columns=hide_cols).reset_index(drop=True)
+
+# (Optional) quick sanity so we know we have rows/cols
+st.caption(f"DEBUG • All pairs df: {df.shape} -> display: {_df_display.shape}")
+
+# Row color helper (white text for Strong Buy rows)
+def _row_style(row):
+    s = str(row.get("Signal", "")).strip().upper()
+    if s == "STRONG BUY":
+        return ["background-color: #16a34a; color: white; font-weight: 600;"] * len(row)
+    if s == "WATCH":
+        return ["background-color: #eab308; color: black;"] * len(row)
+    return [""] * len(row)
+
+# Apply row styling
+_allpairs_styler = _df_display.style.apply(_row_style, axis=1)
+
+# Final render with sortable, scrollable table
+try:
+    render_sortable_styler(_allpairs_styler, table_id="allpairs_table", height=560)
+except Exception as e:
+    st.exception(e)
+
+# Make a display copy without helper columns
 # All Pairs final render
 
 # Row color helper
