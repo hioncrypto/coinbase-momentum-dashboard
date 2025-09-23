@@ -1012,10 +1012,10 @@ def render_sortable_styler(styler, table_id: str, height: int = 480):
 
     html = f"""
     <style>
-  .vw-breakout {
+  .vw-breakout {{
     width: 100vw;
     margin-left: calc(-50vw + 50%);
-  }
+  }}
 </style>
 
 <div id="{table_id}" class="vw-breakout" style="max-height:70vh; overflow:auto;">
