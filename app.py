@@ -975,7 +975,8 @@ for pid in pairs:
         "_enabled": enabled_cnt,
         "Chips": chips,
     })
-   def render_sortable_styler(styler, table_id: str, height: int = 480):
+# ---------- Sortable Styler helper ----------
+def render_sortable_styler(styler, table_id: str, height: int = 480):
     """
     Render a pandas Styler as HTML with clickable header sorting.
     Keeps your row background colors exactly as-is.
