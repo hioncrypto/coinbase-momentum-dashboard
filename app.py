@@ -1174,7 +1174,7 @@ if when:
         if dt_guess.to_pydatetime() <= horizon:
             when_iso = dt_guess.isoformat()
     except Exception:
-        # if parsing fails, just leave when_iso as None
+        # parsing failed — leave when_iso as None
         when_iso = None
 
 lr_note_event("UPCOMING", "Unknown", pair, when_iso, url)
