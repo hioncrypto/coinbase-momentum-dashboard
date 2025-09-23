@@ -1162,7 +1162,6 @@ def lr_scan_upcoming():
             found = lr_extract_upcoming_from_text(txt)
             horizon = dt.datetime.utcnow() + dt.timedelta(hours=int(st.session_state.get("lr_upcoming_window_h", 48)))
             for snippet, when, pair_guess in found:
-            for snippet, when, pair_guess in found:
                 pair = pair_guess or "UNKNOWN"
            if pair == "UNKNOWN":
                continue
