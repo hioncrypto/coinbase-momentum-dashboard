@@ -1132,51 +1132,15 @@ else:
 
 # Renumber inside the Top-10 section so it shows 1..10
 
-# --------------------- All pairs ---------------------
-st.subheader("📑 All pairs")
-st.caption(f"⏱️ Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
-
-# Make a display copy without helper columns
-hide_cols = [c for c in ["_green", "_yellow", "Signal_norm"] if c in df.columns]
-_df_display = df.drop(columns=hide_cols).reset_index(drop=True)
-
-# (Optional) quick sanity so we know we have rows/cols
-st.caption(f"DEBUG • All pairs df: {df.shape} -> display: {_df_display.shape}")
-
-# Row color helper (white text for Strong Buy rows)
-def _row_style(row):
-    s = str(row.get("Signal", "")).strip().upper()
-    if s == "STRONG BUY":
-        return ["background-color: #16a34a; color: white; font-weight: 600;"] * len(row)
-    if s == "WATCH":
-        return ["background-color: #eab308; color: black;"] * len(row)
-    return [""] * len(row)
-
-# Apply row styling
-_allpairs_styler = _df_display.style.apply(_row_style, axis=1)
-
-# Final render with sortable, scrollable table
-try:
-    render_sortable_styler(_allpairs_styler, table_id="allpairs_table", height=560)
-except Exception as e:
-    st.exception(e)
-
-# Make a display copy without helper columns
-# All Pairs final render
-
-# Row color helper
-def _row_style(row):
-    s = str(row.get("Signal", "")).strip().upper()
-    if s == "STRONG BUY":
-        return ["background-color: #16a34a; color: white;"] * len(row)
-    if s == "WATCH":
-        return ["background-color: #eab308; color: black;"] * len(row)
-    return [""] * len(row)
 # ---------------- All pairs ----------------
 st.subheader("📄 All pairs")
 st.caption(f"🕒 Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
 
-# Row color helper
+# Build the display DataFrame (hide helper cols if present)
+hide_cols = [c for c in ["_green", "_yellow", "signal_norm"] if c in df.columns]
+_df_display = df.drop(columns=hide_cols).reset_index(drop=True)
+
+# Row color helper (white text on strong-green rows)
 def _row_style(row):
     s = str(row.get("Signal", "")).strip().upper()
     if s == "STRONG BUY":
@@ -1185,23 +1149,20 @@ def _row_style(row):
         return ["background-color: #eab308; color: black;"] * len(row)
     return [""] * len(row)
 
-# Make a display copy without helper columns
-hide_cols = [c for c in ["_green", "_yellow", "Signal_norm"] if c in df.columns]
-_df_display = df.drop(columns=hide_cols).reset_index(drop=True)
-
 # Apply row styling
 _allpairs_styler = _df_display.style.apply(_row_style, axis=1)
 
-# If "_passed" column exists, apply local styler
+# If "_passed" exists, apply its local styler so truthy cells are green+bold
 if "_passed" in _df_display.columns:
     def __passed_style_local(v):
         s = str(v).strip().lower()
-        truthy = s in {"1", "true", "yes", "y", "passed", "pass", "✓", "✅"}
+        truthy = s in {"1", "true", "yes", "y", "passed", "pass", "✓", "✔"}
         return "background-color: #16a34a; color: white; font-weight: 600;" if truthy else ""
     _allpairs_styler = _allpairs_styler.applymap(__passed_style_local, subset=["_passed"])
 
 # Render sortable, scrollable table
 render_sortable_styler(_allpairs_styler, table_id="allpairs_table", height=560)
+
 
 # ----------------------------- Listing Radar engine -----------------------------
 def lr_parse_quotes(csv_text: str) -> set:
