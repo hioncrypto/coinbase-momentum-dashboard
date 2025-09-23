@@ -1038,8 +1038,8 @@ _top10_display = top10.drop(columns=[c for c in ["_green", "_yellow", "Signal_no
 
 
 _top10_display = top10.drop(columns=[c for c in ["_green", "_yellow", "Signal_norm"] if c in top10.columns])
-st.table(_top10_display.style.apply(_row_style, axis=1))
-
+_top10_styler = _top10_display.style.apply(_row_style, axis=1)
+render_sortable_styler(_top10_styler, table_id="top10_table", height=380)
 
     # All pairs
 
@@ -1068,7 +1068,8 @@ if "_passed" in _df_display.columns:
         return "background-color: #16a34a; color: white; font-weight: 600;" if truthy else ""
     styler = styler.applymap(__passed_style_local, subset=["_passed"])
 
-st.table(styler)
+_allpairs_styler = styler
+render_sortable_styler(_allpairs_styler, table_id="allpairs_table", height=560)
 
 st.table(styler)
        
