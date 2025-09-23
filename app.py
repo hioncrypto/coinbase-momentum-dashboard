@@ -1085,8 +1085,6 @@ top10["#"] = np.arange(1, len(top10) + 1)
 cols = ["#"] + [c for c in top10.columns if c != "#"]
 top10 = top10[cols]
 # Hide helper columns by dropping them from the display copy
-_top10_display = top10.drop(columns=[c for c in ["_green", "_yellow", "Signal_norm"] if c in top10.columns])
-
 
 _top10_display = top10.drop(columns=[c for c in ["_green", "_yellow", "Signal_norm"] if c in top10.columns])
 _top10_styler = _top10_display.style.apply(_row_style, axis=1)
@@ -1105,10 +1103,11 @@ else:
 # --------------------- All pairs ---------------------
 st.subheader("📑 All pairs")
 st.caption(f"⏱️ Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+
 # Make a display copy without helper columns
 _df_display = df.drop(columns=[c for c in ["_green", "_yellow", "Signal_norm"] if c in df.columns])
 
-# Style rows by Signal
+# Style rows by Signal (keeps your green/yellow backgrounds)
 styler = _df_display.style.apply(_row_style, axis=1)
 
 # Local cell styler for the _passed column (avoids NameError)
@@ -1119,8 +1118,10 @@ if "_passed" in _df_display.columns:
         return "background-color: #16a34a; color: white; font-weight: 600;" if truthy else ""
     styler = styler.applymap(__passed_style_local, subset=["_passed"])
 
+# Final render for All pairs (sortable headers; replaces st.table(styler))
 _allpairs_styler = styler
 render_sortable_styler(_allpairs_styler, table_id="allpairs_table", height=560)
+
 
 st.table(styler)
        
