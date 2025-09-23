@@ -1172,31 +1172,36 @@ def _row_style(row):
     if s == "WATCH":
         return ["background-color: #eab308; color: black;"] * len(row)
     return [""] * len(row)
-# ---------------- All Pairs final render ----------------
+# ---------------- All pairs ----------------
+st.subheader("📄 All pairs")
+st.caption(f"🕒 Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+
+# Row color helper
+def _row_style(row):
+    s = str(row.get("Signal", "")).strip().upper()
+    if s == "STRONG BUY":
+        return ["background-color: #16a34a; color: white; font-weight: 600;"] * len(row)
+    if s == "WATCH":
+        return ["background-color: #eab308; color: black;"] * len(row)
+    return [""] * len(row)
+
 # Make a display copy without helper columns
 hide_cols = [c for c in ["_green", "_yellow", "Signal_norm"] if c in df.columns]
 _df_display = df.drop(columns=hide_cols).reset_index(drop=True)
+
 # Apply row styling
 _allpairs_styler = _df_display.style.apply(_row_style, axis=1)
 
-# If "_passed" column exists, apply its local styler
+# If "_passed" column exists, apply local styler
 if "_passed" in _df_display.columns:
     def __passed_style_local(v):
         s = str(v).strip().lower()
-        truthy = s in {"1", "true", "yes", "y", "passed", "pass", "✓", "✔"}
+        truthy = s in {"1", "true", "yes", "y", "passed", "pass", "✓", "✅"}
         return "background-color: #16a34a; color: white; font-weight: 600;" if truthy else ""
     _allpairs_styler = _allpairs_styler.applymap(__passed_style_local, subset=["_passed"])
 
 # Render sortable, scrollable table
-render_sortable_styler(
-    _allpairs_styler,
-    table_id="allpairs_table",
-    height=560
-)
-
-# -----------------------------------------------------------
-# (next section: Listing Radar engine continues here)
-
+render_sortable_styler(_allpairs_styler, table_id="allpairs_table", height=560)
 
 # ----------------------------- Listing Radar engine -----------------------------
 def lr_parse_quotes(csv_text: str) -> set:
