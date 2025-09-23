@@ -975,6 +975,56 @@ for pid in pairs:
         "_enabled": enabled_cnt,
         "Chips": chips,
     })
+    def render_sortable_styler(styler, table_id: str, height: int = 480):
+    """
+    Render a pandas Styler as HTML with clickable header sorting.
+    Keeps your row background colors exactly as-is.
+    """
+    # Pandas 2.x: hide(axis="index"), older: hide_index()
+    try:
+        html_table = styler.hide(axis="index").to_html()
+    except Exception:
+        html_table = styler.hide_index().to_html()
+
+    html = f"""
+<div id="{table_id}" style="width:100%">{html_table}</div>
+<script>
+(function() {{
+  const root = document.getElementById('{table_id}');
+  if (!root) return;
+  const table = root.querySelector('table');
+  if (!table) return;
+
+  function val(tr, idx) {{
+    const el = tr.children[idx];
+    const txt = (el?.innerText || '').trim();
+    const n = parseFloat(txt.replace(/[,\\s%$]/g,''));
+    return isNaN(n) ? txt.toLowerCase() : n;
+  }}
+
+  const ths = table.tHead ? Array.from(table.tHead.rows[0].cells) : [];
+  ths.forEach((th, idx) => {{
+    th.style.cursor = 'pointer';
+    th.title = 'Click to sort';
+    th.addEventListener('click', () => {{
+      const tbody = table.tBodies[0];
+      const rows = Array.from(tbody.rows);
+      const asc = !(th.dataset.sortAsc === 'true');  // toggle
+      rows.sort((a, b) => {{
+        const va = val(a, idx), vb = val(b, idx);
+        if (va < vb) return asc ? -1 : 1;
+        if (va > vb) return asc ? 1 : -1;
+        return 0;
+      }});
+      rows.forEach(r => tbody.appendChild(r));
+      ths.forEach(h => h.removeAttribute('data-sort-asc'));
+      th.dataset.sortAsc = asc ? 'true' : 'false';
+    }});
+  }});
+}})();
+</script>
+"""
+    components.html(html, height=height, scrolling=True)
 
 # ----------------------------- Diagnostics & Tables -----------------------------
 df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=["Pair"])
