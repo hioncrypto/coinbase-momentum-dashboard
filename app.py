@@ -1166,16 +1166,18 @@ def lr_scan_upcoming():
                 if pair == "UNKNOWN":
                     continue
                 when_iso = None
-                if when:
-                    try:
-                        dt_guess = pd.to_datetime(when, utc=True)
-                        if dt_guess.tzinfo is None:
-                            dt_guess = dt_guess.tz_localize("UTC")
-                        if dt_guess.to_pydatetime() <= horizon:
-                            when_iso = dt_guess.isoformat()
-                    except Exception:
-                        when_iso = None
-                        lr_note_event("UPCOMING", "Unknown", pair, when_iso, url)
+if when:
+    try:
+        dt_guess = pd.to_datetime(when, utc=True)
+        if dt_guess.tzinfo is None:
+            dt_guess = dt_guess.tz_localize("UTC")
+        if dt_guess.to_pydatetime() <= horizon:
+            when_iso = dt_guess.isoformat()
+    except Exception:
+        # if parsing fails, just leave when_iso as None
+        when_iso = None
+
+lr_note_event("UPCOMING", "Unknown", pair, when_iso, url)
 
 lr_scan_new_listings()
 lr_scan_upcoming()
