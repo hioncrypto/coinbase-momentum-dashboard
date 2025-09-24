@@ -1132,6 +1132,49 @@ else:
 
 # Renumber inside the Top-10 section so it shows 1..10
 
+# ---------------- Top 10 movers (1h) ----------------
+st.subheader("🏁 Top 10 movers (1h)")
+
+# Find a 1h % change column by common names
+_possible_1h_cols = {
+    "% change (1h)", "% change 1h", "change 1h", "pct_change_1h",
+    "pct change (1h)", "change_1h", "1h %", "1h_change", "1h"
+}
+chg_col = next(
+    (c for c in _df_display.columns if c.strip().lower() in {s.lower() for s in _possible_1h_cols}),
+    None
+)
+
+if chg_col is None:
+    st.info("Couldn't find a 1h change column; skipping Top 10 section.")
+else:
+    # Build the Top-10 by 1h change (desc)
+    _df_top10 = (
+        _df_display
+        .sort_values(chg_col, ascending=False, na_position="last")
+        .head(10)
+        .reset_index(drop=True)
+    )
+    # Add 1..10 rank column at the left if not already present
+    if "#" not in _df_top10.columns:
+        _df_top10.insert(0, "#", range(1, len(_df_top10) + 1))
+
+    # Row color helper (normalize case so Strong Buy always hits)
+    def _row_style_top(row):
+        s = str(row.get("Signal", "")).strip().upper()
+        if s == "STRONG BUY":
+            return ["background-color: #16a34a; color: white; font-weight: 600;"] * len(row)
+        elif s == "WATCH":
+            return ["background-color: #eab308; color: black;"] * len(row)
+        return [""] * len(row)
+
+    # Try sortable table first; fall back to a plain dataframe
+    try:
+        _top10_styler = _df_top10.style.apply(_row_style_top, axis=1)
+        render_sortable_styler(_top10_styler, table_id="top10_table", height=360)
+    except Exception:
+        st.dataframe(_df_top10, use_container_width=True, height=360)
+
 # ------------------------ All pairs ------------------------
 st.subheader("📄 All pairs")
 st.caption(f"🕒 Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
