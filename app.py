@@ -1152,16 +1152,16 @@ else:
     if _df_display.shape[0] == 0:
         st.info("No rows to show (filters may have removed all rows). Try disabling 'Use My Pairs only' or loosening gates / watchlist.")
         else:
-        # Row color helper (keep if you want later)
-        def _row_style(row):
-            s = str(row.get("Signal", "")).strip().upper()
-            if s == "STRONG BUY":
-                return ["background-color: #16a34a; color: white; font-weight: 600;"] * len(row)
-            if s == "WATCH":
-                return ["background-color: #eab308; color: black;"] * len(row)
-            return [""] * len(row)
+            # Row color helper (keep if you want later)
+            def _row_style(row):
+                s = str(row.get("Signal", "")).strip().upper()
+                if s == "STRONG BUY":
+                    return ["background-color: #16a34a; color: white; font-weight: 600;"] * len(row)
+                if s == "WATCH":
+                    return ["background-color: #eab308; color: black;"] * len(row)
+                return [""] * len(row)
 
-        _allpairs_styler = _df_display.style.apply(_row_style, axis=1)
+            _allpairs_styler = _df_display.style.apply(_row_style, axis=1)
 
         # Try sortable table; fall back to a plain table if anything goes wrong
         try:
