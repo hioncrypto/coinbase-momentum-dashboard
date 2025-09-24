@@ -1136,47 +1136,69 @@ else:
 st.subheader("📄 All pairs")
 st.caption(f"🕒 Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
 
-# SAFETY: verify base df exists
-if 'df' not in locals():
-    st.error("Internal: 'df' is not defined at the All-pairs stage.")
-else:
-    # Build the display DF (drop helper cols if present)
-    hide_cols = [c for c in ["_green", "_yellow", "signal_norm"] if c in df.columns]
-    _df_display = df.drop(columns=hide_cols).reset_index(drop=True)
+# HARDENED: show what we have, then render
+def _safe_len(obj):
+    try:
+        return len(obj)
+    except Exception:
+        return "n/a"
 
-    # If there are literally no rows, show a friendly note
+if 'df' not in locals():
+    st.error("Internal: variable 'df' is not defined at the All-pairs stage.")
+else:
+    # 0) Quick baseline peek so we know data exists even if filters hide it
+    st.caption("DEBUG: base df shape")
+    try:
+        st.write({"rows": df.shape[0], "cols": df.shape[1]})
+    except Exception as e:
+        st.warning(f"DEBUG: cannot read df.shape: {e}")
+
+    # 1) Build the display DF (drop helper columns if present)
+    helper_cols = ["_green", "_yellow", "signal_norm"]
+    hide_cols = [c for c in helper_cols if c in df.columns]
+    try:
+        _df_display = df.drop(columns=hide_cols).reset_index(drop=True)
+    except Exception as e:
+        st.error(f"Failed building _df_display: {e}")
+        _df_display = df.copy()
+
+    # 2) If filters nuked everything, say so and still show the empty frame
     if _df_display.shape[0] == 0:
         st.info("No rows to show (filters may have removed all rows). Try disabling 'Use My Pairs only' or loosening gates / watchlist.")
+        st.dataframe(_df_display, use_container_width=True, height=360)
     else:
-        # Row color helper
+        # 3) Cosmetic row styling helper (safe defaults if column missing)
         def _row_style(row):
-            s = str(row.get("Signal", "")).strip().upper()
+            try:
+                s = str(row.get("Signal", "")).strip().upper()
+            except Exception:
+                s = ""
             if s == "STRONG BUY":
-                return ["background-color: #16a34a; color: white; font-weight: 600;"] * len(row)
+                return ["background-color: #16a34a; color: white; font-weight: 600;"] * _safe_len(row)
             if s == "WATCH":
-                return ["background-color: #eab308; color: black;"] * len(row)
-            return [""] * len(row)
+                return ["background-color: #eab308; color: black;"] * _safe_len(row)
+            return [""] * _safe_len(row)
 
-        _allpairs_styler = _df_display.style.apply(_row_style, axis=1)
-
-        # Try sortable table; fall back to a plain table if anything goes wrong
+        # 4) Build styler (guarded)
         try:
-            render_sortable_styler(
-                _allpairs_styler,
-                table_id="allpairs_table",
-                height=560
-            )
+            _allpairs_styler = _df_display.style.apply(_row_style, axis=1)
         except Exception as e:
-            st.warning(f"Sortable table failed. Falling back to a plain table. Error: {e}")
-            st.table(_df_display)
-
-        # Optional: also show a full-width dataframe beneath (comment out to avoid duplicate)
-        # st.dataframe(_df_display, use_container_width=True, height=560)
+            st.warning(f"DEBUG: styler failed ({e}); showing plain dataframe.")
+            st.dataframe(_df_display, use_container_width=True, height=560)
+        else:
+            # 5) Try the sortable HTML table; if it fails, we *still* draw something
+            try:
+                render_sortable_styler(
+                    _allpairs_styler,
+                    table_id="allpairs_table",
+                    height=560
+                )
+            except Exception as e:
+                st.warning(f"Sortable table failed. Falling back to a plain table. Error: {e}")
+                st.dataframe(_df_display, use_container_width=True, height=560)
 
 # ------------------------ Listing Radar engine ------------------------
 
-
-# ----------------------------- Listing Radar engine -----------------------------
 def lr_parse_quotes(csv_text: str) -> set:
     return set(x.strip().upper() for x in (csv_text or "").split(",") if x.strip())
 
