@@ -111,13 +111,14 @@ section[data-testid="stSidebar"] button:hover {
     color: black !important;
 }
 </style>
-""", unsafe_allow_html=True)
-
 /* All sidebar buttons - softer blue */
 section[data-testid="stSidebar"] button {
     background-color: rgb(122, 155, 199) !important;
     color: white !important;
     border: 1px solid rgb(90, 123, 163) !important;
+}
+</style>
+""", unsafe_allow_html=True)
     font-weight: 500 !important;
 }
 
