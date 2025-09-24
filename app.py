@@ -1185,7 +1185,7 @@ else:
         except Exception as e:
             st.warning(f"DEBUG: styler failed ({e}); showing plain dataframe.")
             st.dataframe(_df_display, use_container_width=True, height=560)
-        else:
+else:
             # 5) Try the sortable HTML table; if it fails, we *still* draw something
 try:
     if _df_display.shape[0] == 0:
