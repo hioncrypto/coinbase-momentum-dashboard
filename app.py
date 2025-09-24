@@ -23,7 +23,20 @@ import pandas as pd
 import requests
 import streamlit as st
 import streamlit.components.v1 as components
+def sync_settings_to_url():
+    """Sync key settings to URL parameters for persistence"""
+    key_settings = {
+        "discover_cap": st.session_state.get("discover_cap", 400),
+        "exchange": st.session_state.get("exchange", "Coinbase"),
+        "quote": st.session_state.get("quote", "USD"),
+        "refresh_sec": st.session_state.get("refresh_sec", 30)
+    }
+    st.query_params.update(key_settings)
 
+# Call this after any setting changes
+if st.session_state.get("_setting_changed", False):
+    sync_settings_to_url()
+    st.session_state["_setting_changed"] = False
 # Optional dependencies
 try:
     from streamlit_autorefresh import st_autorefresh
