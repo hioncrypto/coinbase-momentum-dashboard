@@ -61,6 +61,56 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+# Custom CSS with blue sidebar buttons
+st.markdown("""
+<style>
+[data-testid="stAppViewContainer"] > .main > div.block-container {
+    max-width: 100vw !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+}
+
+div[data-testid="stDataFrame"],
+div[data-testid="stDataFrame"] *,
+div[data-testid="stDataEditor"],
+div[data-testid="stDataEditor"] * {
+    opacity: 1 !important;
+    filter: none !important;
+    transition: none !important;
+    animation: none !important;
+}
+
+section[data-testid="stSidebar"],
+section[data-testid="stSidebar"] * {
+    pointer-events: auto !important;
+    opacity: 1 !important;
+    z-index: 999;
+}
+
+section[data-testid="stSidebar"] button {
+    background-color: #7a9bc7 !important;
+    color: white !important;
+    border: 1px solid #6a8bb7 !important;
+    font-weight: 500 !important;
+}
+
+section[data-testid="stSidebar"] button:hover {
+    background-color: #6a8bb7 !important;
+    border-color: #5a7ba7 !important;
+}
+
+.row-green {
+    background-color: #16a34a !important;
+    color: white !important;
+    font-weight: 600;
+}
+
+.row-yellow {
+    background-color: #eab308 !important;
+    color: black !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
 /* All sidebar buttons - softer blue */
 section[data-testid="stSidebar"] button {
