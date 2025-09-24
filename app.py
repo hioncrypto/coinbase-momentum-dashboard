@@ -1151,36 +1151,31 @@ else:
     # If there are literally no rows, show a friendly note
     if _df_display.shape[0] == 0:
         st.info("No rows to show (filters may have removed all rows). Try disabling 'Use My Pairs only' or loosening gates / watchlist.")
-else:
-    # Row color helper
-    def _row_style(row):
-        s = str(row.get("Signal", "")).strip().upper()
-        if s == "STRONG BUY":
-            return ["background-color: #16a34a; color: white; font-weight: 600;"] * len(row)
-        if s == "WATCH":
-            return ["background-color: #eab308; color: black;"] * len(row)
-        return [""] * len(row)
+        else:
+        # Row color helper (keep if you want later)
+        def _row_style(row):
+            s = str(row.get("Signal", "")).strip().upper()
+            if s == "STRONG BUY":
+                return ["background-color: #16a34a; color: white; font-weight: 600;"] * len(row)
+            if s == "WATCH":
+                return ["background-color: #eab308; color: black;"] * len(row)
+            return [""] * len(row)
 
-    # Apply row styling
-    _allpairs_styler = _df_display.style.apply(_row_style, axis=1)
+        _allpairs_styler = _df_display.style.apply(_row_style, axis=1)
 
-    # If "_passed" column exists, apply local styler
-    if "_passed" in _df_display.columns:
-        def _passed_style_local(v):
-            s = str(v).strip().lower()
-            truthy = s in {"1", "true", "yes", "y", "passed", "pass", "✓", "✔"}
-            return "background-color: #16a34a; color: white; font-weight: 600;" if truthy else ""
-        _allpairs_styler = _allpairs_styler.applymap(_passed_style_local, subset=["_passed"])
+        # Try sortable table; fall back to a plain table if anything goes wrong
+        try:
+            render_sortable_styler(
+                _allpairs_styler,
+                table_id="allpairs_table",
+                height=560
+            )
+        except Exception as e:
+            st.warning(f"Sortable table failed. Falling back to a plain table. Error: {e}")
+            st.table(_df_display)
 
-    # Try sortable table; fallback to st.table
-    try:
-        render_sortable_styler(_allpairs_styler, table_id="allpairs_table", height=560)
-    except Exception as e:
-        st.warning(f"Sortable table failed. Falling back to plain table. Error: {e}")
-        st.table(_df_display)
-
-    st.dataframe(_df_display, use_container_width=True, height=560)
-
+        # Also render a regular dataframe at full container width so there is always something visible
+        st.dataframe(_df_display, use_container_width=True, height=560)
 
 # ----------------------------- Listing Radar engine -----------------------------
 def lr_parse_quotes(csv_text: str) -> set:
