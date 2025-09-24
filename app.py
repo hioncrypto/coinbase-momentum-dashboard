@@ -61,6 +61,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
 # Custom CSS with blue sidebar buttons
 st.markdown("""
 <style>
@@ -88,25 +89,25 @@ section[data-testid="stSidebar"] * {
 }
 
 section[data-testid="stSidebar"] button {
-    background-color: #7a9bc7 !important;
+    background-color: rgb(122, 155, 199) !important;
     color: white !important;
-    border: 1px solid #6a8bb7 !important;
+    border: 1px solid rgb(106, 139, 183) !important;
     font-weight: 500 !important;
 }
 
 section[data-testid="stSidebar"] button:hover {
-    background-color: #6a8bb7 !important;
-    border-color: #5a7ba7 !important;
+    background-color: rgb(106, 139, 183) !important;
+    border-color: rgb(90, 123, 167) !important;
 }
 
 .row-green {
-    background-color: #16a34a !important;
+    background-color: rgb(22, 163, 74) !important;
     color: white !important;
     font-weight: 600;
 }
 
 .row-yellow {
-    background-color: #eab308 !important;
+    background-color: rgb(234, 179, 8) !important;
     color: black !important;
 }
 </style>
