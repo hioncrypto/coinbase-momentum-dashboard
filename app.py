@@ -1192,20 +1192,23 @@ try:
         st.info("No rows to show ...")
     else:
         # Always show something: dataframe by default, sortable on demand
-        show_sortable = st.toggle("Enable sortable table (beta)", value=False, key="ap_allpairs_sortable")
-
+        show_sortable = st.toggle(
+            "Enable sortable table (beta)",
+            value=False,
+            key="ap_allpairs_sortable"
+        )
         if show_sortable:
-        try:
-            render_sortable_styler(_allpairs_styler, table_id="allpairs_table", height=560)
-except Exception as e:
-            st.warning(f"Sortable table failed. Falling back to plain table. Error: {e}")
+            render_sortable_styler(
+                _allpairs_styler,
+                table_id="allpairs_table",
+                height=560
+            )
+        else:
             st.dataframe(_df_display, use_container_width=True)
-    else:
-        st.dataframe(_df_display, use_container_width=True)
 
 except Exception as e:
-    st.warning(f"Sortable table failed. Falling back to a plain table. Error: {e}")
-    st.dataframe(_df_display, use_container_width=True, height=560)
+    st.warning(f"Sortable table failed. Falling back to plain table. Error: {e}")
+    st.dataframe(_df_display, use_container_width=True)
 
 # ------------------------ Listing Radar engine ------------------------
 
