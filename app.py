@@ -117,7 +117,7 @@ section[data-testid="stSidebar"] button:hover {
 section[data-testid="stSidebar"] button {
     background-color: rgb(122, 155, 199) !important;
     color: white !important;
-    border: 1px solid #5a7ca3 !important;
+    border: 1px solid rgb(90, 123, 163) !important;
     font-weight: 500 !important;
 }
 
