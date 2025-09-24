@@ -89,55 +89,29 @@ section[data-testid="stSidebar"] * {
 }
 
 section[data-testid="stSidebar"] button {
-    background-color: rgb(122, 155, 199) !important;
+    background-color: steelblue !important;
     color: white !important;
-    border: 1px solid rgb(106, 139, 183) !important;
+    border: 1px solid darkslateblue !important;
     font-weight: 500 !important;
 }
 
 section[data-testid="stSidebar"] button:hover {
-    background-color: rgb(106, 139, 183) !important;
-    border-color: rgb(90, 123, 167) !important;
+    background-color: darkslateblue !important;
+    border-color: navy !important;
 }
 
 .row-green {
-    background-color: rgb(22, 163, 74) !important;
+    background-color: forestgreen !important;
     color: white !important;
     font-weight: 600;
 }
 
 .row-yellow {
-    background-color: rgb(234, 179, 8) !important;
+    background-color: gold !important;
     color: black !important;
 }
 </style>
-/* All sidebar buttons - softer blue */
-section[data-testid="stSidebar"] button {
-    background-color: rgb(122, 155, 199) !important;
-    color: white !important;
-    border: 1px solid rgb(90, 123, 163) !important;
-}
-</style>
 """, unsafe_allow_html=True)
-    font-weight: 500 !important;
-}
-
-section[data-testid="stSidebar"] button:hover {
-    background-color: rgb(122, 155, 199) !important;
-    border-color: #4a6b92 !important;
-}
-
-section[data-testid="stSidebar"] button[kind="primary"] {
-    background-color: rgb(122, 155, 199) !important;
-    color: white !important;
-    border: 1px solid #4a6b92 !important;
-}
-
-section[data-testid="stSidebar"] button[kind="secondary"] {
-    background-color: rgb(122, 155, 199) !important;
-    color: white !important;
-    border: 1px solid rgb(122, 155, 199) !important;
-}
 # =============================================================================
 # STATE MANAGEMENT
 # =============================================================================
