@@ -1178,19 +1178,18 @@ else:
             if s == "WATCH":
                 return ["background-color: #eab308; color: black;"] * _safe_len(row)
             return [""] * _safe_len(row)
-
         # 4) Build styler (guarded)
-        try:
-            _allpairs_styler = _df_display.style.apply(_row_style, axis=1)
-        except Exception as e:
-            st.warning(f"DEBUG: styler failed ({e}); showing plain dataframe.")
-            st.dataframe(_df_display, use_container_width=True, height=560)
+    try:
+        _allpairs_styler = _df_display.style.apply(_row_style, axis=1)
+    except Exception as e:
+        st.warning(f"DEBUG: styler failed ({e}); showing plain dataframe.")
+        st.dataframe(_df_display, use_container_width=True, height=560)
     else:
         # Always show something: dataframe by default, sortable on demand
         show_sortable = st.toggle(
             "Enable sortable table (beta)",
             value=False,
-            key="ap_allpairs_sortable"
+            key="ap_allpairs_sortable",
         )
 
         if _df_display.shape[0] == 0:
@@ -1201,14 +1200,14 @@ else:
                     render_sortable_styler(
                         _allpairs_styler,
                         table_id="allpairs_table",
-                        height=560
+                        height=560,
                     )
                 except Exception as e:
                     st.warning(f"Sortable table failed. Falling back to plain table. Error: {e}")
                     st.dataframe(_df_display, use_container_width=True, height=560)
             else:
                 st.dataframe(_df_display, use_container_width=True, height=560)
-
+        
 # ------------------------ Listing Radar engine ------------------------
 
 def lr_parse_quotes(csv_text: str) -> set:
