@@ -132,6 +132,7 @@ section[data-testid="stSidebar"] button:hover {
 def init_session_state():
     """Initialize session state variables"""
     def init_session_state():
+def init_session_state():
     """Initialize session state variables"""
     
     # Initialize discover_cap from URL if present
@@ -141,6 +142,10 @@ def init_session_state():
         except:
             st.session_state["discover_cap"] = 400
     
+    defaults = {
+        # Market settings
+        "exchange": "Coinbase",
+        # ... rest of your code
     defaults = {
         # Market settings
         "exchange": "Coinbase",
