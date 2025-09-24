@@ -530,6 +530,18 @@ def evaluate_gates(df: pd.DataFrame, settings: dict) -> Tuple[dict, int, str, in
     else:
         gate_chips.append(" M–")
     
+    # ATR gate
+    if settings.get("use_atr", False):
+        atr_values = atr(df, settings.get("atr_len", 14))
+        current_atr = float(atr_values.iloc[-1]) if not atr_values.empty else 0
+        atr_pct = (current_atr / last_close * 100) if last_close > 0 else 0
+        atr_pass = atr_pct >= settings.get("min_atr", 0.5)
+        gates_passed += int(atr_pass)
+        gates_enabled += 1
+        gate_chips.append(f" A{'✅' if atr_pass else '❌'}({atr_pct:.2f}%)")
+    else:
+        gate_chips.append(" A–")
+    
     # Trend breakout gate
     if settings.get("use_trend", False):
         trend_pass = trend_breakout_up(
@@ -635,63 +647,176 @@ with expander("Mode & Timeframes"):
     st.toggle("Sort Descending", key="sort_desc")
 
 # Gates Settings
-with expander("Trading Gates"):
-    presets = ["Spike Hunter", "Early MACD Cross", "Confirm Rally", "Custom"]
+with expander("Gates"):
+    presets = ["Spike Hunter", "Early MACD Cross", "Confirm Rally", "None"]
     st.radio("Preset", presets, 
             index=presets.index(st.session_state.get("preset", "Spike Hunter")), 
             key="preset", horizontal=True)
     
+    st.markdown("**Tips:** Gate Mode 'ALL' requires every enabled gate. 'ANY' needs at least one. "
+               "'Custom (K/Y)' colors rows based on how many gates pass (K=green, Y=yellow).")
+    
     # Apply presets
     if st.session_state["preset"] == "Spike Hunter":
         st.session_state.update({
-            "gate_mode": "ANY", "hard_filter": False, "use_vol_spike": True, 
-            "use_rsi": False, "use_macd": False, "use_trend": False, 
-            "use_roc": False, "use_macd_cross": False
+            "gate_mode": "ANY", "hard_filter": False, "lookback_candles": 3, "min_pct": 3.0,
+            "use_vol_spike": True, "vol_mult": 1.10, "use_rsi": False, "use_macd": False,
+            "use_trend": False, "use_roc": False, "use_macd_cross": False
         })
     elif st.session_state["preset"] == "Early MACD Cross":
         st.session_state.update({
-            "gate_mode": "ANY", "hard_filter": False, "use_vol_spike": True, 
-            "use_rsi": True, "min_rsi": 50, "use_macd_cross": True
+            "gate_mode": "ANY", "hard_filter": False, "lookback_candles": 3, "min_pct": 3.0,
+            "use_vol_spike": True, "vol_mult": 1.10, "use_rsi": True, "min_rsi": 50,
+            "use_macd": False, "use_trend": False, "use_roc": False, "use_macd_cross": True,
+            "macd_cross_bars": 5, "macd_cross_only_bull": True, "macd_cross_below_zero": True,
+            "macd_hist_confirm_bars": 3
         })
     elif st.session_state["preset"] == "Confirm Rally":
         st.session_state.update({
-            "gate_mode": "Custom (K/Y)", "hard_filter": True, "min_pct": 5.0,
+            "gate_mode": "Custom (K/Y)", "hard_filter": True, "lookback_candles": 2, "min_pct": 5.0,
             "use_vol_spike": True, "vol_mult": 1.20, "use_rsi": True, "min_rsi": 60,
-            "use_macd": True, "use_trend": True
+            "use_macd": True, "min_mhist": 0.0, "use_trend": True, "pivot_span": 4, "trend_within": 48,
+            "use_roc": False, "use_macd_cross": False, "K_green": 3, "Y_yellow": 2
         })
     
     st.radio("Gate Mode", ["ALL", "ANY", "Custom (K/Y)"], 
             index=["ALL", "ANY", "Custom (K/Y)"].index(st.session_state["gate_mode"]), 
             key="gate_mode", horizontal=True)
+    st.toggle("Hard filter (hide non-passers)", key="hard_filter")
     
-    st.toggle("Hard Filter (hide non-passers)", key="hard_filter")
+    # Basic gate parameters
+    st.slider("Δ lookback (candles)", 1, 100, st.session_state["lookback_candles"], 1, key="lookback_candles")
+    st.slider("Min +% change (Δ gate)", 0.0, 50.0, st.session_state["min_pct"], 0.5, key="min_pct")
     
-    # Gate parameters
-    st.slider("Δ lookback candles", 1, 100, st.session_state["lookback_candles"], key="lookback_candles")
-    st.slider("Min % change", 0.0, 50.0, st.session_state["min_pct"], 0.5, key="min_pct")
+    # Volume, RSI, MACD gates in columns
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.toggle("Volume spike ×", key="use_vol_spike")
+        st.slider("Spike multiple ×", 1.0, 5.0, st.session_state["vol_mult"], 0.05, key="vol_mult")
+    with c2:
+        st.toggle("RSI", key="use_rsi")
+        st.slider("Min RSI", 40, 90, st.session_state["min_rsi"], 1, key="min_rsi")
+    with c3:
+        st.toggle("MACD hist", key="use_macd")
+        st.slider("Min MACD hist", 0.0, 2.0, st.session_state["min_mhist"], 0.05, key="min_mhist")
     
-    col1, col2 = st.columns(2)
-    with col1:
-        st.toggle("Volume Spike", key="use_vol_spike")
-        if st.session_state["use_vol_spike"]:
-            st.slider("Volume Multiplier", 1.0, 5.0, st.session_state["vol_mult"], 0.05, key="vol_mult")
+    # ATR, Trend, ROC gates in columns
+    c4, c5, c6 = st.columns(3)
+    with c4:
+        st.toggle("ATR %", key="use_atr")
+        st.slider("Min ATR %", 0.0, 10.0, st.session_state.get("min_atr", 0.5), 0.1, key="min_atr")
+    with c5:
+        st.toggle("Trend breakout (up)", key="use_trend")
+        st.slider("Pivot span (bars)", 2, 10, st.session_state["pivot_span"], 1, key="pivot_span")
+        st.slider("Breakout within (bars)", 5, 96, st.session_state["trend_within"], 1, key="trend_within")
+    with c6:
+        st.toggle("ROC (rate of change)", key="use_roc")
+        st.slider("Min ROC %", 0.0, 50.0, st.session_state["min_roc"], 0.5, key="min_roc")
     
-    with col2:
-        st.toggle("RSI Gate", key="use_rsi")
-        if st.session_state["use_rsi"]:
-            st.slider("Min RSI", 40, 90, st.session_state["min_rsi"], key="min_rsi")
+    # MACD Cross section
+    st.markdown("**MACD Cross (early entry)**")
+    c7, c8, c9, c10 = st.columns(4)
+    with c7:
+        st.toggle("Enable MACD Cross", key="use_macd_cross")
+    with c8:
+        st.slider("Cross within last (bars)", 1, 10, st.session_state["macd_cross_bars"], 1, key="macd_cross_bars")
+    with c9:
+        st.toggle("Bullish only", key="macd_cross_only_bull")
+    with c10:
+        st.toggle("Prefer below zero", key="macd_cross_below_zero")
+    st.slider("Histogram > 0 within (bars)", 0, 10, st.session_state["macd_hist_confirm_bars"], 1, key="macd_hist_confirm_bars")
     
-    st.toggle("MACD Cross", key="use_macd_cross")
-    if st.session_state["use_macd_cross"]:
-        st.slider("Cross within bars", 1, 10, st.session_state["macd_cross_bars"], key="macd_cross_bars")
-        st.toggle("Bullish crosses only", key="macd_cross_only_bull")
+    # Custom K/Y rules
+    st.markdown("---")
+    st.subheader("Color rules (Custom only)")
+    st.selectbox("Gates needed to turn green (K)", list(range(1, 8)), 
+                index=st.session_state["K_green"] - 1, key="K_green")
+    st.selectbox("Yellow needs ≥ Y (but < K)", list(range(0, st.session_state["K_green"])), 
+                index=min(st.session_state["Y_yellow"], st.session_state["K_green"] - 1), key="Y_yellow")
+
+# Indicator Lengths
+with expander("Indicator lengths"):
+    st.caption("Longer = smoother; shorter = more reactive.")
+    st.slider("RSI length", 5, 50, st.session_state["rsi_len"], 1, key="rsi_len")
+    st.slider("MACD fast EMA", 3, 50, st.session_state["macd_fast"], 1, key="macd_fast")
+    st.slider("MACD slow EMA", 5, 100, st.session_state["macd_slow"], 1, key="macd_slow")
+    st.slider("MACD signal", 3, 50, st.session_state["macd_sig"], 1, key="macd_sig")
+    st.slider("ATR length", 5, 50, st.session_state.get("atr_len", 14), 1, key="atr_len")
+    st.slider("Volume window", 5, 50, st.session_state["vol_window"], 1, key="vol_window")
+
+# ATH/ATL History
+with expander("History depth (for ATH/ATL)"):
+    st.toggle("Compute ATH/ATL", key="do_ath")
+    basis_options = ["Hourly", "Daily", "Weekly"]
+    st.selectbox("Basis", basis_options, 
+                index=basis_options.index(st.session_state["basis"]), key="basis")
+    
+    if st.session_state["basis"] == "Hourly":
+        st.slider("Hours (≤72)", 1, 72, st.session_state["amount_hourly"], 1, key="amount_hourly")
+    elif st.session_state["basis"] == "Daily":
+        st.slider("Days (≤365)", 1, 365, st.session_state["amount_daily"], 1, key="amount_daily")
+    else:
+        st.slider("Weeks (≤52)", 1, 52, st.session_state["amount_weekly"], 1, key="amount_weekly")
 
 # Display Settings
-with expander("Display & Notifications"):
-    st.slider("Font Scale", 0.8, 1.6, st.session_state["font_scale"], 0.05, key="font_scale")
-    st.slider("Auto-refresh (seconds)", 5, 120, st.session_state["refresh_sec"], key="refresh_sec")
-    st.text_input("Email (optional)", st.session_state.get("email_to", ""), key="email_to")
-    st.text_input("Webhook URL (optional)", st.session_state.get("webhook_url", ""), key="webhook_url")
+with expander("Display"):
+    st.slider("Font size (global)", 0.8, 1.6, st.session_state["font_scale"], 0.05, key="font_scale")
+    st.slider("Auto-refresh (seconds)", 5, 120, st.session_state["refresh_sec"], 1, key="refresh_sec")
+
+# Notifications
+with expander("Notifications"):
+    st.caption("Tips: Email requires SMTP in st.secrets; webhook posts JSON to your endpoint.")
+    st.text_input("Email recipient (optional)", st.session_state["email_to"], key="email_to")
+    st.text_input("Webhook URL (optional)", st.session_state["webhook_url"], key="webhook_url")
+
+# Listing Radar
+with expander("Listing Radar"):
+    st.caption("'New' listings are detected by symbol diffs. 'Upcoming' scraped from feeds within a window.")
+    if st.session_state.get("lr_unacked", 0) > 0:
+        st.markdown('<span style="background-color: #ff4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px;">New/Upcoming listings</span>', unsafe_allow_html=True)
+    
+    st.toggle("Enable Listing Radar", key="lr_enabled")
+    
+    if st.session_state.get("lr_enabled", False):
+        c1, c2 = st.columns(2)
+        with c1:
+            st.toggle("Watch Coinbase", key="lr_watch_coinbase", value=st.session_state.get("lr_watch_coinbase", True))
+        with c2:
+            st.toggle("Watch Binance", key="lr_watch_binance", value=st.session_state.get("lr_watch_binance", True))
+        
+        st.text_input("Watch quotes", 
+                     st.session_state.get("lr_watch_quotes", "USD, USDT, USDC"), 
+                     key="lr_watch_quotes",
+                     help="Comma-separated quote currencies to monitor")
+        
+        st.slider("Poll interval (seconds)", 10, 300, 
+                 st.session_state.get("lr_poll_sec", 30), 5, 
+                 key="lr_poll_sec")
+        
+        st.slider("Upcoming window (hours)", 1, 168, 
+                 st.session_state.get("lr_upcoming_window_h", 48), 1,
+                 key="lr_upcoming_window_h")
+        
+        st.text_area("News feeds (URLs)", 
+                    st.session_state.get("lr_feeds", "https://blog.coinbase.com/feed\nhttps://www.binance.com/en/support/announcement"),
+                    key="lr_feeds",
+                    help="One URL per line for scraping upcoming listing announcements")
+
+# Watchlist Management (separate from My Pairs)
+with expander("Watchlist"):
+    st.caption("Watchlist is different from 'My Pairs'. Use this for broader monitoring.")
+    current_watchlist = st.text_area(
+        "Watchlist pairs", 
+        st.session_state.get("watchlist", "BTC-USD, ETH-USD, SOL-USD, AVAX-USD, ADA-USD"),
+        key="watchlist_edit",
+        help="Comma-separated pairs like BTC-USD, ETH-USDT"
+    )
+    
+    if st.button("Update Watchlist"):
+        cleaned = ", ".join([p.strip().upper() for p in current_watchlist.split(",") if p.strip()])
+        st.session_state["watchlist"] = cleaned
+        st.success("Watchlist updated!")
+        st.rerun()
 
 # =============================================================================
 # MAIN DISPLAY
@@ -728,6 +853,9 @@ gate_settings = {
     "macd_slow": st.session_state["macd_slow"],
     "macd_sig": st.session_state["macd_sig"],
     "min_mhist": st.session_state["min_mhist"],
+    "use_atr": st.session_state.get("use_atr", False),
+    "atr_len": st.session_state.get("atr_len", 14),
+    "min_atr": st.session_state.get("min_atr", 0.5),
     "use_trend": st.session_state["use_trend"],
     "pivot_span": st.session_state["pivot_span"],
     "trend_within": st.session_state["trend_within"],
