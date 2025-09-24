@@ -62,15 +62,17 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS
+# Custom CSS with blue sidebar styling
 st.markdown("""
 <style>
+/* Main layout */
 [data-testid="stAppViewContainer"] > .main > div.block-container {
     max-width: 100vw !important;
     padding-left: 12px !important;
     padding-right: 12px !important;
 }
 
+/* Data tables styling */
 div[data-testid="stDataFrame"],
 div[data-testid="stDataFrame"] *,
 div[data-testid="stDataEditor"],
@@ -81,6 +83,15 @@ div[data-testid="stDataEditor"] * {
     animation: none !important;
 }
 
+/* Sidebar background and main styling */
+section[data-testid="stSidebar"] {
+    background-color: #1f3a5f !important;
+}
+
+section[data-testid="stSidebar"] > div {
+    background-color: #1f3a5f !important;
+}
+
 section[data-testid="stSidebar"],
 section[data-testid="stSidebar"] * {
     pointer-events: auto !important;
@@ -88,6 +99,54 @@ section[data-testid="stSidebar"] * {
     z-index: 999;
 }
 
+/* Sidebar text colors */
+section[data-testid="stSidebar"] .stMarkdown,
+section[data-testid="stSidebar"] .stText,
+section[data-testid="stSidebar"] label,
+section[data-testid="stSidebar"] .stCaption,
+section[data-testid="stSidebar"] p,
+section[data-testid="stSidebar"] h1,
+section[data-testid="stSidebar"] h2,
+section[data-testid="stSidebar"] h3 {
+    color: white !important;
+}
+
+/* Sidebar buttons */
+section[data-testid="stSidebar"] button[kind="secondary"] {
+    background-color: #4a90e2 !important;
+    color: white !important;
+    border: 1px solid #357abd !important;
+    font-weight: 500 !important;
+}
+
+section[data-testid="stSidebar"] button[kind="secondary"]:hover {
+    background-color: #357abd !important;
+    border-color: #2968a3 !important;
+}
+
+section[data-testid="stSidebar"] button[kind="primary"] {
+    background-color: #2c5aa0 !important;
+    color: white !important;
+    border: none !important;
+}
+
+/* Sidebar input fields */
+section[data-testid="stSidebar"] input,
+section[data-testid="stSidebar"] textarea,
+section[data-testid="stSidebar"] select {
+    background-color: #2c5aa0 !important;
+    color: white !important;
+    border: 1px solid #4a90e2 !important;
+}
+
+/* Expanders */
+section[data-testid="stSidebar"] .streamlit-expanderHeader {
+    background-color: #2c5aa0 !important;
+    color: white !important;
+    border-radius: 5px !important;
+}
+
+/* Row colors for main table */
 .row-green {
     background-color: #16a34a !important;
     color: white !important;
