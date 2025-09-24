@@ -62,69 +62,30 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS with blue sidebar buttons
-st.markdown("""
-<style>
-[data-testid="stAppViewContainer"] > .main > div.block-container {
-    max-width: 100vw !important;
-    padding-left: 12px !important;
-    padding-right: 12px !important;
-}
-
-div[data-testid="stDataFrame"],
-div[data-testid="stDataFrame"] *,
-div[data-testid="stDataEditor"],
-div[data-testid="stDataEditor"] * {
-    opacity: 1 !important;
-    filter: none !important;
-    transition: none !important;
-    animation: none !important;
-}
-
-section[data-testid="stSidebar"],
-section[data-testid="stSidebar"] * {
-    pointer-events: auto !important;
-    opacity: 1 !important;
-    z-index: 999;
-}
-
-/* All sidebar buttons - less vibrant blue */
+/* All sidebar buttons - softer blue */
 section[data-testid="stSidebar"] button {
-    background-color: #5a7fb8 !important;
+    background-color: #6b8db5 !important;
     color: white !important;
-    border: 1px solid #4a6b99 !important;
+    border: 1px solid #5a7ca3 !important;
     font-weight: 500 !important;
 }
 
 section[data-testid="stSidebar"] button:hover {
-    background-color: #4a6b99 !important;
-    border-color: #3a5580 !important;
+    background-color: #5a7ca3 !important;
+    border-color: #4a6b92 !important;
 }
 
 section[data-testid="stSidebar"] button[kind="primary"] {
-    background-color: #4a6b99 !important;
+    background-color: #5a7ca3 !important;
     color: white !important;
-    border: 1px solid #3a5580 !important;
+    border: 1px solid #4a6b92 !important;
 }
 
 section[data-testid="stSidebar"] button[kind="secondary"] {
-    background-color: #5a7fb8 !important;
+    background-color: #6b8db5 !important;
     color: white !important;
-    border: 1px solid #4a6b99 !important;
+    border: 1px solid #5a7ca3 !important;
 }
-
-.row-green {
-    background-color: #16a34a !important;
-    color: white !important;
-    font-weight: 600;
-}
-
-.row-yellow {
-    background-color: #eab308 !important;
-    color: black !important;
-}
-</style>
-""", unsafe_allow_html=True)
 # =============================================================================
 # STATE MANAGEMENT
 # =============================================================================
