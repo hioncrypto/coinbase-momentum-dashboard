@@ -367,22 +367,45 @@ def fetch_data(exchange: str, pair: str, timeframe: str, limit: Optional[int] = 
         return fetch_coinbase_data(pair, timeframe, limit)
 
 # =============================================================================
-# CACHING
+# CACHING WITH FORCED REFRESH
 # =============================================================================
 
 def get_cache_key() -> int:
-    """Generate cache key based on refresh interval"""
-    refresh_sec = max(1, int(st.session_state.get("refresh_sec", 30)))
-    return int(time.time() // refresh_sec)
+    """Generate cache key based on refresh interval - forces cache refresh"""
+    refresh_sec = max(5, int(st.session_state.get("refresh_sec", 30)))
+    # Use current time divided by refresh interval to create time-based buckets
+    cache_bucket = int(time.time() // refresh_sec)
+    return cache_bucket
 
-@st.cache_data(show_spinner=False)
-def get_cached_data(exchange: str, pair: str, timeframe: str, cache_key: int) -> Optional[pd.DataFrame]:
-    """Cached data fetching function"""
+@st.cache_data(show_spinner=False, ttl=None)
+def get_cached_data(exchange: str, pair: str, timeframe: str, cache_key: int, force_refresh: bool = False) -> Optional[pd.DataFrame]:
+    """Cached data fetching function with forced refresh capability"""
     try:
         limit = get_bars_limit(timeframe)
         return fetch_data(exchange, pair, timeframe, limit)
-    except Exception:
+    except Exception as e:
+        st.error(f"Error fetching data for {pair}: {e}")
         return None
+
+# Add a manual refresh button for user control
+col1, col2, col3 = st.columns([1, 1, 2])
+with col1:
+    if st.button("🔄 Refresh Now", type="primary"):
+        get_cached_data.clear()
+        st.session_state["ws_prices"] = {}  # Clear WebSocket prices too
+        st.rerun()
+
+with col2:
+    if st.button("🧹 Clear Cache"):
+        get_cached_data.clear()
+        st.session_state.clear()  # Clear all session state
+        st.rerun()
+
+with col3:
+    # Show real-time status
+    is_ws_active = st.session_state.get("ws_alive", False)
+    ws_symbol = "🟢" if is_ws_active else "🔴"
+    st.caption(f"WebSocket: {ws_symbol} | Pairs in cache: {len(st.session_state.get('ws_prices', {}))}")
 
 # =============================================================================
 # PRODUCT LISTING
@@ -589,19 +612,33 @@ def expander(title: str):
     """Create sidebar expander with collapse/expand state"""
     return st.sidebar.expander(title, expanded=not st.session_state.get("collapse_all", False))
 
-# Sidebar header
+def expander(title: str):
+    """Create sidebar expander with collapse/expand state - no refresh on state change"""
+    expanded = not st.session_state.get("collapse_all", False)
+    return st.sidebar.expander(title, expanded=expanded)
+
+# Sidebar header with improved collapse/expand logic
 with st.sidebar:
     st.title("🚀 Crypto Tracker")
     
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col1:
-        if st.button("Collapse All", use_container_width=True):
+    # Track previous collapse state to detect changes
+    prev_collapse_state = st.session_state.get("_prev_collapse_state", None)
+    current_collapse_state = st.session_state.get("collapse_all", False)
+    
+    c1, c2, c3 = st.columns([1, 1, 1])
+    with c1:
+        if st.button("Collapse All", use_container_width=True, key="collapse_btn"):
             st.session_state["collapse_all"] = True
-    with col2:
-        if st.button("Expand All", use_container_width=True):
+            st.session_state["_ui_only_change"] = True  # Mark as UI-only change
+    with c2:
+        if st.button("Expand All", use_container_width=True, key="expand_btn"):
             st.session_state["collapse_all"] = False
-    with col3:
+            st.session_state["_ui_only_change"] = True  # Mark as UI-only change
+    with c3:
         st.toggle("⭐ My Pairs Only", key="use_my_pairs")
+
+    # Store current state for next comparison
+    st.session_state["_prev_collapse_state"] = current_collapse_state
 
     # My Pairs management
     with st.popover("Manage My Pairs"):
@@ -879,16 +916,19 @@ y_required = st.session_state["Y_yellow"]
 
 effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"].lower() else st.session_state["exchange"]
 
-# Show progress
+# Show processing status
 if pairs:
-    progress_bar = st.progress(0)
-    status_text = st.empty()
+    status_placeholder = st.empty()
+    progress_placeholder = st.empty()
     
+    # Process each pair with real-time updates
     for i, pair in enumerate(pairs):
-        progress_bar.progress((i + 1) / len(pairs))
-        status_text.text(f"Processing {pair}... ({i + 1}/{len(pairs)})")
+        # Update progress
+        progress = (i + 1) / len(pairs)
+        progress_placeholder.progress(progress)
+        status_placeholder.text(f"Processing {pair}... ({i + 1}/{len(pairs)})")
         
-        # Get data
+        # Get fresh data for each pair
         df = get_cached_data(effective_exchange, pair, sort_tf, cache_key)
         if df is None or df.empty or len(df) < st.session_state["min_bars"]:
             continue
@@ -896,19 +936,22 @@ if pairs:
         # Evaluate gates
         meta, passed, chips, enabled = evaluate_gates(df, gate_settings)
         
-        # Determine inclusion and signal
+        # Determine inclusion and signal based on gate mode
         if mode == "ALL":
             include = (enabled > 0 and passed == enabled)
             is_green = include
-            is_yellow = (0 < passed < enabled)
+            is_yellow = (0 < passed < enabled) and (passed >= enabled - 1)  # Close matches
         elif mode == "ANY":
             include = True
             is_green = (passed >= 1)
-            is_yellow = False
+            is_yellow = False  # ANY mode doesn't use yellow
         else:  # Custom (K/Y)
             include = True
             is_green = (passed >= k_required)
             is_yellow = (not is_green) and (passed >= y_required)
+            # Also mark close matches as yellow if they're just 1 gate short of green
+            if not is_green and not is_yellow and passed >= (k_required - 1) and passed > 0:
+                is_yellow = True
         
         # Apply hard filter
         if hard_filter:
@@ -917,33 +960,63 @@ if pairs:
             if mode == "Custom (K/Y)" and not (is_green or is_yellow):
                 continue
         
-        # Get price (WebSocket or last close)
+        # Get current price (WebSocket override or last close)
         ws_price = st.session_state.get("ws_prices", {}).get(pair)
         last_price = float(ws_price) if ws_price else float(df["close"].iloc[-1])
         first_price = float(df["close"].iloc[0])
         pct_change = (last_price / (first_price + 1e-12) - 1.0) * 100.0
         
-        # Determine signal
+        # Determine signal text
         signal = ""
         if is_green:
             signal = "Strong Buy"
         elif is_yellow:
             signal = "Watch"
         
-        rows.append({
+        # Add ATH/ATL data if enabled
+        ath_data = {}
+        if st.session_state.get("do_ath", False):
+            # Get longer history for ATH/ATL calculation
+            basis = st.session_state["basis"]
+            if basis == "Hourly":
+                history_limit = st.session_state["amount_hourly"] * 4  # 15min bars
+            elif basis == "Daily":
+                history_limit = st.session_state["amount_daily"] * 24  # hourly bars  
+            else:  # Weekly
+                history_limit = st.session_state["amount_weekly"] * 7 * 24  # hourly bars
+            
+            history_df = get_cached_data(effective_exchange, pair, "1h", cache_key)
+            if history_df is not None and not history_df.empty:
+                from_ath, ath_date, from_atl, atl_date = compute_ath_atl(history_df)
+                ath_data = {
+                    "ATH %": f"{from_ath:+.1f}%" if not pd.isna(from_ath) else "N/A",
+                    "ATL %": f"{from_atl:+.1f}%" if not pd.isna(from_atl) else "N/A"
+                }
+        
+        # Build row data
+        row_data = {
             "Pair": pair,
-            "Price": round(last_price, 6),
-            f"% Change ({sort_tf})": round(pct_change, 3),
+            "Price": f"${last_price:.6f}",
+            f"% Change ({sort_tf})": pct_change,
             "Signal": signal,
             "Gates": chips,
             "_passed": passed,
             "_enabled": enabled,
             "_green": is_green,
-            "_yellow": is_yellow
-        })
+            "_yellow": is_yellow,
+            "_ws_active": ws_price is not None
+        }
+        
+        # Add ATH/ATL columns if enabled
+        row_data.update(ath_data)
+        
+        rows.append(row_data)
     
-    progress_bar.empty()
-    status_text.empty()
+    # Clear progress indicators
+    progress_placeholder.empty()
+    status_placeholder.empty()
+    
+    st.success(f"✅ Processed {len(rows)} pairs successfully!")
 
 # Create DataFrame
 if rows:
@@ -1046,20 +1119,117 @@ if rows:
 else:
     st.info("No trading pairs found. Adjust your market settings or increase the discovery cap.")
 
-# Auto-refresh
+# WebSocket Management for real-time updates
+if st.session_state["mode"].startswith("WebSocket") and effective_exchange == "Coinbase" and WS_AVAILABLE:
+    if not st.session_state.get("ws_alive", False) and pairs:
+        # Start WebSocket for top pairs
+        ws_pairs = pairs[:st.session_state["ws_chunk"]]
+        
+        def ws_worker(product_ids):
+            try:
+                ws = websocket.WebSocket()
+                ws.connect(CONFIG.COINBASE_WS, timeout=10)
+                ws.settimeout(1.0)
+                
+                subscribe_msg = {
+                    "type": "subscribe",
+                    "channels": [{"name": "ticker", "product_ids": product_ids}]
+                }
+                ws.send(json.dumps(subscribe_msg))
+                
+                st.session_state["ws_alive"] = True
+                
+                while st.session_state.get("ws_alive", False):
+                    try:
+                        message = ws.recv()
+                        if message:
+                            data = json.loads(message)
+                            if data.get("type") == "ticker":
+                                product_id = data.get("product_id")
+                                price = data.get("price")
+                                if product_id and price:
+                                    st.session_state["ws_prices"][product_id] = float(price)
+                    except websocket.WebSocketTimeoutException:
+                        continue
+                    except Exception:
+                        break
+            except Exception:
+                pass
+            finally:
+                st.session_state["ws_alive"] = False
+                try:
+                    ws.close()
+                except Exception:
+                    pass
+        
+        if not st.session_state.get("ws_thread") or not st.session_state["ws_thread"].is_alive():
+            ws_thread = threading.Thread(target=ws_worker, args=(ws_pairs,), daemon=True)
+            st.session_state["ws_thread"] = ws_thread
+            ws_thread.start()
+
+# Smart cache clearing - avoid refreshing data on UI-only changes
+current_time = int(time.time())
+if "last_update" not in st.session_state:
+    st.session_state["last_update"] = 0
+
+time_since_update = current_time - st.session_state["last_update"]
+refresh_interval = st.session_state["refresh_sec"]
+
+# Check if this is just a UI state change (like expand/collapse)
+is_ui_only_change = st.session_state.get("_ui_only_change", False)
+if is_ui_only_change:
+    st.session_state["_ui_only_change"] = False  # Reset the flag
+    # Don't refresh data, just continue with existing data
+
+# Only refresh data if enough time has passed AND it's not a UI-only change
+elif time_since_update >= refresh_interval:
+    st.session_state["last_update"] = current_time
+    get_cached_data.clear()  # Clear the cache to force fresh data
+    st.rerun()
+
+# Auto-refresh mechanism
 if st_autorefresh:
-    refresh_interval = max(5, st.session_state["refresh_sec"]) * 1000
-    st_autorefresh(interval=refresh_interval, key="auto_refresh")
+    refresh_interval_ms = max(5, st.session_state["refresh_sec"]) * 1000
+    st_autorefresh(interval=refresh_interval_ms, key="auto_refresh", debounce=False)
 else:
-    # Fallback refresh using JavaScript
+    # Enhanced JavaScript fallback with better reliability
     refresh_sec = max(5, st.session_state["refresh_sec"])
     st.markdown(f"""
     <script>
-    setTimeout(function(){{
-        window.location.reload();
+    // Clear any existing refresh timers
+    if (window.cryptoRefreshTimer) {{
+        clearTimeout(window.cryptoRefreshTimer);
+    }}
+    
+    // Set new refresh timer
+    window.cryptoRefreshTimer = setTimeout(function() {{
+        // Add timestamp to prevent caching
+        const url = new URL(window.location);
+        url.searchParams.set('_refresh', Date.now());
+        window.location.href = url.toString();
     }}, {refresh_sec * 1000});
+    
+    // Also add a manual refresh button listener
+    document.addEventListener('visibilitychange', function() {{
+        if (document.visibilityState === 'visible') {{
+            // Page became visible, refresh if it's been a while
+            const lastRefresh = sessionStorage.getItem('lastCryptoRefresh') || 0;
+            const now = Date.now();
+            if (now - lastRefresh > {refresh_sec * 1000}) {{
+                sessionStorage.setItem('lastCryptoRefresh', now);
+                window.location.reload();
+            }}
+        }}
+    }});
     </script>
     """, unsafe_allow_html=True)
+
+# Live update indicator
+st.markdown(f"""
+<div style="position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.7); color: white; padding: 5px 10px; border-radius: 15px; font-size: 12px; z-index: 1000;">
+    🔄 Last: {time.strftime('%H:%M:%S')} | Next: {refresh_interval}s
+</div>
+""", unsafe_allow_html=True)
 
 # Footer
 st.markdown("---")
