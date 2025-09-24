@@ -114,27 +114,27 @@ section[data-testid="stSidebar"] button:hover {
 
 /* All sidebar buttons - softer blue */
 section[data-testid="stSidebar"] button {
-    background-color: #6b8db5 !important;
+    background-color: rgb(122, 155, 199) !important;
     color: white !important;
-    border: 1px solid #5a7ca3 !important;
+    border: 1px solid rgb(90, 123, 163) !important;
     font-weight: 500 !important;
 }
 
 section[data-testid="stSidebar"] button:hover {
-    background-color: #5a7ca3 !important;
+    background-color: rgb(122, 155, 199) !important;
     border-color: #4a6b92 !important;
 }
 
 section[data-testid="stSidebar"] button[kind="primary"] {
-    background-color: #5a7ca3 !important;
+    background-color: rgb(122, 155, 199) !important;
     color: white !important;
     border: 1px solid #4a6b92 !important;
 }
 
 section[data-testid="stSidebar"] button[kind="secondary"] {
-    background-color: #6b8db5 !important;
+    background-color: rgb(122, 155, 199) !important;
     color: white !important;
-    border: 1px solid #5a7ca3 !important;
+    border: 1px solid rgb(122, 155, 199) !important;
 }
 # =============================================================================
 # STATE MANAGEMENT
