@@ -132,7 +132,7 @@ section[data-testid="stSidebar"] button:hover {
 def init_session_state():
     """Initialize session state variables"""
     def init_session_state():
-def init_session_state():
+    def init_session_state():
     """Initialize session state variables"""
     
     # Initialize discover_cap from URL if present
@@ -141,6 +141,17 @@ def init_session_state():
             st.session_state["discover_cap"] = int(st.query_params["discover_cap"])
         except:
             st.session_state["discover_cap"] = 400
+    
+    defaults = {
+        "exchange": "Coinbase",
+        "quote": "USD",
+        "discover_cap": 400,
+        # ... rest of your defaults
+    }
+    
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
     
     defaults = {
         # Market settings
