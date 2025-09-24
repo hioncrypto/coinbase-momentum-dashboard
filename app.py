@@ -88,23 +88,29 @@ section[data-testid="stSidebar"] * {
     z-index: 999;
 }
 
-/* Blue sidebar buttons only */
-section[data-testid="stSidebar"] button[kind="secondary"] {
-    background-color: #4a90e2 !important;
+/* All sidebar buttons - less vibrant blue */
+section[data-testid="stSidebar"] button {
+    background-color: #5a7fb8 !important;
     color: white !important;
-    border: 1px solid #357abd !important;
+    border: 1px solid #4a6b99 !important;
     font-weight: 500 !important;
 }
 
-section[data-testid="stSidebar"] button[kind="secondary"]:hover {
-    background-color: #357abd !important;
-    border-color: #2968a3 !important;
+section[data-testid="stSidebar"] button:hover {
+    background-color: #4a6b99 !important;
+    border-color: #3a5580 !important;
 }
 
 section[data-testid="stSidebar"] button[kind="primary"] {
-    background-color: #2c5aa0 !important;
+    background-color: #4a6b99 !important;
     color: white !important;
-    border: none !important;
+    border: 1px solid #3a5580 !important;
+}
+
+section[data-testid="stSidebar"] button[kind="secondary"] {
+    background-color: #5a7fb8 !important;
+    color: white !important;
+    border: 1px solid #4a6b99 !important;
 }
 
 .row-green {
