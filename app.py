@@ -1185,29 +1185,29 @@ else:
         except Exception as e:
             st.warning(f"DEBUG: styler failed ({e}); showing plain dataframe.")
             st.dataframe(_df_display, use_container_width=True, height=560)
-else:
-    # Always show something: dataframe by default, sortable on demand
-    show_sortable = st.toggle(
-        "Enable sortable table (beta)",
-        value=False,
-        key="ap_allpairs_sortable"
-    )
-
-    if _df_display.shape[0] == 0:
-        st.info("No rows to show ...")
     else:
-        if show_sortable:
-            try:
-                render_sortable_styler(
-                    _allpairs_styler,
-                    table_id="allpairs_table",
-                    height=560
-                )
-            except Exception as e:
-                st.warning(f"Sortable table failed. Falling back to plain table. Error: {e}")
-                st.dataframe(_df_display, use_container_width=True, height=560)
+        # Always show something: dataframe by default, sortable on demand
+        show_sortable = st.toggle(
+            "Enable sortable table (beta)",
+            value=False,
+            key="ap_allpairs_sortable"
+        )
+
+        if _df_display.shape[0] == 0:
+            st.info("No rows to show ...")
         else:
-            st.dataframe(_df_display, use_container_width=True, height=560)
+            if show_sortable:
+                try:
+                    render_sortable_styler(
+                        _allpairs_styler,
+                        table_id="allpairs_table",
+                        height=560
+                    )
+                except Exception as e:
+                    st.warning(f"Sortable table failed. Falling back to plain table. Error: {e}")
+                    st.dataframe(_df_display, use_container_width=True, height=560)
+            else:
+                st.dataframe(_df_display, use_container_width=True, height=560)
 
 # ------------------------ Listing Radar engine ------------------------
 
