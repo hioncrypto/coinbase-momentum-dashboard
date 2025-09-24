@@ -17,7 +17,6 @@ import re
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import List, Optional, Tuple, Dict, Any
-from dataclasses import dataclass, asdict
 
 import numpy as np
 import pandas as pd
@@ -41,34 +40,17 @@ except ImportError:
 # CONFIGURATION & CONSTANTS
 # =============================================================================
 
-@dataclass
-class AppConfig:
-    """Central configuration for the application"""
-    # API endpoints
-    COINBASE_BASE: str = "https://api.exchange.coinbase.com"
-    BINANCE_BASE: str = "https://api.binance.com"
-    COINBASE_WS: str = "wss://ws-feed.exchange.coinbase.com"
+class Config:
+    """Application configuration"""
+    COINBASE_BASE = "https://api.exchange.coinbase.com"
+    BINANCE_BASE = "https://api.binance.com"
+    COINBASE_WS = "wss://ws-feed.exchange.coinbase.com"
     
-    # Market data
-    TIMEFRAMES: Dict[str, int] = None
-    QUOTES: List[str] = None
-    EXCHANGES: List[str] = None
-    
-    # Default settings
-    DEFAULT_REFRESH_SEC: int = 30
-    DEFAULT_FONT_SCALE: float = 1.0
-    MAX_PAIRS_LIMIT: int = 500
-    
-    def __post_init__(self):
-        if self.TIMEFRAMES is None:
-            self.TIMEFRAMES = {"15m": 900, "1h": 3600}
-        if self.QUOTES is None:
-            self.QUOTES = ["USD", "USDC", "USDT", "BTC", "ETH", "EUR"]
-        if self.EXCHANGES is None:
-            self.EXCHANGES = ["Coinbase", "Binance", "Kraken (coming soon)", "KuCoin (coming soon)"]
+    TIMEFRAMES = {"15m": 900, "1h": 3600}
+    QUOTES = ["USD", "USDC", "USDT", "BTC", "ETH", "EUR"]
+    EXCHANGES = ["Coinbase", "Binance", "Kraken (coming soon)", "KuCoin (coming soon)"]
 
-# Initialize global config
-CONFIG = AppConfig()
+CONFIG = Config()
 
 # =============================================================================
 # STREAMLIT PAGE SETUP
@@ -80,17 +62,15 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for better styling
+# Custom CSS
 st.markdown("""
 <style>
-/* Full width layout */
 [data-testid="stAppViewContainer"] > .main > div.block-container {
     max-width: 100vw !important;
     padding-left: 12px !important;
     padding-right: 12px !important;
 }
 
-/* Remove animations and opacity changes */
 div[data-testid="stDataFrame"],
 div[data-testid="stDataFrame"] *,
 div[data-testid="stDataEditor"],
@@ -101,32 +81,11 @@ div[data-testid="stDataEditor"] * {
     animation: none !important;
 }
 
-/* Keep sidebar interactive */
 section[data-testid="stSidebar"],
 section[data-testid="stSidebar"] * {
     pointer-events: auto !important;
     opacity: 1 !important;
     z-index: 999;
-}
-
-/* Table styling */
-.sortable-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 1rem;
-}
-
-.sortable-table th {
-    background-color: #f0f2f6;
-    padding: 0.5rem;
-    text-align: left;
-    cursor: pointer;
-    border-bottom: 2px solid #ddd;
-}
-
-.sortable-table td {
-    padding: 0.5rem;
-    border-bottom: 1px solid #eee;
 }
 
 .row-green {
@@ -263,18 +222,6 @@ def macd_core(close: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9)
     histogram = macd_line - signal_line
     return macd_line, signal_line, histogram
 
-def atr(df: pd.DataFrame, length: int = 14) -> pd.Series:
-    """Average True Range"""
-    high, low, close = df["high"], df["low"], df["close"]
-    prev_close = close.shift(1)
-    
-    tr1 = high - low
-    tr2 = (high - prev_close).abs()
-    tr3 = (low - prev_close).abs()
-    
-    true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-    return true_range.ewm(alpha=1/length, adjust=False).mean()
-
 def volume_spike(df: pd.DataFrame, window: int = 20) -> float:
     """Calculate volume spike ratio"""
     if len(df) < window + 1:
@@ -292,12 +239,10 @@ def find_pivots(close: pd.Series, span: int = 3) -> Tuple[List[int], List[int]]:
     values = close.values
     
     for i in range(span, n - span):
-        # Pivot high
         if (values[i] > values[i-span:i].max() and 
             values[i] > values[i+1:i+1+span].max()):
             highs.append(i)
         
-        # Pivot low
         if (values[i] < values[i-span:i].min() and 
             values[i] < values[i+1:i+1+span].min()):
             lows.append(i)
@@ -313,11 +258,9 @@ def trend_breakout_up(df: pd.DataFrame, span: int = 3, within_bars: int = 48) ->
     if not highs:
         return False
     
-    # Get most recent pivot high
     latest_high_idx = highs[-1]
     resistance_level = float(df["close"].iloc[latest_high_idx])
     
-    # Check for breakout
     for i in range(latest_high_idx + 1, len(df)):
         if float(df["close"].iloc[i]) > resistance_level:
             bars_since_breakout = len(df) - 1 - i
@@ -342,10 +285,7 @@ def fetch_coinbase_data(pair: str, timeframe: str, limit: int) -> Optional[pd.Da
     
     url = f"{CONFIG.COINBASE_BASE}/products/{pair}/candles"
     params = {"granularity": tf_seconds}
-    headers = {
-        "User-Agent": "crypto-tracker/2.0",
-        "Accept": "application/json"
-    }
+    headers = {"User-Agent": "crypto-tracker/2.0", "Accept": "application/json"}
     
     for attempt in range(3):
         try:
@@ -386,15 +326,10 @@ def fetch_binance_data(pair: str, timeframe: str, limit: int) -> Optional[pd.Dat
         return None
     
     interval = "15m" if timeframe == "15m" else "1h"
-    params = {
-        "symbol": symbol,
-        "interval": interval,
-        "limit": max(50, limit)
-    }
+    params = {"symbol": symbol, "interval": interval, "limit": max(50, limit)}
     
     try:
-        response = requests.get(f"{CONFIG.BINANCE_BASE}/api/v3/klines", 
-                              params=params, timeout=20)
+        response = requests.get(f"{CONFIG.BINANCE_BASE}/api/v3/klines", params=params, timeout=20)
         
         if response.status_code != 200:
             return None
@@ -422,7 +357,6 @@ def fetch_data(exchange: str, pair: str, timeframe: str, limit: Optional[int] = 
         limit = get_bars_limit(timeframe)
     
     limit = max(1, min(300, limit))
-    
     exchange_lower = exchange.lower()
     
     if exchange_lower.startswith("coinbase"):
@@ -430,7 +364,6 @@ def fetch_data(exchange: str, pair: str, timeframe: str, limit: Optional[int] = 
     elif exchange_lower.startswith("binance"):
         return fetch_binance_data(pair, timeframe, limit)
     else:
-        # Default to Coinbase for unsupported exchanges
         return fetch_coinbase_data(pair, timeframe, limit)
 
 # =============================================================================
@@ -499,103 +432,7 @@ def get_products(exchange: str, quote: str) -> List[str]:
     elif exchange_lower.startswith("binance"):
         return get_binance_products(quote)
     else:
-        # Default to Coinbase
         return get_coinbase_products(quote)
-
-# =============================================================================
-# WEBSOCKET MANAGER
-# =============================================================================
-
-def ws_worker(product_ids: List[str], endpoint: str = None):
-    """WebSocket worker thread"""
-    if endpoint is None:
-        endpoint = CONFIG.COINBASE_WS
-    
-    try:
-        ws = websocket.WebSocket()
-        ws.connect(endpoint, timeout=10)
-        ws.settimeout(1.0)
-        
-        # Subscribe to ticker channel
-        subscribe_msg = {
-            "type": "subscribe",
-            "channels": [{
-                "name": "ticker",
-                "product_ids": product_ids
-            }]
-        }
-        ws.send(json.dumps(subscribe_msg))
-        
-        st.session_state["ws_alive"] = True
-        
-        while st.session_state.get("ws_alive", False):
-            try:
-                message = ws.recv()
-                if not message:
-                    continue
-                
-                data = json.loads(message)
-                if data.get("type") == "ticker":
-                    product_id = data.get("product_id")
-                    price = data.get("price")
-                    
-                    if product_id and price:
-                        st.session_state["ws_q"].put((product_id, float(price)))
-                        
-            except websocket.WebSocketTimeoutException:
-                continue
-            except Exception:
-                break
-                
-    except Exception:
-        pass
-    finally:
-        st.session_state["ws_alive"] = False
-        try:
-            ws.close()
-        except Exception:
-            pass
-
-def start_ws(exchange: str, pairs: List[str], chunk_size: int):
-    """Start WebSocket connection"""
-    if (not WS_AVAILABLE or 
-        exchange != "Coinbase" or 
-        not pairs or 
-        st.session_state.get("ws_alive")):
-        return
-    
-    selected_pairs = pairs[:max(2, min(chunk_size, len(pairs)))]
-    
-    thread = threading.Thread(
-        target=ws_worker,
-        args=(selected_pairs,),
-        daemon=True
-    )
-    st.session_state["ws_thread"] = thread
-    thread.start()
-    time.sleep(0.2)  # Brief pause for connection
-
-def stop_ws():
-    """Stop WebSocket connection"""
-    if st.session_state.get("ws_alive"):
-        st.session_state["ws_alive"] = False
-
-def drain_ws_queue():
-    """Process WebSocket price updates"""
-    queue_obj = st.session_state.get("ws_q")
-    prices = st.session_state.get("ws_prices", {})
-    
-    if not queue_obj:
-        return
-    
-    try:
-        while True:
-            product_id, price = queue_obj.get_nowait()
-            prices[product_id] = price
-    except queue.Empty:
-        pass
-    
-    st.session_state["ws_prices"] = prices
 
 # =============================================================================
 # GATE EVALUATION
@@ -613,7 +450,6 @@ def check_macd_cross(macd_line: pd.Series, signal_line: pd.Series,
         prev_diff = macd_line.iloc[-i-1] - signal_line.iloc[-i-1]
         curr_diff = macd_line.iloc[-i] - signal_line.iloc[-i]
         
-        # Check for cross
         crossed_up = prev_diff < 0 and curr_diff > 0
         crossed_down = prev_diff > 0 and curr_diff < 0
         
@@ -622,11 +458,9 @@ def check_macd_cross(macd_line: pd.Series, signal_line: pd.Series,
         if not only_bull and not (crossed_up or crossed_down):
             continue
         
-        # Check below zero requirement
         if need_below and (macd_line.iloc[-i] > 0 or signal_line.iloc[-i] > 0):
             continue
         
-        # Check histogram confirmation
         if confirm_bars > 0:
             conf_start = max(0, len(hist) - i)
             conf_end = min(len(hist), conf_start + confirm_bars)
@@ -643,12 +477,10 @@ def evaluate_gates(df: pd.DataFrame, settings: dict) -> Tuple[dict, int, str, in
     n = len(df)
     lookback = max(1, min(settings.get("lookback_candles", 3), 100, n - 1))
     
-    # Calculate basic metrics
     last_close = float(df["close"].iloc[-1])
     ref_close = float(df["close"].iloc[-lookback])
     delta_pct = (last_close / ref_close - 1.0) * 100.0
     
-    # MACD calculation
     macd_line, signal_line, hist = macd_core(
         df["close"], 
         settings.get("macd_fast", 12), 
@@ -660,7 +492,7 @@ def evaluate_gates(df: pd.DataFrame, settings: dict) -> Tuple[dict, int, str, in
     gates_enabled = 0
     gate_chips = []
     
-    # Delta gate (always enabled)
+    # Delta gate
     delta_pass = delta_pct >= settings.get("min_pct", 3.0)
     gates_passed += int(delta_pass)
     gates_enabled += 1
@@ -733,85 +565,374 @@ def evaluate_gates(df: pd.DataFrame, settings: dict) -> Tuple[dict, int, str, in
     else:
         gate_chips.append(" C–")
     
-    metadata = {
-        "delta_pct": delta_pct,
-        "macd_cross": cross_info
-    }
+    metadata = {"delta_pct": delta_pct, "macd_cross": cross_info}
     
     return metadata, gates_passed, " ".join(gate_chips), gates_enabled
 
 # =============================================================================
-# NOTIFICATIONS
+# SIDEBAR CONTROLS
 # =============================================================================
 
-def send_email_alert(subject: str, body: str, recipient: str) -> Tuple[bool, str]:
-    """Send email alert"""
-    try:
-        cfg = st.secrets.get("smtp", {})
-        if not cfg:
-            return False, "SMTP not configured in st.secrets"
-        
-        msg = MIMEMultipart()
-        msg["From"] = cfg["sender"]
-        msg["To"] = recipient
-        msg["Subject"] = subject
-        msg.attach(MIMEText(body, "plain"))
-        
-        ctx = ssl.create_default_context()
-        with smtplib.SMTP_SSL(cfg["host"], cfg.get("port", 465), context=ctx) as server:
-            server.login(cfg["user"], cfg["password"])
-            server.sendmail(cfg["sender"], recipient, msg.as_string())
-        
-        return True, "Email sent successfully"
-    except Exception as e:
-        return False, f"Email error: {e}"
+def expander(title: str):
+    """Create sidebar expander with collapse/expand state"""
+    return st.sidebar.expander(title, expanded=not st.session_state.get("collapse_all", False))
 
-def post_webhook(url: str, payload: dict) -> Tuple[bool, str]:
-    """Post webhook notification"""
-    try:
-        response = requests.post(url, json=payload, timeout=10)
-        return (200 <= response.status_code < 300), response.text
-    except Exception as e:
-        return False, str(e)
+# Sidebar header
+with st.sidebar:
+    st.title("🚀 Crypto Tracker")
+    
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col1:
+        if st.button("Collapse All", use_container_width=True):
+            st.session_state["collapse_all"] = True
+    with col2:
+        if st.button("Expand All", use_container_width=True):
+            st.session_state["collapse_all"] = False
+    with col3:
+        st.toggle("⭐ My Pairs Only", key="use_my_pairs")
+
+    # My Pairs management
+    with st.popover("Manage My Pairs"):
+        st.caption("Comma-separated (e.g., BTC-USD, ETH-USDT)")
+        current = st.text_area("Edit list", st.session_state.get("my_pairs", ""))
+        if st.button("Save My Pairs"):
+            st.session_state["my_pairs"] = ", ".join([p.strip().upper() for p in current.split(",") if p.strip()])
+            st.success("Saved!")
+
+# Market Settings
+with expander("Market Settings"):
+    st.selectbox("Exchange", CONFIG.EXCHANGES, 
+                index=CONFIG.EXCHANGES.index(st.session_state["exchange"]), 
+                key="exchange")
+    
+    st.selectbox("Quote Currency", CONFIG.QUOTES, 
+                index=CONFIG.QUOTES.index(st.session_state["quote"]), 
+                key="quote")
+    
+    st.checkbox("Use watchlist only", key="use_watch")
+    
+    if st.session_state["use_my_pairs"]:
+        pairs_pool = [p.strip().upper() for p in st.session_state.get("my_pairs", "").split(",") if p.strip()]
+        pairs_pool = [p for p in pairs_pool if p.endswith(f"-{st.session_state['quote']}")]
+    elif st.session_state["use_watch"]:
+        pairs_pool = [p.strip().upper() for p in st.session_state.get("watchlist", "").split(",") if p.strip()]
+        pairs_pool = [p for p in pairs_pool if p.endswith(f"-{st.session_state['quote']}")]
+    else:
+        effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"].lower() else st.session_state["exchange"]
+        pairs_pool = get_products(effective_exchange, st.session_state["quote"])
+    
+    st.slider(f"Pairs to discover (Available: {len(pairs_pool)})", 
+             0, 500, st.session_state["discover_cap"], 10, key="discover_cap")
+
+# Mode Settings
+with expander("Mode & Timeframes"):
+    st.radio("Data Source", ["REST only", "WebSocket + REST"], key="mode")
+    st.slider("WebSocket chunk size", 2, 20, st.session_state["ws_chunk"], key="ws_chunk")
+    
+    st.selectbox("Sort Timeframe", ["15m", "1h"], 
+                index=["15m", "1h"].index(st.session_state["sort_tf"]), 
+                key="sort_tf")
+    st.toggle("Sort Descending", key="sort_desc")
+
+# Gates Settings
+with expander("Trading Gates"):
+    presets = ["Spike Hunter", "Early MACD Cross", "Confirm Rally", "Custom"]
+    st.radio("Preset", presets, 
+            index=presets.index(st.session_state.get("preset", "Spike Hunter")), 
+            key="preset", horizontal=True)
+    
+    # Apply presets
+    if st.session_state["preset"] == "Spike Hunter":
+        st.session_state.update({
+            "gate_mode": "ANY", "hard_filter": False, "use_vol_spike": True, 
+            "use_rsi": False, "use_macd": False, "use_trend": False, 
+            "use_roc": False, "use_macd_cross": False
+        })
+    elif st.session_state["preset"] == "Early MACD Cross":
+        st.session_state.update({
+            "gate_mode": "ANY", "hard_filter": False, "use_vol_spike": True, 
+            "use_rsi": True, "min_rsi": 50, "use_macd_cross": True
+        })
+    elif st.session_state["preset"] == "Confirm Rally":
+        st.session_state.update({
+            "gate_mode": "Custom (K/Y)", "hard_filter": True, "min_pct": 5.0,
+            "use_vol_spike": True, "vol_mult": 1.20, "use_rsi": True, "min_rsi": 60,
+            "use_macd": True, "use_trend": True
+        })
+    
+    st.radio("Gate Mode", ["ALL", "ANY", "Custom (K/Y)"], 
+            index=["ALL", "ANY", "Custom (K/Y)"].index(st.session_state["gate_mode"]), 
+            key="gate_mode", horizontal=True)
+    
+    st.toggle("Hard Filter (hide non-passers)", key="hard_filter")
+    
+    # Gate parameters
+    st.slider("Δ lookback candles", 1, 100, st.session_state["lookback_candles"], key="lookback_candles")
+    st.slider("Min % change", 0.0, 50.0, st.session_state["min_pct"], 0.5, key="min_pct")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.toggle("Volume Spike", key="use_vol_spike")
+        if st.session_state["use_vol_spike"]:
+            st.slider("Volume Multiplier", 1.0, 5.0, st.session_state["vol_mult"], 0.05, key="vol_mult")
+    
+    with col2:
+        st.toggle("RSI Gate", key="use_rsi")
+        if st.session_state["use_rsi"]:
+            st.slider("Min RSI", 40, 90, st.session_state["min_rsi"], key="min_rsi")
+    
+    st.toggle("MACD Cross", key="use_macd_cross")
+    if st.session_state["use_macd_cross"]:
+        st.slider("Cross within bars", 1, 10, st.session_state["macd_cross_bars"], key="macd_cross_bars")
+        st.toggle("Bullish crosses only", key="macd_cross_only_bull")
+
+# Display Settings
+with expander("Display & Notifications"):
+    st.slider("Font Scale", 0.8, 1.6, st.session_state["font_scale"], 0.05, key="font_scale")
+    st.slider("Auto-refresh (seconds)", 5, 120, st.session_state["refresh_sec"], key="refresh_sec")
+    st.text_input("Email (optional)", st.session_state.get("email_to", ""), key="email_to")
+    st.text_input("Webhook URL (optional)", st.session_state.get("webhook_url", ""), key="webhook_url")
 
 # =============================================================================
-# SORTABLE TABLE COMPONENT
+# MAIN DISPLAY
 # =============================================================================
 
-def render_sortable_table(df: pd.DataFrame, table_id: str, height: int = 480):
-    """Render a sortable table with row styling"""
-    if df.empty:
-        st.info("No data to display")
-        return
+st.title("🚀 Enhanced Crypto Tracker")
+
+# Get trading pairs
+if st.session_state["use_my_pairs"]:
+    pairs = [p.strip().upper() for p in st.session_state.get("my_pairs", "").split(",") if p.strip()]
+elif st.session_state["use_watch"]:
+    pairs = [p.strip().upper() for p in st.session_state["watchlist"].split(",") if p.strip()]
+else:
+    effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"].lower() else st.session_state["exchange"]
+    pairs = get_products(effective_exchange, st.session_state["quote"])
+
+# Apply discovery cap
+cap = max(0, min(500, st.session_state["discover_cap"]))
+if cap > 0:
+    pairs = pairs[:cap]
+
+# Build gate settings
+gate_settings = {
+    "lookback_candles": st.session_state["lookback_candles"],
+    "min_pct": st.session_state["min_pct"],
+    "use_vol_spike": st.session_state["use_vol_spike"],
+    "vol_mult": st.session_state["vol_mult"],
+    "vol_window": st.session_state["vol_window"],
+    "use_rsi": st.session_state["use_rsi"],
+    "rsi_len": st.session_state["rsi_len"],
+    "min_rsi": st.session_state["min_rsi"],
+    "use_macd": st.session_state["use_macd"],
+    "macd_fast": st.session_state["macd_fast"],
+    "macd_slow": st.session_state["macd_slow"],
+    "macd_sig": st.session_state["macd_sig"],
+    "min_mhist": st.session_state["min_mhist"],
+    "use_trend": st.session_state["use_trend"],
+    "pivot_span": st.session_state["pivot_span"],
+    "trend_within": st.session_state["trend_within"],
+    "use_roc": st.session_state["use_roc"],
+    "min_roc": st.session_state["min_roc"],
+    "use_macd_cross": st.session_state["use_macd_cross"],
+    "macd_cross_bars": st.session_state["macd_cross_bars"],
+    "macd_cross_only_bull": st.session_state["macd_cross_only_bull"],
+    "macd_cross_below_zero": st.session_state["macd_cross_below_zero"],
+    "macd_hist_confirm_bars": st.session_state["macd_hist_confirm_bars"],
+}
+
+# Process pairs and build rows
+rows = []
+cache_key = get_cache_key()
+sort_tf = st.session_state["sort_tf"]
+mode = st.session_state["gate_mode"]
+hard_filter = st.session_state["hard_filter"]
+k_required = st.session_state["K_green"]
+y_required = st.session_state["Y_yellow"]
+
+effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"].lower() else st.session_state["exchange"]
+
+# Show progress
+if pairs:
+    progress_bar = st.progress(0)
+    status_text = st.empty()
     
-    # Create HTML table with styling
-    html_rows = []
-    
-    # Header
-    header_cells = []
-    for col in df.columns:
-        if not col.startswith('_'):  # Skip internal columns
-            header_cells.append(f'<th onclick="sortTable(\'{table_id}\', {len(header_cells)})">{col}</th>')
-    html_rows.append(f'<tr>{"".join(header_cells)}</tr>')
-    
-    # Data rows
-    for idx, row in df.iterrows():
-        signal = str(row.get('Signal', '')).strip().upper()
+    for i, pair in enumerate(pairs):
+        progress_bar.progress((i + 1) / len(pairs))
+        status_text.text(f"Processing {pair}... ({i + 1}/{len(pairs)})")
         
-        if signal == 'STRONG BUY':
-            row_class = 'row-green'
-        elif signal == 'WATCH':
-            row_class = 'row-yellow'
-        else:
-            row_class = ''
+        # Get data
+        df = get_cached_data(effective_exchange, pair, sort_tf, cache_key)
+        if df is None or df.empty or len(df) < st.session_state["min_bars"]:
+            continue
         
-        cells = []
-        for col in df.columns:
-            if not col.startswith('_'):  # Skip internal columns
-                value = row[col]
-                if isinstance(value, (int, float)):
-                    if col.startswith('%') or 'Change' in col:
-                        cells.append(f'<td>{value:+.2f}%</td>')
-                    elif 'Price' in col:
-                        cells.append(f'<td>${value:.6f}</td>')
-                    else:
+        # Evaluate gates
+        meta, passed, chips, enabled = evaluate_gates(df, gate_settings)
+        
+        # Determine inclusion and signal
+        if mode == "ALL":
+            include = (enabled > 0 and passed == enabled)
+            is_green = include
+            is_yellow = (0 < passed < enabled)
+        elif mode == "ANY":
+            include = True
+            is_green = (passed >= 1)
+            is_yellow = False
+        else:  # Custom (K/Y)
+            include = True
+            is_green = (passed >= k_required)
+            is_yellow = (not is_green) and (passed >= y_required)
+        
+        # Apply hard filter
+        if hard_filter:
+            if mode in {"ALL", "ANY"} and not include:
+                continue
+            if mode == "Custom (K/Y)" and not (is_green or is_yellow):
+                continue
+        
+        # Get price (WebSocket or last close)
+        ws_price = st.session_state.get("ws_prices", {}).get(pair)
+        last_price = float(ws_price) if ws_price else float(df["close"].iloc[-1])
+        first_price = float(df["close"].iloc[0])
+        pct_change = (last_price / (first_price + 1e-12) - 1.0) * 100.0
+        
+        # Determine signal
+        signal = ""
+        if is_green:
+            signal = "Strong Buy"
+        elif is_yellow:
+            signal = "Watch"
+        
+        rows.append({
+            "Pair": pair,
+            "Price": round(last_price, 6),
+            f"% Change ({sort_tf})": round(pct_change, 3),
+            "Signal": signal,
+            "Gates": chips,
+            "_passed": passed,
+            "_enabled": enabled,
+            "_green": is_green,
+            "_yellow": is_yellow
+        })
+    
+    progress_bar.empty()
+    status_text.empty()
+
+# Create DataFrame
+if rows:
+    df_results = pd.DataFrame(rows)
+    
+    # Sort by % change
+    chg_col = f"% Change ({sort_tf})"
+    ascending = not st.session_state["sort_desc"]
+    df_results = df_results.sort_values(chg_col, ascending=ascending).reset_index(drop=True)
+    df_results.insert(0, "#", range(1, len(df_results) + 1))
+    
+    # Show current time and summary
+    st.caption(f"Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    green_count = df_results["_green"].sum()
+    yellow_count = df_results["_yellow"].sum()
+    total_count = len(df_results)
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Pairs", total_count)
+    with col2:
+        st.metric("Strong Buy", green_count)
+    with col3:
+        st.metric("Watch", yellow_count)
+    with col4:
+        st.metric("Neutral", total_count - green_count - yellow_count)
+    
+    # Top 10 section
+    st.subheader("📌 Top 10 Opportunities")
+    
+    if green_count > 0:
+        top_10 = df_results[df_results["_green"]].head(10)
+    else:
+        top_10 = df_results.head(10)
+    
+    if not top_10.empty:
+        # Display columns (hide internal columns)
+        display_cols = [col for col in top_10.columns if not col.startswith('_')]
+        top_10_display = top_10[display_cols].reset_index(drop=True)
+        top_10_display.insert(0, "Rank", range(1, len(top_10_display) + 1))
+        
+        # Style the dataframe
+        def style_rows(row):
+            if row.name < len(top_10):
+                original_idx = top_10.index[row.name]
+                if df_results.loc[original_idx, "_green"]:
+                    return ['background-color: #16a34a; color: white; font-weight: 600'] * len(row)
+                elif df_results.loc[original_idx, "_yellow"]:
+                    return ['background-color: #eab308; color: black'] * len(row)
+            return [''] * len(row)
+        
+        styled_df = top_10_display.style.apply(style_rows, axis=1)
+        st.dataframe(styled_df, use_container_width=True, hide_index=True)
+    else:
+        st.info("No top opportunities found with current settings.")
+    
+    # All pairs section
+    st.subheader("📊 All Pairs")
+    
+    # Display options
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        show_all = st.checkbox("Show all pairs (not just signals)", value=not hard_filter)
+    with col2:
+        sort_option = st.selectbox("Sort by", ["% Change", "Signal", "Pair"], index=0)
+    
+    # Filter for display
+    if not show_all:
+        display_df = df_results[df_results["_green"] | df_results["_yellow"]]
+    else:
+        display_df = df_results
+    
+    # Re-sort if needed
+    if sort_option == "Signal":
+        display_df = display_df.sort_values(["_green", "_yellow"], ascending=[False, False])
+    elif sort_option == "Pair":
+        display_df = display_df.sort_values("Pair")
+    
+    if not display_df.empty:
+        # Display columns (hide internal columns)
+        display_cols = [col for col in display_df.columns if not col.startswith('_')]
+        final_display = display_df[display_cols].reset_index(drop=True)
+        
+        # Style the dataframe
+        def style_all_rows(row):
+            if row.name < len(display_df):
+                original_idx = display_df.index[row.name]
+                if display_df.loc[original_idx, "_green"]:
+                    return ['background-color: #16a34a; color: white; font-weight: 600'] * len(row)
+                elif display_df.loc[original_idx, "_yellow"]:
+                    return ['background-color: #eab308; color: black'] * len(row)
+            return [''] * len(row)
+        
+        styled_all = final_display.style.apply(style_all_rows, axis=1)
+        st.dataframe(styled_all, use_container_width=True, hide_index=True, height=600)
+    else:
+        st.info("No pairs match the current filter criteria.")
+
+else:
+    st.info("No trading pairs found. Adjust your market settings or increase the discovery cap.")
+
+# Auto-refresh
+if st_autorefresh:
+    refresh_interval = max(5, st.session_state["refresh_sec"]) * 1000
+    st_autorefresh(interval=refresh_interval, key="auto_refresh")
+else:
+    # Fallback refresh using JavaScript
+    refresh_sec = max(5, st.session_state["refresh_sec"])
+    st.markdown(f"""
+    <script>
+    setTimeout(function(){{
+        window.location.reload();
+    }}, {refresh_sec * 1000});
+    </script>
+    """, unsafe_allow_html=True)
+
+# Footer
+st.markdown("---")
+st.caption("🚀 Enhanced Crypto Tracker - Real-time cryptocurrency analysis with advanced technical indicators")
