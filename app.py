@@ -1142,34 +1142,27 @@ if 'df' not in locals():
 else:
     # Debug the shapes so we can see what's going on
     st.caption(f"DEBUG: base df shape {df.shape}")
-
     # Build the display DF (drop helper cols if present)
     hide_cols = [c for c in ["_green", "_yellow", "signal_norm"] if c in df.columns]
     _df_display = df.drop(columns=hide_cols).reset_index(drop=True)
-    st.caption(f"DEBUG: display df shape {_df_display.shape}")
+        # If there are literally no rows, show a friendly note
+    else:
+    # Debug the shapes so we can see what's going on
+    st.caption(f"DEBUG: base df shape {df.shape}")
+
+    # Build the display DF ...
+    hide_cols = ...
+    _df_display = ...
 
     # If there are literally no rows, show a friendly note
     if _df_display.shape[0] == 0:
-        st.info("No rows to show (filters may have removed all rows). Try disabling 'Use My Pairs only' or loosening gates / watchlist.")
-        else:
-            # Row color helper (keep if you want later)
-            def _row_style(row):
-                s = str(row.get("Signal", "")).strip().upper()
-                if s == "STRONG BUY":
-                    return ["background-color: #16a34a; color: white; font-weight: 600;"] * len(row)
-                if s == "WATCH":
-                    return ["background-color: #eab308; color: black;"] * len(row)
-                return [""] * len(row)
+        st.info("No rows to show ...")
+    else:
+        def _row_style(row):
+            ...
+        _allpairs_styler = _df_display.style.apply(_row_style, axis=1)
+        render_sortable_styler(_allpairs_styler, table_id="allpairs_table", height=560)
 
-            _allpairs_styler = _df_display.style.apply(_row_style, axis=1)
-
-        # Try sortable table; fall back to a plain table if anything goes wrong
-        try:
-            render_sortable_styler(
-                _allpairs_styler,
-                table_id="allpairs_table",
-                height=560
-            )
         except Exception as e:
             st.warning(f"Sortable table failed. Falling back to a plain table. Error: {e}")
             st.table(_df_display)
