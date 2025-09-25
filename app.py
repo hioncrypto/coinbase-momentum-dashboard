@@ -661,18 +661,18 @@ with st.sidebar:
 
 with expander("Market Settings"):
     with expander("Market Settings"):
-    exchanges_list = ["Coinbase", "Binance", "Kraken (coming soon)", "KuCoin (coming soon)"]
-    quotes_list = ["USD", "USDC", "USDT", "BTC", "ETH", "EUR"]
+        exchanges_list = ["Coinbase", "Binance", "Kraken (coming soon)", "KuCoin (coming soon)"]
+        quotes_list = ["USD", "USDC", "USDT", "BTC", "ETH", "EUR"]
     
-    st.selectbox("Exchange", exchanges_list, 
+        st.selectbox("Exchange", exchanges_list, 
                 index=exchanges_list.index(st.session_state.get("exchange", "Coinbase")), 
                 key="exchange")
     
-    st.selectbox("Quote Currency", quotes_list, 
+        st.selectbox("Quote Currency", quotes_list, 
                 index=quotes_list.index(st.session_state.get("quote", "USD")), 
                 key="quote")
     
-    st.checkbox("Use watchlist only", key="use_watch", 
+        st.checkbox("Use watchlist only", key="use_watch", 
                 value=st.session_state.get("use_watch", False))
     
     # Calculate available pairs
