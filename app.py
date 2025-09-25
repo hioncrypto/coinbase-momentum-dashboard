@@ -752,13 +752,39 @@ except Exception:
         pairs_pool = get_products(effective_exchange, st.session_state["quote"])
     
     # Pairs to discover slider with persistence
-new_cap = st.slider(
-    f"Pairs to discover (Available: {len(pairs_pool)})", 
-    0, 500, 
-    st.session_state.get("discover_cap", 400), 
-    10, 
-    key="discover_cap"
+# ---------------- Sidebar › Discover (sticky) ----------------
+
+# compute a safe available count for the label
+avail_count = len(locals().get("avail_pairs", locals().get("pairs_pool", [])))
+
+# one-time init from URL ?ptd=
+if "pairs_to_discover" not in st.session_state:
+    try:
+        qv = st.query_params.get("ptd")
+    except Exception:
+        qv = st.experimental_get_query_params().get("ptd", [None])[0]
+    try:
+        st.session_state.pairs_to_discover = int(qv)
+    except Exception:
+        st.session_state.pairs_to_discover = 100
+    st.session_state.pairs_to_discover = int(min(500, max(5, st.session_state.pairs_to_discover)))
+
+# slider (sticky)
+ptd = st.sidebar.slider(
+    f"Pairs to discover{f' (Available: {avail_count})' if avail_count else ''}",
+    min_value=5, max_value=500, step=5,
+    value=st.session_state.pairs_to_discover,
+    key="pairs_to_discover",
+    help="Persists via URL ?ptd= and session state."
 )
+
+# persist to URL and drop any old param like discover_cap
+try:
+    st.query_params.clear()
+    st.query_params["ptd"] = str(ptd)
+except Exception:
+    st.experimental_set_query_params(ptd=str(ptd))
+
 
 # Save to URL when value changes
 if new_cap != st.session_state.get("_prev_discover_cap"):
