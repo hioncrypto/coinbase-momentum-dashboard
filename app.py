@@ -717,9 +717,6 @@ except Exception:
         effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"].lower() else st.session_state["exchange"]
         avail_pairs = get_products(effective_exchange, st.session_state["quote"])
     
-    st.selectbox("Quote Currency", CONFIG.QUOTES, 
-                index=CONFIG.QUOTES.index(st.session_state["quote"]), 
-                key="quote")
     
     st.checkbox("Use watchlist only", key="use_watch")
     
