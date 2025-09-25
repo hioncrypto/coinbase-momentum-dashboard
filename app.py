@@ -23,20 +23,7 @@ import pandas as pd
 import requests
 import streamlit as st
 import streamlit.components.v1 as components
-def sync_settings_to_url():
-    """Sync key settings to URL parameters for persistence"""
-    key_settings = {
-        "discover_cap": st.session_state.get("discover_cap", 400),
-        "exchange": st.session_state.get("exchange", "Coinbase"),
-        "quote": st.session_state.get("quote", "USD"),
-        "refresh_sec": st.session_state.get("refresh_sec", 30)
-    }
-    st.query_params.update(key_settings)
 
-# Call this after any setting changes
-if st.session_state.get("_setting_changed", False):
-    sync_settings_to_url()
-    st.session_state["_setting_changed"] = False
 # Optional dependencies
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -75,7 +62,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS with blue sidebar buttons
+# Custom CSS
 st.markdown("""
 <style>
 [data-testid="stAppViewContainer"] > .main > div.block-container {
@@ -101,66 +88,25 @@ section[data-testid="stSidebar"] * {
     z-index: 999;
 }
 
-section[data-testid="stSidebar"] button {
-    background-color: steelblue !important;
-    color: white !important;
-    border: 1px solid darkslateblue !important;
-    font-weight: 500 !important;
-}
-
-section[data-testid="stSidebar"] button:hover {
-    background-color: darkslateblue !important;
-    border-color: navy !important;
-}
-
 .row-green {
-    background-color: forestgreen !important;
+    background-color: #16a34a !important;
     color: white !important;
     font-weight: 600;
 }
 
 .row-yellow {
-    background-color: gold !important;
+    background-color: #eab308 !important;
     color: black !important;
 }
 </style>
 """, unsafe_allow_html=True)
+
 # =============================================================================
 # STATE MANAGEMENT
 # =============================================================================
 
 def init_session_state():
     """Initialize session state variables"""
-    def init_session_state():
-    def init_session_state():
-    """Initialize session state variables"""
-    
-    # Initialize discover_cap from URL if present
-    if "discover_cap" in st.query_params:
-        try:
-            st.session_state["discover_cap"] = int(st.query_params["discover_cap"])
-        except:
-            st.session_state["discover_cap"] = 400
-    
-    defaults = {
-        "exchange": "Coinbase",
-        "quote": "USD",
-        "discover_cap": 400,
-        # ... rest of your defaults
-    }
-    
-    for key, value in defaults.items():
-        if key not in st.session_state:
-            st.session_state[key] = value
-    
-    defaults = {
-        # Market settings
-        "exchange": "Coinbase",
-        # ... rest of your code
-    defaults = {
-        # Market settings
-        "exchange": "Coinbase",
-        # ... rest of your defaults
     defaults = {
         # Market settings
         "exchange": "Coinbase",
@@ -724,16 +670,8 @@ with expander("Market Settings"):
         effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"].lower() else st.session_state["exchange"]
         pairs_pool = get_products(effective_exchange, st.session_state["quote"])
     
-# Store current discover_cap in URL when it changes
-if st.slider(
-    f"Pairs to discover (Available: {len(pairs_pool)})", 
-    0, 500, 
-    st.session_state["discover_cap"], 
-    10, 
-    key="discover_cap"
-) != st.session_state.get("_prev_discover_cap", st.session_state["discover_cap"]):
-    st.query_params["discover_cap"] = str(st.session_state["discover_cap"])
-    st.session_state["_prev_discover_cap"] = st.session_state["discover_cap"]
+    st.slider(f"Pairs to discover (Available: {len(pairs_pool)})", 
+             0, 500, st.session_state["discover_cap"], 10, key="discover_cap")
 
 # Mode Settings
 with expander("Mode & Timeframes"):
@@ -1295,4 +1233,4 @@ st.markdown(f"""
 
 # Footer
 st.markdown("---")
-st.caption("🚀 Enhanced Crypto Tracker - Real-time cryptocurrency analysis with advanced technical indicators")
+st.caption("🚀 Enhanced Crypto Tracker - Real-t
