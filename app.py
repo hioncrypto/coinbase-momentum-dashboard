@@ -653,15 +653,35 @@ with st.sidebar:
             st.session_state["my_pairs"] = ", ".join([p.strip().upper() for p in current.split(",") if p.strip()])
             st.success("Saved!")
 
-# In Market Settings expander
 with expander("Market Settings"):
-    st.selectbox("Exchange", CONFIG.EXCHANGES, 
-                index=CONFIG.EXCHANGES.index(st.session_state["exchange"]), 
+    st.selectbox("Exchange", EXCHANGES, 
+                index=EXCHANGES.index(st.session_state.get("exchange", "Coinbase")), 
                 key="exchange")
     
-    st.selectbox("Quote Currency", CONFIG.QUOTES, 
-                index=CONFIG.QUOTES.index(st.session_state["quote"]), 
+    st.selectbox("Quote Currency", QUOTES, 
+                index=QUOTES.index(st.session_state.get("quote", "USD")), 
                 key="quote")
+    
+    st.checkbox("Use watchlist only", key="use_watch", 
+                value=st.session_state.get("use_watch", False))
+    
+    # Calculate available pairs
+    if st.session_state.get("use_my_pairs", False):
+        avail_pairs = [p.strip().upper() for p in st.session_state.get("my_pairs", "").split(",") if p.strip()]
+    elif st.session_state.get("use_watch", False):
+        avail_pairs = [p.strip().upper() for p in st.session_state.get("watchlist", "").split(",") if p.strip()]
+    else:
+        effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"].lower() else st.session_state["exchange"]
+        avail_pairs = get_products(effective_exchange, st.session_state["quote"])
+    
+    # Pairs to discover slider
+    st.slider(
+        f"Pairs to discover (Available: {len(avail_pairs)})", 
+        0, 500, 
+        st.session_state.get("discover_cap", 400), 
+        10, 
+        key="discover_cap"
+    )
     
     # Calculate available pairs
     if st.session_state["use_watch"] and st.session_state.get("watchlist", "").strip():
