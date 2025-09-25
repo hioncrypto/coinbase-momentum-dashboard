@@ -770,11 +770,12 @@ ptd = st.sidebar.slider(
 # sync UI value back into sticky state
 st.session_state.pairs_to_discover = int(ptd)
 
-# persist to URL
+# persist to URL (place immediately after the slider)
+value_to_persist = int(st.session_state.get("pairs_to_discover", 100))
 try:
-    st.query_params["ptd"] = str(ptd)
+    st.query_params["ptd"] = str(value_to_persist)
 except Exception:
-    st.experimental_set_query_params(ptd=str(ptd))
+    st.experimental_set_query_params(ptd=str(value_to_persist))
 
     st.session_state.pairs_to_discover = int(min(500, max(5, st.session_state.pairs_to_discover)))
 
