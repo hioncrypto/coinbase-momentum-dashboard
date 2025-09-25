@@ -1045,34 +1045,27 @@ if rows:
     with col4:
         st.metric("Neutral", total_count - green_count - yellow_count)
     
-    # Top 10 section
-    st.subheader("📌 Top 10 Opportunities")
+  # Top 10 section - Sort by percentage change first
+st.subheader("📌 Top 10 Opportunities")
+
+# Always sort by percentage change as primary criteria
+chg_col = f"% Change ({sort_tf})"
+top_10 = df_results.nlargest(10, chg_col).reset_index(drop=True)
+top_10.insert(0, "Rank", range(1, len(top_10) + 1))
+
+if not top_10.empty:
+    # Style rows based on gate status
+    def style_top10_rows(row):
+        idx = row.name
+        if "_green" in top_10.columns and top_10.iloc[idx]["_green"]:
+            return ['background-color: #16a34a; color: white; font-weight: 600'] * len(row)
+        elif "_yellow" in top_10.columns and top_10.iloc[idx]["_yellow"]:
+            return ['background-color: #eab308; color: black'] * len(row)
+        return [''] * len(row)
     
-    if green_count > 0:
-        top_10 = df_results[df_results["_green"]].head(10)
-    else:
-        top_10 = df_results.head(10)
-    
-    if not top_10.empty:
-        # Display columns (hide internal columns)
-        display_cols = [col for col in top_10.columns if not col.startswith('_')]
-        top_10_display = top_10[display_cols].reset_index(drop=True)
-        top_10_display.insert(0, "Rank", range(1, len(top_10_display) + 1))
-        
-        # Style the dataframe
-        def style_rows(row):
-            if row.name < len(top_10):
-                original_idx = top_10.index[row.name]
-                if df_results.loc[original_idx, "_green"]:
-                    return ['background-color: #16a34a; color: white; font-weight: 600'] * len(row)
-                elif df_results.loc[original_idx, "_yellow"]:
-                    return ['background-color: #eab308; color: black'] * len(row)
-            return [''] * len(row)
-        
-        styled_df = top_10_display.style.apply(style_rows, axis=1)
-        st.dataframe(styled_df, use_container_width=True, hide_index=True)
-    else:
-        st.info("No top opportunities found with current settings.")
+    display_cols = [col for col in top_10.columns if not col.startswith('_')]
+    styled_df = top_10[display_cols].style.apply(style_top10_rows, axis=1)
+    st.dataframe(styled_df, use_container_width=True, hide_index=True)
     
     # All pairs section
     st.subheader("📊 All Pairs")
