@@ -737,26 +737,48 @@ except Exception:
  # compute a safe available count for the label
 avail_count = len(locals().get("avail_pairs", locals().get("pairs_pool", [])))
 
-# one-time init from URL ?ptd=
+# ---------------- Sidebar › Discover ----------------
+st.sidebar.subheader("Discover Settings")
+
+# compute available pairs count if list exists
+avail_count = len(locals().get("avail_pairs", locals().get("pairs_pool", [])))
+
+# one-time init from ?ptd= or fallback
 if "pairs_to_discover" not in st.session_state:
+    qp = (getattr(st, "query_params", {}) or {}).get("ptd")
+    if qp is None:
+        qp = st.experimental_get_query_params().get("ptd", [None])[0]
     try:
-        qv = st.query_params.get("ptd")
-    except Exception:
-        qv = st.experimental_get_query_params().get("ptd", [None])[0]
-    try:
-        st.session_state.pairs_to_discover = int(qv)
+        st.session_state.pairs_to_discover = int(qp)
     except Exception:
         st.session_state.pairs_to_discover = 100
-    st.session_state.pairs_to_discover = int(min(500, max(5, st.session_state.pairs_to_discover)))
+    st.session_state.pairs_to_discover = int(
+        min(500, max(5, st.session_state.pairs_to_discover))
+    )
 
-# slider (sticky)
+# single sticky slider
 ptd = st.sidebar.slider(
     f"Pairs to discover{f' (Available: {avail_count})' if avail_count else ''}",
-    min_value=5, max_value=500, step=5,
+    min_value=5,
+    max_value=500,
+    step=5,
     value=st.session_state.pairs_to_discover,
-    key="pairs_to_discover",
+    key="ui_pairs_to_discover",   # unique widget key
     help="Persists via URL ?ptd= and session state."
 )
+
+# sync UI value back into sticky state
+st.session_state.pairs_to_discover = int(ptd)
+
+# persist to URL
+try:
+    st.query_params["ptd"] = str(ptd)
+except Exception:
+    st.experimental_set_query_params(ptd=str(ptd))
+
+    st.session_state.pairs_to_discover = int(min(500, max(5, st.session_state.pairs_to_discover)))
+
+
 
 # persist to URL and drop any old param like discover_cap
 try:
