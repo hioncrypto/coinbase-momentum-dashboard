@@ -670,8 +670,19 @@ with expander("Market Settings"):
         effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"].lower() else st.session_state["exchange"]
         pairs_pool = get_products(effective_exchange, st.session_state["quote"])
     
-    st.slider(f"Pairs to discover (Available: {len(pairs_pool)})", 
-             0, 500, st.session_state["discover_cap"], 10, key="discover_cap")
+    # Pairs to discover slider with persistence
+new_cap = st.slider(
+    f"Pairs to discover (Available: {len(pairs_pool)})", 
+    0, 500, 
+    st.session_state.get("discover_cap", 400), 
+    10, 
+    key="discover_cap"
+)
+
+# Save to URL when value changes
+if new_cap != st.session_state.get("_prev_discover_cap"):
+    st.query_params["discover_cap"] = str(new_cap)
+    st.session_state["_prev_discover_cap"] = new_cap
 
 # Mode Settings
 with expander("Mode & Timeframes"):
