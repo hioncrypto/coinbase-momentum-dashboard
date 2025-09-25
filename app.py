@@ -1233,4 +1233,5 @@ st.markdown(f"""
 
 # Footer
 st.markdown("---")
-st.caption("🚀 Enhanced Crypto Tracker - Real-t
+st.caption("🚀 Enhanced Crypto Tracker — Real-time momentum scanner by hioncrypto")
+
