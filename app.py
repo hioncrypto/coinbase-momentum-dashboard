@@ -699,14 +699,6 @@ if "pairs_to_discover" not in st.session_state:
         st.session_state.pairs_to_discover = 100
     st.session_state.pairs_to_discover = int(min(500, max(5, st.session_state.pairs_to_discover)))
 
-# Slider (sticky across reruns/refresh)
-ptd = st.sidebar.slider(
-    "Pairs to discover",
-    min_value=5, max_value=500, step=5,
-    value=st.session_state.pairs_to_discover,
-    key="pairs_to_discover",
-    help="Persists via URL ?ptd= and session state."
-)
 
 # Persist to URL on change
 try:
@@ -726,15 +718,6 @@ except Exception:
         effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"].lower() else st.session_state["exchange"]
         avail_pairs = get_products(effective_exchange, st.session_state["quote"])
     
-    # Pairs to discover slider
-    st.slider(
-        f"Pairs to discover (Available: {len(avail_pairs)})", 
-        0, 500, 
-        st.session_state.get("discover_cap", 400), 
-        10, 
-        key="discover_cap"
-    )
-    
     st.selectbox("Quote Currency", CONFIG.QUOTES, 
                 index=CONFIG.QUOTES.index(st.session_state["quote"]), 
                 key="quote")
@@ -751,10 +734,7 @@ except Exception:
         effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"].lower() else st.session_state["exchange"]
         pairs_pool = get_products(effective_exchange, st.session_state["quote"])
     
-    # Pairs to discover slider with persistence
-# ---------------- Sidebar › Discover (sticky) ----------------
-
-# compute a safe available count for the label
+ # compute a safe available count for the label
 avail_count = len(locals().get("avail_pairs", locals().get("pairs_pool", [])))
 
 # one-time init from URL ?ptd=
