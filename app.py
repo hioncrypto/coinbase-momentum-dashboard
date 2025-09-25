@@ -684,14 +684,36 @@ with expander("Market Settings"):
         effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"].lower() else st.session_state["exchange"]
         avail_pairs = get_products(effective_exchange, st.session_state["quote"])
     
-    # Pairs to discover slider
-    st.slider(
-        f"Pairs to discover (Available: {len(avail_pairs)})", 
-        0, 500, 
-        st.session_state.get("discover_cap", 400), 
-        10, 
-        key="discover_cap"
-    )
+   # ---------------- Sidebar › Discover (sticky) ----------------
+# Unique key: "pairs_to_discover"  (do NOT reuse "discover_cap")
+
+# One-time init from URL ?ptd=... else default=100
+if "pairs_to_discover" not in st.session_state:
+    try:
+        qv = st.query_params.get("ptd")
+    except Exception:
+        qv = st.experimental_get_query_params().get("ptd", [None])[0]
+    try:
+        st.session_state.pairs_to_discover = int(qv)
+    except Exception:
+        st.session_state.pairs_to_discover = 100
+    st.session_state.pairs_to_discover = int(min(500, max(5, st.session_state.pairs_to_discover)))
+
+# Slider (sticky across reruns/refresh)
+ptd = st.sidebar.slider(
+    "Pairs to discover",
+    min_value=5, max_value=500, step=5,
+    value=st.session_state.pairs_to_discover,
+    key="pairs_to_discover",
+    help="Persists via URL ?ptd= and session state."
+)
+
+# Persist to URL on change
+try:
+    st.query_params["ptd"] = str(ptd)
+except Exception:
+    st.experimental_set_query_params(ptd=str(ptd))
+ 
     
     # Calculate available pairs
     if st.session_state["use_watch"] and st.session_state.get("watchlist", "").strip():
