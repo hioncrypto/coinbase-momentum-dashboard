@@ -196,6 +196,12 @@ def init_session_state():
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
+    # Override with URL parameters if present (must come after defaults)
+if "discover_cap" in st.query_params:
+    try:
+        st.session_state["discover_cap"] = int(st.query_params["discover_cap"])
+    except:
+        pass
 
 # Initialize state
 init_session_state()
