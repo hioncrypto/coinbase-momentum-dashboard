@@ -107,15 +107,20 @@ section[data-testid="stSidebar"] * {
 
 def init_session_state():
     """Initialize session state variables"""
+    
+    # Load discover_cap from URL first
+    if "discover_cap" in st.query_params:
+        try:
+            st.session_state["discover_cap"] = int(st.query_params["discover_cap"])
+        except:
+            pass
+    
     defaults = {
         # Market settings
         "exchange": "Coinbase",
         "quote": "USD",
-        "use_watch": False,
-        "watchlist": "BTC-USD, ETH-USD, SOL-USD, AVAX-USD, ADA-USD",
-        "use_my_pairs": False,
-        "my_pairs": "BTC-USD, ETH-USD, SOL-USD",
         "discover_cap": 400,
+        # ... keep all the rest of your existing defaults here
         
         # Mode
         "mode": "REST only",
