@@ -704,7 +704,6 @@ if "pairs_to_discover" not in st.session_state:
 try:
     st.query_params["ptd"] = str(ptd)
 except Exception:
-    st.experimental_set_query_params(ptd=str(ptd))
  
     
     # Calculate available pairs
