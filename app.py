@@ -515,11 +515,11 @@ def evaluate_gates(df: pd.DataFrame, settings: dict) -> Tuple[dict, int, str, in
     gates_enabled = 0
     gate_chips = []
     
-    # Delta gate
-    delta_pass = delta_pct >= settings.get("min_pct", 3.0)
-    gates_passed += int(delta_pass)
-    gates_enabled += 1
-    gate_chips.append(f"Δ{'✅' if delta_pass else '❌'}({delta_pct:+.2f}%)")
+    # Delta gate (always enabled, show pass/fail status)
+delta_pass = delta_pct >= settings.get("min_pct", 3.0)
+gates_passed += int(delta_pass)
+gates_enabled += 1
+gate_chips.append(f"Δ{'✅' if delta_pass else '❌'}({delta_pct:+.2f}%)")
     
     # Volume spike gate
     if settings.get("use_vol_spike", True):
