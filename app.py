@@ -659,7 +659,6 @@ with st.sidebar:
             st.session_state["my_pairs"] = ", ".join([p.strip().upper() for p in current.split(",") if p.strip()])
             st.success("Saved!")
 
-with expander("Market Settings"):
     with expander("Market Settings"):
         exchanges_list = ["Coinbase", "Binance", "Kraken (coming soon)", "KuCoin (coming soon)"]
         quotes_list = ["USD", "USDC", "USDT", "BTC", "ETH", "EUR"]
