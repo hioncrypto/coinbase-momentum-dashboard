@@ -388,9 +388,9 @@ def get_cache_key() -> int:
     cache_bucket = int(time.time() // refresh_sec)
     return cache_bucket
 
-@st.cache_data(show_spinner=False, ttl=None)
-def get_cached_data(exchange: str, pair: str, timeframe: str, cache_key: int, force_refresh: bool = False) -> Optional[pd.DataFrame]:
-    """Cached data fetching function with forced refresh capability"""
+@st.cache_data(show_spinner=False, ttl=60)
+def get_cached_data(exchange: str, pair: str, timeframe: str) -> Optional[pd.DataFrame]:
+    """Cached data fetching function - refreshes every 60 seconds"""
     try:
         limit = get_bars_limit(timeframe)
         return fetch_data(exchange, pair, timeframe, limit)
