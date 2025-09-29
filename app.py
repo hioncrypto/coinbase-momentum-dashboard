@@ -816,8 +816,7 @@ st.radio("Preset", presets,
             index=presets.index(st.session_state.get("preset", "Spike Hunter")),
             key="preset", 
             horizontal=True,
-            help="Velocity Mode: Vol 2.5×, MACD cross ≤3 bars, ROC 5%. Tweak: vol→2.0/roc→3.0 (aggressive) or vol→3.0/roc→7.0 (conservative)")
-    st.markdown("**Tips:** Gate Mode 'ALL' requires every enabled gate. 'ANY' needs at least one. "
+             help="Velocity Mode: Vol 2.5×, MACD cross ≤3 bars, ROC 5%. Tweak: vol→2.0/roc→3.0 (aggressive) or vol→3.0/roc→7.0 (conservative)")
 "'Custom (K/Y)' colors rows based on how many gates pass (K=green, Y=yellow).")
     
     # Apply presets
