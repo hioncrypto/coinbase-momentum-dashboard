@@ -824,7 +824,7 @@ if st.session_state["preset"] == "Spike Hunter":
             "use_vol_spike": True, "vol_mult": 1.10, "use_rsi": False, "use_macd": False,
             "use_trend": False, "use_roc": False, "use_macd_cross": False
         })
-    elif st.session_state["preset"] == "Early MACD Cross":
+elif st.session_state["preset"] == "Early MACD Cross":
         st.session_state.update({
             "gate_mode": "ANY", "hard_filter": False, "lookback_candles": 3, "min_pct": 3.0,
             "use_vol_spike": True, "vol_mult": 1.10, "use_rsi": True, "min_rsi": 50,
