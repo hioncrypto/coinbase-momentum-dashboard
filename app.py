@@ -812,7 +812,7 @@ with expander("Mode & Timeframes"):
     st.toggle("Sort Descending", key="sort_desc")
 
 presets = ["Spike Hunter", "Early MACD Cross", "Confirm Rally", "Velocity Mode", "None"]
-            st.radio("Preset", presets,
+        st.radio("Preset", presets,
             index=presets.index(st.session_state.get("preset", "Spike Hunter")),
             key="preset", 
             horizontal=True,
