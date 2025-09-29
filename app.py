@@ -832,7 +832,7 @@ elif st.session_state["preset"] == "Early MACD Cross":
             "macd_cross_bars": 5, "macd_cross_only_bull": True, "macd_cross_below_zero": True,
             "macd_hist_confirm_bars": 3
         })
-    elif st.session_state["preset"] == "Confirm Rally":
+elif st.session_state["preset"] == "Confirm Rally":
         st.session_state.update({
             "gate_mode": "Custom (K/Y)", "hard_filter": True, "lookback_candles": 2, "min_pct": 5.0,
             "use_vol_spike": True, "vol_mult": 1.20, "use_rsi": True, "min_rsi": 60,
