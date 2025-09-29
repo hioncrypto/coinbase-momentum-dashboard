@@ -381,12 +381,6 @@ def fetch_data(exchange: str, pair: str, timeframe: str, limit: Optional[int] = 
 # CACHING WITH FORCED REFRESH
 # =============================================================================
 
-def get_cache_key() -> int:
-    """Generate cache key based on refresh interval - forces cache refresh"""
-    refresh_sec = max(5, int(st.session_state.get("refresh_sec", 30)))
-    # Use current time divided by refresh interval to create time-based buckets
-    cache_bucket = int(time.time() // refresh_sec)
-    return cache_bucket
 
 @st.cache_data(show_spinner=False, ttl=60)
 def get_cached_data(exchange: str, pair: str, timeframe: str) -> Optional[pd.DataFrame]:
