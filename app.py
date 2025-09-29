@@ -382,7 +382,7 @@ def fetch_data(exchange: str, pair: str, timeframe: str, limit: Optional[int] = 
 # =============================================================================
 
 
-@st.cache_data(show_spinner=False, ttl=60)
+# @st.cache_data(show_spinner=False, ttl=60)
 def get_cached_data(exchange: str, pair: str, timeframe: str) -> Optional[pd.DataFrame]:
     """Cached data fetching function - refreshes every 60 seconds"""
     try:
