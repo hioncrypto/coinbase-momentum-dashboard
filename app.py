@@ -982,7 +982,8 @@ else:
     pairs = get_products(effective_exchange, st.session_state["quote"])
 
 # Apply discovery cap
-cap = max(0, min(500, st.session_state["discover_cap"]))
+# Apply discovery limit
+pairs = pairs[:st.session_state.get("pairs_to_discover", 100)]
 if cap > 0:
     pairs = pairs[:cap]
 
