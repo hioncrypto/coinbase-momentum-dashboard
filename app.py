@@ -1042,7 +1042,7 @@ if pairs:
         status_placeholder.text(f"Processing {pair}... ({i + 1}/{len(pairs)})")
         
         # Get fresh data for each pair
-        df = get_cached_data(effective_exchange, pair, sort_tf, cache_key)
+        df = get_cached_data(effective_exchange, pair, sort_tf)
         if df is None or df.empty or len(df) < st.session_state["min_bars"]:
             continue
         
