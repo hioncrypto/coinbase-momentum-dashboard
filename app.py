@@ -784,10 +784,6 @@ except Exception:
 
 
 # Save to URL when value changes
-if new_cap != st.session_state.get("_prev_discover_cap"):
-    st.query_params["discover_cap"] = str(new_cap)
-    st.session_state["_prev_discover_cap"] = new_cap
-
 # Mode Settings
 with expander("Mode & Timeframes"):
     st.radio("Data Source", ["REST only", "WebSocket + REST"], key="mode")
