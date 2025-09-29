@@ -840,10 +840,10 @@ elif st.session_state["preset"] == "Confirm Rally":
             "use_roc": False, "use_macd_cross": False, "K_green": 3, "Y_yellow": 2
         })
     
-    st.radio("Gate Mode", ["ALL", "ANY", "Custom (K/Y)"], 
+st.radio("Gate Mode", ["ALL", "ANY", "Custom (K/Y)"], 
             index=["ALL", "ANY", "Custom (K/Y)"].index(st.session_state["gate_mode"]), 
             key="gate_mode", horizontal=True)
-    st.toggle("Hard filter (hide non-passers)", key="hard_filter")
+st.toggle("Hard filter (hide non-passers)", key="hard_filter")
     
     # Basic gate parameters
     st.slider("Δ lookback (candles)", 1, 100, st.session_state["lookback_candles"], 1, key="lookback_candles")
