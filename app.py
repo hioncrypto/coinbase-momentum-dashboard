@@ -818,7 +818,7 @@ st.radio("Preset", presets,
             horizontal=True,
              help="Velocity Mode: Vol 2.5×, MACD cross ≤3 bars, ROC 5%. Tweak: vol→2.0/roc→3.0 (aggressive) or vol→3.0/roc→7.0 (conservative)")    
     # Apply presets
-if st.session_state["preset"] == "Spike Hunter":
+    if st.session_state["preset"] == "Spike Hunter":
         st.session_state.update({
             "gate_mode": "ANY", "hard_filter": False, "lookback_candles": 3, "min_pct": 3.0,
             "use_vol_spike": True, "vol_mult": 1.10, "use_rsi": False, "use_macd": False,
