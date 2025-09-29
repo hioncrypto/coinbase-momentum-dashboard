@@ -1014,7 +1014,6 @@ gate_settings = {
 
 # Process pairs and build rows
 rows = []
-cache_key = get_cache_key()
 sort_tf = st.session_state["sort_tf"]
 mode = st.session_state["gate_mode"]
 hard_filter = st.session_state["hard_filter"]
@@ -1092,8 +1091,7 @@ if pairs:
             else:  # Weekly
                 history_limit = st.session_state["amount_weekly"] * 7 * 24  # hourly bars
             
-            history_df = get_cached_data(effective_exchange, pair, "1h", cache_key)
-            if history_df is not None and not history_df.empty:
+            history_df = get_cached_data(effective_exchange, pair, "1h")
                 from_ath, ath_date, from_atl, atl_date = compute_ath_atl(history_df)
                 ath_data = {
                     "ATH %": f"{from_ath:+.1f}%" if not pd.isna(from_ath) else "N/A",
