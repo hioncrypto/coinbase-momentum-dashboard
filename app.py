@@ -846,7 +846,7 @@ st.radio("Gate Mode", ["ALL", "ANY", "Custom (K/Y)"],
 st.toggle("Hard filter (hide non-passers)", key="hard_filter")
     
     # Basic gate parameters
-    st.slider("Δ lookback (candles)", 1, 100, st.session_state["lookback_candles"], 1, key="lookback_candles")
+        st.slider("Δ lookback (candles)", 1, 100, st.session_state["lookback_candles"], 1, key="lookback_candles")
     st.slider("Min +% change (Δ gate)", 0.0, 50.0, st.session_state["min_pct"], 0.5, key="min_pct")
     
     # Volume, RSI, MACD gates in columns
