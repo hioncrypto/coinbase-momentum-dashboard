@@ -1092,10 +1092,10 @@ if pairs:
                 history_limit = st.session_state["amount_weekly"] * 7 * 24  # hourly bars
             
             history_df = get_cached_data(effective_exchange, pair, "1h")
-                from_ath, ath_date, from_atl, atl_date = compute_ath_atl(history_df)
-                ath_data = {
-                    "ATH %": f"{from_ath:+.1f}%" if not pd.isna(from_ath) else "N/A",
-                    "ATL %": f"{from_atl:+.1f}%" if not pd.isna(from_atl) else "N/A"
+            from_ath, ath_date, from_atl, atl_date = compute_ath_atl(history_df)
+            ath_data = {
+                "ATH %": f"{from_ath:+.1f}%" if not pd.isna(from_ath) else "N/A",
+                "ATL %": f"{from_atl:+.1f}%" if not pd.isna(from_atl) else "N/A"
                 }
         
         # Build row data
