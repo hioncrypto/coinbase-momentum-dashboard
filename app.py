@@ -673,7 +673,23 @@ with st.sidebar:
     
         st.checkbox("Use watchlist only", key="use_watch", 
                 value=st.session_state.get("use_watch", False))
+
+    # Watchlist Management (separate from My Pairs)
+    with expander("Watchlist"):
+    st.caption("Watchlist is different from 'My Pairs'. Use this for broader monitoring.")
+    current_watchlist = st.text_area(
+        "Watchlist pairs", 
+        st.session_state.get("watchlist", "BTC-USD, ETH-USD, SOL-USD, AVAX-USD, ADA-USD"),
+        key="watchlist_edit",
+        help="Comma-separated pairs like BTC-USD, ETH-USDT"
+    )
     
+    if st.button("Update Watchlist"):
+        cleaned = ", ".join([p.strip().upper() for p in current_watchlist.split(",") if p.strip()])
+        st.session_state["watchlist"] = cleaned
+        st.success("Watchlist updated!")
+        st.rerun()
+
     # Calculate available pairs
     if st.session_state.get("use_my_pairs", False):
         avail_pairs = [p.strip().upper() for p in st.session_state.get("my_pairs", "").split(",") if p.strip()]
@@ -950,21 +966,6 @@ with expander("Listing Radar"):
                     key="lr_feeds",
                     help="One URL per line for scraping upcoming listing announcements")
 
-# Watchlist Management (separate from My Pairs)
-with expander("Watchlist"):
-    st.caption("Watchlist is different from 'My Pairs'. Use this for broader monitoring.")
-    current_watchlist = st.text_area(
-        "Watchlist pairs", 
-        st.session_state.get("watchlist", "BTC-USD, ETH-USD, SOL-USD, AVAX-USD, ADA-USD"),
-        key="watchlist_edit",
-        help="Comma-separated pairs like BTC-USD, ETH-USDT"
-    )
-    
-    if st.button("Update Watchlist"):
-        cleaned = ", ".join([p.strip().upper() for p in current_watchlist.split(",") if p.strip()])
-        st.session_state["watchlist"] = cleaned
-        st.success("Watchlist updated!")
-        st.rerun()
 
 # =============================================================================
 # MAIN DISPLAY
