@@ -676,8 +676,8 @@ with st.sidebar:
 
     # Watchlist Management (separate from My Pairs)
     with expander("Watchlist"):
-    st.caption("Watchlist is different from 'My Pairs'. Use this for broader monitoring.")
-    current_watchlist = st.text_area(
+        st.caption("Watchlist is different from 'My Pairs'. Use this for broader monitoring.")
+        current_watchlist = st.text_area(
         "Watchlist pairs", 
         st.session_state.get("watchlist", "BTC-USD, ETH-USD, SOL-USD, AVAX-USD, ADA-USD"),
         key="watchlist_edit",
