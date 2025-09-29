@@ -717,7 +717,6 @@ except Exception:
         avail_pairs = get_products(effective_exchange, st.session_state["quote"])
     
     
-    st.checkbox("Use watchlist only", key="use_watch")
     
     if st.session_state["use_my_pairs"]:
         pairs_pool = [p.strip().upper() for p in st.session_state.get("my_pairs", "").split(",") if p.strip()]
