@@ -817,7 +817,6 @@ st.radio("Preset", presets,
             key="preset", 
             horizontal=True,
             help="Velocity Mode: Vol 2.5×, MACD cross ≤3 bars, ROC 5%. Tweak: vol→2.0/roc→3.0 (aggressive) or vol→3.0/roc→7.0 (conservative)")
-    
     st.markdown("**Tips:** Gate Mode 'ALL' requires every enabled gate. 'ANY' needs at least one. "
                "'Custom (K/Y)' colors rows based on how many gates pass (K=green, Y=yellow).")
     
