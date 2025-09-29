@@ -382,16 +382,22 @@ def fetch_data(exchange: str, pair: str, timeframe: str, limit: Optional[int] = 
 # =============================================================================
 
 
-@st.cache_data(show_spinner=False, ttl=lambda: max(5, st.session_state.get("refresh_sec", 10)))
-def get_cached_data(...):
+# derive TTL from the Auto-refresh slider dynamically
+_refresh_ttl = int(max(5, st.session_state.get("refresh_sec", 15)))
+
+@st.cache_data(show_spinner=False, ttl=_refresh_ttl)
 def get_cached_data(exchange: str, pair: str, timeframe: str) -> Optional[pd.DataFrame]:
-    """Cached data fetching function - refreshes every 60 seconds"""
+    """Cached data fetching function — TTL follows the Auto-refresh slider."""
     try:
         limit = get_bars_limit(timeframe)
         return fetch_data(exchange, pair, timeframe, limit)
     except Exception as e:
         st.error(f"Error fetching data for {pair}: {e}")
         return None
+
+# clear the cache so TTL changes take effect immediately
+get_cached_data.clear()
+
 
 # Add a manual refresh button for user control
 col1, col2, col3 = st.columns([1, 1, 2])
