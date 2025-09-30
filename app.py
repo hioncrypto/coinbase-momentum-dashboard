@@ -813,9 +813,10 @@ with expander("Mode & Timeframes"):
 
 # Gates Settings
 with expander("Gates"):
-            index=presets.index(st.session_state.get("preset", "Spike Hunter")), 
+            st.radio("Preset", presets, 
+            index=presets.index(st.session_state.get("preset", "Spike Hunter")),
             key="preset", horizontal=True,
-    help="hioncrypto's Velocity Mode: Aggressive early-entry scanner for explosive moves")
+            help="hioncrypto's Velocity Mode: Aggressive early-entry scanner for explosive moves")
     st.markdown("**Tips:** Gate Mode 'ALL' requires every enabled gate. 'ANY' needs at least one. "
                "'Custom (K/Y)' colors rows based on how many gates pass (K=green, Y=yellow).")
     
