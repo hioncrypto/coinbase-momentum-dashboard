@@ -1129,8 +1129,6 @@ if pairs:
         
         # Add ATH/ATL columns if enabled
         row_data.update(ath_data)
-            # Add ATH/ATL columns if enabled
-            row_data.update(ath_data)
             
             # Send alerts if pair meets velocity criteria
             if is_green:  # Only alert on strong signals
