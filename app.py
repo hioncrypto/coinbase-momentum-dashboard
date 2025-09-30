@@ -23,7 +23,11 @@ import pandas as pd
 import requests
 import streamlit as st
 import streamlit.components.v1 as components
-
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import requests
+from datetime import datetime
 # Optional dependencies
 try:
     from streamlit_autorefresh import st_autorefresh
