@@ -28,6 +28,9 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import requests
 from datetime import datetime
+# Track alerted pairs to avoid spam
+if 'alerted_pairs' not in st.session_state:
+    st.session_state.alerted_pairs = set()
 # Optional dependencies
 try:
     from streamlit_autorefresh import st_autorefresh
