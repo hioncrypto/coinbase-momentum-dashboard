@@ -1129,8 +1129,24 @@ if pairs:
         
         # Add ATH/ATL columns if enabled
         row_data.update(ath_data)
-        
-        rows.append(row_data)
+            # Add ATH/ATL columns if enabled
+            row_data.update(ath_data)
+            
+            # Send alerts if pair meets velocity criteria
+            if is_green:  # Only alert on strong signals
+                email_recipient = st.session_state.get("email_alert", "")
+                webhook_url = st.session_state.get("webhook_url", "")
+                
+                # Only alert once per pair per session
+                if pair not in st.session_state.alerted_pairs:
+                    if email_recipient:
+                        send_email_alert(email_recipient, pair, last_price, pct_change)
+                    if webhook_url:
+                        send_webhook_alert(webhook_url, pair, last_price, pct_change, chips)
+                    
+                    st.session_state.alerted_pairs.add(pair)
+            
+            rows.append(row_data)
     
     # Clear progress indicators
     progress_placeholder.empty()
