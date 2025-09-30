@@ -811,20 +811,24 @@ with expander("Mode & Timeframes"):
                 key="sort_tf")
     st.toggle("Sort Descending", key="sort_desc")
 
-presets = ["Spike Hunter", "Early MACD Cross", "Confirm Rally", "Velocity Mode", "None"]
-st.radio("Preset", presets,
-            index=presets.index(st.session_state.get("preset", "Spike Hunter")),
-            key="preset", 
-            horizontal=True,
-             help="Velocity Mode: Vol 2.5×, MACD cross ≤3 bars, ROC 5%. Tweak: vol→2.0/roc→3.0 (aggressive) or vol→3.0/roc→7.0 (conservative)")    
+# Gates Settings
+with expander("Gates"):
+    presets = ["Spike Hunter", "Early MACD Cross", "Confirm Rally", "Velocity Mode", "None"]
+    st.radio("Preset", presets, 
+            index=presets.index(st.session_state.get("preset", "Spike Hunter")), 
+            key="preset", horizontal=True)
+    
+    st.markdown("**Tips:** Gate Mode 'ALL' requires every enabled gate. 'ANY' needs at least one. "
+               "'Custom (K/Y)' colors rows based on how many gates pass (K=green, Y=yellow).")
+    
     # Apply presets
-if st.session_state["preset"] == "Spike Hunter":
+    if st.session_state["preset"] == "Spike Hunter":
         st.session_state.update({
             "gate_mode": "ANY", "hard_filter": False, "lookback_candles": 3, "min_pct": 3.0,
             "use_vol_spike": True, "vol_mult": 1.10, "use_rsi": False, "use_macd": False,
             "use_trend": False, "use_roc": False, "use_macd_cross": False
         })
-elif st.session_state["preset"] == "Early MACD Cross":
+    elif st.session_state["preset"] == "Early MACD Cross":
         st.session_state.update({
             "gate_mode": "ANY", "hard_filter": False, "lookback_candles": 3, "min_pct": 3.0,
             "use_vol_spike": True, "vol_mult": 1.10, "use_rsi": True, "min_rsi": 50,
@@ -832,24 +836,32 @@ elif st.session_state["preset"] == "Early MACD Cross":
             "macd_cross_bars": 5, "macd_cross_only_bull": True, "macd_cross_below_zero": True,
             "macd_hist_confirm_bars": 3
         })
-elif st.session_state["preset"] == "Confirm Rally":
+    elif st.session_state["preset"] == "Confirm Rally":
         st.session_state.update({
             "gate_mode": "Custom (K/Y)", "hard_filter": True, "lookback_candles": 2, "min_pct": 5.0,
             "use_vol_spike": True, "vol_mult": 1.20, "use_rsi": True, "min_rsi": 60,
             "use_macd": True, "min_mhist": 0.0, "use_trend": True, "pivot_span": 4, "trend_within": 48,
             "use_roc": False, "use_macd_cross": False, "K_green": 3, "Y_yellow": 2
         })
+    elif st.session_state["preset"] == "Velocity Mode":
+        st.session_state.update({
+            "gate_mode": "ANY", "hard_filter": True, "lookback_candles": 2, "min_pct": 2.5,
+            "use_vol_spike": True, "vol_mult": 2.5, "vol_window": 20,
+            "use_rsi": False, "use_macd": False, "use_trend": False, "use_atr": False,
+            "use_roc": True, "min_roc": 5.0,
+            "use_macd_cross": True, "macd_cross_bars": 3, "macd_cross_only_bull": True,
+            "macd_cross_below_zero": True, "macd_hist_confirm_bars": 2,
+            "K_green": 2, "Y_yellow": 1
+        })
     
-st.radio("Gate Mode", ["ALL", "ANY", "Custom (K/Y)"], 
+    st.radio("Gate Mode", ["ALL", "ANY", "Custom (K/Y)"], 
             index=["ALL", "ANY", "Custom (K/Y)"].index(st.session_state["gate_mode"]), 
             key="gate_mode", horizontal=True)
-st.toggle("Hard filter (hide non-passers)", key="hard_filter")
+    st.toggle("Hard filter (hide non-passers)", key="hard_filter")
     
-    # Basic gate parameters
-        st.slider("Δ lookback (candles)", 1, 100, st.session_state["lookback_candles"], 1, key="lookback_candles")
+    st.slider("Δ lookback (candles)", 1, 100, st.session_state["lookback_candles"], 1, key="lookback_candles")
     st.slider("Min +% change (Δ gate)", 0.0, 50.0, st.session_state["min_pct"], 0.5, key="min_pct")
     
-    # Volume, RSI, MACD gates in columns
     c1, c2, c3 = st.columns(3)
     with c1:
         st.toggle("Volume spike ×", key="use_vol_spike")
@@ -861,7 +873,6 @@ st.toggle("Hard filter (hide non-passers)", key="hard_filter")
         st.toggle("MACD hist", key="use_macd")
         st.slider("Min MACD hist", 0.0, 2.0, st.session_state["min_mhist"], 0.05, key="min_mhist")
     
-    # ATR, Trend, ROC gates in columns
     c4, c5, c6 = st.columns(3)
     with c4:
         st.toggle("ATR %", key="use_atr")
@@ -874,7 +885,6 @@ st.toggle("Hard filter (hide non-passers)", key="hard_filter")
         st.toggle("ROC (rate of change)", key="use_roc")
         st.slider("Min ROC %", 0.0, 50.0, st.session_state["min_roc"], 0.5, key="min_roc")
     
-    # MACD Cross section
     st.markdown("**MACD Cross (early entry)**")
     c7, c8, c9, c10 = st.columns(4)
     with c7:
@@ -887,14 +897,12 @@ st.toggle("Hard filter (hide non-passers)", key="hard_filter")
         st.toggle("Prefer below zero", key="macd_cross_below_zero")
     st.slider("Histogram > 0 within (bars)", 0, 10, st.session_state["macd_hist_confirm_bars"], 1, key="macd_hist_confirm_bars")
     
-    # Custom K/Y rules
     st.markdown("---")
     st.subheader("Color rules (Custom only)")
     st.selectbox("Gates needed to turn green (K)", list(range(1, 8)), 
                 index=st.session_state["K_green"] - 1, key="K_green")
     st.selectbox("Yellow needs ≥ Y (but < K)", list(range(0, st.session_state["K_green"])), 
                 index=min(st.session_state["Y_yellow"], st.session_state["K_green"] - 1), key="Y_yellow")
-
 # Indicator Lengths
 with expander("Indicator lengths"):
     st.caption("Longer = smoother; shorter = more reactive.")
