@@ -817,7 +817,7 @@ with expander("Gates"):
             st.radio("Preset", presets,
             index=presets.index(st.session_state.get("preset", "Spike Hunter")),
             key="preset", horizontal=True)
-"'Custom (K/Y)' colors rows based on how many gates pass (K=green, Y=yellow).")
+            "'Custom (K/Y)' colors rows based on how many gates pass (K=green, Y=yellow).")
     
     # Apply presets
     if st.session_state["preset"] == "Spike Hunter":
