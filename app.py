@@ -1131,7 +1131,7 @@ if pairs:
         row_data.update(ath_data)
             
             # Send alerts if pair meets velocity criteria
-            if is_green:  # Only alert on strong signals
+        if is_green:  # Only alert on strong signals
                 email_recipient = st.session_state.get("email_alert", "")
                 webhook_url = st.session_state.get("webhook_url", "")
                 
