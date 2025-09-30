@@ -813,7 +813,7 @@ with expander("Mode & Timeframes"):
 
 # Gates Settings
 with expander("Gates"):
-            st.radio("Preset", presets, 
+            presets = ["Spike Hunter", "Early MACD Cross", "Confirm Rally", "hioncrypto's Velocity Mode", "None"]
             index=presets.index(st.session_state.get("preset", "Spike Hunter")),
             key="preset", horizontal=True,
             help="hioncrypto's Velocity Mode: Aggressive early-entry scanner for explosive moves")
