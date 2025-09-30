@@ -1144,7 +1144,7 @@ if pairs:
                     
                     st.session_state.alerted_pairs.add(pair)
             
-            rows.append(row_data)
+        rows.append(row_data)
     
     # Clear progress indicators
     progress_placeholder.empty()
