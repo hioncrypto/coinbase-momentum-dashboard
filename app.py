@@ -1169,7 +1169,7 @@ if rows:
     min_pct = st.session_state["min_pct"]
     df_results = df_results[df_results[chg_col] >= min_pct]
         
-        df_results.insert(0, "#", range(1, len(df_results) + 1))
+    df_results.insert(0, "#", range(1, len(df_results) + 1))
     
     # Show current time and summary
     st.caption(f"Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
