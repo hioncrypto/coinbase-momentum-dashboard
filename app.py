@@ -1188,8 +1188,7 @@ if rows:
     with col4:
         st.metric("Neutral", total_count - green_count - yellow_count)
     
-# Top 10 section - Sort by percentage change first
-        st.subheader("🔥 Top 10 Opportunities")
+st.subheader("🔥 Top 10 Opportunities")
         
         # Always sort by percentage change as primary criteria
         chg_col = f"% Change ({sort_tf})"
