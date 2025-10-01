@@ -1190,6 +1190,8 @@ if rows:
     
 st.subheader("🔥 Top 10 Opportunities")
             
+st.subheader("🔥 Top 10 Opportunities")
+            
             # Always sort by percentage change as primary criteria
             chg_col = f"% Change ({sort_tf})"
             top_10 = df_results.head(10)
