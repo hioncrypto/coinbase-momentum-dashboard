@@ -1193,7 +1193,7 @@ st.subheader("📌 Top 10 Opportunities")
 
 # Always sort by percentage change as primary criteria
 chg_col = f"% Change ({sort_tf})"
-top_10 = df_results.nlargest(10, chg_col).reset_index(drop=True)
+top_10 = df_results.head(10)
 top_10.insert(0, "Rank", range(1, len(top_10) + 1))
 
 if not top_10.empty:
