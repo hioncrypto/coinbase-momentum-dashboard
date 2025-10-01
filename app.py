@@ -814,7 +814,7 @@ with expander("Mode & Timeframes"):
     st.radio("Data Source", ["REST only", "WebSocket + REST"], key="mode")
     st.slider("WebSocket chunk size", 2, 20, st.session_state["ws_chunk"], key="ws_chunk")
     
-    st.selectbox("Sort Timeframe", ["15m", "1h"], 
+    st.selectbox("Sort Timeframe", ["5m", "15m", "1h"], 
                 index=["15m", "1h"].index(st.session_state["sort_tf"]), 
                 key="sort_tf")
     st.toggle("Sort Descending", key="sort_desc")
