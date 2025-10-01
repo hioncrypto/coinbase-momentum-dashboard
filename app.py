@@ -1210,7 +1210,11 @@ if rows:
                 
             display_cols = [col for col in top_10.columns if not col.startswith('_')]
             styled_df = top_10[display_cols].style.apply(style_top10_rows, axis=1)
-            st.dataframe(styled_df, use_container_width=True, hide_index=True)
+            
+            # Center the table
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                st.dataframe(styled_df, use_container_width=True, hide_index=True)
     # Display options
     col1, col2 = st.columns([3, 1])
     with col1:
