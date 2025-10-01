@@ -1188,27 +1188,21 @@ if rows:
     with col4:
         st.metric("Neutral", total_count - green_count - yellow_count)
     
-  # Top 10 section - Sort by percentage change first
-    st.subheader("📌 Top 10 Opportunities")
-    
-    # Always sort by percentage change as primary criteria
-    chg_col = f"% Change ({sort_tf})"
-        top_10 = df_results.head(10)
-    top_10.insert(0, "Rank", range(1, len(top_10) + 1))
-    
-    if not top_10.empty:
-        # Style rows based on gate status
-        def style_top10_rows(row):
-            idx = row.name
-            if "_green" in top_10.columns and top_10.iloc[idx]["_green"]:
-                return ['background-color: #16a34a; color: white; font-weight: 600'] * len(row)
-            elif "_yellow" in top_10.columns and top_10.iloc[idx]["_yellow"]:
-                return ['background-color: #eab308; color: black'] * len(row)
-            return [''] * len(row)
-        
-        display_cols = [col for col in top_10.columns if not col.startswith('_')]
-        styled_df = top_10[display_cols].style.apply(style_top10_rows, axis=1)
-        st.dataframe(styled_df, use_container_width=True, hide_index=True)
+    # Top 10 section - Sort by percentage change first
+            st.subheader("🔥 Top 10 Opportunities")
+            
+            # Always sort by percentage change as primary criteria
+            chg_col = f"% Change ({sort_tf})"
+            top_10 = df_results.head(10)
+            top_10.insert(0, "Rank", range(1, len(top_10) + 1))
+            
+            if not top_10.empty:
+                # Style rows based on gate status
+                def style_top10_rows(row):
+                    idx = row.name
+                    if "_green" in top_10.columns and top_10.iloc[idx]["_green"]:
+                        return ['background-color: #1ea34e; color: white; font-weight: 600'] * len(row)
+                    elif "_yellow" in top_10.columns and top_10.iloc[idx]["_yellow"
         
     # All pairs section
     st.subheader("📊 All Pairs")
