@@ -41,6 +41,7 @@ try:
     import websocket
     WS_AVAILABLE = True
 except ImportError:
+    # Track alerted pairs to avoid spam
     WS_AVAILABLE = False
 
 # =============================================================================
