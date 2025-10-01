@@ -1166,7 +1166,7 @@ if rows:
     df_results = df_results.sort_values(chg_col, ascending=ascending).reset_index(drop=True)
         
         # Filter to only pairs meeting minimum % change threshold (delta gate)
-        min_pct = st.session_state["min_pct"]
+    min_pct = st.session_state["min_pct"]
         df_results = df_results[df_results[chg_col] >= min_pct]
         
         df_results.insert(0, "#", range(1, len(df_results) + 1))
