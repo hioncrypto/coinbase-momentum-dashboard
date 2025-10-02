@@ -479,7 +479,7 @@ def get_coinbase_products(quote: str) -> List[str]:
         
         products = []
         for product in response.json():
-            if product.get("quote_currency") == quote.upper():
+            if product.get("quote_currency") == quote.upper() and product.get("status") == "online" and not product.get("trading_disabled", False) and not product.get("cancel_only", False):
                 pair = f"{product['base_currency']}-{product['quote_currency']}"
                 products.append(pair)
         
