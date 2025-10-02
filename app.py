@@ -105,7 +105,7 @@ CONFIG = Config()
 # =============================================================================
 
 st.set_page_config(
-    page_title="Enhanced Crypto Tracker", 
+    page_title="hioncrypto's: Crypto Tracker", 
     layout="wide",
     initial_sidebar_state="expanded"
 )
