@@ -911,7 +911,7 @@ with expander("Mode & Timeframes"):
            st.toggle("Volume spike ✕", key="use_vol_spike", help="Passes if current volume exceeds average volume by the spike multiple (e.g., 2.5x means current volume is 250% of average)")
         
         st.slider("Spike multiple ✕", 1.0, 5.0, st.session_state["vol_mult"], 0.05, key="vol_mult", help="Multiplier threshold. 2.5 means current volume must be at least 2.5 times the average volume over the lookback period")
-          st.slider("Min RSI", 40, 90, st.session_state["min_rsi"], 1, key="min_rsi")
+        st.slider("Min RSI", 40, 90, st.session_state["min_rsi"], 1, key="min_rsi")
         with c3:
             st.toggle("MACD hist", key="use_macd")
             st.slider("Min MACD hist", 0.0, 2.0, st.session_state["min_mhist"], 0.05, key="min_mhist")
