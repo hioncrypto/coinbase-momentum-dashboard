@@ -16,7 +16,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Mobile-responsive CSS
 st.markdown("""
     <style>
     /* Keep sidebar toggle button floating/fixed while scrolling */
@@ -24,6 +23,13 @@ st.markdown("""
         position: fixed !important;
         top: 1rem;
         left: 1rem;
+        z-index: 999;
+    }
+    
+    /* Keep sidebar close button fixed when sidebar is expanded */
+    [data-testid="stSidebar"] button[kind="header"] {
+        position: sticky !important;
+        top: 1rem;
         z-index: 999;
     }
     
