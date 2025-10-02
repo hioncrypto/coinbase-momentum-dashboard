@@ -6,6 +6,27 @@
 # requests>=2.31
 # websocket-client>=1.6 
 
+import streamlit as st
+
+# Page configuration - MUST be first Streamlit command
+st.set_page_config(
+    page_title="Enhanced Crypto Tracker",
+    page_icon="🚀",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
+# Mobile-responsive CSS
+st.markdown("""
+    <style>
+    @media (max-width: 768px) {
+        .stDataFrame { font-size: 11px; }
+        [data-testid="stMetricValue"] { font-size: 18px; }
+        [data-testid="stMetricLabel"] { font-size: 11px; }
+        .block-container { padding: 0.5rem; }
+    }
+    </style>
+    """, unsafe_allow_html=True)
 import json
 import time
 import datetime as dt
@@ -21,7 +42,6 @@ from typing import List, Optional, Tuple, Dict, Any
 import numpy as np
 import pandas as pd
 import requests
-import streamlit as st
 import streamlit.components.v1 as components
 import smtplib
 from email.mime.text import MIMEText
