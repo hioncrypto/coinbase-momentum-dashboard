@@ -27,11 +27,12 @@ st.markdown("""
     }
     
     /* Keep sidebar close button fixed when sidebar is expanded */
-    [data-testid="stSidebar"] button[kind="header"] {
-        position: sticky !important;
-        top: 1rem;
-        z-index: 999;
-    }
+[data-testid="stSidebar"] > div > button:first-child {
+    position: fixed !important;
+    top: 1rem;
+    left: 1rem;
+    z-index: 999;
+}
     
     /* Mobile-friendly adjustments */
     @media (max-width: 768px) {
