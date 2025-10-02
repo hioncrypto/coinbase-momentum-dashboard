@@ -863,8 +863,9 @@ with expander("Mode & Timeframes"):
     with expander("Gates"):
         presets = ["Spike Hunter", "Early MACD Cross", "Confirm Rally", "hioncrypto's Velocity Mode", "None"]
         st.radio("Preset", presets,
-                index=presets.index(st.session_state.get("preset", "Spike Hunter")),
-                key="preset", horizontal=True)
+         index=presets.index(st.session_state.get("preset", "Spike Hunter")),
+         key="preset", horizontal=True,
+         help="Quick filter configurations: Spike Hunter (fast momentum), Early MACD Cross (trend reversals), Confirm Rally (strict multi-gate), Velocity Mode (explosive moves), None (manual)")
         
         st.markdown("**Tips:** Gate Mode 'ALL' requires every enabled gate. 'ANY' needs at least one. "
                    "'Custom (K/Y)' colors rows based on how many gates pass (K=green, Y=yellow).")
