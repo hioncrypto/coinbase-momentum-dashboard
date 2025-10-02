@@ -1124,7 +1124,7 @@ if pairs:
         # Get current price (WebSocket override or last close)
         ws_price = st.session_state.get("ws_prices", {}).get(pair)
         last_price = float(ws_price) if ws_price else float(df["close"].iloc[-1])
-        first_price = float(df["close"].iloc[0])
+        first_price = float(df["close"].iloc[-st.session_state["lookback_candles"]])
         pct_change = (last_price / (first_price + 1e-12) - 1.0) * 100.0
         
         # Determine signal text
