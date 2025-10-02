@@ -865,6 +865,7 @@ with expander("Mode & Timeframes"):
         st.radio("Preset", presets,
          index=presets.index(st.session_state.get("preset", "Spike Hunter")),
          key="preset", horizontal=True,
+         Use the conditional info box - shows explanation below when you select Spike Hunter        
          help="Quick filter configurations: Spike Hunter (fast momentum), Early MACD Cross (trend reversals), Confirm Rally (strict multi-gate), Velocity Mode (explosive moves), None (manual)")
         
         st.markdown("**Tips:** Gate Mode 'ALL' requires every enabled gate. 'ANY' needs at least one. "
