@@ -1024,7 +1024,7 @@ with expander("Listing Radar"):
 # MAIN DISPLAY
 # =============================================================================
 
-st.title("🚀 Enhanced Crypto Tracker")
+st.title("🚀 hioncrypto's: Crypto Tracker")
 
 # Get trading pairs
 if st.session_state["use_my_pairs"]:
