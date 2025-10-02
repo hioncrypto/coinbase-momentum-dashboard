@@ -872,13 +872,11 @@ with expander("Mode & Timeframes"):
         # Apply presets
         if st.session_state["preset"] == "Spike Hunter":
             st.session_state.update({
-                "gate_mode": "ANY", "hard_filter": False, "lookback_candles": 3, "min_pct": 3.0,
                 "use_vol_spike": True, "vol_mult": 1.10, "use_rsi": False, "use_macd": False,
                 "use_trend": False, "use_roc": False, "use_macd_cross": False
             })
         elif st.session_state["preset"] == "Early MACD Cross":
             st.session_state.update({
-                "gate_mode": "ANY", "hard_filter": False, "lookback_candles": 3, "min_pct": 3.0,
                 "use_vol_spike": True, "vol_mult": 1.10, "use_rsi": True, "min_rsi": 50,
                 "use_macd": False, "use_trend": False, "use_roc": False, "use_macd_cross": True,
                 "macd_cross_bars": 5, "macd_cross_only_bull": True, "macd_cross_below_zero": True,
@@ -886,14 +884,12 @@ with expander("Mode & Timeframes"):
             })
         elif st.session_state["preset"] == "Confirm Rally":
             st.session_state.update({
-                "gate_mode": "Custom (K/Y)", "hard_filter": True, "lookback_candles": 2, "min_pct": 5.0,
                 "use_vol_spike": True, "vol_mult": 1.20, "use_rsi": True, "min_rsi": 60,
                 "use_macd": True, "min_mhist": 0.0, "use_trend": True, "pivot_span": 4, "trend_within": 48,
                 "use_roc": False, "use_macd_cross": False, "K_green": 3, "Y_yellow": 2
             })
         elif st.session_state["preset"] == "hioncrypto's Velocity Mode":
             st.session_state.update({
-                "gate_mode": "ANY", "hard_filter": True, "lookback_candles": 2, "min_pct": 2.5,
                 "use_vol_spike": True, "vol_mult": 2.5, "vol_window": 20,
                 "use_rsi": False, "use_macd": False, "use_trend": False, "use_atr": False,
                 "use_roc": True, "min_roc": 5.0,
