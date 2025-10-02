@@ -26,13 +26,17 @@ st.markdown("""
         z-index: 999;
     }
     
-   /* Keep sidebar close button fixed when sidebar is expanded */
-    [data-testid="stSidebar"] > div:first-child {
-        position: sticky !important;
-        top: 0;
-        z-index: 999;
-        background-color: #0e1117;
+  /* Force sidebar header to stay at top */
+    section[data-testid="stSidebar"] > div {
+        position: relative !important;
     }
+    
+    section[data-testid="stSidebar"] > div > div:first-child {
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 1000 !important;
+        background: #262730 !important;
+    } 
     
     /* Mobile-friendly adjustments */
     @media (max-width: 768px) {
