@@ -19,6 +19,15 @@ st.set_page_config(
 # Mobile-responsive CSS
 st.markdown("""
     <style>
+    /* Keep sidebar toggle button floating/fixed while scrolling */
+    [data-testid="collapsedControl"] {
+        position: fixed !important;
+        top: 1rem;
+        left: 1rem;
+        z-index: 999;
+    }
+    
+    /* Mobile-friendly adjustments */
     @media (max-width: 768px) {
         .stDataFrame { font-size: 11px; }
         [data-testid="stMetricValue"] { font-size: 18px; }
