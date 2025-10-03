@@ -615,7 +615,13 @@ def evaluate_gates(df: pd.DataFrame, settings: dict) -> Tuple[dict, int, str, in
     
     # ATR gate
     if settings.get("use_atr", False):
-        atr_values = atr(df, settings.get("atr_len", 14))
+        # Calculate ATR manually
+        high_low = df['high'] - df['low']
+        high_close = abs(df['high'] - df['close'].shift())
+        low_close = abs(df['low'] - df['close'].shift())
+        true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+        atr_values = true_range.rolling(window=settings.get("atr_len", 14)).mean()
+        
         current_atr = float(atr_values.iloc[-1]) if not atr_values.empty else 0
         atr_pct = (current_atr / last_close * 100) if last_close > 0 else 0
         atr_pass = atr_pct >= settings.get("min_atr", 0.5)
