@@ -104,11 +104,6 @@ CONFIG = Config()
 # STREAMLIT PAGE SETUP
 # =============================================================================
 
-st.set_page_config(
-    page_title="hioncrypto's: Crypto Tracker", 
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
 
 # Custom CSS
 st.markdown("""
