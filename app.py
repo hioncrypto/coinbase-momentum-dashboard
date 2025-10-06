@@ -437,7 +437,6 @@ def get_cached_data(exchange: str, pair: str, timeframe: str) -> Optional[pd.Dat
         return None
 
 # clear the cache so TTL changes take effect immediately
-get_cached_data.clear()
 
 
 # Add a manual refresh button for user control
