@@ -1353,7 +1353,6 @@ if is_ui_only_change:
 # Only refresh data if enough time has passed AND it's not a UI-only change
 elif time_since_update >= refresh_interval:
     st.session_state["last_update"] = current_time
-    get_cached_data.clear()  # Clear the cache to force fresh data
     st.rerun()
 
 # Auto-refresh mechanism
