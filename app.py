@@ -151,12 +151,16 @@ section[data-testid="stSidebar"] * {
 def init_session_state():
     """Initialize session state variables"""
     
-    # Load discover_cap from URL first
-    if "discover_cap" in st.query_params:
-        try:
-            st.session_state["discover_cap"] = int(st.query_params["discover_cap"])
-        except:
-            pass
+    # Only load URL params on FIRST run
+    if "_initialized" not in st.session_state:
+        st.session_state["_initialized"] = True
+        
+        # Load discover_cap from URL first (only on initial load)
+        if "discover_cap" in st.query_params:
+            try:
+                st.session_state["discover_cap"] = int(st.query_params["discover_cap"])
+            except:
+                pass
     
     defaults = {
         # Market settings
