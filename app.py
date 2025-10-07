@@ -1373,9 +1373,9 @@ elif time_since_update >= refresh_interval:
     st.rerun()
 
 # Auto-refresh mechanism
-if st_autorefresh:
-    refresh_interval_ms = max(5, st.session_state["refresh_sec"]) * 1000
-    st_autorefresh(interval=refresh_interval_ms, key="auto_refresh", debounce=False)
+# if st_autorefresh:
+#    refresh_interval_ms = max(5, st.session_state["refresh_sec"]) * 1000
+#    st_autorefresh(interval=refresh_interval_ms, key="auto_refresh", debounce=False)
 else:
         # Use Streamlit's native rerun instead of JavaScript reload
         # JavaScript reloads destroy session state!
