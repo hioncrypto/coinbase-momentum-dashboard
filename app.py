@@ -711,7 +711,6 @@ with st.sidebar:
         quotes_list = ["USD", "USDC", "USDT", "BTC", "ETH", "EUR"]
     
         st.selectbox("Exchange", exchanges_list, 
-                index=exchanges_list.index(st.session_state.get("exchange", "Coinbase")), 
                 key="exchange")
     
         st.selectbox("Quote Currency", quotes_list, 
