@@ -149,9 +149,9 @@ section[data-testid="stSidebar"] * {
 # =============================================================================
 
 def init_session_state():
-    """Initialize session state variables"""
+    """Initialize session state variables - only sets defaults if not present"""
     
-    # Only load URL params on FIRST run
+    # Mark initialization and load URL params ONLY on first run
     if "_initialized" not in st.session_state:
         st.session_state["_initialized"] = True
         
@@ -162,12 +162,12 @@ def init_session_state():
             except:
                 pass
     
+    # Define defaults
     defaults = {
         # Market settings
         "exchange": "Coinbase",
         "quote": "USD",
         "discover_cap": 400,
-        # ... keep all the rest of your existing defaults here
         
         # Mode
         "mode": "REST only",
@@ -192,6 +192,9 @@ def init_session_state():
         "macd_slow": 26,
         "macd_sig": 9,
         "min_mhist": 0.0,
+        "use_atr": False,
+        "atr_len": 14,
+        "min_atr": 0.5,
         "use_trend": False,
         "pivot_span": 4,
         "trend_within": 48,
@@ -227,11 +230,10 @@ def init_session_state():
         # WebSocket
         "ws_thread": None,
         "ws_alive": False,
-        "ws_q": queue.Queue(),
         "ws_prices": {},
         
         # Alerts
-        "alert_seen": set(),
+        "alerted_pairs": set(),
         
         # Listing Radar
         "lr_enabled": False,
@@ -240,10 +242,14 @@ def init_session_state():
         "lr_unacked": 0,
     }
     
+    # CRITICAL: Only set defaults for keys that DON'T exist
+    # This preserves user changes across refreshes
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
 
+# Initialize state
+init_session_state()
 # Initialize state
 init_session_state()
 
