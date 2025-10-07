@@ -1377,38 +1377,9 @@ if st_autorefresh:
     refresh_interval_ms = max(5, st.session_state["refresh_sec"]) * 1000
     st_autorefresh(interval=refresh_interval_ms, key="auto_refresh", debounce=False)
 else:
-    # Enhanced JavaScript fallback with better reliability
-    refresh_sec = max(5, st.session_state["refresh_sec"])
-    st.markdown(f"""
-    <script>
-    // Clear any existing refresh timers
-    if (window.cryptoRefreshTimer) {{
-        clearTimeout(window.cryptoRefreshTimer);
-    }}
-    
-    // Set new refresh timer
-    window.cryptoRefreshTimer = setTimeout(function() {{
-        // Add timestamp to prevent caching
-        const url = new URL(window.location);
-        url.searchParams.set('_refresh', Date.now());
-        window.location.href = url.toString();
-    }}, {refresh_sec * 1000});
-    
-    // Also add a manual refresh button listener
-    document.addEventListener('visibilitychange', function() {{
-        if (document.visibilityState === 'visible') {{
-            // Page became visible, refresh if it's been a while
-            const lastRefresh = sessionStorage.getItem('lastCryptoRefresh') || 0;
-            const now = Date.now();
-            if (now - lastRefresh > {refresh_sec * 1000}) {{
-                sessionStorage.setItem('lastCryptoRefresh', now);
-                window.location.reload();
-            }}
-        }}
-    }});
-    </script>
-    """, unsafe_allow_html=True)
-
+        # Use Streamlit's native rerun instead of JavaScript reload
+        # JavaScript reloads destroy session state!
+        pass  # The st.rerun() on line 1373 already handles refresh
 # Live update indicator
 st.markdown(f"""
 <div style="position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.7); color: white; padding: 5px 10px; border-radius: 15px; font-size: 12px; z-index: 1000;">
