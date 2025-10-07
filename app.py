@@ -909,27 +909,27 @@ with expander("Mode & Timeframes"):
                 key="gate_mode", horizontal=True)
         st.toggle("Hard filter (hide non-passers)", key="hard_filter")
         
-        st.slider("Δ lookback (candles)", 1, 100, st.session_state["lookback_candles"], 1, key="lookback_candles")
-        st.slider("Min +% change (Δ gate)", 0.0, 50.0, st.session_state["min_pct"], 0.5, key="min_pct")
+        st.slider("Δ lookback (candles)", 1, 100, step=1, key="lookback_candles")
+        st.slider("Min +% change (Δ gate)", 0.0, 50.0, step=0.5, key="min_pct")
         
         c1, c2, c3 = st.columns(3)
         with c1:
            st.toggle("Volume spike ✕", key="use_vol_spike", help="Passes if current volume exceeds average volume by the spike multiple (e.g., 2.5x means current volume is 250% of average)")
         
-        st.slider("Spike multiple ✕", 1.0, 5.0, st.session_state["vol_mult"], 0.05, key="vol_mult", help="Multiplier threshold. 2.5 means current volume must be at least 2.5 times the average volume over the lookback period")
-        st.slider("Min RSI", 40, 90, st.session_state["min_rsi"], 1, key="min_rsi")
+        st.slider("Spike multiple ✕", 1.0, 5.0, step=0.05, key="vol_mult", help="Multiplier threshold. 2.5 means current volume must be at least 2.5 times the average volume over the lookback period")
+        st.slider("Min RSI", 40, 90, step=1, key="min_rsi")
         with c3:
             st.toggle("MACD hist", key="use_macd")
-            st.slider("Min MACD hist", 0.0, 2.0, st.session_state["min_mhist"], 0.05, key="min_mhist")
+            st.slider("Min MACD hist", 0.0, 2.0, step=0.05, key="min_mhist")
         
         c4, c5, c6 = st.columns(3)
         with c4:
             st.toggle("ATR %", key="use_atr")
-            st.slider("Min ATR %", 0.0, 10.0, st.session_state.get("min_atr", 0.5), 0.1, key="min_atr")
+            st.slider("Min ATR %", 0.0, 10.0, step=0.1, key="min_atr")
         with c5:
             st.toggle("Trend breakout (up)", key="use_trend")
-            st.slider("Pivot span (bars)", 2, 10, st.session_state["pivot_span"], 1, key="pivot_span")
-            st.slider("Breakout within (bars)", 5, 96, st.session_state["trend_within"], 1, key="trend_within")
+            st.slider("Pivot span (bars)", 2, 10, step=1, key="pivot_span")
+            st.slider("Breakout within (bars)", 5, 96, step=1, key="trend_within")
         with c6:
             st.toggle("ROC (rate of change)", key="use_roc")
             st.slider("Min ROC %", 0.0, 50.0, st.session_state["min_roc"], 0.5, key="min_roc")
