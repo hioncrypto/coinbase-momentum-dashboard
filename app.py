@@ -932,7 +932,7 @@ with expander("Mode & Timeframes"):
             st.slider("Breakout within (bars)", 5, 96, step=1, key="trend_within")
         with c6:
             st.toggle("ROC (rate of change)", key="use_roc")
-            st.slider("Min ROC %", 0.0, 50.0, st.session_state["min_roc"], 0.5, key="min_roc")
+            st.slider("Min ROC %", 0.0, 50.0, step=0.5, key="min_roc")
         
         st.markdown("**MACD Cross (early entry)**")
         c7, c8, c9, c10 = st.columns(4)
