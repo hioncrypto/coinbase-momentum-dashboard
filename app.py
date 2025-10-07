@@ -713,8 +713,7 @@ with st.sidebar:
         st.selectbox("Exchange", exchanges_list, 
                 key="exchange")
     
-        st.selectbox("Quote Currency", quotes_list, 
-                index=quotes_list.index(st.session_state.get("quote", "USD")), 
+        st.selectbox("Quote Currency", quotes_list,  
                 key="quote")
     
         st.checkbox("Use watchlist only", key="use_watch", 
