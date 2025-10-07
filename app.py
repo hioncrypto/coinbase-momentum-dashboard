@@ -868,19 +868,26 @@ with expander("Mode & Timeframes"):
         st.markdown("**Tips:** Gate Mode 'ALL' requires every enabled gate. 'ANY' needs at least one. "
                    "'Custom (K/Y)' colors rows based on how many gates pass (K=green, Y=yellow).")
         
-        # Apply presets
-        if st.session_state["preset"] == "Spike Hunter":
-            st.session_state.update({
-                "use_vol_spike": True, "vol_mult": 1.10, "use_rsi": False, "use_macd": False,
-                "use_trend": False, "use_roc": False, "use_macd_cross": False
-            })
-        elif st.session_state["preset"] == "Early MACD Cross":
-            st.session_state.update({
-                "use_vol_spike": True, "vol_mult": 1.10, "use_rsi": True, "min_rsi": 50,
-                "use_macd": False, "use_trend": False, "use_roc": False, "use_macd_cross": True,
-                "macd_cross_bars": 5, "macd_cross_only_bull": True, "macd_cross_below_zero": True,
-                "macd_hist_confirm_bars": 3
-            })
+        # Apply presets ONLY when selection changes
+        if "_last_preset" not in st.session_state:
+            st.session_state["_last_preset"] = st.session_state["preset"]
+        
+        if st.session_state["preset"] != st.session_state["_last_preset"]:
+            st.session_state["_last_preset"] = st.session_state["preset"]
+            
+            # NOW apply the preset (only when it changes)
+            if st.session_state["preset"] == "Spike Hunter":
+                st.session_state.update({
+                    "use_vol_spike": True, "vol_mult": 1.10, "use_rsi": False, "use_macd": False,
+                    "use_trend": False, "use_roc": False, "use_macd_cross": False
+                })
+            elif st.session_state["preset"] == "Early MACD Cross":
+                st.session_state.update({
+                    "use_vol_spike": True, "vol_mult": 1.10, "use_rsi": True, "min_rsi": 50,
+                    "use_macd": False, "use_trend": False, "use_roc": False, "use_macd_cross": True,
+                    "macd_cross_bars": 5, "macd_cross_only_bull": True, "macd_cross_below_zero": True,
+                    "macd_hist_confirm_bars": 3
+                })
         elif st.session_state["preset"] == "Confirm Rally":
             st.session_state.update({
                 "use_vol_spike": True, "vol_mult": 1.20, "use_rsi": True, "min_rsi": 60,
