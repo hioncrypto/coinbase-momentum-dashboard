@@ -1025,13 +1025,16 @@ with expander("Listing Radar"):
 st.title("🚀 hioncrypto's: Crypto Tracker")
 
 # DEBUG - Remove after testing
-with st.expander("🐛 DEBUG INFO", expanded=True):
+with st.expander("🐛 DEBUG_INFO", expanded=True):
     st.write("Preset:", st.session_state.get("preset", "NOT SET"))
     st.write("Last Preset:", st.session_state.get("_last_preset", "NOT SET"))
     st.write("min_pct:", st.session_state.get("min_pct", "NOT SET"))
     st.write("lookback_candles:", st.session_state.get("lookback_candles", "NOT SET"))
     st.write("vol_mult:", st.session_state.get("vol_mult", "NOT SET"))
     st.write("_initialized:", st.session_state.get("_initialized", "NOT SET"))
+    st.write("---")
+    st.write("**Session Keys Count:**", len(st.session_state.keys()))
+    st.write("**First 30 Keys:**", list(st.session_state.keys())[:30])
 
 # Get trading pairs
 # Get trading pairs
