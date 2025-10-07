@@ -260,7 +260,7 @@ if "min_pct" in st.session_state and st.session_state["min_pct"] != 3.0:
 # =============================================================================   
 # =============================================================================
 # TECHNICAL INDICATORS            
-            st.session_state[key] = value
+    st.session_state[key] = value
 
 # Initialize state
 init_session_state()
