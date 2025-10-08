@@ -243,6 +243,10 @@ def init_session_state():
     }
     
     # CRITICAL: Only set defaults for keys that DON'T exist
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
+    # CRITICAL: Only set defaults for keys that DON'T exist
     # This preserves user changes across refreshes
 for key, value in defaults.items():
         if key not in st.session_state:
