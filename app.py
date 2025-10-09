@@ -879,10 +879,12 @@ with expander("Mode & Timeframes"):
         # Presets UI + persistence
         presets = ["Spike Hunter", "Early MACD Cross", "Confirm Rally", "hioncrypto's Velocity Mode", "None"]
     
-        if "preset" not in st.session_state:
-            st.session_state["preset"] = "None"
+                if "preset" not in st.session_state:
+            p = st.query_params.get("preset", None)
+            st.session_state["preset"] = p if p in presets else "None"
         if "_last_preset" not in st.session_state:
-            st.session_state["_last_preset"] = "None"
+            st.session_state["_last_preset"] = st.session_state["preset"]
+
     
         try:
             idx = presets.index(st.session_state["preset"])
@@ -900,6 +902,7 @@ with expander("Mode & Timeframes"):
             horizontal=True,
             help="Quick filter configurations."
         )
+        st.query_params["preset"] = st.session_state["preset"]
 
         st.session_state["preset"] = st.session_state["_preset_widget"]
 
