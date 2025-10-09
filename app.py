@@ -876,40 +876,54 @@ with expander("Mode & Timeframes"):
 
 # Gates Settings
     with expander("Gates"):
-        presets = ["Spike Hunter", "Early MACD Cross", "Confirm Rally", "hioncrypto's Velocity Mode", "None"]
-        st.radio("Preset", presets, key="preset",
-         horizontal=True,
-         help="Quick filter configurations: Spike Hunter (fast momentum), Early MACD Cross (trend reversals), Confirm Rally (strict multi-gate), Velocity Mode (explosive moves), None (manual)")
-        
-        st.markdown("**Tips:** Gate Mode 'ALL' requires every enabled gate. 'ANY' needs at least one. "
-                   "'Custom (K/Y)' colors rows based on how many gates pass (K=green, Y=yellow).")
-        
-        # Apply presets ONLY when selection changes
-        if "_last_preset" not in st.session_state:
-            st.session_state["_last_preset"] = st.session_state["preset"]
-        
-        if st.session_state["preset"] != st.session_state["_last_preset"]:
-            st.session_state["_last_preset"] = st.session_state["preset"]
-            
-            # NOW apply the preset (only when it changes)
-            if st.session_state["preset"] == "Spike Hunter":
-                st.session_state.update({
-                    "use_vol_spike": True, "vol_mult": 1.10, "use_rsi": False, "use_macd": False,
-                    "use_trend": False, "use_roc": False, "use_macd_cross": False
-                })
-            elif st.session_state["preset"] == "Early MACD Cross":
-                st.session_state.update({
-                    "use_vol_spike": True, "vol_mult": 1.10, "use_rsi": True, "min_rsi": 50,
-                    "use_macd": False, "use_trend": False, "use_roc": False, "use_macd_cross": True,
-                    "macd_cross_bars": 5, "macd_cross_only_bull": True, "macd_cross_below_zero": True,
-                    "macd_hist_confirm_bars": 3
-                })
+    # Presets UI + persistence
+    presets = ["Spike Hunter", "Early MACD Cross", "Confirm Rally", "hioncrypto's Velocity Mode", "None"]
+
+    if "preset" not in st.session_state:
+        st.session_state["preset"] = "None"
+    if "_last_preset" not in st.session_state:
+        st.session_state["_last_preset"] = "None"
+
+    try:
+        idx = presets.index(st.session_state["preset"])
+    except Exception:
+        idx = presets.index("None")
+
+    st.radio(
+        "Preset",
+        presets,
+        index=idx,
+        key="preset",
+        horizontal=True,
+        help="Quick filter configurations.",
+    )
+
+    st.markdown("**Tips:** Gate Mode 'ALL' requires every enabled gate. 'ANY' needs at least one. Custom (K/Y) colors rows based on gate pass counts (K=green, Y=yellow).")
+
+    if st.session_state["preset"] != st.session_state["_last_preset"]:
+        st.session_state["_last_preset"] = st.session_state["preset"]
+
+        if st.session_state["preset"] == "Spike Hunter":
+            st.session_state.update({
+                "use_vol_spike": True, "vol_mult": 1.10, "use_rsi": False, "use_macd": False,
+                "use_trend": False, "use_roc": False, "use_macd_cross": False
+            })
+
+        elif st.session_state["preset"] == "Early MACD Cross":
+            st.session_state.update({
+                "use_vol_spike": True, "vol_mult": 1.10, "use_rsi": True, "min_rsi": 50,
+                "use_macd": True, "use_trend": False, "use_roc": False, "use_macd_cross": True,
+                "macd_cross_bars": 1, "macd_cross_only_bull": True, "macd_cross_below_zero": False,
+                "macd_hist_confirm_bars": 3
+            })
+
         elif st.session_state["preset"] == "Confirm Rally":
             st.session_state.update({
                 "use_vol_spike": True, "vol_mult": 1.20, "use_rsi": True, "min_rsi": 60,
                 "use_macd": True, "min_mhist": 0.0, "use_trend": True, "pivot_span": 4, "trend_within": 48,
                 "use_roc": False, "use_macd_cross": False, "K_green": 3, "Y_yellow": 2
             })
+
         elif st.session_state["preset"] == "hioncrypto's Velocity Mode":
             st.session_state.update({
                 "use_vol_spike": True, "vol_mult": 2.5, "vol_window": 20,
@@ -919,11 +933,7 @@ with expander("Mode & Timeframes"):
                 "macd_cross_below_zero": True, "macd_hist_confirm_bars": 2,
                 "K_green": 2, "Y_yellow": 1
             })
-        
-        st.radio("Gate Mode", ["ALL", "ANY", "Custom (K/Y)"],
-                index=["ALL", "ANY", "Custom (K/Y)"].index(st.session_state["gate_mode"]),
-                key="gate_mode", horizontal=True)
-        st.toggle("Hard filter (hide non-passers)", key="hard_filter")
+
         
         st.slider("Δ lookback (candles)", 1, 100, step=1, key="lookback_candles")
         st.slider("Min +% change (Δ gate)", 0.0, 50.0, step=0.5, key="min_pct")
