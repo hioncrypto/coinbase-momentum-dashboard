@@ -889,14 +889,14 @@ with expander("Mode & Timeframes"):
         except Exception:
             idx = presets.index("None")
     
-        st.radio(
+                st.session_state["preset"] = st.radio(
             "Preset",
             presets,
             index=idx,
-            key="preset",
             horizontal=True,
-            help="Quick filter configurations.",
+            help="Quick filter configurations."
         )
+
     
         st.markdown("**Tips:** Gate Mode 'ALL' requires every enabled gate. 'ANY' needs at least one. Custom (K/Y) colors rows based on gate pass counts (K=green, Y=yellow).")
     
