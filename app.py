@@ -878,7 +878,6 @@ with expander("Mode & Timeframes"):
     with expander("Gates"):
         presets = ["Spike Hunter", "Early MACD Cross", "Confirm Rally", "hioncrypto's Velocity Mode", "None"]
         st.radio("Preset", presets, key="preset",
-         key="preset", 
          horizontal=True,
          help="Quick filter configurations: Spike Hunter (fast momentum), Early MACD Cross (trend reversals), Confirm Rally (strict multi-gate), Velocity Mode (explosive moves), None (manual)")
         
