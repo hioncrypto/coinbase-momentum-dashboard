@@ -991,16 +991,21 @@ st.slider("Cross within last (bars)", 1, 10,
           value=int(st.session_state.get("macd_cross_bars", 5)),
           step=1, key="macd_cross_bars")
 st.slider("Histogram > 0 within (bars)", 0, 10,
-          value=int(st.session_state.get("macd_hist_confirm_bars", 3)),
-          step=1, key="macd_hist_confirm_bars")
+st.markdown("---")
+st.subheader("Color rules (Custom only)")
 
-                 index=st.session_state["K_green"] - 1, key="K_green")
-    st.selectbox("Yellow needs ≥ Y (but < K)", list(range(0, st.session_state["K_green"])),
-                 index=min(st.session_state["Y_yellow"], st.session_state["K_green"] - 1), key="Y_yellow")
+st.selectbox(
+    "Gates needed to turn green (K)", list(range(1, 8)),
+    index=int(st.session_state.get("K_green", 3)) - 1, key="K_green"
+)
 
-# Indicator Lengths
-with expander("Indicator lengths"):
-    st.caption("Longer = smoother; shorter = more reactive.")
+st.selectbox(
+    "Yellow needs ≥ Y (but < K)", list(range(0, int(st.session_state.get("K_green", 3)))),
+    index=min(int(st.session_state.get("Y_yellow", 2)),
+              max(0, int(st.session_state.get("K_green", 3)) - 1)),
+    key="Y_yellow"
+)
+
     st.slider("RSI length", 5, 50, st.session_state["rsi_len"], 1, key="rsi_len")
     st.slider("MACD fast EMA", 3, 50, st.session_state["macd_fast"], 1, key="macd_fast")
     st.slider("MACD slow EMA", 5, 100, st.session_state["macd_slow"], 1, key="macd_slow")
