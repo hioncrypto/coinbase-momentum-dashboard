@@ -902,13 +902,13 @@ st.radio(
             horizontal=True,
             help="Quick filter configurations."
         )
-        st.query_params["preset"] = st.session_state["preset"]
+st.query_params["preset"] = st.session_state["preset"]
 
-        st.session_state["preset"] = st.session_state["_preset_widget"]
+st.session_state["preset"] = st.session_state["_preset_widget"]
 
 
     
-        st.markdown("**Tips:** Gate Mode 'ALL' requires every enabled gate. 'ANY' needs at least one. Custom (K/Y) colors rows based on gate pass counts (K=green, Y=yellow).")
+st.markdown("**Tips:** Gate Mode 'ALL' requires every enabled gate. 'ANY' needs at least one. Custom (K/Y) colors rows based on gate pass counts (K=green, Y=yellow).")
     
         if st.session_state["preset"] != st.session_state["_last_preset"]:
             st.session_state["_last_preset"] = st.session_state["preset"]
