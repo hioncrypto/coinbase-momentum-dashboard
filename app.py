@@ -1006,15 +1006,26 @@ st.slider(
 st.subheader("Color rules (Custom only)")
 
 st.selectbox(
-    "Gates needed to turn green (K)", list(range(1, 8)),
-    index=int(st.session_state.get("K_green", 3)) - 1, key="K_green"
+st.markdown("---")
+st.subheader("Color rules (Custom only)")
+
+st.selectbox(
+    "Gates needed to turn green (K)",
+    list(range(1, 8)),
+    index=int(st.session_state.get("K_green", 3)) - 1,
+    key="K_green",
 )
 
 st.selectbox(
-    "Yellow needs ≥ Y (but < K)", list(range(0, int(st.session_state.get("K_green", 3)))),
-    index=min(int(st.session_state.get("Y_yellow", 2)),
-# Indicator Lengths
-with expander("Indicator lengths"):
+    "Yellow needs ≥ Y (but < K)",
+    list(range(0, int(st.session_state.get("K_green", 3)))),
+    index=min(
+        int(st.session_state.get("Y_yellow", 2)),
+        max(0, int(st.session_state.get("K_green", 3)) - 1),
+    ),
+    key="Y_yellow",
+)
+
     st.caption("Longer = smoother; shorter = more reactive.")
     st.slider("RSI length", 5, 50, value=int(st.session_state.get("rsi_len", 14)), step=1, key="rsi_len")
     st.slider("MACD fast EMA", 3, 50, value=int(st.session_state.get("macd_fast", 12)), step=1, key="macd_fast")
