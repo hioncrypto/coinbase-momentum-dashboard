@@ -882,7 +882,7 @@ with expander("Mode & Timeframes"):
 if "preset" not in st.session_state:
             p = st.query_params.get("preset", None)
             st.session_state["preset"] = p if p in presets else "None"
-        if "_last_preset" not in st.session_state:
+if "_last_preset" not in st.session_state:
             st.session_state["_last_preset"] = st.session_state["preset"]
 
     
