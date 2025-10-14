@@ -888,7 +888,7 @@ if "_last_preset" not in st.session_state:
     
 try:
             idx = presets.index(st.session_state["preset"])
-        except Exception:
+except Exception:
             idx = presets.index("None")
     
              if "_preset_widget" not in st.session_state:
