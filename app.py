@@ -982,16 +982,27 @@ st.slider("Breakout within (bars)", 5, 96,
           step=1, key="trend_within")
 
 # c6
-st.slider("Min ROC %", 0.0, 50.0,
-          value=float(st.session_state.get("min_roc", 1.0)),
-          step=0.5, key="min_roc")
+st.markdown("**MACD Cross (early entry)**")
+c7, c8, c9, c10 = st.columns(4)
+with c7:
+    st.toggle("Enable MACD Cross", key="use_macd_cross")
+with c8:
+    st.slider(
+        "Cross within last (bars)", 1, 10,
+        value=int(st.session_state.get("macd_cross_bars", 5)),
+        step=1, key="macd_cross_bars"
+    )
+with c9:
+    st.toggle("Bullish only", key="macd_cross_only_bull")
+with c10:
+    st.toggle("Prefer below zero", key="macd_cross_below_zero")
 
-# MACD Cross
-st.slider("Cross within last (bars)", 1, 10,
-          value=int(st.session_state.get("macd_cross_bars", 5)),
-          step=1, key="macd_cross_bars")
-st.slider("Histogram > 0 within (bars)", 0, 10,
-st.markdown("---")
+st.slider(
+    "Histogram > 0 within (bars)", 0, 10,
+    value=int(st.session_state.get("macd_hist_confirm_bars", 3)),
+    step=1, key="macd_hist_confirm_bars"
+)
+
 st.subheader("Color rules (Custom only)")
 
 st.selectbox(
