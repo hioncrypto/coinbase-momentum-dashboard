@@ -891,7 +891,7 @@ try:
 except Exception:
             idx = presets.index("None")
     
-             if "_preset_widget" not in st.session_state:
+if "_preset_widget" not in st.session_state:
             st.session_state["_preset_widget"] = st.session_state.get("preset", "None")
 
         st.radio(
