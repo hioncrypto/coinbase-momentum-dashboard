@@ -879,57 +879,57 @@ with expander("Mode & Timeframes"):
         # Presets UI + persistence
         presets = ["Spike Hunter", "Early MACD Cross", "Confirm Rally", "hioncrypto's Velocity Mode", "None"]
     
-if "preset" not in st.session_state:
-            p = st.query_params.get("preset", None)
-            st.session_state["preset"] = p if p in presets else "None"
-if "_last_preset" not in st.session_state:
-            st.session_state["_last_preset"] = st.session_state["preset"]
+with expander("Gates"):
+    # Presets UI + persistence
+    presets = ["Spike Hunter", "Early MACD Cross", "Confirm Rally", "hioncrypto's Velocity Mode", "None"]
 
-    
-try:
-            idx = presets.index(st.session_state["preset"])
-except Exception:
-            idx = presets.index("None")
-    
-if "_preset_widget" not in st.session_state:
-            st.session_state["_preset_widget"] = st.session_state.get("preset", "None")
+    if "preset" not in st.session_state:
+        p = st.query_params.get("preset", None)
+        st.session_state["preset"] = p if p in presets else "None"
+    if "_last_preset" not in st.session_state:
+        st.session_state["_last_preset"] = st.session_state["preset"]
 
-st.radio(
-            "Preset",
-            presets,
-            index=presets.index(st.session_state["_preset_widget"]),
-            key="_preset_widget",
-            horizontal=True,
-            help="Quick filter configurations."
-        )
-st.query_params["preset"] = st.session_state["preset"]
+    try:
+        idx = presets.index(st.session_state["preset"])
+    except Exception:
+        idx = presets.index("None")
 
-st.session_state["preset"] = st.session_state["_preset_widget"]
+    if "_preset_widget" not in st.session_state:
+        st.session_state["_preset_widget"] = st.session_state.get("preset", "None")
 
+    st.radio(
+        "Preset",
+        presets,
+        index=presets.index(st.session_state["_preset_widget"]),
+        key="_preset_widget",
+        horizontal=True,
+        help="Quick filter configurations."
+    )
+    st.query_params["preset"] = st.session_state["preset"]
+    st.session_state["preset"] = st.session_state["_preset_widget"]
 
-    
-st.markdown("**Tips:** Gate Mode 'ALL' requires every enabled gate. 'ANY' needs at least one. Custom (K/Y) colors rows based on gate pass counts (K=green, Y=yellow).")
-    
-        if st.session_state["preset"] != st.session_state["_last_preset"]:
-            st.session_state["_last_preset"] = st.session_state["preset"]
-    
-            if st.session_state["preset"] == "Spike Hunter":
-                st.session_state.update({
-                    "use_vol_spike": True, "vol_mult": 1.10, "use_rsi": False, "use_macd": False,
-                    "use_trend": False, "use_roc": False, "use_macd_cross": False
-                })
-    
-            elif st.session_state["preset"] == "Early MACD Cross":
-                st.session_state.update({
-                    "use_vol_spike": True, "vol_mult": 1.10, "use_rsi": True, "min_rsi": 50,
-                    "use_macd": True, "use_trend": False, "use_roc": False, "use_macd_cross": True,
-                    "macd_cross_bars": 1, "macd_cross_only_bull": True, "macd_cross_below_zero": False,
-                    "macd_hist_confirm_bars": 3
-                })
-    
-            elif st.session_state["preset"] == "Confirm Rally":
-                st.session_state.update({
-                    "use_vol_spike": True, "vol_mult": 1.20, "use_rsi": True, "min_rsi": 60,
+    st.markdown("**Tips:** Gate Mode 'ALL' requires every enabled gate. 'ANY' needs at least one. Custom (K/Y) colors rows based on gate pass counts (K=green, Y=yellow).**")
+
+    if st.session_state["preset"] != st.session_state["_last_preset"]:
+        st.session_state["_last_preset"] = st.session_state["preset"]
+
+        if st.session_state["preset"] == "Spike Hunter":
+            st.session_state.update({
+                "use_vol_spike": True, "vol_mult": 1.10, "use_rsi": False, "use_macd": False,
+                "use_trend": False, "use_roc": False, "use_macd_cross": False
+            })
+
+        elif st.session_state["preset"] == "Early MACD Cross":
+            st.session_state.update({
+                "use_vol_spike": True, "vol_mult": 1.10, "use_rsi": True, "min_rsi": 50,
+                "use_macd": True, "use_trend": False, "use_roc": False, "use_macd_cross": True,
+                "macd_cross_bars": 1, "macd_cross_only_bull": True, "macd_cross_below_zero": False,
+                "macd_hist_confirm_bars": 3
+            })
+
+        elif st.session_state["preset"] == "Confirm Rally":
+            st.session_state.update({
+                "use_vol_spike": True, "vol_mult": 1.20, "use_rsi": True, "min_rsi": 60,
                 "use_macd": True, "min_mhist": 0.0, "use_trend": True, "pivot_span": 4, "trend_within": 48,
                 "use_roc": False, "use_macd_cross": False, "K_green": 3, "Y_yellow": 2
             })
@@ -944,50 +944,54 @@ st.markdown("**Tips:** Gate Mode 'ALL' requires every enabled gate. 'ANY' needs 
                 "K_green": 2, "Y_yellow": 1
             })
 
-        
-        st.slider("Δ lookback (candles)", 1, 100, step=1, key="lookback_candles")
-        st.slider("Min +% change (Δ gate)", 0.0, 50.0, step=0.5, key="min_pct")
-        
-        c1, c2, c3 = st.columns(3)
-        with c1:
-           st.toggle("Volume spike ✕", key="use_vol_spike", help="Passes if current volume exceeds average volume by the spike multiple (e.g., 2.5x means current volume is 250% of average)")
-        
-        st.slider("Spike multiple ✕", 1.0, 5.0, step=0.05, key="vol_mult", help="Multiplier threshold. 2.5 means current volume must be at least 2.5 times the average volume over the lookback period")
+    # Basic gate sliders
+    st.slider("Δ lookback (candles)", 1, 100, step=1, key="lookback_candles")
+    st.slider("Min +% change (Δ gate)", 0.0, 50.0, step=0.5, key="min_pct")
+
+    # Columns for gate toggles/params
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.toggle("Volume spike ✕", key="use_vol_spike",
+                  help="Passes if current volume exceeds average volume by the spike multiple (e.g., 2.5x means current volume is 250% of average)")
+        st.slider("Spike multiple ✕", 1.0, 5.0, step=0.05, key="vol_mult",
+                  help="Multiplier threshold. 2.5 means current volume must be at least 2.5 times the average volume over the lookback period")
+    with c2:
         st.slider("Min RSI", 40, 90, step=1, key="min_rsi")
-        with c3:
-            st.toggle("MACD hist", key="use_macd")
-            st.slider("Min MACD hist", 0.0, 2.0, step=0.05, key="min_mhist")
-        
-        c4, c5, c6 = st.columns(3)
-        with c4:
-            st.toggle("ATR %", key="use_atr")
-            st.slider("Min ATR %", 0.0, 10.0, step=0.1, key="min_atr")
-        with c5:
-            st.toggle("Trend breakout (up)", key="use_trend")
-            st.slider("Pivot span (bars)", 2, 10, step=1, key="pivot_span")
-            st.slider("Breakout within (bars)", 5, 96, step=1, key="trend_within")
-        with c6:
-            st.toggle("ROC (rate of change)", key="use_roc")
-            st.slider("Min ROC %", 0.0, 50.0, step=0.5, key="min_roc")
-        
-        st.markdown("**MACD Cross (early entry)**")
-        c7, c8, c9, c10 = st.columns(4)
-        with c7:
-            st.toggle("Enable MACD Cross", key="use_macd_cross")
-        with c8:
-            st.slider("Cross within last (bars)", 1, 10, st.session_state["macd_cross_bars"], 1, key="macd_cross_bars")
-        with c9:
-            st.toggle("Bullish only", key="macd_cross_only_bull")
-        with c10:
-            st.toggle("Prefer below zero", key="macd_cross_below_zero")
-        st.slider("Histogram > 0 within (bars)", 0, 10, st.session_state["macd_hist_confirm_bars"], 1, key="macd_hist_confirm_bars")
-        
-        st.markdown("---")
-        st.subheader("Color rules (Custom only)")
-        st.selectbox("Gates needed to turn green (K)", list(range(1, 8)),
-                    index=st.session_state["K_green"] - 1, key="K_green")
-        st.selectbox("Yellow needs ≥ Y (but < K)", list(range(0, st.session_state["K_green"])),
-                    index=min(st.session_state["Y_yellow"], st.session_state["K_green"] - 1), key="Y_yellow")
+    with c3:
+        st.toggle("MACD hist", key="use_macd")
+        st.slider("Min MACD hist", 0.0, 2.0, step=0.05, key="min_mhist")
+
+    c4, c5, c6 = st.columns(3)
+    with c4:
+        st.toggle("ATR %", key="use_atr")
+        st.slider("Min ATR %", 0.0, 10.0, step=0.1, key="min_atr")
+    with c5:
+        st.toggle("Trend breakout (up)", key="use_trend")
+        st.slider("Pivot span (bars)", 2, 10, step=1, key="pivot_span")
+        st.slider("Breakout within (bars)", 5, 96, step=1, key="trend_within")
+    with c6:
+        st.toggle("ROC (rate of change)", key="use_roc")
+        st.slider("Min ROC %", 0.0, 50.0, step=0.5, key="min_roc")
+
+    st.markdown("**MACD Cross (early entry)**")
+    c7, c8, c9, c10 = st.columns(4)
+    with c7:
+        st.toggle("Enable MACD Cross", key="use_macd_cross")
+    with c8:
+        st.slider("Cross within last (bars)", 1, 10, st.session_state["macd_cross_bars"], 1, key="macd_cross_bars")
+    with c9:
+        st.toggle("Bullish only", key="macd_cross_only_bull")
+    with c10:
+        st.toggle("Prefer below zero", key="macd_cross_below_zero")
+    st.slider("Histogram > 0 within (bars)", 0, 10, st.session_state["macd_hist_confirm_bars"], 1, key="macd_hist_confirm_bars")
+
+    st.markdown("---")
+    st.subheader("Color rules (Custom only)")
+    st.selectbox("Gates needed to turn green (K)", list(range(1, 8)),
+                 index=st.session_state["K_green"] - 1, key="K_green")
+    st.selectbox("Yellow needs ≥ Y (but < K)", list(range(0, st.session_state["K_green"])),
+                 index=min(st.session_state["Y_yellow"], st.session_state["K_green"] - 1), key="Y_yellow")
+
 # Indicator Lengths
 with expander("Indicator lengths"):
     st.caption("Longer = smoother; shorter = more reactive.")
