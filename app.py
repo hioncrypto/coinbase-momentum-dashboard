@@ -945,49 +945,55 @@ with expander("Gates"):
             })
 
     # Basic gate sliders
-    st.slider("Δ lookback (candles)", 1, 100, step=1, key="lookback_candles")
-    st.slider("Min +% change (Δ gate)", 0.0, 50.0, step=0.5, key="min_pct")
+    st.slider("Δ lookback (candles)", 1, 100,
+          value=int(st.session_state.get("lookback_candles", 3)),
+          step=1, key="lookback_candles")
 
-    # Columns for gate toggles/params
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.toggle("Volume spike ✕", key="use_vol_spike",
-                  help="Passes if current volume exceeds average volume by the spike multiple (e.g., 2.5x means current volume is 250% of average)")
-        st.slider("Spike multiple ✕", 1.0, 5.0, step=0.05, key="vol_mult",
-                  help="Multiplier threshold. 2.5 means current volume must be at least 2.5 times the average volume over the lookback period")
-    with c2:
-        st.slider("Min RSI", 40, 90, step=1, key="min_rsi")
-    with c3:
-        st.toggle("MACD hist", key="use_macd")
-        st.slider("Min MACD hist", 0.0, 2.0, step=0.05, key="min_mhist")
+st.slider("Min +% change (Δ gate)", 0.0, 50.0,
+          value=float(st.session_state.get("min_pct", 3.0)),
+          step=0.5, key="min_pct")
 
-    c4, c5, c6 = st.columns(3)
-    with c4:
-        st.toggle("ATR %", key="use_atr")
-        st.slider("Min ATR %", 0.0, 10.0, step=0.1, key="min_atr")
-    with c5:
-        st.toggle("Trend breakout (up)", key="use_trend")
-        st.slider("Pivot span (bars)", 2, 10, step=1, key="pivot_span")
-        st.slider("Breakout within (bars)", 5, 96, step=1, key="trend_within")
-    with c6:
-        st.toggle("ROC (rate of change)", key="use_roc")
-        st.slider("Min ROC %", 0.0, 50.0, step=0.5, key="min_roc")
+# inside c1
+st.slider("Spike multiple ✕", 1.0, 5.0,
+          value=float(st.session_state.get("vol_mult", 1.10)),
+          step=0.05, key="vol_mult")
 
-    st.markdown("**MACD Cross (early entry)**")
-    c7, c8, c9, c10 = st.columns(4)
-    with c7:
-        st.toggle("Enable MACD Cross", key="use_macd_cross")
-    with c8:
-        st.slider("Cross within last (bars)", 1, 10, st.session_state["macd_cross_bars"], 1, key="macd_cross_bars")
-    with c9:
-        st.toggle("Bullish only", key="macd_cross_only_bull")
-    with c10:
-        st.toggle("Prefer below zero", key="macd_cross_below_zero")
-    st.slider("Histogram > 0 within (bars)", 0, 10, st.session_state["macd_hist_confirm_bars"], 1, key="macd_hist_confirm_bars")
+# inside c2
+st.slider("Min RSI", 40, 90,
+          value=int(st.session_state.get("min_rsi", 55)),
+          step=1, key="min_rsi")
 
-    st.markdown("---")
-    st.subheader("Color rules (Custom only)")
-    st.selectbox("Gates needed to turn green (K)", list(range(1, 8)),
+# inside c3
+st.slider("Min MACD hist", 0.0, 2.0,
+          value=float(st.session_state.get("min_mhist", 0.0)),
+          step=0.05, key="min_mhist")
+
+# c4
+st.slider("Min ATR %", 0.0, 10.0,
+          value=float(st.session_state.get("min_atr", 0.5)),
+          step=0.1, key="min_atr")
+
+# c5
+st.slider("Pivot span (bars)", 2, 10,
+          value=int(st.session_state.get("pivot_span", 4)),
+          step=1, key="pivot_span")
+st.slider("Breakout within (bars)", 5, 96,
+          value=int(st.session_state.get("trend_within", 48)),
+          step=1, key="trend_within")
+
+# c6
+st.slider("Min ROC %", 0.0, 50.0,
+          value=float(st.session_state.get("min_roc", 1.0)),
+          step=0.5, key="min_roc")
+
+# MACD Cross
+st.slider("Cross within last (bars)", 1, 10,
+          value=int(st.session_state.get("macd_cross_bars", 5)),
+          step=1, key="macd_cross_bars")
+st.slider("Histogram > 0 within (bars)", 0, 10,
+          value=int(st.session_state.get("macd_hist_confirm_bars", 3)),
+          step=1, key="macd_hist_confirm_bars")
+
                  index=st.session_state["K_green"] - 1, key="K_green")
     st.selectbox("Yellow needs ≥ Y (but < K)", list(range(0, st.session_state["K_green"])),
                  index=min(st.session_state["Y_yellow"], st.session_state["K_green"] - 1), key="Y_yellow")
