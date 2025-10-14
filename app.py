@@ -1013,21 +1013,16 @@ st.selectbox(
 st.selectbox(
     "Yellow needs ≥ Y (but < K)", list(range(0, int(st.session_state.get("K_green", 3)))),
     index=min(int(st.session_state.get("Y_yellow", 2)),
-              max(0, int(st.session_state.get("K_green", 3)) - 1)),
-    key="Y_yellow"
-)
+# Indicator Lengths
+with expander("Indicator lengths"):
+    st.caption("Longer = smoother; shorter = more reactive.")
+    st.slider("RSI length", 5, 50, value=int(st.session_state.get("rsi_len", 14)), step=1, key="rsi_len")
+    st.slider("MACD fast EMA", 3, 50, value=int(st.session_state.get("macd_fast", 12)), step=1, key="macd_fast")
+    st.slider("MACD slow EMA", 5, 100, value=int(st.session_state.get("macd_slow", 26)), step=1, key="macd_slow")
+    st.slider("MACD signal", 3, 50, value=int(st.session_state.get("macd_sig", 9)), step=1, key="macd_sig")
+    st.slider("ATR length", 5, 50, value=int(st.session_state.get("atr_len", 14)), step=1, key="atr_len")
+    st.slider("Volume window", 5, 50, value=int(st.session_state.get("vol_window", 20)), step=1, key="vol_window")
 
-    st.slider("RSI length", 5, 50, st.session_state["rsi_len"], 1, key="rsi_len")
-    st.slider("MACD fast EMA", 3, 50, st.session_state["macd_fast"], 1, key="macd_fast")
-    st.slider("MACD slow EMA", 5, 100, st.session_state["macd_slow"], 1, key="macd_slow")
-    st.slider("MACD signal", 3, 50, st.session_state["macd_sig"], 1, key="macd_sig")
-    st.slider("ATR length", 5, 50, st.session_state.get("atr_len", 14), 1, key="atr_len")
-    st.slider("Volume window", 5, 50, st.session_state["vol_window"], 1, key="vol_window")
-
-# ATH/ATL History
-with expander("History depth (for ATH/ATL)"):
-    st.toggle("Compute ATH/ATL", key="do_ath")
-    basis_options = ["Hourly", "Daily", "Weekly"]
     st.selectbox("Basis", basis_options, 
                 index=basis_options.index(st.session_state["basis"]), key="basis")
     
