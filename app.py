@@ -888,12 +888,6 @@ with expander("Gates"):
         st.session_state["preset"] = p if p in presets else "None"
     if "_last_preset" not in st.session_state:
         st.session_state["_last_preset"] = st.session_state["preset"]
-
-    try:
-        idx = presets.index(st.session_state["preset"])
-    except Exception:
-        idx = presets.index("None")
-
     if "_preset_widget" not in st.session_state:
         st.session_state["_preset_widget"] = st.session_state.get("preset", "None")
 
@@ -912,13 +906,11 @@ with expander("Gates"):
 
     if st.session_state["preset"] != st.session_state["_last_preset"]:
         st.session_state["_last_preset"] = st.session_state["preset"]
-
         if st.session_state["preset"] == "Spike Hunter":
             st.session_state.update({
                 "use_vol_spike": True, "vol_mult": 1.10, "use_rsi": False, "use_macd": False,
                 "use_trend": False, "use_roc": False, "use_macd_cross": False
             })
-
         elif st.session_state["preset"] == "Early MACD Cross":
             st.session_state.update({
                 "use_vol_spike": True, "vol_mult": 1.10, "use_rsi": True, "min_rsi": 50,
@@ -926,14 +918,12 @@ with expander("Gates"):
                 "macd_cross_bars": 1, "macd_cross_only_bull": True, "macd_cross_below_zero": False,
                 "macd_hist_confirm_bars": 3
             })
-
         elif st.session_state["preset"] == "Confirm Rally":
             st.session_state.update({
                 "use_vol_spike": True, "vol_mult": 1.20, "use_rsi": True, "min_rsi": 60,
                 "use_macd": True, "min_mhist": 0.0, "use_trend": True, "pivot_span": 4, "trend_within": 48,
                 "use_roc": False, "use_macd_cross": False, "K_green": 3, "Y_yellow": 2
             })
-
         elif st.session_state["preset"] == "hioncrypto's Velocity Mode":
             st.session_state.update({
                 "use_vol_spike": True, "vol_mult": 2.5, "vol_window": 20,
@@ -945,104 +935,58 @@ with expander("Gates"):
             })
 
     # Basic gate sliders
-    st.slider("Δ lookback (candles)", 1, 100,
-          value=int(st.session_state.get("lookback_candles", 3)),
-          step=1, key="lookback_candles")
+    st.slider("Δ lookback (candles)", 1, 100, value=int(st.session_state.get("lookback_candles", 3)), step=1, key="lookback_candles")
+    st.slider("Min +% change (Δ gate)", 0.0, 50.0, value=float(st.session_state.get("min_pct", 3.0)), step=0.5, key="min_pct")
 
-st.slider("Min +% change (Δ gate)", 0.0, 50.0,
-          value=float(st.session_state.get("min_pct", 3.0)),
-          step=0.5, key="min_pct")
+    # Columns for gate toggles/params
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.toggle("Volume spike ✕", key="use_vol_spike", help="Passes if current volume exceeds average volume by the spike multiple")
+        st.slider("Spike multiple ✕", 1.0, 5.0, value=float(st.session_state.get("vol_mult", 1.10)), step=0.05, key="vol_mult")
+    with c2:
+        st.slider("Min RSI", 40, 90, value=int(st.session_state.get("min_rsi", 55)), step=1, key="min_rsi")
+    with c3:
+        st.toggle("MACD hist", key="use_macd")
+        st.slider("Min MACD hist", 0.0, 2.0, value=float(st.session_state.get("min_mhist", 0.0)), step=0.05, key="min_mhist")
 
-# inside c1
-st.slider("Spike multiple ✕", 1.0, 5.0,
-          value=float(st.session_state.get("vol_mult", 1.10)),
-          step=0.05, key="vol_mult")
+    c4, c5, c6 = st.columns(3)
+    with c4:
+        st.toggle("ATR %", key="use_atr")
+        st.slider("Min ATR %", 0.0, 10.0, value=float(st.session_state.get("min_atr", 0.5)), step=0.1, key="min_atr")
+    with c5:
+        st.toggle("Trend breakout (up)", key="use_trend")
+        st.slider("Pivot span (bars)", 2, 10, value=int(st.session_state.get("pivot_span", 4)), step=1, key="pivot_span")
+        st.slider("Breakout within (bars)", 5, 96, value=int(st.session_state.get("trend_within", 48)), step=1, key="trend_within")
+    with c6:
+        st.toggle("ROC (rate of change)", key="use_roc")
+        st.slider("Min ROC %", 0.0, 50.0, value=float(st.session_state.get("min_roc", 1.0)), step=0.5, key="min_roc")
 
-# inside c2
-st.slider("Min RSI", 40, 90,
-          value=int(st.session_state.get("min_rsi", 55)),
-          step=1, key="min_rsi")
+    st.markdown("**MACD Cross (early entry)**")
+    c7, c8, c9, c10 = st.columns(4)
+    with c7:
+        st.toggle("Enable MACD Cross", key="use_macd_cross")
+    with c8:
+        st.slider("Cross within last (bars)", 1, 10, value=int(st.session_state.get("macd_cross_bars", 5)), step=1, key="macd_cross_bars")
+    with c9:
+        st.toggle("Bullish only", key="macd_cross_only_bull")
+    with c10:
+        st.toggle("Prefer below zero", key="macd_cross_below_zero")
+    st.slider("Histogram > 0 within (bars)", 0, 10, value=int(st.session_state.get("macd_hist_confirm_bars", 3)), step=1, key="macd_hist_confirm_bars")
 
-# inside c3
-st.slider("Min MACD hist", 0.0, 2.0,
-          value=float(st.session_state.get("min_mhist", 0.0)),
-          step=0.05, key="min_mhist")
-
-# c4
-st.slider("Min ATR %", 0.0, 10.0,
-          value=float(st.session_state.get("min_atr", 0.5)),
-          step=0.1, key="min_atr")
-
-# c5
-st.slider("Pivot span (bars)", 2, 10,
-          value=int(st.session_state.get("pivot_span", 4)),
-          step=1, key="pivot_span")
-st.slider("Breakout within (bars)", 5, 96,
-          value=int(st.session_state.get("trend_within", 48)),
-          step=1, key="trend_within")
-
-# c6
-st.markdown("**MACD Cross (early entry)**")
-c7, c8, c9, c10 = st.columns(4)
-with c7:
-    st.toggle("Enable MACD Cross", key="use_macd_cross")
-with c8:
-    st.slider(
-        "Cross within last (bars)", 1, 10,
-        value=int(st.session_state.get("macd_cross_bars", 5)),
-        step=1, key="macd_cross_bars"
+    st.markdown("---")
+    st.subheader("Color rules (Custom only)")
+    st.selectbox(
+        "Gates needed to turn green (K)",
+        list(range(1, 8)),
+        index=int(st.session_state.get("K_green", 3)) - 1,
+        key="K_green",
     )
-with c9:
-    st.toggle("Bullish only", key="macd_cross_only_bull")
-with c10:
-    st.toggle("Prefer below zero", key="macd_cross_below_zero")
-
-st.slider(
-    "Histogram > 0 within (bars)", 0, 10,
-    value=int(st.session_state.get("macd_hist_confirm_bars", 3)),
-    step=1, key="macd_hist_confirm_bars"
-)
-
-st.subheader("Color rules (Custom only)")
-
-st.selectbox(
-st.markdown("---")
-st.subheader("Color rules (Custom only)")
-
-st.selectbox(
-    "Gates needed to turn green (K)",
-    list(range(1, 8)),
-    index=int(st.session_state.get("K_green", 3)) - 1,
-    key="K_green",
-)
-
-st.selectbox(
-    "Yellow needs ≥ Y (but < K)",
-    list(range(0, int(st.session_state.get("K_green", 3)))),
-    index=min(
-        int(st.session_state.get("Y_yellow", 2)),
-        max(0, int(st.session_state.get("K_green", 3)) - 1),
-    ),
-    key="Y_yellow",
-)
-
-    st.caption("Longer = smoother; shorter = more reactive.")
-    st.slider("RSI length", 5, 50, value=int(st.session_state.get("rsi_len", 14)), step=1, key="rsi_len")
-    st.slider("MACD fast EMA", 3, 50, value=int(st.session_state.get("macd_fast", 12)), step=1, key="macd_fast")
-    st.slider("MACD slow EMA", 5, 100, value=int(st.session_state.get("macd_slow", 26)), step=1, key="macd_slow")
-    st.slider("MACD signal", 3, 50, value=int(st.session_state.get("macd_sig", 9)), step=1, key="macd_sig")
-    st.slider("ATR length", 5, 50, value=int(st.session_state.get("atr_len", 14)), step=1, key="atr_len")
-    st.slider("Volume window", 5, 50, value=int(st.session_state.get("vol_window", 20)), step=1, key="vol_window")
-
-    st.selectbox("Basis", basis_options, 
-                index=basis_options.index(st.session_state["basis"]), key="basis")
-    
-    if st.session_state["basis"] == "Hourly":
-        st.slider("Hours (≤72)", 1, 72, st.session_state["amount_hourly"], 1, key="amount_hourly")
-    elif st.session_state["basis"] == "Daily":
-        st.slider("Days (≤365)", 1, 365, st.session_state["amount_daily"], 1, key="amount_daily")
-    else:
-        st.slider("Weeks (≤52)", 1, 52, st.session_state["amount_weekly"], 1, key="amount_weekly")
+    st.selectbox(
+        "Yellow needs ≥ Y (but < K)",
+        list(range(0, int(st.session_state.get("K_green", 3)))),
+        index=min(int(st.session_state.get("Y_yellow", 2)), max(0, int(st.session_state.get("K_green", 3)) - 1)),
+        key="Y_yellow",
+    )
 
 # Display Settings
 with expander("Display"):
