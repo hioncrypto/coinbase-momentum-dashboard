@@ -903,6 +903,18 @@ with expander("Gates"):
     st.session_state["preset"] = st.session_state["_preset_widget"]
 
     st.markdown("**Tips:** Gate Mode 'ALL' requires every enabled gate. 'ANY' needs at least one. Custom (K/Y) colors rows based on gate pass counts (K=green, Y=yellow).**")
+# --- sticky settings helper ---
+if "_user_set" not in st.session_state:
+    st.session_state["_user_set"] = set()
+
+def _lock_setting(key: str):
+    st.session_state["_user_set"].add(key)
+
+def _apply_preset_safely(updates: dict):
+    for k, v in updates.items():
+        if k not in st.session_state["_user_set"]:
+            st.session_state[k] = v
+# --- end helper ---
 
     if st.session_state["preset"] != st.session_state["_last_preset"]:
         st.session_state["_last_preset"] = st.session_state["preset"]
@@ -936,7 +948,9 @@ with expander("Gates"):
 
     # Basic gate sliders
     st.slider("Δ lookback (candles)", 1, 100, value=int(st.session_state.get("lookback_candles", 3)), step=1, key="lookback_candles")
-    st.slider("Min +% change (Δ gate)", 0.0, 50.0, value=float(st.session_state.get("min_pct", 3.0)), step=0.5, key="min_pct")
+   st.slider("Min +% change (Δ gate)", 0.0, 50.0,
+          value=float(st.session_state.get("min_pct", 3.0)),
+          step=0.5, key="min_pct")
 
     # Columns for gate toggles/params
     c1, c2, c3 = st.columns(3)
