@@ -890,6 +890,8 @@ with expander("Gates"):
     st.query_params["preset"] = st.session_state["preset"]
     st.session_state["preset"] = st.session_state["_preset_widget"]
     st.markdown("**Tips:** Gate Mode 'ALL' requires every enabled gate. 'ANY' needs at least one. Custom (K/Y) colors rows based on gate pass counts (K=green, Y=yellow).**")
+    st.session_state.setdefault("lookback_candles", 3)
+    st.session_state.setdefault("min_pct", 3.0)
     st.slider("Δ lookback (candles)", 1, 100, value=int(st.session_state.get("lookback_candles", 3)), step=1, key="lookback_candles")
     st.slider("Min +% change (Δ gate)", 0.0, 50.0, value=float(st.session_state.get("min_pct", 3.0)), step=0.5, key="min_pct")
 # --- sticky settings helper ---
