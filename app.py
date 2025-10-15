@@ -250,10 +250,6 @@ def init_session_state():
 # Initialize state
 init_session_state()
 
-# CRITICAL DEBUG - Check if values persist after init
-if "min_pct" in st.session_state and st.session_state["min_pct"] != 3.0:
-    st.warning(f"⚠️ min_pct was changed to {st.session_state['min_pct']} but may reset")
-
 # =============================================================================
 # TECHNICAL INDICATORS
 # =============================================================================   
