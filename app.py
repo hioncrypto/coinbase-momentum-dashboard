@@ -247,9 +247,6 @@ def init_session_state():
         if key not in st.session_state:
             st.session_state[key] = value
 
-# Initialize state
-init_session_state()
-
 # =============================================================================
 # TECHNICAL INDICATORS
 # =============================================================================   
