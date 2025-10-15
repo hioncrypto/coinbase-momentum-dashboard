@@ -892,8 +892,14 @@ with expander("Gates"):
     st.markdown("**Tips:** Gate Mode 'ALL' requires every enabled gate. 'ANY' needs at least one. Custom (K/Y) colors rows based on gate pass counts (K=green, Y=yellow).**")
     st.session_state.setdefault("lookback_candles", 3)
     st.session_state.setdefault("min_pct", 3.0)
-    st.slider("Δ lookback (candles)", 1, 100, value=int(st.session_state.get("lookback_candles", 3)), step=1, key="lookback_candles")
-    st.slider("Min +% change (Δ gate)", 0.0, 50.0, value=float(st.session_state.get("min_pct", 3.0)), step=0.5, key="min_pct")
+    st.slider("Δ lookback (candles)", 1, 100,
+          value=int(st.session_state["lookback_candles"]),
+          step=1, key="lookback_candles",
+          on_change=_lock_setting, args=("lookback_candles",))
+    st.slider("Min +% change (Δ gate)", 0.0, 50.0,
+          value=float(st.session_state["min_pct"]),
+          step=0.5, key="min_pct",
+          on_change=_lock_setting, args=("min_pct",))
 # --- sticky settings helper ---
 if "_user_set" not in st.session_state:
     st.session_state["_user_set"] = set()
