@@ -903,7 +903,6 @@ def _apply_preset_safely(updates: dict):
     for k, v in updates.items():
         if k not in st.session_state["_user_set"]:
             st.session_state[k] = v
-
         st.slider("Δ lookback (candles)", 1, 100,
               value=int(st.session_state["lookback_candles"]),
               step=1, key="lookback_candles",
