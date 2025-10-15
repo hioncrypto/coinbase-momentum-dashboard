@@ -1046,7 +1046,6 @@ with st.expander("🐛 DEBUG_INFO", expanded=True):
     st.write("**First 30 Keys:**", list(st.session_state.keys())[:30])
 
 # Get trading pairs
-# Get trading pairs
 if st.session_state["use_my_pairs"]:
     pairs = [p.strip().upper() for p in st.session_state.get("my_pairs", "").split(",") if p.strip()]
 elif st.session_state["use_watch"]:
