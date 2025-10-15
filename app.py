@@ -873,11 +873,6 @@ with expander("Mode & Timeframes"):
     st.selectbox("Sort Timeframe", ["5m", "15m", "1h"], 
                 key="sort_tf")
     st.toggle("Sort Descending", key="sort_desc")
-
-# Gates Settings
-    with expander("Gates"):
-        # Presets UI + persistence
-        presets = ["Spike Hunter", "Early MACD Cross", "Confirm Rally", "hioncrypto's Velocity Mode", "None"]
     
 with expander("Gates"):
     # Presets UI + persistence
