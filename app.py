@@ -947,8 +947,8 @@ def _apply_preset_safely(updates: dict):
             })
 
     # Basic gate sliders
-          st.slider("Δ lookback (candles)", 1, 100, value=int(st.session_state.get("lookback_candles", 3)), step=1, key="lookback_candles")
-          st.slider("Min +% change (Δ gate)", 0.0, 50.0,
+    st.slider("Δ lookback (candles)", 1, 100, value=int(st.session_state.get("lookback_candles", 3)), step=1, key="lookback_candles")
+    st.slider("Min +% change (Δ gate)", 0.0, 50.0,
           value=float(st.session_state.get("min_pct", 3.0)),
           step=0.5, key="min_pct")
 
