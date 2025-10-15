@@ -942,8 +942,8 @@ def _apply_preset_safely(updates: dict):
     # Columns for gate toggles/params
     c1, c2, c3 = st.columns(3)
     with c1:
-    st.slider("Δ lookback (candles)", 1, 100, value=int(st.session_state.get("lookback_candles", 3)), step=1, key="lookback_candles")
-    st.slider("Min +% change (Δ gate)", 0.0, 50.0, value=float(st.session_state.get("min_pct", 3.0)), step=0.5, key="min_pct")
+        st.slider("Δ lookback (candles)", 1, 100, value=int(st.session_state.get("lookback_candles", 3)), step=1, key="lookback_candles")
+        st.slider("Min +% change (Δ gate)", 0.0, 50.0, value=float(st.session_state.get("min_pct", 3.0)), step=0.5, key="min_pct")
 
     with c2:
         st.slider("Min RSI", 40, 90, value=int(st.session_state.get("min_rsi", 55)), step=1, key="min_rsi")
