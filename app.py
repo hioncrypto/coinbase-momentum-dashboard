@@ -892,15 +892,7 @@ with expander("Gates"):
     st.markdown("**Tips:** Gate Mode 'ALL' requires every enabled gate. 'ANY' needs at least one. Custom (K/Y) colors rows based on gate pass counts (K=green, Y=yellow).**")
     st.session_state.setdefault("lookback_candles", 3)
     st.session_state.setdefault("min_pct", 3.0)
-    st.slider("Δ lookback (candles)", 1, 100,
-          value=int(st.session_state["lookback_candles"]),
-          step=1, key="lookback_candles",
-          on_change=_lock_setting, args=("lookback_candles",))
-    st.slider("Min +% change (Δ gate)", 0.0, 50.0,
-          value=float(st.session_state["min_pct"]),
-          step=0.5, key="min_pct",
-          on_change=_lock_setting, args=("min_pct",))
-# --- sticky settings helper ---
+    # --- sticky settings helper ---
 if "_user_set" not in st.session_state:
     st.session_state["_user_set"] = set()
 
@@ -911,6 +903,16 @@ def _apply_preset_safely(updates: dict):
     for k, v in updates.items():
         if k not in st.session_state["_user_set"]:
             st.session_state[k] = v
+
+    st.slider("Δ lookback (candles)", 1, 100,
+          value=int(st.session_state["lookback_candles"]),
+          step=1, key="lookback_candles",
+          on_change=_lock_setting, args=("lookback_candles",))
+    st.slider("Min +% change (Δ gate)", 0.0, 50.0,
+          value=float(st.session_state["min_pct"]),
+          step=0.5, key="min_pct",
+          on_change=_lock_setting, args=("min_pct",))
+
 # --- end helper ---
 
     if st.session_state["preset"] != st.session_state["_last_preset"]:
