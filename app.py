@@ -908,7 +908,7 @@ def _apply_preset_safely(updates: dict):
           value=int(st.session_state["lookback_candles"]),
           step=1, key="lookback_candles",
           on_change=_lock_setting, args=("lookback_candles",))
-   st.slider("Min +% change (Δ gate)", 0.0, 50.0,
+    st.slider("Min +% change (Δ gate)", 0.0, 50.0,
           value=float(st.session_state["min_pct"]),
           step=0.5, key="min_pct",
           on_change=_lock_setting, args=("min_pct",))
