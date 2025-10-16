@@ -1113,7 +1113,6 @@ if cap > 0:
 
 # Build gate settings
 gate_settings = {
-  gate_settings = {
     "lookback_candles": int(st.session_state.get("lookback_candles", 3)),
     "min_pct": float(st.session_state.get("min_pct", 3.0)),
 
@@ -1141,6 +1140,13 @@ gate_settings = {
 
     "use_roc": bool(st.session_state.get("use_roc", False)),
     "min_roc": float(st.session_state.get("min_roc", 1.0)),
+
+    "use_macd_cross": bool(st.session_state.get("use_macd_cross", False)),
+    "macd_cross_bars": int(st.session_state.get("macd_cross_bars", 3)),
+    "macd_cross_only_bull": bool(st.session_state.get("macd_cross_only_bull", True)),
+    "macd_cross_below_zero": bool(st.session_state.get("macd_cross_below_zero", False)),
+    "macd_hist_confirm_bars": int(st.session_state.get("macd_hist_confirm_bars", 3)),
+}
 
     "use_macd_cross": bool(st.session_state.get("use_macd_cross", False)),
     "macd_cross_bars": int(st.session_state.get("macd_cross_bars", 3)),
