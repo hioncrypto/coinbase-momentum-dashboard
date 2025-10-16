@@ -1034,7 +1034,7 @@ with expander("Gates"):
 
 # Display Settings
 with expander("Display"):
-    st.slider("Font size (global)", 0.8, 1.6, st.session_state["font_scale"], 0.05, key="font_scale")
+    st.slider("Font size (global)", 0.8, 1.6, value=float(st.session_state.get("font_scale", 1.0)), step=0.05, key="font_scale")
     st.slider("Auto-refresh (seconds)", 5, 120, st.session_state["refresh_sec"], 1, key="refresh_sec")
 
 # Notifications
