@@ -1034,14 +1034,15 @@ with expander("Gates"):
 
 # Display Settings
 with expander("Display"):
-    st.slider("Font size (global)", 0.8, 1.6, value=float(st.session_state.get("font_scale", 1.0)), step=0.05, key="font_scale")
-    st.slider("Auto-refresh (seconds)", 5, 120, value=int(st.session_state.get("refresh_sec", 30)), step=1, key="refresh_sec")
+    st.slider("Font size (global)", 0.8, 1.6, value=st.session_state.get("font_scale", 1.0), step=0.05, key="font_scale")
+    st.slider("Auto-refresh (seconds)", 5, 120, value=st.session_state.get("refresh_sec", 30), step=1, key="refresh_sec")
+
 
 # Notifications
 with expander("Notifications"):
     st.caption("Tips: Email requires SMTP in st.secrets; webhook posts JSON to your endpoint.")
-    st.text_input("Email recipient (optional)", value=st.session_state.get("email_to", ""), key="email_to")
-    st.text_input("Webhook URL (optional)", st.session_state["webhook_url"], key="webhook_url")
+    st.text_input("Email recipient (optional)", st.session_state.get("email_to", ""), key="email_to")
+    st.text_input("Webhook URL (optional)", st.session_state.get("webhook_url", ""), key="webhook_url")
 
 # Listing Radar
 with expander("Listing Radar"):
