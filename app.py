@@ -861,7 +861,7 @@ except Exception:
 # Mode Settings
 with expander("Mode & Timeframes"):
     st.radio("Data Source", ["REST only", "WebSocket + REST"], key="mode")
-    st.slider("WebSocket chunk size", 2, 20, st.session_state["ws_chunk"], key="ws_chunk")
+    st.slider("WebSocket chunk size", 2, 20, value=int(st.session_state.get("ws_chunk", 2)), step=1, key="ws_chunk")
     
     st.selectbox("Sort Timeframe", ["5m", "15m", "1h"], 
                 key="sort_tf")
