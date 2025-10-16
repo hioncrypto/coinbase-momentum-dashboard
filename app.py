@@ -255,8 +255,7 @@ def init_session_state():
     ### REPLACE WITH THIS:
     st.session_state["min_pct"] = 30.0
 
-# Initialize state
-init_session_state()
+
 # Initialize state
 ### REPLACE WITH THIS:
     st.session_state["min_pct"] = 30.0
