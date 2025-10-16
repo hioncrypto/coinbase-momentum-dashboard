@@ -1113,33 +1113,42 @@ if cap > 0:
 
 # Build gate settings
 gate_settings = {
-    "lookback_candles": st.session_state["lookback_candles"],
-    "min_pct": st.session_state["min_pct"],
-    "use_vol_spike": st.session_state["use_vol_spike"],
-    "vol_mult": st.session_state["vol_mult"],
-    "vol_window": st.session_state["vol_window"],
-    "use_rsi": st.session_state["use_rsi"],
-    "rsi_len": st.session_state["rsi_len"],
-    "min_rsi": st.session_state["min_rsi"],
-    "use_macd": st.session_state["use_macd"],
-    "macd_fast": st.session_state["macd_fast"],
-    "macd_slow": st.session_state["macd_slow"],
-    "macd_sig": st.session_state["macd_sig"],
-    "min_mhist": st.session_state["min_mhist"],
-    "use_atr": st.session_state.get("use_atr", False),
-    "atr_len": st.session_state.get("atr_len", 14),
-    "min_atr": st.session_state.get("min_atr", 0.5),
-    "use_trend": st.session_state["use_trend"],
-    "pivot_span": st.session_state["pivot_span"],
-    "trend_within": st.session_state["trend_within"],
-    "use_roc": st.session_state["use_roc"],
-    "min_roc": st.session_state["min_roc"],
-    "use_macd_cross": st.session_state["use_macd_cross"],
-    "macd_cross_bars": st.session_state["macd_cross_bars"],
-    "macd_cross_only_bull": st.session_state["macd_cross_only_bull"],
-    "macd_cross_below_zero": st.session_state["macd_cross_below_zero"],
-    "macd_hist_confirm_bars": st.session_state["macd_hist_confirm_bars"],
+  gate_settings = {
+    "lookback_candles": int(st.session_state.get("lookback_candles", 3)),
+    "min_pct": float(st.session_state.get("min_pct", 3.0)),
+
+    "use_vol_spike": bool(st.session_state.get("use_vol_spike", False)),
+    "vol_mult": float(st.session_state.get("vol_mult", 1.10)),
+    "vol_window": int(st.session_state.get("vol_window", 20)),
+
+    "use_rsi": bool(st.session_state.get("use_rsi", False)),
+    "rsi_len": int(st.session_state.get("rsi_len", 14)),
+    "min_rsi": int(st.session_state.get("min_rsi", 55)),
+
+    "use_macd": bool(st.session_state.get("use_macd", False)),
+    "macd_fast": int(st.session_state.get("macd_fast", 12)),
+    "macd_slow": int(st.session_state.get("macd_slow", 26)),
+    "macd_sig": int(st.session_state.get("macd_sig", 9)),
+    "min_mhist": float(st.session_state.get("min_mhist", 0.0)),
+
+    "use_atr": bool(st.session_state.get("use_atr", False)),
+    "atr_len": int(st.session_state.get("atr_len", 14)),
+    "min_atr": float(st.session_state.get("min_atr", 0.5)),
+
+    "use_trend": bool(st.session_state.get("use_trend", False)),
+    "pivot_span": int(st.session_state.get("pivot_span", 4)),
+    "trend_within": int(st.session_state.get("trend_within", 48)),
+
+    "use_roc": bool(st.session_state.get("use_roc", False)),
+    "min_roc": float(st.session_state.get("min_roc", 1.0)),
+
+    "use_macd_cross": bool(st.session_state.get("use_macd_cross", False)),
+    "macd_cross_bars": int(st.session_state.get("macd_cross_bars", 3)),
+    "macd_cross_only_bull": bool(st.session_state.get("macd_cross_only_bull", True)),
+    "macd_cross_below_zero": bool(st.session_state.get("macd_cross_below_zero", False)),
+    "macd_hist_confirm_bars": int(st.session_state.get("macd_hist_confirm_bars", 3)),
 }
+
 
 # Process pairs and build rows
 rows = []
