@@ -1040,7 +1040,7 @@ with expander("Display"):
 # Notifications
 with expander("Notifications"):
     st.caption("Tips: Email requires SMTP in st.secrets; webhook posts JSON to your endpoint.")
-    st.text_input("Email recipient (optional)", st.session_state["email_to"], key="email_to")
+    st.text_input("Email recipient (optional)", value=st.session_state.get("email_to", ""), key="email_to")
     st.text_input("Webhook URL (optional)", st.session_state["webhook_url"], key="webhook_url")
 
 # Listing Radar
