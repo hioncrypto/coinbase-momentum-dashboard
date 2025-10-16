@@ -879,7 +879,7 @@ with expander("Gates"):
     if "_preset_widget" not in st.session_state:
         st.session_state["_preset_widget"] = st.session_state.get("preset", "None")
 
-    with expander("Gates"):
+with expander("Gates"):
     # Presets UI + persistence
     presets = ["Spike Hunter", "Early MACD Cross", "Confirm Rally", "hioncrypto's Velocity Mode", "None"]
 
