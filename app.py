@@ -1148,7 +1148,7 @@ gate_settings = {
     "macd_hist_confirm_bars": int(st.session_state.get("macd_hist_confirm_bars", 3)),
 }
 
-    "use_macd_cross": bool(st.session_state.get("use_macd_cross", False)),
+        "use_macd_cross": bool(st.session_state.get("use_macd_cross", False)),
     "macd_cross_bars": int(st.session_state.get("macd_cross_bars", 3)),
     "macd_cross_only_bull": bool(st.session_state.get("macd_cross_only_bull", True)),
     "macd_cross_below_zero": bool(st.session_state.get("macd_cross_below_zero", False)),
