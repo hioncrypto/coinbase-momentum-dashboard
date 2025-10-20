@@ -1304,7 +1304,7 @@ if rows:
     
     # Always sort by percentage change as primary criteria
     chg_col = f"% Change ({sort_tf})"
-    top_10 = df_results.head(10)
+    top_10 = def_results.head(10).reset_index(drop=True)
     # Remove the # column if it exists to avoid duplication
     if "#" in top_10.columns:
         top_10 = top_10.drop(columns=["#"])
