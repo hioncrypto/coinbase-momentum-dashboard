@@ -918,6 +918,12 @@ with expander("Gates"):
               value=float(st.session_state.get("min_pct", 3.0)),
               step=0.5, key="min_pct",
               on_change=_lock_setting, args=("min_pct",))
+    st.slider(
+        "Min rows (bars)", 1, 300,
+        value=int(st.session_state.get("min_bars", 30)),
+        step=1, key="min_bars",
+        on_change=_lock_setting, args=("min_bars",)
+    )
 
     # Apply preset changes
     if st.session_state["preset"] != st.session_state["_last_preset"]:
