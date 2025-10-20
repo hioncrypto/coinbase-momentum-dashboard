@@ -866,18 +866,6 @@ with expander("Mode & Timeframes"):
     st.selectbox("Sort Timeframe", ["5m", "15m", "1h"], 
                 key="sort_tf")
     st.toggle("Sort Descending", key="sort_desc")
-    
-with expander("Gates"):
-    # Presets UI + persistence
-    presets = ["Spike Hunter", "Early MACD Cross", "Confirm Rally", "hioncrypto's Velocity Mode", "None"]
-
-    if "preset" not in st.session_state:
-        p = st.query_params.get("preset", None)
-        st.session_state["preset"] = p if p in presets else "None"
-    if "_last_preset" not in st.session_state:
-        st.session_state["_last_preset"] = st.session_state["preset"]
-    if "_preset_widget" not in st.session_state:
-        st.session_state["_preset_widget"] = st.session_state.get("preset", "None")
 
 with expander("Gates"):
     # Presets UI + persistence
