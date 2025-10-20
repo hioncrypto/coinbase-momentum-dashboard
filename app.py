@@ -1102,8 +1102,8 @@ else:
 # Apply discovery cap
 # Apply discovery limit
 cap = max(5, min(500, st.session_state.get("pairs_to_discover", 100)))
-if cap > 0:
-    pairs = pairs[:cap]
+
+
 
 # Build gate settings
 gate_settings = {
