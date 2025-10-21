@@ -708,17 +708,6 @@ with st.sidebar:
     with c3:
         st.toggle("⭐ My Pairs Only", key="use_my_pairs")
         
-    # ---- Sidebar width + show expander style (safe CSS) ---- reomove is slider does not work 
-    st.markdown("""
-    <style>
-    /* Make the sidebar a bit wider */
-    section[data-testid="stSidebar"] { width: 380px !important; }
-    section[data-testid="stSidebar"] > div { width: 380px !important; }
-    /* Nudge the main area so it doesn't overlap */
-    div[role="main"] { margin-left: 380px !important; }
-    </style>
-    """, unsafe_allow_html=True)
-
     # Store current state for next comparison
     st.session_state["_prev_collapse_state"] = current_collapse_state
 
