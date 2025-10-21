@@ -59,6 +59,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import List, Optional, Tuple, Dict, Any
 
+
 import numpy as np
 import pandas as pd
 import requests
@@ -87,6 +88,28 @@ except ImportError:
 # =============================================================================
 # CONFIGURATION & CONSTANTS
 # =============================================================================
+# Sidebar expand/collapse control Remove if it does nor work
+with st.sidebar:
+    expand_sidebar = st.checkbox("Expand sidebar", value=True)
+
+if expand_sidebar:
+    st.markdown(
+        """
+        <style>
+        [data-testid="stSidebar"] {width: 400px;}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+else:
+    st.markdown(
+        """
+        <style>
+        [data-testid="stSidebar"] {width: 200px;}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 class Config:
     """Application configuration"""
