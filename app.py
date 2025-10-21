@@ -88,6 +88,27 @@ except ImportError:
 # =============================================================================
 # CONFIGURATION & CONSTANTS
 # =============================================================================
+# Sidebar expand/collapse control
+with st.sidebar:
+    expand_sidebar = st.checkbox("Expand sidebar", value=True)
+
+# Inject CSS to control sidebar width
+sidebar_width = "400px" if expand_sidebar else "200px"
+
+st.markdown(
+    f"""
+    <style>
+        section[data-testid="stSidebar"] {{
+            width: {sidebar_width} !important;
+        }}
+        div[data-testid="stSidebarContent"] {{
+            width: {sidebar_width} !important;
+        }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 class Config:
     """Application configuration"""
     COINBASE_BASE = "https://api.exchange.coinbase.com"
