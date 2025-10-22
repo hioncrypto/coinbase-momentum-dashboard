@@ -13,6 +13,7 @@ from datetime import datetime
 import pandas as pd
 import time
 
+POLYGON_KEY = st.secrets.get("POLYGON_KEY", "")
 # Page configuration - MUST be first Streamlit command
 st.set_page_config(
     page_title="hioncrypto: Stock Tracker",
