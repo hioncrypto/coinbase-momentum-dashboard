@@ -10,7 +10,7 @@ import streamlit as st
 
 # Page configuration - MUST be first Streamlit command
 st.set_page_config(
-    page_title="hioncrypto's: Crypto Tracker",
+    page_title="hioncrypto: Stock Tracker",
     page_icon="🚀",
     layout="wide",
     initial_sidebar_state="collapsed"
