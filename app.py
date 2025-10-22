@@ -690,7 +690,7 @@ def expander(title: str):
 
 # Sidebar header with improved collapse/expand logic
 with st.sidebar:
-    st.title("🚀 Crypto Tracker")
+    st.title("📈 Stock Tracker")
     
     # Track previous collapse state to detect changes
     prev_collapse_state = st.session_state.get("_prev_collapse_state", None)
