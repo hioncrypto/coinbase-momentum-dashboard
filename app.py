@@ -679,12 +679,12 @@ def evaluate_gates(df: pd.DataFrame, settings: dict) -> Tuple[dict, int, str, in
 # SIDEBAR CONTROLS
 # =============================================================================
 
-def expander(title: str):
-    """Create sidebar expander with collapse/expand state"""
-    return st.sidebar.expander(title, expanded=not st.session_state.get("collapse_all", False))
+
+
+
 
 def expander(title: str):
-    """Create sidebar expander with collapse/expand state - no refresh on state change"""
+    "Create sidebar expander with collapse/expand state"
     expanded = not st.session_state.get("collapse_all", False)
     return st.sidebar.expander(title, expanded=expanded)
 
