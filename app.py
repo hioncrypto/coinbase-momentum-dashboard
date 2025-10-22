@@ -8,6 +8,11 @@
 
 import streamlit as st
 
+# Stock data feed support
+from datetime import datetime
+import pandas as pd
+import time
+
 # Page configuration - MUST be first Streamlit command
 st.set_page_config(
     page_title="hioncrypto: Stock Tracker",
