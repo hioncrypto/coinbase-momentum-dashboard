@@ -695,6 +695,7 @@ def expander(title: str):
 
 # Sidebar header with improved collapse/expand logic
 with st.sidebar:
+    market = st.selectbox("Market", ["Stocks", "Crypto"], index=0, key="market")
     st.title("📈 Stock Tracker")
     
     # Track previous collapse state to detect changes
