@@ -105,15 +105,80 @@ CONFIG = Config()
 # =============================================================================
 
 
-# Custom CSS
 st.markdown("""
 <style>
+/* IMPROVED SIDEBAR - Responsive and properly expanding */
+section[data-testid="stSidebar"] {
+    min-width: 32rem !important;
+    max-width: 50rem !important;
+}
+section[data-testid="stSidebar"] > div:first-child {
+    padding: 1rem !important;
+}
+
+/* Make ALL sidebar elements responsive */
+section[data-testid="stSidebar"] * {
+    max-width: 100% !important;
+}
+/* Sticky top section with all controls */
+section[data-testid="stSidebar"] > div:first-child > div:first-child {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 999 !important;
+    
+    padding-bottom: 1rem !important;
+/* Expand content to full width */
+[data-testid="stAppViewContainer"] .main {
+    max-width: 100vw !important;
+}
+}
+
+section[data-testid="stSidebar"] .element-container,
+section[data-testid="stSidebar"] .stMarkdown,
+section[data-testid="stSidebar"] .row-widget,
+section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
+    width: 100% !important;
+}
+
+/* Buttons, inputs, and interactive elements */
+section[data-testid="stSidebar"] .stButton,
+section[data-testid="stSidebar"] .stButton > button,
+section[data-testid="stSidebar"] .stSelectbox,
+section[data-testid="stSidebar"] .stSlider,
+section[data-testid="stSidebar"] .stNumberInput,
+section[data-testid="stSidebar"] .stTextInput,
+section[data-testid="stSidebar"] .stTextArea,
+section[data-testid="stSidebar"] .stRadio,
+section[data-testid="stSidebar"] .stCheckbox {
+    width: 100% !important;
+}
+
+/* Expander containers */
+section[data-testid="stSidebar"] .streamlit-expanderHeader,
+section[data-testid="stSidebar"] .streamlit-expanderContent {
+    width: 100% !important;
+}
+
+/* Columns in sidebar */
+section[data-testid="stSidebar"] [data-testid="column"] {
+    width: 100% !important;
+    min-width: 0 !important;
+    flex: 1 1 0 !important;
+}
+
+/* Slider specifically */
+section[data-testid="stSidebar"] .stSlider [data-testid="stSlider"] {
+    width: 100% !important;
+}
+
+/* Main page body */
 [data-testid="stAppViewContainer"] > .main > div.block-container {
     max-width: 100vw !important;
     padding-left: 12px !important;
     padding-right: 12px !important;
 }
 
+/* Keep tables fully opaque */
 div[data-testid="stDataFrame"],
 div[data-testid="stDataFrame"] *,
 div[data-testid="stDataEditor"],
@@ -124,22 +189,41 @@ div[data-testid="stDataEditor"] * {
     animation: none !important;
 }
 
-section[data-testid="stSidebar"],
-section[data-testid="stSidebar"] * {
-    pointer-events: auto !important;
-    opacity: 1 !important;
-    z-index: 999;
-}
-
+/* Row highlight colors */
 .row-green {
     background-color: #16a34a !important;
     color: white !important;
     font-weight: 600;
 }
-
 .row-yellow {
     background-color: #eab308 !important;
     color: black !important;
+}
+
+/* Floating live status badge */
+#live-status-badge {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    background: rgba(0,0,0,0.7);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 15px;
+    font-size: 12px;
+    z-index: 1000;
+}
+
+/* Mobile tweaks */
+@media (max-width: 768px) {
+    .stDataFrame { font-size: 11px; }
+    [data-testid="stMetricValue"] { font-size: 18px; }
+    [data-testid="stMetricLabel"] { font-size: 11px; }
+    .block-container { padding: 0.5rem; }
+    
+    section[data-testid="stSidebar"] {
+        width: 300px !important;
+        min-width: 300px !important;
+    }
 }
 </style>
 """, unsafe_allow_html=True)
