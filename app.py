@@ -872,7 +872,10 @@ with expander("Gates"):
     presets = ["Spike Hunter", "Early MACD Cross", "Confirm Rally", "hioncrypto's Velocity Mode", "None"]
 
     if "preset" not in st.session_state:
-        p = st.query_params.get("preset", None)
+        try:
+            p = st.query_params.get("preset", None)
+        except:
+            p = None
         st.session_state["preset"] = p if p in presets else "None"
     if "_last_preset" not in st.session_state:
         st.session_state["_last_preset"] = st.session_state["preset"]
@@ -887,7 +890,10 @@ with expander("Gates"):
         horizontal=True,
         help="Quick filter configurations."
     )
-    st.query_params["preset"] = st.session_state["preset"]
+    try:
+        st.query_params["preset"] = st.session_state["preset"]
+    except:
+        pass
     st.session_state["preset"] = st.session_state["_preset_widget"]
     
     st.markdown("**Tips:** Gate Mode 'ALL' requires every enabled gate. 'ANY' needs at least one. Custom (K/Y) colors rows based on gate pass counts (K=green, Y=yellow).**")
@@ -908,7 +914,7 @@ with expander("Gates"):
             if k not in st.session_state["_user_set"]:
                 st.session_state[k] = v
 
-    # SLIDERS - These are at the MAIN level of the expander, NOT inside any function
+    # Main sliders at top
     st.slider("Δ lookback (candles)", 1, 100,
               value=int(st.session_state.get("lookback_candles", 3)),
               step=1, key="lookback_candles",
@@ -918,12 +924,11 @@ with expander("Gates"):
               value=float(st.session_state.get("min_pct", 3.0)),
               step=0.5, key="min_pct",
               on_change=_lock_setting, args=("min_pct",))
-    st.slider(
-        "Min rows (bars)", 1, 300,
-        value=int(st.session_state.get("min_bars", 30)),
-        step=1, key="min_bars",
-        on_change=_lock_setting, args=("min_bars",)
-    )
+    
+    st.slider("Min rows (bars)", 1, 300,
+              value=int(st.session_state.get("min_bars", 30)),
+              step=1, key="min_bars",
+              on_change=_lock_setting, args=("min_bars",))
 
     # Apply preset changes
     if st.session_state["preset"] != st.session_state["_last_preset"]:
@@ -956,49 +961,54 @@ with expander("Gates"):
                 "K_green": 2, "Y_yellow": 1
             })
 
-    # Volume spike settings
-    c1 = st.columns(3)[0]
+    # Row 1: Volume spike | RSI | MACD hist
+    c1, c2, c3 = st.columns(3)
     with c1:
-        st.toggle("Volume spike X", key="use_vol_spike", help="Passes if current volume exceeds average volume by the spike multiple")
-        st.slider("Spike multiple X", 1.0, 5.0, step=0.05, key="vol_mult", help="Multiplier threshold. 2.5 means current volume must be at least 2.5x average")
-    
-    # RSI settings
-    c2 = st.columns(3)[1]
+        st.toggle("Volume spike", key="use_vol_spike")
+        if st.session_state.get("use_vol_spike"):
+            st.slider("Spike multiple", 1.0, 5.0, step=0.05, key="vol_mult")
     with c2:
         st.toggle("RSI", key="use_rsi")
-        st.slider("Min RSI", 40, 90, step=1, key="min_rsi")
-    
-    # MACD histogram settings
-    c3 = st.columns(3)[2]
+        if st.session_state.get("use_rsi"):
+            st.slider("Min RSI", 40, 90, step=1, key="min_rsi")
     with c3:
         st.toggle("MACD hist", key="use_macd")
-        st.slider("Min MACD hist", 0.0, 2.0, step=0.05, key="min_mhist")
+        if st.session_state.get("use_macd"):
+            st.slider("Min MACD hist", 0.0, 2.0, step=0.05, key="min_mhist")
 
-    # Additional gate settings in columns
+    # Row 2: ATR % | Trend breakout | ROC
     c4, c5, c6 = st.columns(3)
     with c4:
         st.toggle("ATR %", key="use_atr")
-        st.slider("Min ATR %", 0.0, 10.0, step=0.1, key="min_atr")
+        if st.session_state.get("use_atr"):
+            st.slider("Min ATR %", 0.0, 10.0, step=0.1, key="min_atr")
     with c5:
-        st.toggle("Trend breakout (up)", key="use_trend")
-        st.slider("Pivot span (bars)", 2, 10, step=1, key="pivot_span")
-        st.slider("Breakout within (bars)", 5, 96, step=1, key="trend_within")
+        st.toggle("Trend breakout", key="use_trend")
+        if st.session_state.get("use_trend"):
+            st.slider("Pivot span", 2, 10, step=1, key="pivot_span")
+            st.slider("Breakout within", 5, 96, step=1, key="trend_within")
     with c6:
-        st.toggle("ROC (rate of change)", key="use_roc")
-        st.slider("Min ROC %", 0.0, 50.0, step=0.5, key="min_roc")
+        st.toggle("ROC", key="use_roc")
+        if st.session_state.get("use_roc"):
+            st.slider("Min ROC %", 0.0, 50.0, step=0.5, key="min_roc")
 
-    # MACD Cross settings
+    # MACD Cross section
     st.markdown("**MACD Cross (early entry)**")
     c7, c8, c9, c10 = st.columns(4)
     with c7:
-        st.toggle("Enable MACD Cross", key="use_macd_cross")
+        st.toggle("Enable", key="use_macd_cross")
     with c8:
-        st.slider("Cross within last (bars)", 1, 10, step=1, key="macd_cross_bars")
+        if st.session_state.get("use_macd_cross"):
+            st.slider("Cross within", 1, 10, step=1, key="macd_cross_bars")
     with c9:
-        st.toggle("Bullish only", key="macd_cross_only_bull")
+        if st.session_state.get("use_macd_cross"):
+            st.toggle("Bullish only", key="macd_cross_only_bull")
     with c10:
-        st.toggle("Prefer below zero", key="macd_cross_below_zero")
-    st.slider("Histogram > 0 within (bars)", 0, 10, step=1, key="macd_hist_confirm_bars")
+        if st.session_state.get("use_macd_cross"):
+            st.toggle("Below zero", key="macd_cross_below_zero")
+    
+    if st.session_state.get("use_macd_cross"):
+        st.slider("Histogram > 0 within", 0, 10, step=1, key="macd_hist_confirm_bars")
 
     st.markdown("---")
     
@@ -1011,20 +1021,21 @@ with expander("Gates"):
     # Toggle for hard filter
     st.toggle("Hard filter (hide non-passers)", key="hard_filter")
     
-    # Color rules for Custom mode
-    st.subheader("Color rules (Custom only)")
-    st.selectbox(
-        "Gates needed to turn green (K)",
-        list(range(1, 8)),
-        index=int(st.session_state.get("K_green", 3)) - 1,
-        key="K_green",
-    )
-    st.selectbox(
-        "Yellow needs ≥ Y (but < K)",
-        list(range(0, int(st.session_state.get("K_green", 3)))),
-        index=min(int(st.session_state.get("Y_yellow", 2)), max(0, int(st.session_state.get("K_green", 3)) - 1)),
-        key="Y_yellow",
-    )
+    # Color rules for Custom mode - only show when Custom is selected
+    if st.session_state.get("gate_mode") == "Custom (K/Y)":
+        st.subheader("Color rules")
+        st.selectbox(
+            "Gates needed to turn green (K)",
+            list(range(1, 8)),
+            index=int(st.session_state.get("K_green", 3)) - 1,
+            key="K_green",
+        )
+        st.selectbox(
+            "Yellow needs ≥ Y (but < K)",
+            list(range(0, int(st.session_state.get("K_green", 3)))),
+            index=min(int(st.session_state.get("Y_yellow", 2)), max(0, int(st.session_state.get("K_green", 3)) - 1)),
+            key="Y_yellow",
+        )
 
 # Display Settings
 with expander("Display"):
