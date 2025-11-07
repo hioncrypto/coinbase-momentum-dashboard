@@ -1145,8 +1145,8 @@ rows = []
 sort_tf = st.session_state["sort_tf"]
 mode = st.session_state["gate_mode"]
 hard_filter = st.session_state["hard_filter"]
-k_required = st.session_state["K_green"]
-y_required = st.session_state["Y_yellow"]
+k_required = st.session_state.get("K_green", 3)
+y_required = st.session_state.get("Y_yellow", 2)
 
 effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"].lower() else st.session_state["exchange"]
 
