@@ -13,7 +13,7 @@ st.set_page_config(
     page_title="hioncrypto's: Crypto Tracker",
     page_icon="🚀",
     layout="wide",
-    initial_sidebar_state="expanded"  # Change from "collapsed" to "expanded"
+    initial_sidebar_state="expanded"
 )
 
 st.markdown("""
@@ -82,7 +82,6 @@ try:
     import websocket
     WS_AVAILABLE = True
 except ImportError:
-    # Track alerted pairs to avoid spam
     WS_AVAILABLE = False
 
 # =============================================================================
@@ -229,42 +228,59 @@ div[data-testid="stDataEditor"] * {
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# STATE MANAGEMENT
+# STATE MANAGEMENT WITH PERSISTENCE
 # =============================================================================
 
+def load_from_url(key: str, default_value, value_type=str):
+    """Load a setting from URL parameters"""
+    try:
+        qv = st.query_params.get(key)
+        if qv is not None:
+            if value_type == bool:
+                return qv.lower() in ('true', '1', 'yes', 'on')
+            elif value_type == int:
+                return int(qv)
+            elif value_type == float:
+                return float(qv)
+            else:
+                return qv
+    except:
+        pass
+    return default_value
+
+def save_to_url(key: str, value):
+    """Save a setting to URL parameters"""
+    try:
+        st.query_params[key] = str(value)
+    except:
+        pass
+
 def init_session_state():
-    """Initialize session state variables - only sets defaults if not present"""
+    """Initialize session state variables with URL persistence"""
     
-    # Mark initialization and load URL params ONLY on first run
+    # Mark initialization
     if "_initialized" not in st.session_state:
         st.session_state["_initialized"] = True
-        
-        # Load discover_cap from URL first (only on initial load)
-        if "discover_cap" in st.query_params:
-            try:
-                st.session_state["discover_cap"] = int(st.query_params["discover_cap"])
-            except:
-                pass
     
-    # Define defaults
+    # Define defaults with URL persistence for key settings
     defaults = {
         # Market settings
-        "exchange": "Coinbase",
-        "quote": "USD",
-        "discover_cap": 400,
+        "exchange": load_from_url("exchange", "Coinbase"),
+        "quote": load_from_url("quote", "USD"),
+        "pairs_to_discover": load_from_url("ptd", 100, int),
         
         # Mode
         "mode": "REST only",
         "ws_chunk": 5,
         
-        # Timeframes
-        "sort_tf": "1h",
-        "sort_desc": True,
-        "min_bars": 1,
+        # Timeframes - DEFAULT TO 1H AND SORT ON
+        "sort_tf": load_from_url("sort_tf", "1h"),
+        "sort_desc": load_from_url("sort_desc", True, bool),
+        "min_bars": 30,
         
-        # Gates
-        "lookback_candles": 3,
-        "min_pct": 3.0,
+        # Gates - PERSIST THESE VALUES
+        "lookback_candles": load_from_url("lookback", 3, int),
+        "min_pct": load_from_url("min_pct", 10.0, float),
         "use_vol_spike": True,
         "vol_mult": 1.10,
         "vol_window": 20,
@@ -319,8 +335,8 @@ def init_session_state():
         # Alerts
         "alerted_pairs": set(),
         
-        # Listing Radar
-        "lr_enabled": False,
+        # Listing Radar - DEFAULT TO ON
+        "lr_enabled": load_from_url("lr_enabled", True, bool),
         "lr_baseline": {"Coinbase": set(), "Binance": set()},
         "lr_events": [],
         "lr_unacked": 0,
@@ -330,19 +346,6 @@ def init_session_state():
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
-
-# =============================================================================
-# TECHNICAL INDICATORS
-# =============================================================================   
-# =============================================================================
-# TECHNICAL INDICATORS            
-    ### REPLACE WITH THIS:
-    st.session_state["min_pct"] = 30.0
-
-
-# Initialize state
-### REPLACE WITH THIS:
-    st.session_state["min_pct"] = 30.0
 
 # =============================================================================
 # TECHNICAL INDICATORS
@@ -519,13 +522,11 @@ def fetch_data(exchange: str, pair: str, timeframe: str, limit: Optional[int] = 
 # CACHING WITH FORCED REFRESH
 # =============================================================================
 
-
-# derive TTL from the Auto-refresh slider dynamically
 _refresh_ttl = int(max(5, st.session_state.get("refresh_sec", 15)))
 
 @st.cache_data(show_spinner=False, ttl=_refresh_ttl)
 def get_cached_data(exchange: str, pair: str, timeframe: str) -> Optional[pd.DataFrame]:
-    """Cached data fetching function — TTL follows the Auto-refresh slider."""
+    """Cached data fetching function"""
     try:
         limit = get_bars_limit(timeframe)
         return fetch_data(exchange, pair, timeframe, limit)
@@ -533,25 +534,20 @@ def get_cached_data(exchange: str, pair: str, timeframe: str) -> Optional[pd.Dat
         st.error(f"Error fetching data for {pair}: {e}")
         return None
 
-# clear the cache so TTL changes take effect immediately
-
-
-# Add a manual refresh button for user control
 col1, col2, col3 = st.columns([1, 1, 2])
 with col1:
     if st.button("🔄 Refresh Now", type="primary"):
         get_cached_data.clear()
-        st.session_state["ws_prices"] = {}  # Clear WebSocket prices too
+        st.session_state["ws_prices"] = {}
         st.rerun()
 
 with col2:
     if st.button("🧹 Clear Cache"):
         get_cached_data.clear()
-        st.session_state.clear()  # Clear all session state
+        st.session_state.clear()
         st.rerun()
 
 with col3:
-    # Show real-time status
     is_ws_active = st.session_state.get("ws_alive", False)
     ws_symbol = "🟢" if is_ws_active else "🔴"
     st.caption(f"WebSocket: {ws_symbol} | Pairs in cache: {len(st.session_state.get('ws_prices', {}))}")
@@ -704,7 +700,6 @@ def evaluate_gates(df: pd.DataFrame, settings: dict) -> Tuple[dict, int, str, in
     
     # ATR gate
     if settings.get("use_atr", False):
-        # Calculate ATR manually
         high_low = df['high'] - df['low']
         high_close = abs(df['high'] - df['close'].shift())
         low_close = abs(df['low'] - df['close'].shift())
@@ -765,18 +760,16 @@ def evaluate_gates(df: pd.DataFrame, settings: dict) -> Tuple[dict, int, str, in
 
 def expander(title: str):
     """Create sidebar expander with collapse/expand state"""
-    return st.sidebar.expander(title, expanded=not st.session_state.get("collapse_all", False))
-
-def expander(title: str):
-    """Create sidebar expander with collapse/expand state - no refresh on state change"""
     expanded = not st.session_state.get("collapse_all", False)
     return st.sidebar.expander(title, expanded=expanded)
 
-# Sidebar header with improved collapse/expand logic
+# Initialize state
+init_session_state()
+
+# Sidebar header
 with st.sidebar:
     st.title("🚀 Crypto Tracker")
     
-    # Track previous collapse state to detect changes
     prev_collapse_state = st.session_state.get("_prev_collapse_state", None)
     current_collapse_state = st.session_state.get("collapse_all", False)
     
@@ -784,18 +777,16 @@ with st.sidebar:
     with c1:
         if st.button("Collapse All", use_container_width=True, key="collapse_btn"):
             st.session_state["collapse_all"] = True
-            st.session_state["_ui_only_change"] = True  # Mark as UI-only change
+            st.session_state["_ui_only_change"] = True
     with c2:
         if st.button("Expand All", use_container_width=True, key="expand_btn"):
             st.session_state["collapse_all"] = False
-            st.session_state["_ui_only_change"] = True  # Mark as UI-only change
+            st.session_state["_ui_only_change"] = True
     with c3:
         st.toggle("⭐ My Pairs Only", key="use_my_pairs")
         
-    # Store current state for next comparison
     st.session_state["_prev_collapse_state"] = current_collapse_state
 
-    # My Pairs management
     with st.popover("Manage My Pairs"):
         st.caption("Comma-separated (e.g., BTC-USD, ETH-USDT)")
         current = st.text_area("Edit list", st.session_state.get("my_pairs", ""))
@@ -807,30 +798,24 @@ with st.sidebar:
         exchanges_list = ["Coinbase", "Binance", "Kraken (coming soon)", "KuCoin (coming soon)"]
         quotes_list = ["USD", "USDC", "USDT", "BTC", "ETH", "EUR"]
     
-        st.selectbox("Exchange", exchanges_list, 
-                key="exchange")
-    
-        st.selectbox("Quote Currency", quotes_list,  
-                key="quote")
-    
-        st.checkbox("Use watchlist only", key="use_watch", 
-                value=st.session_state.get("use_watch", False))
+        st.selectbox("Exchange", exchanges_list, key="exchange")
+        st.selectbox("Quote Currency", quotes_list, key="quote")
+        st.checkbox("Use watchlist only", key="use_watch", value=st.session_state.get("use_watch", False))
 
-    # Watchlist Management (separate from My Pairs)
     with expander("Watchlist"):
         st.caption("Watchlist is different from 'My Pairs'. Use this for broader monitoring.")
         current_watchlist = st.text_area(
-        "Watchlist pairs", 
-        st.session_state.get("watchlist", "BTC-USD, ETH-USD, SOL-USD, AVAX-USD, ADA-USD"),
-        key="watchlist_edit",
-        help="Comma-separated pairs like BTC-USD, ETH-USDT"
-    )
-    
-    if st.button("Update Watchlist"):
-        cleaned = ", ".join([p.strip().upper() for p in current_watchlist.split(",") if p.strip()])
-        st.session_state["watchlist"] = cleaned
-        st.success("Watchlist updated!")
-        st.rerun()
+            "Watchlist pairs", 
+            st.session_state.get("watchlist", "BTC-USD, ETH-USD, SOL-USD, AVAX-USD, ADA-USD"),
+            key="watchlist_edit",
+            help="Comma-separated pairs like BTC-USD, ETH-USDT"
+        )
+        
+        if st.button("Update Watchlist"):
+            cleaned = ", ".join([p.strip().upper() for p in current_watchlist.split(",") if p.strip()])
+            st.session_state["watchlist"] = cleaned
+            st.success("Watchlist updated!")
+            st.rerun()
 
     # Calculate available pairs
     if st.session_state.get("use_my_pairs", False):
@@ -841,126 +826,48 @@ with st.sidebar:
         effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"].lower() else st.session_state["exchange"]
         avail_pairs = get_products(effective_exchange, st.session_state["quote"])
     
-   # ---------------- Sidebar › Discover (sticky) ----------------
-# Unique key: "pairs_to_discover"  (do NOT reuse "discover_cap")
+    avail_count = len(avail_pairs)
 
-# One-time init from URL ?ptd=... else default=100
-if "pairs_to_discover" not in st.session_state:
-    try:
-        qv = st.query_params.get("ptd")
-    except Exception:
-        qv = st.experimental_get_query_params().get("ptd", [None])[0]
-    try:
-        st.session_state.pairs_to_discover = int(qv)
-    except Exception:
-        st.session_state.pairs_to_discover = 100
-    st.session_state.pairs_to_discover = int(min(500, max(5, st.session_state.pairs_to_discover)))
-
-
-# Persist to URL on change
-try:
-    st.query_params["ptd"] = str(ptd)
-except Exception:
- 
+    st.sidebar.subheader("Discover Settings")
     
-    # Calculate available pairs
-    if st.session_state["use_watch"] and st.session_state.get("watchlist", "").strip():
-        avail_pairs = [p.strip().upper() for p in st.session_state["watchlist"].split(",") if p.strip()]
-        avail_pairs = [p for p in avail_pairs if p.endswith(f"-{st.session_state['quote']}")]
-    elif st.session_state.get("use_my_pairs", False):
-        avail_pairs = [p.strip().upper() for p in st.session_state.get("my_pairs", "").split(",") if p.strip()]
-        avail_pairs = [p for p in avail_pairs if p.endswith(f"-{st.session_state['quote']}")]
-    else:
-        effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"].lower() else st.session_state["exchange"]
-        avail_pairs = get_products(effective_exchange, st.session_state["quote"])
-    
-    
-    
-    if st.session_state["use_my_pairs"]:
-        pairs_pool = [p.strip().upper() for p in st.session_state.get("my_pairs", "").split(",") if p.strip()]
-        pairs_pool = [p for p in pairs_pool if p.endswith(f"-{st.session_state['quote']}")]
-    elif st.session_state["use_watch"]:
-        pairs_pool = [p.strip().upper() for p in st.session_state.get("watchlist", "").split(",") if p.strip()]
-        pairs_pool = [p for p in pairs_pool if p.endswith(f"-{st.session_state['quote']}")]
-    else:
-        effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"].lower() else st.session_state["exchange"]
-        pairs_pool = get_products(effective_exchange, st.session_state["quote"])
-    
- # compute a safe available count for the label
-avail_count = len(locals().get("avail_pairs", locals().get("pairs_pool", [])))
-
-# ---------------- Sidebar › Discover ----------------
-st.sidebar.subheader("Discover Settings")
-
-# compute available pairs count if list exists
-avail_count = len(locals().get("avail_pairs", locals().get("pairs_pool", [])))
-
-# one-time init from ?ptd= or fallback
-if "pairs_to_discover" not in st.session_state:
-    qp = (getattr(st, "query_params", {}) or {}).get("ptd")
-    if qp is None:
-        qp = st.experimental_get_query_params().get("ptd", [None])[0]
-    try:
-        st.session_state.pairs_to_discover = int(qp)
-    except Exception:
-        st.session_state.pairs_to_discover = 100
-    st.session_state.pairs_to_discover = int(
-        min(500, max(5, st.session_state.pairs_to_discover))
+    ptd = st.sidebar.slider(
+        f"Pairs to discover{f' (Available: {avail_count})' if avail_count else ''}",
+        min_value=5,
+        max_value=500,
+        step=5,
+        value=st.session_state.get("pairs_to_discover", 100),
+        key="ui_pairs_to_discover",
+        help="Persists via URL ?ptd= and session state."
     )
+    
+    st.session_state["pairs_to_discover"] = int(ptd)
+    save_to_url("ptd", ptd)
 
-# single sticky slider
-ptd = st.sidebar.slider(
-    f"Pairs to discover{f' (Available: {avail_count})' if avail_count else ''}",
-    min_value=5,
-    max_value=500,
-    step=5,
-    value=st.session_state.pairs_to_discover,
-    key="ui_pairs_to_discover",   # unique widget key
-    help="Persists via URL ?ptd= and session state."
-)
-
-# sync UI value back into sticky state
-st.session_state.pairs_to_discover = int(ptd)
-
-# persist to URL (place immediately after the slider)
-value_to_persist = int(st.session_state.get("pairs_to_discover", 100))
-try:
-    st.query_params["ptd"] = str(value_to_persist)
-except Exception:
-    st.experimental_set_query_params(ptd=str(value_to_persist))
-
-    st.session_state.pairs_to_discover = int(min(500, max(5, st.session_state.pairs_to_discover)))
-
-
-
-# persist to URL and drop any old param like discover_cap
-try:
-    st.query_params.clear()
-    st.query_params["ptd"] = str(ptd)
-except Exception:
-    st.experimental_set_query_params(ptd=str(ptd))
-
-
-# Save to URL when value changes
-# Mode Settings
+# Mode Settings with persistence
 with expander("Mode & Timeframes"):
     st.radio("Data Source", ["REST only", "WebSocket + REST"], key="mode")
     st.slider("WebSocket chunk size", 2, 20, value=int(st.session_state.get("ws_chunk", 2)), step=1, key="ws_chunk")
     
-    st.selectbox("Sort Timeframe", ["5m", "15m", "1h"], 
-                key="sort_tf")
-    st.toggle("Sort Descending", key="sort_desc")
+    # Persist timeframe changes
+    new_tf = st.selectbox("Sort Timeframe", ["5m", "15m", "1h"], 
+                         index=["5m", "15m", "1h"].index(st.session_state.get("sort_tf", "1h")),
+                         key="sort_tf_widget")
+    if new_tf != st.session_state.get("sort_tf"):
+        st.session_state["sort_tf"] = new_tf
+        save_to_url("sort_tf", new_tf)
+        st.session_state["_settings_changed"] = True
+    
+    # Persist sort direction
+    new_sort = st.toggle("Sort Descending", value=st.session_state.get("sort_desc", True), key="sort_desc_widget")
+    if new_sort != st.session_state.get("sort_desc"):
+        st.session_state["sort_desc"] = new_sort
+        save_to_url("sort_desc", new_sort)
 
 with expander("Gates"):
-    # Presets UI + persistence
     presets = ["Spike Hunter", "Early MACD Cross", "Confirm Rally", "hioncrypto's Velocity Mode", "None"]
 
     if "preset" not in st.session_state:
-        try:
-            p = st.query_params.get("preset", None)
-        except:
-            p = None
-        st.session_state["preset"] = p if p in presets else "None"
+        st.session_state["preset"] = load_from_url("preset", "None")
     if "_last_preset" not in st.session_state:
         st.session_state["_last_preset"] = st.session_state["preset"]
     if "_preset_widget" not in st.session_state:
@@ -974,19 +881,11 @@ with expander("Gates"):
         horizontal=True,
         help="Quick filter configurations."
     )
-    try:
-        st.query_params["preset"] = st.session_state["preset"]
-    except:
-        pass
+    save_to_url("preset", st.session_state["preset"])
     st.session_state["preset"] = st.session_state["_preset_widget"]
     
     st.markdown("**Tips:** Gate Mode 'ALL' requires every enabled gate. 'ANY' needs at least one. Custom (K/Y) colors rows based on gate pass counts (K=green, Y=yellow).**")
     
-    # Ensure defaults exist
-    st.session_state.setdefault("lookback_candles", 3)
-    st.session_state.setdefault("min_pct", 3.0)
-    
-    # Helper functions for sticky settings
     if "_user_set" not in st.session_state:
         st.session_state["_user_set"] = set()
 
@@ -998,23 +897,28 @@ with expander("Gates"):
             if k not in st.session_state["_user_set"]:
                 st.session_state[k] = v
 
-    # Main sliders at top
-    st.slider("Δ lookback (candles)", 1, 100,
-              value=int(st.session_state.get("lookback_candles", 3)),
-              step=1, key="lookback_candles",
-              on_change=_lock_setting, args=("lookback_candles",))
+    # PERSIST SLIDER VALUES
+    new_lookback = st.slider("Δ lookback (candles)", 1, 100,
+                             value=int(st.session_state.get("lookback_candles", 3)),
+                             step=1, key="lookback_widget")
+    if new_lookback != st.session_state.get("lookback_candles"):
+        st.session_state["lookback_candles"] = new_lookback
+        save_to_url("lookback", new_lookback)
+        _lock_setting("lookback_candles")
     
-    st.slider("Min +% change (Δ gate)", 0.0, 50.0,
-              value=float(st.session_state.get("min_pct", 3.0)),
-              step=0.5, key="min_pct",
-              on_change=_lock_setting, args=("min_pct",))
+    new_min_pct = st.slider("Min +% change (Δ gate)", 0.0, 50.0,
+                            value=float(st.session_state.get("min_pct", 10.0)),
+                            step=0.5, key="min_pct_widget")
+    if new_min_pct != st.session_state.get("min_pct"):
+        st.session_state["min_pct"] = new_min_pct
+        save_to_url("min_pct", new_min_pct)
+        _lock_setting("min_pct")
     
     st.slider("Min rows (bars)", 1, 300,
               value=int(st.session_state.get("min_bars", 30)),
               step=1, key="min_bars",
               on_change=_lock_setting, args=("min_bars",))
 
-    # Apply preset changes
     if st.session_state["preset"] != st.session_state["_last_preset"]:
         st.session_state["_last_preset"] = st.session_state["preset"]
         if st.session_state["preset"] == "Spike Hunter":
@@ -1045,7 +949,6 @@ with expander("Gates"):
                 "K_green": 2, "Y_yellow": 1
             })
 
-    # Row 1: Volume spike | RSI | MACD hist
     c1, c2, c3 = st.columns(3)
     with c1:
         st.toggle("Volume spike", key="use_vol_spike")
@@ -1060,7 +963,6 @@ with expander("Gates"):
         if st.session_state.get("use_macd"):
             st.slider("Min MACD hist", 0.0, 2.0, step=0.05, key="min_mhist")
 
-    # Row 2: ATR % | Trend breakout | ROC
     c4, c5, c6 = st.columns(3)
     with c4:
         st.toggle("ATR %", key="use_atr")
@@ -1076,7 +978,6 @@ with expander("Gates"):
         if st.session_state.get("use_roc"):
             st.slider("Min ROC %", 0.0, 50.0, step=0.5, key="min_roc")
 
-    # MACD Cross section
     st.markdown("**MACD Cross (early entry)**")
     c7, c8, c9, c10 = st.columns(4)
     with c7:
@@ -1096,16 +997,13 @@ with expander("Gates"):
 
     st.markdown("---")
     
-    # Gate Mode selection
     st.radio("Gate Mode", ["ALL", "ANY", "Custom (K/Y)"],
             index=["ALL", "ANY", "Custom (K/Y)"].index(st.session_state.get("gate_mode", "ANY")),
             key="gate_mode",
             horizontal=True)
     
-    # Toggle for hard filter
     st.toggle("Hard filter (hide non-passers)", key="hard_filter")
     
-    # Color rules for Custom mode - only show when Custom is selected
     if st.session_state.get("gate_mode") == "Custom (K/Y)":
         st.subheader("Color rules")
         st.selectbox(
@@ -1121,25 +1019,26 @@ with expander("Gates"):
             key="Y_yellow",
         )
 
-# Display Settings
 with expander("Display"):
     st.slider("Font size (global)", 0.8, 1.6, value=st.session_state.get("font_scale", 1.0), step=0.05, key="font_scale")
     st.slider("Auto-refresh (seconds)", 5, 120, value=st.session_state.get("refresh_sec", 30), step=1, key="refresh_sec")
 
-
-# Notifications
 with expander("Notifications"):
     st.caption("Tips: Email requires SMTP in st.secrets; webhook posts JSON to your endpoint.")
     st.text_input("Email recipient (optional)", st.session_state.get("email_to", ""), key="email_to")
     st.text_input("Webhook URL (optional)", st.session_state.get("webhook_url", ""), key="webhook_url")
 
-# Listing Radar
+# LISTING RADAR - DEFAULT TO ON
 with expander("Listing Radar"):
     st.caption("'New' listings are detected by symbol diffs. 'Upcoming' scraped from feeds within a window.")
     if st.session_state.get("lr_unacked", 0) > 0:
         st.markdown('<span style="background-color: #ff4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px;">New/Upcoming listings</span>', unsafe_allow_html=True)
     
-    st.toggle("Enable Listing Radar", key="lr_enabled")
+    # Persist listing radar state
+    new_lr = st.toggle("Enable Listing Radar", value=st.session_state.get("lr_enabled", True), key="lr_enabled_widget")
+    if new_lr != st.session_state.get("lr_enabled"):
+        st.session_state["lr_enabled"] = new_lr
+        save_to_url("lr_enabled", new_lr)
     
     if st.session_state.get("lr_enabled", False):
         c1, c2 = st.columns(2)
@@ -1166,13 +1065,12 @@ with expander("Listing Radar"):
                     key="lr_feeds",
                     help="One URL per line for scraping upcoming listing announcements")
 
-
 # =============================================================================
 # MAIN DISPLAY
 # =============================================================================
 
 st.title("🚀 hioncrypto's: Crypto Tracker")
-# Get trading pairs
+
 if st.session_state["use_my_pairs"]:
     pairs = [p.strip().upper() for p in st.session_state.get("my_pairs", "").split(",") if p.strip()]
 elif st.session_state["use_watch"]:
@@ -1181,42 +1079,31 @@ else:
     effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"].lower() else st.session_state["exchange"]
     pairs = get_products(effective_exchange, st.session_state["quote"])
 
-# Apply discovery cap
-# Apply discovery limit
 cap = max(5, min(500, st.session_state.get("pairs_to_discover", 100)))
 pairs = pairs[:cap]
 
-
-# Build gate settings
 gate_settings = {
     "lookback_candles": int(st.session_state.get("lookback_candles", 3)),
-    "min_pct": float(st.session_state.get("min_pct", 3.0)),
-
+    "min_pct": float(st.session_state.get("min_pct", 10.0)),
     "use_vol_spike": bool(st.session_state.get("use_vol_spike", False)),
     "vol_mult": float(st.session_state.get("vol_mult", 1.10)),
     "vol_window": int(st.session_state.get("vol_window", 20)),
-
     "use_rsi": bool(st.session_state.get("use_rsi", False)),
     "rsi_len": int(st.session_state.get("rsi_len", 14)),
     "min_rsi": int(st.session_state.get("min_rsi", 55)),
-
     "use_macd": bool(st.session_state.get("use_macd", False)),
     "macd_fast": int(st.session_state.get("macd_fast", 12)),
     "macd_slow": int(st.session_state.get("macd_slow", 26)),
     "macd_sig": int(st.session_state.get("macd_sig", 9)),
     "min_mhist": float(st.session_state.get("min_mhist", 0.0)),
-
     "use_atr": bool(st.session_state.get("use_atr", False)),
     "atr_len": int(st.session_state.get("atr_len", 14)),
     "min_atr": float(st.session_state.get("min_atr", 0.5)),
-
     "use_trend": bool(st.session_state.get("use_trend", False)),
     "pivot_span": int(st.session_state.get("pivot_span", 4)),
     "trend_within": int(st.session_state.get("trend_within", 48)),
-
     "use_roc": bool(st.session_state.get("use_roc", False)),
     "min_roc": float(st.session_state.get("min_roc", 1.0)),
-
     "use_macd_cross": bool(st.session_state.get("use_macd_cross", False)),
     "macd_cross_bars": int(st.session_state.get("macd_cross_bars", 3)),
     "macd_cross_only_bull": bool(st.session_state.get("macd_cross_only_bull", True)),
@@ -1224,7 +1111,6 @@ gate_settings = {
     "macd_hist_confirm_bars": int(st.session_state.get("macd_hist_confirm_bars", 3)),
 }
 
-# Process pairs and build rows
 rows = []
 sort_tf = st.session_state["sort_tf"]
 mode = st.session_state["gate_mode"]
@@ -1234,84 +1120,71 @@ y_required = st.session_state.get("Y_yellow", 2)
 
 effective_exchange = "Coinbase" if "coming soon" in st.session_state["exchange"].lower() else st.session_state["exchange"]
 
-# Show processing status
 if pairs:
     status_placeholder = st.empty()
     progress_placeholder = st.empty()
     
-    # Process each pair with real-time updates
     for i, pair in enumerate(pairs):
-        # Update progress
         progress = (i + 1) / len(pairs)
         progress_placeholder.progress(progress)
         status_placeholder.text(f"Processing {pair}... ({i + 1}/{len(pairs)})")
         
-        # Get fresh data for each pair
         df = get_cached_data(effective_exchange, pair, sort_tf)
         if df is None or df.empty or len(df) < st.session_state["min_bars"]:
             continue
         
-        # Evaluate gates
         meta, passed, chips, enabled = evaluate_gates(df, gate_settings)
         
-        # Determine inclusion and signal based on gate mode
         if mode == "ALL":
             include = (enabled > 0 and passed == enabled)
             is_green = include
-            is_yellow = (0 < passed < enabled) and (passed >= enabled - 1)  # Close matches
+            is_yellow = (0 < passed < enabled) and (passed >= enabled - 1)
         elif mode == "ANY":
             include = True
             is_green = (passed >= 1)
-            is_yellow = False  # ANY mode doesn't use yellow
-        else:  # Custom (K/Y)
+            is_yellow = False
+        else:
             include = True
             is_green = (passed >= k_required)
             is_yellow = (not is_green) and (passed >= y_required)
-            # Also mark close matches as yellow if they're just 1 gate short of green
             if not is_green and not is_yellow and passed >= (k_required - 1) and passed > 0:
                 is_yellow = True
         
-        # Apply hard filter
         if hard_filter:
             if mode in {"ALL", "ANY"} and not include:
                 continue
             if mode == "Custom (K/Y)" and not (is_green or is_yellow):
                 continue
         
-        # Get current price (WebSocket override or last close)
         ws_price = st.session_state.get("ws_prices", {}).get(pair)
         last_price = float(ws_price) if ws_price else float(df["close"].iloc[-1])
         lookback = min(st.session_state["lookback_candles"], len(df) - 1)
         first_price = float(df["close"].iloc[-lookback]) if lookback > 0 else float(df["close"].iloc[0])
         pct_change = (last_price / (first_price + 1e-12) - 1.0) * 100.0
         
-        # Determine signal text
         signal = ""
         if is_green:
             signal = "Strong Buy"
         elif is_yellow:
             signal = "Watch"
         
-        # Add ATH/ATL data if enabled
         ath_data = {}
         if st.session_state.get("do_ath", False):
-            # Get longer history for ATH/ATL calculation
             basis = st.session_state["basis"]
             if basis == "Hourly":
-                history_limit = st.session_state["amount_hourly"] * 4  # 15min bars
+                history_limit = st.session_state["amount_hourly"] * 4
             elif basis == "Daily":
-                history_limit = st.session_state["amount_daily"] * 24  # hourly bars  
-            else:  # Weekly
-                history_limit = st.session_state["amount_weekly"] * 7 * 24  # hourly bars
+                history_limit = st.session_state["amount_daily"] * 24
+            else:
+                history_limit = st.session_state["amount_weekly"] * 7 * 24
             
             history_df = get_cached_data(effective_exchange, pair, "1h")
             from_ath, ath_date, from_atl, atl_date = compute_ath_atl(history_df)
             ath_data = {
                 "ATH %": f"{from_ath:+.1f}%" if not pd.isna(from_ath) else "N/A",
                 "ATL %": f"{from_atl:+.1f}%" if not pd.isna(from_atl) else "N/A"
-                }
+            }
         
-        # Build row data
         row_data = {
             "Pair": pair,
             "Price": f"${last_price:.6f}",
@@ -1325,47 +1198,38 @@ if pairs:
             "_ws_active": ws_price is not None
         }
         
-        # Add ATH/ATL columns if enabled
         row_data.update(ath_data)
+        
+        if is_green:
+            email_recipient = st.session_state.get("email_alert", "")
+            webhook_url = st.session_state.get("webhook_url", "")
             
-            # Send alerts if pair meets velocity criteria
-        if is_green:  # Only alert on strong signals
-                email_recipient = st.session_state.get("email_alert", "")
-                webhook_url = st.session_state.get("webhook_url", "")
+            if pair not in st.session_state.alerted_pairs:
+                if email_recipient:
+                    send_email_alert(email_recipient, pair, last_price, pct_change)
+                if webhook_url:
+                    send_webhook_alert(webhook_url, pair, last_price, pct_change, chips)
                 
-                # Only alert once per pair per session
-                if pair not in st.session_state.alerted_pairs:
-                    if email_recipient:
-                        send_email_alert(email_recipient, pair, last_price, pct_change)
-                    if webhook_url:
-                        send_webhook_alert(webhook_url, pair, last_price, pct_change, chips)
-                    
-                    st.session_state.alerted_pairs.add(pair)
-            
+                st.session_state.alerted_pairs.add(pair)
+        
         rows.append(row_data)
     
-    # Clear progress indicators
     progress_placeholder.empty()
     status_placeholder.empty()
     
     st.success(f"✅ Processed {len(rows)} pairs successfully!")
 
-# Create DataFrame
+# CRITICAL FIX: Don't filter ALL results - only filter Top 10
 if rows:
     df_results = pd.DataFrame(rows)
     
-    # Sort by % change
     chg_col = f"% Change ({sort_tf})"
     ascending = not st.session_state["sort_desc"]
     df_results = df_results.sort_values(chg_col, ascending=ascending).reset_index(drop=True)
-        
-        # Filter to only pairs meeting minimum % change threshold (delta gate)
-    min_pct = st.session_state["min_pct"]
-    df_results = df_results[df_results[chg_col] >= min_pct]
-        
+    
+    # DON'T FILTER df_results HERE - let lower table show ALL pairs
     df_results.insert(0, "#", range(1, len(df_results) + 1))
     
-    # Show current time and summary
     st.caption(f"Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
     
     green_count = df_results["_green"].sum()
@@ -1384,52 +1248,51 @@ if rows:
     
     st.subheader("🔥 Top 10 Opportunities")
     
-    # Always sort by percentage change as primary criteria
-    chg_col = f"% Change ({sort_tf})"
-    top_10 = df_results.head(10).copy(); top_10.reset_index(drop=True, inplace=True)
-    # Remove the # column if it exists to avoid duplication
-    if "#" in top_10.columns:
-        top_10 = top_10.drop(columns=["#"])
-    top_10.insert(0, "Rank", range(1, len(top_10) + 1))
+    # CRITICAL FIX: Filter for Top 10 ONLY (pairs above threshold)
+    min_pct = st.session_state["min_pct"]
+    top_10_filtered = df_results[df_results[chg_col] >= min_pct].head(10).copy()
+    top_10_filtered.reset_index(drop=True, inplace=True)
     
-    if not top_10.empty:
-        # Style rows based on gate status
+    if "#" in top_10_filtered.columns:
+        top_10_filtered = top_10_filtered.drop(columns=["#"])
+    top_10_filtered.insert(0, "Rank", range(1, len(top_10_filtered) + 1))
+    
+    if not top_10_filtered.empty:
         def style_top10_rows(row):
             idx = row.name
-            if "_green" in top_10.columns and top_10.iloc[idx]["_green"]:
+            if "_green" in top_10_filtered.columns and top_10_filtered.iloc[idx]["_green"]:
                 return ['background-color: #1ea34e; color: white; font-weight: 600'] * len(row)
-            elif "_yellow" in top_10.columns and top_10.iloc[idx]["_yellow"]:
+            elif "_yellow" in top_10_filtered.columns and top_10_filtered.iloc[idx]["_yellow"]:
                 return ['background-color: #eab308; color: black'] * len(row)
             return [''] * len(row)
         
-        display_cols = [col for col in top_10.columns if not col.startswith('_')]
-        styled_df = top_10[display_cols].style.apply(style_top10_rows, axis=1)
+        display_cols = [col for col in top_10_filtered.columns if not col.startswith('_')]
+        styled_df = top_10_filtered[display_cols].style.apply(style_top10_rows, axis=1)
         st.dataframe(styled_df, use_container_width=True, hide_index=True)
-    # Display options
+    else:
+        st.info("No pairs currently exceed the minimum % change threshold for Top 10.")
+    
+    # Lower table shows ALL pairs (no filtering by min_pct)
     col1, col2 = st.columns([3, 1])
     with col1:
         show_all = st.checkbox("Show all pairs (not just signals)", value=not hard_filter)
     with col2:
         sort_option = st.selectbox("Sort by", ["% Change", "Signal", "Pair"], index=0)
     
-    # Filter for display
     if not show_all:
         display_df = df_results[df_results["_green"] | df_results["_yellow"]]
     else:
         display_df = df_results
     
-    # Re-sort if needed
     if sort_option == "Signal":
         display_df = display_df.sort_values(["_green", "_yellow"], ascending=[False, False])
     elif sort_option == "Pair":
         display_df = display_df.sort_values("Pair")
     
     if not display_df.empty:
-        # Display columns (hide internal columns)
         display_cols = [col for col in display_df.columns if not col.startswith('_')]
         final_display = display_df[display_cols].reset_index(drop=True)
         
-        # Style the dataframe
         def style_all_rows(row):
             if row.name < len(display_df):
                 original_idx = display_df.index[row.name]
@@ -1447,10 +1310,9 @@ if rows:
 else:
     st.info("No trading pairs found. Adjust your market settings or increase the discovery cap.")
 
-# WebSocket Management for real-time updates
+# WebSocket Management
 if st.session_state["mode"].startswith("WebSocket") and effective_exchange == "Coinbase" and WS_AVAILABLE:
     if not st.session_state.get("ws_alive", False) and pairs:
-        # Start WebSocket for top pairs
         ws_pairs = pairs[:st.session_state["ws_chunk"]]
         
         def ws_worker(product_ids):
@@ -1495,7 +1357,7 @@ if st.session_state["mode"].startswith("WebSocket") and effective_exchange == "C
             st.session_state["ws_thread"] = ws_thread
             ws_thread.start()
 
-# Smart cache clearing - avoid refreshing data on UI-only changes
+# Smart refresh - don't break on timeframe changes
 current_time = int(time.time())
 if "last_update" not in st.session_state:
     st.session_state["last_update"] = 0
@@ -1503,34 +1365,19 @@ if "last_update" not in st.session_state:
 time_since_update = current_time - st.session_state["last_update"]
 refresh_interval = st.session_state["refresh_sec"]
 
-# Check if this is just a UI state change (like expand/collapse)
 is_ui_only_change = st.session_state.get("_ui_only_change", False)
 if is_ui_only_change:
-    st.session_state["_ui_only_change"] = False  # Reset the flag
-    # Don't refresh data, just continue with existing data
+    st.session_state["_ui_only_change"] = False
 
-# Only refresh data if enough time has passed AND it's not a UI-only change
 elif time_since_update >= refresh_interval:
     st.session_state["last_update"] = current_time
     st.rerun()
 
-# Auto-refresh mechanism
-#if st_autorefresh:
-#    refresh_interval_ms = max(5, st.session_state["refresh_sec"]) * 1000
-#    st_autorefresh(interval=refresh_interval_ms, key="auto_refresh", debounce=False)
-else:
-        # Use Streamlit's native rerun instead of JavaScript reload
-        # JavaScript reloads destroy session state!
-        pass  # The st.rerun() on line 1373 already handles refresh
-# Live update indicator
 st.markdown(f"""
 <div style="position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.7); color: white; padding: 5px 10px; border-radius: 15px; font-size: 12px; z-index: 1000;">
     🔄 Last: {time.strftime('%H:%M:%S')} | Next: {refresh_interval}s
 </div>
 """, unsafe_allow_html=True)
 
-# Footer
 st.markdown("---")
 st.caption("🚀 Enhanced Crypto Tracker — Real-time momentum scanner by hioncrypto")
-
-
