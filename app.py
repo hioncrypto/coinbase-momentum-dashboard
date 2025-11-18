@@ -1577,8 +1577,8 @@ if pairs:
         
         rows.append(row_data)
         
-        # Check progressive alerts
-        if alert_mode:
+        # Check progressive alerts - ONLY for Strong Buy signals (is_green)
+        if alert_mode and is_green:
             stage_check = check_progressive_stages(df, gate_settings)
             should_alert, stage_name = should_send_alert(pair, stage_check, alert_mode, alerted_pairs)
             
@@ -1600,6 +1600,23 @@ if pairs:
     
     progress_placeholder.empty()
     status_placeholder.empty()
+    
+    # Filter alerts to ONLY Top 10 pairs
+    if alerts_to_send and rows:
+        # Create temporary df to determine Top 10
+        temp_df = pd.DataFrame(rows)
+        chg_col = f"% Change ({sort_tf})"
+        temp_df = temp_df.sort_values(chg_col, ascending=False)
+        
+        # Get Top 10 pairs that are green and above threshold
+        min_pct_threshold = st.session_state["min_pct"]
+        top_10_pairs = temp_df[
+            (temp_df["_green"] == True) & 
+            (temp_df[chg_col] >= min_pct_threshold)
+        ].head(10)["Pair"].tolist()
+        
+        # Filter alerts to only Top 10
+        alerts_to_send = [alert for alert in alerts_to_send if alert["pair"] in top_10_pairs]
     
     # Save alerted pairs
     save_alerted_pairs(alerted_pairs)
