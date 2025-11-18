@@ -380,9 +380,6 @@ def init_session_state():
         "lr_poll_sec": 30,
         "lr_upcoming_window_h": 48,
         "lr_feeds": "https://blog.coinbase.com/feed\nhttps://www.binance.com/en/support/announcement",
-        
-        # Alert errors
-        "alert_errors": [],
     }
     
     # Load from URL and set defaults
@@ -1463,16 +1460,6 @@ with col3:
     ws_symbol = "🟢" if is_ws_active else "🔴"
     st.caption(f"WebSocket: {ws_symbol} | Pairs in cache: {len(st.session_state.get('ws_prices', {}))}")
 
-# Show alert errors
-if st.session_state.get("alert_errors"):
-    for error in st.session_state["alert_errors"][-3:]:
-        st.markdown(f'<div style="background: #fee; border-left: 4px solid #f00; padding: 10px; margin: 10px 0;">❌ {error}</div>', 
-                   unsafe_allow_html=True)
-    
-    if st.button("Clear Errors"):
-        st.session_state["alert_errors"] = []
-        st.rerun()
-
 # Get pairs
 if st.session_state["use_my_pairs"]:
     pairs = [p.strip().upper() for p in st.session_state.get("my_pairs", "").split(",") if p.strip()]
@@ -1620,14 +1607,10 @@ if pairs:
     # Send combined alerts
     if alerts_to_send:
         if st.session_state.get("email_to"):
-            success, error = send_email_alert(alerts_to_send)
-            if not success:
-                st.session_state["alert_errors"].append(f"Email: {error}")
+            send_email_alert(alerts_to_send)
         
         if st.session_state.get("webhook_url"):
-            success, error = send_webhook_alert(alerts_to_send)
-            if not success:
-                st.session_state["alert_errors"].append(f"Webhook: {error}")
+            send_webhook_alert(alerts_to_send)
     
     st.success(f"✅ Processed {len(rows)} pairs successfully!")
 
