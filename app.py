@@ -16,28 +16,31 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# --- GLOBAL UI / TOGGLE CSS (ARROW + MOBILE TWEAKS) -------------------------
 st.markdown("""
     <style>
-    /* Keep sidebar toggle button floating/fixed while scrolling */
+    /* Sidebar toggle (collapse arrow): pin to far-left, always at top */
     [data-testid="collapsedControl"] {
         position: fixed !important;
-        top: 1rem;
-        left: 1rem;
-        z-index: 999;
+        top: 0.8rem;
+        left: 0.5rem;
+        transform: none !important;
+        margin: 0 !important;
+        z-index: 10000 !important;
     }
-    
+
     /* Force sidebar header to stay at top */
     section[data-testid="stSidebar"] > div {
         position: relative !important;
     }
-    
+
     section[data-testid="stSidebar"] > div > div:first-child {
         position: sticky !important;
         top: 0 !important;
         z-index: 1000 !important;
         background: #262730 !important;
-    } 
-    
+    }
+
     /* Mobile-friendly adjustments */
     @media (max-width: 768px) {
         .stDataFrame { font-size: 11px; }
@@ -93,12 +96,20 @@ class Config:
 
 CONFIG = Config()
 
+# --- SIDEBAR SIZE / RESIZE CSS ----------------------------------------------
 st.markdown("""
 <style>
-/* IMPROVED SIDEBAR - Responsive and properly expanding */
+/* IMPROVED SIDEBAR - Responsive and resizable */
 section[data-testid="stSidebar"] {
-    min-width: 32rem !important;
-    max-width: 50rem !important;
+    /* allow user to drag the right edge to resize */
+    resize: horizontal !important;
+    overflow: hidden auto !important;
+
+    /* reasonable limits so it can't get absurdly small/large */
+    min-width: 260px !important;
+    max-width: 55vw !important;
+
+    box-sizing: border-box !important;
 }
 section[data-testid="stSidebar"] > div:first-child {
     padding: 1rem !important;
@@ -175,10 +186,13 @@ div[data-testid="stDataEditor"] * {
     [data-testid="stMetricValue"] { font-size: 18px; }
     [data-testid="stMetricLabel"] { font-size: 11px; }
     .block-container { padding: 0.5rem; }
-    
+
+    /* On phones, keep a sane fixed width and disable drag-resize */
     section[data-testid="stSidebar"] {
-        width: 300px !important;
-        min-width: 300px !important;
+        width: 80vw !important;
+        min-width: 70vw !important;
+        max-width: 90vw !important;
+        resize: none !important;
     }
 }
 </style>
