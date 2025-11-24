@@ -107,7 +107,7 @@ import datetime as dt
 import threading
 import os
 import smtplib
-from email.mime.text import MIMEText
+email.mime.text
 from email.mime.multipart import MIMEMultipart
 from typing import List, Optional, Tuple, Dict, Any
 from pathlib import Path
@@ -536,4 +536,3 @@ def get_products(exchange: str, quote: str) -> List[str]:
 # Just paste **all the remaining code from your last working file**
 # after this comment block. The only edits needed for your layout bug
 # are the CSS at the very top of this file.
-
