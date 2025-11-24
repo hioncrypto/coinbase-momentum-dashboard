@@ -107,7 +107,7 @@ import datetime as dt
 import threading
 import os
 import smtplib
-from email.mime_text import MIMEText
+email.mime.text
 from email.mime.multipart import MIMEMultipart
 from typing import List, Optional, Tuple, Dict, Any
 from pathlib import Path
