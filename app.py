@@ -20,7 +20,7 @@ st.markdown(
 <style>
 :root {
     /* default sidebar width; user can resize between ~260-520px */
-    --sidebar-width: 360px;
+    --sidebar-width: 420px;
 }
 
 /* Sidebar uses CSS variable width */
