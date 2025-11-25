@@ -47,7 +47,7 @@ st.markdown(
     section[data-testid="stSidebar"] {
         resize: horizontal !important;
         overflow: hidden auto !important;
-        min-width: 260px !important;
+        min-width: 300px !important;
         max-width: 600px !important;
     }
 
