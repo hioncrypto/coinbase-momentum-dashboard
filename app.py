@@ -48,9 +48,6 @@ st.markdown(
         max-width: 100% !important;
     }
 
-    /* Sticky top area in sidebar (title + main controls) */
-    section[data-testid="stSidebar"] > div {
-        position: relative !important;
     }
     section[data-testid="stSidebar"] > div > div:first-child {
         position: sticky !important;
