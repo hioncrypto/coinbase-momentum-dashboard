@@ -17,7 +17,7 @@ st.set_page_config(
 )
 
 # ============================================================================
-# GLOBAL CSS (FLOATING COLLAPSE BUTTON + MOBILE TWEAKS)
+# GLOBAL CSS (FLOATING COLLAPSE BUTTON + MOBILE TWEAKS)  **DO NOT CHANGE**
 # ============================================================================
 st.markdown(
     """
@@ -128,21 +128,17 @@ class Config:
 CONFIG = Config()
 
 # ============================================================================
-# LAYOUT / SIDEBAR CSS (WIDTH, RESIZE, TABLE STYLING)
+# LAYOUT / SIDEBAR CSS (WIDTH, RESIZE, TABLE STYLING, SLIDER TICKS)
 # ============================================================================
 st.markdown(
     """
 <style>
-/* --- SIDEBAR WIDTH + RESIZE --- */
-section[data-testid="stSidebar"] {
-    padding-top: 0 !important;
-}
-
-/* Main inner wrapper of the sidebar */
+/* --- SIDEBAR HEIGHT & FLEX LAYOUT --- */
 section[data-testid="stSidebar"] > div:first-child {
     height: 100vh !important;
     display: flex !important;
     flex-direction: column !important;
+    padding-top: 0 !important;
 }
 
 /* Scrollable + resizable content area */
@@ -150,22 +146,13 @@ section[data-testid="stSidebar"] > div:first-child > div:first-child {
     padding: 1rem !important;
     min-width: 360px !important;    /* wider so labels don't wrap */
     max-width: 520px !important;
-    resize: horizontal;
+    resize: horizontal;             /* <-- user can drag to resize */
     overflow: auto;
 }
 
 /* Make ALL sidebar elements responsive and use full width */
 section[data-testid="stSidebar"] * {
     max-width: 100% !important;
-}
-
-/* Sticky top section with controls (Collapse/Expand/My Pairs) */
-section[data-testid="stSidebar"] > div:first-child > div:first-child {
-    position: sticky !important;
-    top: 0 !important;
-    z-index: 999 !important;
-    background: #262730 !important;
-    padding-bottom: 1rem !important;
 }
 
 /* Main page body should be allowed to stretch fully */
@@ -176,19 +163,6 @@ section[data-testid="stSidebar"] > div:first-child > div:first-child {
     max-width: 100vw !important;
     padding-left: 12px !important;
     padding-right: 12px !important;
-}
-
-/* Buttons, inputs, and interactive elements full width in sidebar */
-section[data-testid="stSidebar"] .stButton,
-section[data-testid="stSidebar"] .stButton > button,
-section[data-testid="stSidebar"] .stSelectbox,
-section[data-testid="stSidebar"] .stSlider,
-section[data-testid="stSidebar"] .stNumberInput,
-section[data-testid="stSidebar"] .stTextInput,
-section[data-testid="stSidebar"] .stTextArea,
-section[data-testid="stSidebar"] .stRadio,
-section[data-testid="stSidebar"] .stCheckbox {
-    width: 100% !important;
 }
 
 /* Keep tables fully opaque */
@@ -210,6 +184,40 @@ div[data-testid="stDataEditor"] * {
     color: black !important;
 }
 
+/* ---- SLIDER TICK MARKS (SIDEBAR ONLY) ---- */
+/* Add small tick marks at 25/50/75% to all sidebar sliders */
+section[data-testid="stSidebar"] [data-testid="stSlider"] div[data-baseweb="slider"] {
+    position: relative;
+}
+
+section[data-testid="stSidebar"] [data-testid="stSlider"] div[data-baseweb="slider"]::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -3px;  /* just under the track */
+    height: 8px;
+    background-image:
+        linear-gradient(to right,
+            transparent 0%,
+            rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.45) 1px,
+            transparent 1px,
+            transparent 25%,
+            rgba(255,255,255,0.45) 25%, rgba(255,255,255,0.45) calc(25% + 1px),
+            transparent calc(25% + 1px),
+            transparent 50%,
+            rgba(255,255,255,0.45) 50%, rgba(255,255,255,0.45) calc(50% + 1px),
+            transparent calc(50% + 1px),
+            transparent 75%,
+            rgba(255,255,255,0.45) 75%, rgba(255,255,255,0.45) calc(75% + 1px),
+            transparent calc(75% + 1px),
+            transparent 100%
+        );
+    background-repeat: no-repeat;
+    background-size: 100% 100%;
+    pointer-events: none;
+}
+
 /* Mobile tweaks */
 @media (max-width: 768px) {
     .stDataFrame { font-size: 11px; }
@@ -219,13 +227,13 @@ div[data-testid="stDataEditor"] * {
     section[data-testid="stSidebar"] > div:first-child > div:first-child {
         min-width: 280px !important;
         max-width: 100% !important;
+        resize: none;   /* don’t fight with tiny screens */
     }
 }
 </style>
 """,
     unsafe_allow_html=True,
 )
-
 # =============================================================================
 # URL PARAMETER MAPPING (Shortened names)
 # =============================================================================
@@ -1046,8 +1054,6 @@ def evaluate_gates(
 
     metadata = {"delta_pct": delta_pct, "macd_cross": cross_info}
     return metadata, gates_passed, " ".join(gate_chips), gates_enabled
-
-
 # =============================================================================
 # SIDEBAR CONTROLS
 # =============================================================================
@@ -1184,7 +1190,7 @@ with expander("Mode & Timeframes"):
     new_mode = st.radio(
         "Data Source",
         ["REST only", "WebSocket + REST"],
-        index=0 if st.session_state["mode"] == "REST only" else 1,
+        index(0 if st.session_state["mode"] == "REST only" else 1),
         key="mode_widget",
         help="REST = API polling, WebSocket = real-time",
     )
@@ -1352,7 +1358,9 @@ with expander("Gates"):
 
     c1, c2, c3 = st.columns(3)
     with c1:
-        new_use_vol = st.toggle("Volume spike", key="use_vol_spike", help="Volume exceeds average")
+        new_use_vol = st.toggle(
+            "Volume spike", key="use_vol_spike", help="Volume exceeds average"
+        )
         if new_use_vol != load_from_url("use_vol_spike", False, bool):
             save_to_url("use_vol_spike", new_use_vol)
         if st.session_state.get("use_vol_spike"):
@@ -1382,7 +1390,9 @@ with expander("Gates"):
             if new_mr != st.session_state.get("min_rsi"):
                 save_to_url("min_rsi", new_mr)
     with c3:
-        new_use_macd = st.toggle("MACD hist", key="use_macd", help="Histogram indicator")
+        new_use_macd = st.toggle(
+            "MACD hist", key="use_macd", help="Histogram indicator"
+        )
         if new_use_macd != load_from_url("use_macd", False, bool):
             save_to_url("use_macd", new_use_macd)
         if st.session_state.get("use_macd"):
@@ -1414,7 +1424,9 @@ with expander("Gates"):
             if new_ma != st.session_state.get("min_atr"):
                 save_to_url("min_atr", new_ma)
     with c5:
-        new_use_trend = st.toggle("Trend breakout", key="use_trend", help="Resistance break")
+        new_use_trend = st.toggle(
+            "Trend breakout", key="use_trend", help="Resistance break"
+        )
         if new_use_trend != load_from_url("use_trend", False, bool):
             save_to_url("use_trend", new_use_trend)
         if st.session_state.get("use_trend"):
@@ -1454,7 +1466,9 @@ with expander("Gates"):
     st.markdown("**MACD Cross (early entry)**")
     c7, c8, c9, c10 = st.columns(4)
     with c7:
-        new_umc = st.toggle("Enable", key="use_macd_cross", help="MACD cross detection")
+        new_umc = st.toggle(
+            "Enable", key="use_macd_cross", help="MACD cross detection"
+        )
         if new_umc != load_from_url("use_macd_cross", False, bool):
             save_to_url("use_macd_cross", new_umc)
     with c8:
@@ -1602,7 +1616,7 @@ with expander("Display"):
     if new_rs != st.session_state.get("refresh_sec"):
         save_to_url("refresh_sec", new_rs)
 
-# Listing Radar (fixed lr_enabled bug)
+# Listing Radar
 with expander("Listing Radar"):
     st.caption("Detect new listings")
 
@@ -1662,7 +1676,6 @@ with expander("Listing Radar"):
             st.session_state.get("lr_feeds", ""),
             key="lr_feeds",
         )
-
 # =============================================================================
 # MAIN DISPLAY
 # =============================================================================
@@ -1689,16 +1702,16 @@ with col3:
     )
 
 # Determine pairs
-if st.session_state["use_my_pairs"]:
+if st.session_state.get("use_my_pairs", False):
     pairs = [
         p.strip().upper()
         for p in st.session_state.get("my_pairs", "").split(",")
         if p.strip()
     ]
-elif st.session_state["use_watch"]:
+elif st.session_state.get("use_watch", False):
     pairs = [
         p.strip().upper()
-        for p in st.session_state["watchlist"].split(",")
+        for p in st.session_state.get("watchlist", "").split(",")
         if p.strip()
     ]
 else:
@@ -1712,7 +1725,7 @@ else:
 cap = max(5, min(500, st.session_state.get("pairs_to_discover", 400)))
 pairs = pairs[:cap]
 
-# Gate settings dict (no change in logic)
+# Gate settings dict
 gate_settings = {
     "lookback_candles": int(st.session_state.get("lookback_candles", 3)),
     "min_pct": float(st.session_state.get("min_pct", 3.0)),
@@ -1750,6 +1763,7 @@ gate_settings = {
 
 rows = []
 alerts_to_send = []
+
 sort_tf = st.session_state["sort_tf"]
 mode = st.session_state["gate_mode"]
 hard_filter = st.session_state["hard_filter"]
@@ -1847,7 +1861,7 @@ if pairs:
     progress_placeholder.empty()
     status_placeholder.empty()
 
-    # Filter alerts to Top 10
+    # Filter alerts to Top 10 by % change and threshold
     if alerts_to_send and rows:
         temp_df = pd.DataFrame(rows)
         chg_col = f"% Change ({sort_tf})"
@@ -1978,7 +1992,7 @@ if rows:
 else:
     st.info("No pairs found. Adjust settings.")
 
-# WebSocket management unchanged (same as your previous working version)
+# WebSocket management
 if (
     st.session_state["mode"].startswith("WebSocket")
     and effective_exchange == "Coinbase"
@@ -2040,7 +2054,7 @@ if "last_update" not in st.session_state:
     st.session_state["last_update"] = 0
 
 time_since_update = current_time - st.session_state["last_update"]
-refresh_interval = st.session_state["refresh_sec"]
+refresh_interval = st.session_state.get("refresh_sec", 30)
 
 if time_since_update >= refresh_interval:
     st.session_state["last_update"] = current_time
