@@ -17,25 +17,22 @@ st.set_page_config(
 )
 
 # ============================================================================
-# GLOBAL CSS (MOBILE TWEAKS + REMOVES ARTIFACTS FROM SIDEBAR COLLAPSE BUTTON)
+# GLOBAL CSS (MOBILE TWEAKS + REMOVES SIDEBAR COLLAPSE ARTIFACTS)
 # ============================================================================
 # WHAT THIS FIXES:
-# - Removes the broken Streamlit collapse/expand arrow that was floating in the
-#   middle of the page and creating the vertical ghost line artifact.
-# - Disables Streamlit's built-in sidebar collapse control so it no longer 
-#   appears in the wrong place.
-# - Keeps mobile display tweaks but removes ALL custom positioning hacks that
-#   caused the arrow to float away from the sidebar edge.
-# - Ensures the sidebar can now be resized cleanly with no UI glitches.
+# - Removes the floating collapse arrow that was stuck in the middle of the page.
+# - Removes the vertical "ghost" line created by Streamlit's built-in collapse tab.
+# - Deletes all old positioning hacks that made the arrow drift away from the sidebar.
+# - Keeps mobile tweaks only; the sidebar can now be resized cleanly by CSS below.
 st.markdown(
     """
     <style>
-    /* Completely hide Streamlit’s built-in collapse control (fixes arrow + ghost bar) */
+    /* Completely hide Streamlit’s built-in sidebar collapse control */
     [data-testid="collapsedControl"] {
         display: none !important;
     }
 
-    /* Global mobile-friendly sizing tweaks */
+    /* Global mobile-friendly tweaks */
     @media (max-width: 768px) {
         .stDataFrame { font-size: 11px; }
         [data-testid="stMetricValue"] { font-size: 18px; }
@@ -46,6 +43,36 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+# ============================================================================
+# IMPORTS
+# ============================================================================
+import json
+import time
+import datetime as dt
+import threading
+import os
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from typing import List, Optional, Tuple, Dict, Any
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import requests
+
+# Optional dependencies
+try:
+    from streamlit_autorefresh import st_autorefresh
+except ImportError:
+    st_autorefresh = None
+
+try:
+    import websocket
+    WS_AVAILABLE = True
+except ImportError:
+    WS_AVAILABLE = False
 
 # =============================================================================
 # CONFIGURATION & CONSTANTS
@@ -118,7 +145,7 @@ st.markdown(
         width: 100% !important;
     }
 
-    /* Main page body should be allowed to stretch fully */
+    /* Main page body can stretch fully */
     [data-testid="stAppViewContainer"] .main {
         max-width: 100vw !important;
     }
@@ -162,6 +189,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 # =============================================================================
 # URL PARAMETER MAPPING (Shortened names)
