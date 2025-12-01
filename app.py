@@ -17,12 +17,25 @@ st.set_page_config(
 )
 
 # ============================================================================
-# GLOBAL CSS (MOBILE TWEAKS ONLY - NO CUSTOM COLLAPSE BUTTON)
+# GLOBAL CSS (MOBILE TWEAKS + REMOVES ARTIFACTS FROM SIDEBAR COLLAPSE BUTTON)
 # ============================================================================
+# WHAT THIS FIXES:
+# - Removes the broken Streamlit collapse/expand arrow that was floating in the
+#   middle of the page and creating the vertical ghost line artifact.
+# - Disables Streamlit's built-in sidebar collapse control so it no longer 
+#   appears in the wrong place.
+# - Keeps mobile display tweaks but removes ALL custom positioning hacks that
+#   caused the arrow to float away from the sidebar edge.
+# - Ensures the sidebar can now be resized cleanly with no UI glitches.
 st.markdown(
     """
     <style>
-    /* Global mobile-friendly tweaks */
+    /* Completely hide Streamlit’s built-in collapse control (fixes arrow + ghost bar) */
+    [data-testid="collapsedControl"] {
+        display: none !important;
+    }
+
+    /* Global mobile-friendly sizing tweaks */
     @media (max-width: 768px) {
         .stDataFrame { font-size: 11px; }
         [data-testid="stMetricValue"] { font-size: 18px; }
@@ -33,34 +46,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
-import json
-import time
-import datetime as dt
-import threading
-import os
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from typing import List, Optional, Tuple, Dict, Any
-from pathlib import Path
-
-import numpy as np
-import pandas as pd
-import requests
-
-# Optional dependencies
-try:
-    from streamlit_autorefresh import st_autorefresh
-except ImportError:
-    st_autorefresh = None
-
-try:
-    import websocket
-
-    WS_AVAILABLE = True
-except ImportError:
-    WS_AVAILABLE = False
 
 # =============================================================================
 # CONFIGURATION & CONSTANTS
