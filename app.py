@@ -27,6 +27,24 @@ st.set_page_config(
 st.markdown(
     """
     <style>
+    /* Hide ONLY the vertical resize handle next to the sidebar,
+       but keep the sidebar and its collapse arrow working. */
+    section[data-testid="stSidebar"] [data-testid="stVerticalBlockBorder"],
+    section[data-testid="stSidebar"] [data-testid="stSidebarResizer"],
+    section[data-testid="stSidebar"] div[role="separator"][aria-orientation="vertical"] {
+        opacity: 0 !important;
+        border: none !important;
+        background: transparent !important;
+        pointer-events: none !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    """
+    <style>
     /* Completely hide Streamlit’s built-in sidebar collapse control */
     [data-testid="collapsedControl"] {
         display: none !important;
