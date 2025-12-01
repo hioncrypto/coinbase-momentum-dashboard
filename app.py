@@ -92,97 +92,89 @@ CONFIG = Config()
 # ============================================================================
 st.markdown(
     """
-<style>
-/* --- SIDEBAR WIDTH + RESIZE --- */
-section[data-testid="stSidebar"] {
-    padding-top: 0 !important;
-}
+    <style>
+    /* --- SIDEBAR WIDTH + RESIZE --- */
+    section[data-testid="stSidebar"] {
+        padding-top: 0 !important;
+    }
 
-/* Main inner wrapper of the sidebar */
-section[data-testid="stSidebar"] > div:first-child {
-    height: 100vh !important;
-    display: flex !important;
-    flex-direction: column !important;
-}
+    /* Main inner wrapper of the sidebar */
+    section[data-testid="stSidebar"] > div:first-child {
+        height: 100vh !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
 
-/* Scrollable + resizable content area */
-section[data-testid="stSidebar"] > div:first-child > div:first-child {
-    padding: 1rem !important;
-    min-width: 360px !important;    /* wider so labels don't wrap */
-    max-width: 520px !important;
-    resize: horizontal;
-    overflow: auto;
-}
-
-/* Make ALL sidebar elements responsive and use full width */
-section[data-testid="stSidebar"] * {
-    max-width: 100% !important;
-}
-
-/* Sticky top section with controls (Collapse/Expand/My Pairs) */
-section[data-testid="stSidebar"] > div:first-child > div:first-child {
-    position: sticky !important;
-    top: 0 !important;
-    z-index: 999 !important;
-    background: #262730 !important;
-    padding-bottom: 1rem !important;
-}
-
-/* Main page body should be allowed to stretch fully */
-[data-testid="stAppViewContainer"] .main {
-    max-width: 100vw !important;
-}
-[data-testid="stAppViewContainer"] > .main > div.block-container {
-    max-width: 100vw !important;
-    padding-left: 12px !important;
-    padding-right: 12px !important;
-}
-
-/* Buttons, inputs, and interactive elements full width in sidebar */
-section[data-testid="stSidebar"] .stButton,
-section[data-testid="stSidebar"] .stButton > button,
-section[data-testid="stSidebar"] .stSelectbox,
-section[data-testid="stSidebar"] .stSlider,
-section[data-testid="stSidebar"] .stNumberInput,
-section[data-testid="stSidebar"] .stTextInput,
-section[data-testid="stSidebar"] .stTextArea,
-section[data-testid="stSidebar"] .stRadio,
-section[data-testid="stSidebar"] .stCheckbox {
-    width: 100% !important;
-}
-
-/* Keep tables fully opaque */
-div[data-testid="stDataFrame"],
-div[data-testid="stDataFrame"] *,
-div[data-testid="stDataEditor"],
-div[data-testid="stDataEditor"] * {
-    opacity: 1 !important;
-}
-
-/* Row highlight colors */
-.row-green {
-    background-color: #16a34a !important;
-    color: white !important;
-    font-weight: 600;
-}
-.row-yellow {
-    background-color: #eab308 !important;
-    color: black !important;
-}
-
-/* Mobile tweaks */
-@media (max-width: 768px) {
-    .stDataFrame { font-size: 11px; }
-    [data-testid="stMetricValue"] { font-size: 18px; }
-    [data-testid="stMetricLabel"] { font-size: 11px; }
-    .block-container { padding: 0.5rem !important; }
+    /* Scrollable + resizable content area */
     section[data-testid="stSidebar"] > div:first-child > div:first-child {
-        min-width: 280px !important;
+        padding: 1rem !important;
+        min-width: 360px !important;    /* wider so labels don't wrap */
+        max-width: 520px !important;
+        resize: horizontal;
+        overflow: auto;
+        background: #262730 !important;
+    }
+
+    /* Make ALL sidebar elements responsive and use full width */
+    section[data-testid="stSidebar"] * {
         max-width: 100% !important;
     }
-}
-</style>
-""",
+
+    /* Buttons, inputs, and interactive elements full width in sidebar */
+    section[data-testid="stSidebar"] .stButton,
+    section[data-testid="stSidebar"] .stButton > button,
+    section[data-testid="stSidebar"] .stSelectbox,
+    section[data-testid="stSidebar"] .stSlider,
+    section[data-testid="stSidebar"] .stNumberInput,
+    section[data-testid="stSidebar"] .stTextInput,
+    section[data-testid="stSidebar"] .stTextArea,
+    section[data-testid="stSidebar"] .stRadio,
+    section[data-testid="stSidebar"] .stCheckbox {
+        width: 100% !important;
+    }
+
+    /* Main page body should be allowed to stretch fully */
+    [data-testid="stAppViewContainer"] .main {
+        max-width: 100vw !important;
+    }
+    [data-testid="stAppViewContainer"] > .main > div.block-container {
+        max-width: 100vw !important;
+        padding-left: 12px !important;
+        padding-right: 12px !important;
+    }
+
+    /* Keep tables fully opaque */
+    div[data-testid="stDataFrame"],
+    div[data-testid="stDataFrame"] *,
+    div[data-testid="stDataEditor"],
+    div[data-testid="stDataEditor"] * {
+        opacity: 1 !important;
+    }
+
+    /* Row highlight colors */
+    .row-green {
+        background-color: #16a34a !important;
+        color: white !important;
+        font-weight: 600;
+    }
+    .row-yellow {
+        background-color: #eab308 !important;
+        color: black !important;
+    }
+
+    /* Mobile tweaks */
+    @media (max-width: 768px) {
+        .stDataFrame { font-size: 11px; }
+        [data-testid="stMetricValue"] { font-size: 18px; }
+        [data-testid="stMetricLabel"] { font-size: 11px; }
+        .block-container { padding: 0.5rem !important; }
+        section[data-testid="stSidebar"] > div:first-child > div:first-child {
+            min-width: 280px !important;
+            max-width: 100% !important;
+        }
+    }
+    </style>
+    """,
     unsafe_allow_html=True,
 )
 
