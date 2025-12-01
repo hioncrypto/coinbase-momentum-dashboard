@@ -17,57 +17,17 @@ st.set_page_config(
 )
 
 # ============================================================================
-# GLOBAL CSS (FLOATING COLLAPSE BUTTON + MOBILE TWEAKS)
+# GLOBAL CSS (MOBILE TWEAKS ONLY - NO CUSTOM COLLAPSE BUTTON)
 # ============================================================================
 st.markdown(
     """
     <style>
-    /* --- Floating sidebar collapse arrow --- */
-    [data-testid="collapsedControl"] {
-        position: fixed !important;
-        top: 1rem !important;
-        z-index: 1002 !important;
-        transition: left 0.25s ease-in-out;
-    }
-
-    /* Ensure sidebar container is positioned for relative calculations */
-    section[data-testid="stSidebar"] {
-        position: relative !important;
-    }
-
-    /* When sidebar expanded: keep arrow near sidebar edge */
-    section[data-testid="stSidebar"][aria-expanded="true"] ~ [data-testid="collapsedControl"] {
-        left: 19rem !important;  /* matches default sidebar width */
-    }
-
-    /* When sidebar collapsed: move arrow to far left */
-    section[data-testid="stSidebar"][aria-expanded="false"] ~ [data-testid="collapsedControl"],
-    [data-testid="stSidebarCollapsed"] [data-testid="collapsedControl"] {
-        left: 0.75rem !important;
-    }
-
-    /* Sticky sidebar header */
-    section[data-testid="stSidebar"] > div {
-        position: relative !important;
-    }
-    section[data-testid="stSidebar"] > div > div:first-child {
-        position: sticky !important;
-        top: 0 !important;
-        z-index: 1000 !important;
-        background: #262730 !important;
-    }
-
-    /* Mobile-friendly adjustments */
+    /* Global mobile-friendly tweaks */
     @media (max-width: 768px) {
         .stDataFrame { font-size: 11px; }
         [data-testid="stMetricValue"] { font-size: 18px; }
         [data-testid="stMetricLabel"] { font-size: 11px; }
-        .block-container { padding: 0.5rem; }
-
-        [data-testid="collapsedControl"] {
-            top: 0.5rem !important;
-            left: 0.5rem !important;
-        }
+        .block-container { padding: 0.5rem !important; }
     }
     </style>
     """,
