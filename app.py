@@ -24,43 +24,47 @@ st.set_page_config(
 # - Removes the vertical "ghost" line created by Streamlit's built-in collapse tab.
 # - Deletes all old positioning hacks that made the arrow drift away from the sidebar.
 # - Keeps mobile tweaks only; the sidebar can now be resized cleanly by CSS below.
-st.markdown(
-    """
+st.markdown("""
     <style>
-    /* Hide ONLY the vertical resize handle next to the sidebar,
-       but keep the sidebar and its collapse arrow working. */
-    section[data-testid="stSidebar"] [data-testid="stVerticalBlockBorder"],
-    section[data-testid="stSidebar"] [data-testid="stSidebarResizer"],
-    section[data-testid="stSidebar"] div[role="separator"][aria-orientation="vertical"] {
-        opacity: 0 !important;
-        border: none !important;
-        background: transparent !important;
-        pointer-events: none !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-st.markdown(
-    """
-    <style>
-    /* Completely hide Streamlit’s built-in sidebar collapse control */
-    [data-testid="collapsedControl"] {
+    /* ONLY REMOVE THE RESIZE ARROWS - KEEP EVERYTHING ELSE */
+    section[data-testid="stSidebar"] > div > div:nth-child(2) {
         display: none !important;
     }
-
-    /* Global mobile-friendly tweaks */
+    
+    /* FIXED SIDEBAR WIDTH */
+    section[data-testid="stSidebar"] {
+        width: 21rem !important;
+        min-width: 21rem !important;
+        max-width: 21rem !important;
+        flex-shrink: 0;
+    }
+    
+    section[data-testid="stSidebar"][aria-expanded="true"] {
+        width: 21rem !important;
+        min-width: 21rem !important;
+        max-width: 21rem !important;
+    }
+    
+    /* EXPAND MAIN CONTENT WHEN SIDEBAR COLLAPSED */
+    [data-testid="stSidebar"][aria-expanded="false"] ~ .main .block-container {
+        max-width: 100vw !important;
+        padding-left: 2rem !important;
+        padding-right: 2rem !important;
+    }
+    
+    /* MOBILE FIXES */
     @media (max-width: 768px) {
-        .stDataFrame { font-size: 11px; }
-        [data-testid="stMetricValue"] { font-size: 18px; }
-        [data-testid="stMetricLabel"] { font-size: 11px; }
-        .block-container { padding: 0.5rem !important; }
+        [data-testid="stSidebar"][aria-expanded="false"] {
+            display: none !important;
+        }
+        
+        .main .block-container {
+            max-width: 100% !important;
+            padding: 0.5rem !important;
+        }
     }
     </style>
-    """,
-    unsafe_allow_html=True,
-)
+    """, unsafe_allow_html=True)
 
 # ============================================================================
 # IMPORTS
