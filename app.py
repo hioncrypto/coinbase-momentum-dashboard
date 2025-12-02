@@ -26,42 +26,22 @@ st.set_page_config(
 # - Keeps mobile tweaks only; the sidebar can now be resized cleanly by CSS below.
 st.markdown("""
     <style>
-    /* ONLY REMOVE THE RESIZE ARROWS - KEEP EVERYTHING ELSE */
-    section[data-testid="stSidebar"] > div > div:nth-child(2) {
+    /* ONLY hide the resize handle arrows - nothing else */
+    [data-testid="stSidebar"] .st-emotion-cache-1cypcdb {
         display: none !important;
     }
     
-    /* FIXED SIDEBAR WIDTH */
+    /* Fixed sidebar width */
     section[data-testid="stSidebar"] {
         width: 21rem !important;
         min-width: 21rem !important;
         max-width: 21rem !important;
-        flex-shrink: 0;
     }
     
-    section[data-testid="stSidebar"][aria-expanded="true"] {
-        width: 21rem !important;
-        min-width: 21rem !important;
-        max-width: 21rem !important;
-    }
-    
-    /* EXPAND MAIN CONTENT WHEN SIDEBAR COLLAPSED */
+    /* Expand main content when sidebar is collapsed */
     [data-testid="stSidebar"][aria-expanded="false"] ~ .main .block-container {
         max-width: 100vw !important;
         padding-left: 2rem !important;
-        padding-right: 2rem !important;
-    }
-    
-    /* MOBILE FIXES */
-    @media (max-width: 768px) {
-        [data-testid="stSidebar"][aria-expanded="false"] {
-            display: none !important;
-        }
-        
-        .main .block-container {
-            max-width: 100% !important;
-            padding: 0.5rem !important;
-        }
     }
     </style>
     """, unsafe_allow_html=True)
