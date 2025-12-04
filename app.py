@@ -1282,9 +1282,9 @@ with expander("Gates"):
             st.session_state.update(
                 {
                     "use_vol_spike": True,
-                    "vol_mult": 2.5,
+                    "vol_mult": 15,
                     "use_roc": True,
-                    "min_roc": 5.0,
+                    "min_roc": 3.0,
                     "use_macd_cross": True,
                     "macd_cross_bars": 3,
                     "K_green": 2,
