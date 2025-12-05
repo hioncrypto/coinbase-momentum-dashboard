@@ -1289,6 +1289,11 @@ with expander("Gates"):
                     "macd_cross_bars": 3,
                     "K_green": 2,
                     "Y_yellow": 1,
+
+# ADD THESE TWO MISSING SETTINGS:
+            "lookback_candles": 3,  # number of candles to look back
+            "min_bars": 3,          # minimum consecutive bars required
+            "min_pct": 20.0,        # percent change threshold
         }
     )
              
