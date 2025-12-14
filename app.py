@@ -1869,7 +1869,6 @@ if rows:
     chg_col = f"% Change ({sort_tf})"
     ascending = not st.session_state["sort_desc"]
     df_results = df_results.sort_values(chg_col, ascending=ascending)
-    )
     df_results.insert(0, "#", range(1, len(df_results) + 1))
 
     green_count = df_results["_green"].sum()
