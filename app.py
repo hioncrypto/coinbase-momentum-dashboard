@@ -1956,7 +1956,7 @@ if rows:
             return [""] * len(row)
 
         st.dataframe(
-    df_results, use_container_width=True, hide_index=True, height=600
+    df_results.style.apply(style_all_rows, axis=1), use_container_width=True, hide_index=True, height=600
         )
     else:
         st.info("No pairs match filters.")
