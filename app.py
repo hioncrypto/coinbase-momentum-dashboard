@@ -1949,7 +1949,7 @@ if rows:
                 original_idx = display_df.index[row.name]
                 if display_df.loc[original_idx, "_green"]:
                     return [
-                        "background-color: #16a34a; color: white; font-weight: 600"
+                        "background-color: rgba(22, 163, 74, 0.2)"
                     ] * len(row)
                 elif display_df.loc[original_idx, "_yellow"]:
                     return ["background-color: #eab308; color: black"] * len(row)
