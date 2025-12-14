@@ -1957,7 +1957,7 @@ if rows:
 
         st.dataframe(
     df_results, use_container_width=True, hide_index=True, height=600
-            (
+        )
     else:
         st.info("No pairs match filters.")
 else:
