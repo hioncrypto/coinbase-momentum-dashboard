@@ -1952,7 +1952,7 @@ if rows:
                         "background-color: rgba(22, 163, 74, 0.2)"
                     ] * len(row)
                 elif display_df.loc[original_idx, "_yellow"]:
-                    return ["background-color: #eab308; color: black"] * len(row)
+                   return ["background-color: rgba(234, 179, 8, 0.2)"] * len(row)
             return [""] * len(row)
 
         st.dataframe(
