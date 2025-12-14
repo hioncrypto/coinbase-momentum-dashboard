@@ -183,12 +183,12 @@ st.markdown(
 
     /* Row highlight colors */
     .row-green {
-        background-color: #1e4e3a !important;
+        background-color: rgba(30, 78, 58, 0.15)!important;
         color: white !important;
         font-weight: 600;
     }
     .row-yellow {
-        background-color: #eab308!important;
+        background-color: rgba(234, 179, 8, 0.15)!important;
         color: black !important;
     }
 
