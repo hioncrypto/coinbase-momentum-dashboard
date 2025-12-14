@@ -1891,7 +1891,7 @@ if rows:
     # Top 10
     st.subheader("🔥 Top 10 Opportunities")
     min_pct = st.session_state["min_pct"]
-    top_10_filtered = df_results[df_results[chg_col] >= min_pct].head(10).copy()
+    top_10_filtered = df_results.head(10).copy() 
     top_10_filtered.reset_index(drop=True, inplace=True)
 
     if "#" in top_10_filtered.columns:
