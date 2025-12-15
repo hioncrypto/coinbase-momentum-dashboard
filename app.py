@@ -1,3 +1,4 @@
+
 # Enhanced Crypto Tracker by hioncrypto - Updated Version
 # Requirements (add to requirements.txt):
 # streamlit>=1.33
@@ -183,12 +184,12 @@ st.markdown(
 
     /* Row highlight colors */
     .row-green {
-        background-color: rgba(30, 78, 58, 0.15)!important;
+        background-color: #16a34a !important;
         color: white !important;
         font-weight: 600;
     }
     .row-yellow {
-        background-color: rgba(234, 179, 8, 0.15)!important;
+        background-color: #eab308 !important;
         color: black !important;
     }
 
