@@ -1847,7 +1847,7 @@ if pairs:
             .head(10)["Pair"]
             .tolist()
         )
-            .tolist()
+            
         )
         alerts_to_send = [
             alert for alert in alerts_to_send if alert["pair"] in top_10_pairs
