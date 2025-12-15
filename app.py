@@ -1841,13 +1841,14 @@ if pairs:
         chg_col = f"% Change ({sort_tf})"
         temp_df = temp_df.sort_values(chg_col, ascending=False)
         min_pct_threshold = st.session_state["min_pct"]
-        # Get top 10 pairs by % change (regardless of current color)
         top_10_pairs = (
-            temp_df[temp_df[chg_col] >= min_pct_threshold]  # Only filter by threshold
+            temp_df[
+                (temp_df["_green"] == True)
+                & (temp_df[chg_col] >= min_pct_threshold)
+            ]
             .head(10)["Pair"]
             .tolist()
         )
-        
         alerts_to_send = [
             alert for alert in alerts_to_send if alert["pair"] in top_10_pairs
         ]
@@ -1948,15 +1949,15 @@ if rows:
                 original_idx = display_df.index[row.name]
                 if display_df.loc[original_idx, "_green"]:
                     return [
-                        "background-color: rgba(22, 163, 74, 0.2)"
+                        "background-color: #16a34a; color: white; font-weight: 600"
                     ] * len(row)
                 elif display_df.loc[original_idx, "_yellow"]:
-                   return ["background-color: rgba(234, 179, 8, 0.2)"] * len(row)
+                    return ["background-color: #eab308; color: black"] * len(row)
             return [""] * len(row)
 
         st.dataframe(
-    df_results.style.apply(style_all_rows, axis=1), use_container_width=True, hide_index=True, height=600
-        )
+    final_display, use_container_width=True, hide_index=True, height=600
+)
     else:
         st.info("No pairs match filters.")
 else:
