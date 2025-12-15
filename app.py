@@ -1841,12 +1841,12 @@ if pairs:
         chg_col = f"% Change ({sort_tf})"
         temp_df = temp_df.sort_values(chg_col, ascending=False)
         min_pct_threshold = st.session_state["min_pct"]
+        # Get top 10 pairs by % change (regardless of current color)
         top_10_pairs = (
-            temp_df[
-                (temp_df["_green"] == True)
-                & (temp_df[chg_col] >= min_pct_threshold)
-            ]
+            temp_df[temp_df[chg_col] >= min_pct_threshold]  # Only filter by threshold
             .head(10)["Pair"]
+            .tolist()
+        )
             .tolist()
         )
         alerts_to_send = [
