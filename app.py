@@ -1739,7 +1739,7 @@ gate_settings = {
 
 rows = []
 alerts_to_send = []
-sort_tf = st.session_state["sort_tf"]
+sort_tf = st.session_state.get("sort_tf", st.session_state.get("sort_timeframe"))
 mode = st.session_state["gate_mode"]
 hard_filter = st.session_state["hard_filter"]
 k_required = st.session_state.get("K_green", 3)
