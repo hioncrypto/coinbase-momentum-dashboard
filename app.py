@@ -1928,7 +1928,7 @@ if rows:
 
     col1, col2 = st.columns([3, 1])
     with col1:
-        show_all = st.checkbox("Show all pairs", value=not hard_filter)
+        show_all = st.checkbox("Show all pairs", value=not hard_filter, key="show_all_pairs")
     with col2:
         sort_option = st.selectbox("Sort by", ["% Change", "Signal", "Pair"], index=0)
 
