@@ -1795,9 +1795,6 @@ if pairs:
     if st.session_state.get("webhook_url"):
         send_webhook_alert(alerts_to_send)
 
-        if st.session_state.get("webhook_url"):
-            send_webhook_alert(alerts_to_send)
-
     st.success(f"✅ Processed {len(rows)} pairs successfully!")
 
 # Display results
