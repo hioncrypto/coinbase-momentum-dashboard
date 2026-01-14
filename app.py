@@ -1785,8 +1785,8 @@ if pairs:
     save_alerted_pairs(alerted_pairs)
 
     if alerts_to_send:
-    st.write("ALERTS_TO_SEND:", len(alerts_to_send))
-    st.write("EMAIL_TO IN SESSION:", st.session_state.get("email_to"))
+        st.write("ALERTS_TO_SEND:", len(alerts_to_send))
+        st.write("EMAIL_TO IN SESSION:", st.session_state.get("email_to"))
 
     if st.session_state.get("email_to"):
         st.write("CALLING send_email_alert")
