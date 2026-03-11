@@ -1607,6 +1607,7 @@ with col2:
     if st.button("🧹 Clear Cache"):
         get_cached_data.clear()
         st.session_state.clear()
+        clear_alerted_pairs()
         st.rerun()
 
 with col3:
