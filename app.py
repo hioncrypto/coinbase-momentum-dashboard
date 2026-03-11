@@ -1700,7 +1700,7 @@ if pairs:
         status_placeholder.text(f"Processing {pair}... ({i + 1}/{len(pairs)})")
 
         df = get_cached_data(effective_exchange, pair, sort_tf)
-        if df is None or df.empty or len(df) < st.session_state["min_bars"]:
+        if df is None or df.empty or len(df) < st.session_state.get("min_bars", 8):
             continue
 
         meta, passed, chips, enabled = evaluate_gates(df, gate_settings)
