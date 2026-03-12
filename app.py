@@ -1758,9 +1758,13 @@ if pairs:
         rows.append(row_data)
 
         if alert_mode and is_green:
-            stage_check = check_progressive_stages(df, gate_settings)
+            
             should_alert, stage_name = should_send_alert(
-                pair, stage_check, alert_mode, alerted_pairs
+                pair,
+                pct_change,
+                vol_spike_ratio if pd.notna(vol_spike_ratio) else 0.0,
+                alerted_pairs,
+                alert_mode
             )
             if should_alert:
                 alerts_to_send.append(
@@ -1775,8 +1779,7 @@ if pairs:
                     }
                 )
                 if pair not in alerted_pairs:
-                    alerted_pairs[pair] = {}
-                alerted_pairs[pair][stage_name] = True
+                
 
     progress_placeholder.empty()
     status_placeholder.empty()
