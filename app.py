@@ -1777,9 +1777,8 @@ if pairs:
                         "signal": signal,
                         "stage": stage_name,
                     }
-                )
-                if pair not in alerted_pairs:
-                    pass
+
+                    
                 
 
     progress_placeholder.empty()
