@@ -1779,6 +1779,7 @@ if pairs:
                     }
                 )
                 if pair not in alerted_pairs:
+                    pass
                 
 
     progress_placeholder.empty()
