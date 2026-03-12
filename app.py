@@ -1698,7 +1698,9 @@ effective_exchange = (
     else st.session_state["exchange"]
 )
 
-alerted_pairs = load_alerted_pairs()
+if "alerted_pairs" not in st.session_state:
+    st.session_state["alerted_pairs"] = {}
+alerted_pairs = st.session_state["alerted_pairs"]
 
 if pairs:
     status_placeholder = st.empty()
