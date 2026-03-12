@@ -892,7 +892,8 @@ def evaluate_gates(df: pd.DataFrame, settings: dict) -> Tuple[dict, int, str, in
     gate_chips = []
 
     # Δ gate (always on)
-    delta_pass = delta_pct >= settings.get("min_pct", 3.0)
+    delta_threshold = float(st.session_state.get("min_pct", 0.0))
+    delta_pass = pd.notna(delta_pct) and delta_pct >= delta_threshold
     gates_passed += int(delta_pass)
     gates_enabled += 1
     gate_chips.append(f"Δ{'✅' if delta_pass else '❌'}({delta_pct:+.2f}%)")
