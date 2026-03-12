@@ -1714,7 +1714,7 @@ if pairs:
         df = get_cached_data(effective_exchange, pair, sort_tf)
         if df is None or df.empty or len(df) < st.session_state.get("min_bars", 8):
             continue
-
+        vol_spike_ratio = 0.0
         meta, passed, chips, enabled = evaluate_gates(df, gate_settings)
 
         if mode == "ALL":
