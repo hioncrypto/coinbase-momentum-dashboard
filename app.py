@@ -1760,7 +1760,7 @@ if pairs:
         }
         rows.append(row_data)
 
-        if alert_mode and is_green:
+        if is_green:
             
             should_alert, stage_name = should_send_alert(
                 pair,
