@@ -759,6 +759,8 @@ def send_email_alert(pairs_data: List[dict]) -> Tuple[bool, str]:
         sender_password = st.secrets.get("email", {}).get("sender_password")
         recipient = st.session_state.get("email_to", "")
 
+        print(f"[EMAIL CONFIG] sender_email={bool(sender_email)} sender_password={bool(sender_password)} recipient={bool(recipient)}")
+
         if not all([sender_email, sender_password, recipient]):
             return False, "Email not configured"
 
