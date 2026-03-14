@@ -778,8 +778,26 @@ Timeframe: {data['timeframe']}
 Exchange: {data['exchange']}
 Signal: {data['signal']}
 """
-            )
+        )
+        import smtplib
+        from email.message import EmailMessage
 
+        # ... after line 781 ...
+        msg = EmailMessage()
+        msg.set_content("\n".join(body_parts))
+        msg["Subject"] = subject
+        msg["From"] = sender_email
+        msg["To"] = recipient
+
+        try:
+            with smtplib.SMTP("smtp.gmail.com", 587) as server:
+                server.starttls()  # Secure the connection
+                server.login(sender_email, sender_password)
+                server.send_message(msg)
+            return True, "Alert sent successfully"
+        except Exception as e:
+            return False, f"SMTP Error: {str(e)}"
+        
         body = "\n---\n".join(body_parts)
         body += f"\n\nTimestamp: {dt.datetime.now(dt.timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
         body += "\n\nhioncrypto's Crypto Tracker"
