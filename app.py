@@ -93,6 +93,7 @@ class Config:
     """Application configuration"""
 
     COINBASE_BASE = "https://api.exchange.coinbase.com"
+    COINBASE_V2 = "https://api.coinbase.com/v2"
     BINANCE_BASE = "https://api.binance.com"
     COINBASE_WS = "wss://ws-feed.exchange.coinbase.com"
 
