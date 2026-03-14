@@ -1794,7 +1794,6 @@ if pairs:
                 alert_mode
             )
             if should_alert:
-                st.write(f"QUEUE ALERT: {pair} | pct={pct_change:.2f} | stage={stage_name}")
                 alerts_to_send.append(
                     {
                         "pair": pair,
