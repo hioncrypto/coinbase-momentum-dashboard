@@ -358,7 +358,7 @@ def init_session_state():
         "macd_cross_only_bull": True,
         "macd_cross_below_zero": True,
         "macd_hist_confirm_bars": 3,
-        "gate_mode": "ANY",
+        "gate_mode": "ALL",
         "hard_filter": False,
         "K_green": 3,
         "Y_yellow": 2,
