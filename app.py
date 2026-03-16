@@ -15,7 +15,10 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
-
+# TEMP: Clear alerted_pairs for testing
+if "alerted_pairs" in st.session_state:
+    st.session_state.alerted_pairs = {}
+    st.warning("⚠️ Alerted pairs cleared for testing!")
 # ============================================================================
 # GLOBAL CSS (MOBILE TWEAKS + REMOVES SIDEBAR COLLAPSE ARTIFACTS)
 # ============================================================================
