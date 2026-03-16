@@ -1784,27 +1784,31 @@ if pairs:
         }
         rows.append(row_data)
 
-       if is_green:
-    should_alert, stage_name = should_send_alert(
-        pair,
-        pct_change,
-        vol_spike_ratio if pd.notna(vol_spike_ratio) else 0.0,
-        alerted_pairs,
-        alert_mode,
-        use_vol_spike=st.session_state.get("use_vol_spike", False)  # ✅ Add this line
-    )
-    if should_alert:
-        alerts_to_send.append(
-            {
-                "pair": pair,
-                "price": last_price,
-                "pct": pct_change,
-                "timeframe": sort_tf,
-                "exchange": effective_exchange,
-                "signal": signal,
-                "stage": stage_name,
-            }
+    if is_green:
+        should_alert, stage_name = should_send_alert(
+            pair,
+            pct_change,
+            vol_spike_ratio if pd.notna(vol_spike_ratio) else 0.0,
+            alerted_pairs,
+            alert_mode,
+            use_vol_spike=st.session_state.get("use_vol_spike", False)
         )
+        if should_alert:
+            alerts_to_send.append(
+                {
+                    "pair": pair,
+                    "price": last_price,
+                    "pct": pct_change,
+                    "timeframe": sort_tf,
+                    "exchange": effective_exchange,
+                    "signal": signal,
+                    "stage": stage_name,
+                }
+            )
+    else:
+        # Reset state when pair is NOT Green (has red crosses)
+        if pair in alerted_pairs:
+            alerted_pairs.pop(pair, None)
 else:
     # ✅ Reset state when pair is NOT Green (has red crosses)
     if pair in alerted_pairs:
