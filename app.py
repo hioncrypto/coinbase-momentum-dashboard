@@ -1848,6 +1848,9 @@ else:
     st.success(f"✅ Processed {len(rows)} pairs successfully!")
 
 # Display results
+if "debug_log" in st.session_state:
+    st.write("### Debug Log:")
+    st.write(st.session_state.debug_log)
 if rows:
     df_results = pd.DataFrame(rows)
     chg_col = f"% Change ({sort_tf})"
