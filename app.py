@@ -1784,7 +1784,7 @@ if pairs:
         }
         rows.append(row_data)
 
-        if is_green:
+    if is_green:
         should_alert, stage_name = should_send_alert(
             pair,
             pct_change,
