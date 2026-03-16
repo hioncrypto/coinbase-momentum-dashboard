@@ -1,4 +1,3 @@
-# Force redeploy - debug test
 # Enhanced Crypto Tracker by hioncrypto - Updated Version
 # Requirements (add to requirements.txt):
 # streamlit>=1.33
