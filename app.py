@@ -725,7 +725,7 @@ def should_send_alert(pair, delta_pct, rel_volume, alerted_pairs, alert_mode="Ba
         qualified = delta_ok and volume_ok
         # DEBUG: Log why alert is/isn't firing
         print(f"ALERT CHECK: {pair}")
-         print(f"  delta_ok={delta_ok} (delta_pct={delta_pct:.2f}, base_delta={base_delta:.2f})")
+        print(f"  delta_ok={delta_ok} (delta_pct={delta_pct:.2f}, base_delta={base_delta:.2f})")
         print(f"  volume_ok={volume_ok} (use_vol_spike={use_vol_spike}, rel_volume={rel_volume:.2f}, base_volume={base_volume:.2f})")
         print(f"  qualified={qualified}")
         print(f"  pair_state={pair_state}")
