@@ -1785,7 +1785,7 @@ if pairs:
         rows.append(row_data)
 
         if is_green:
-        should_alert, stage_name = should_send_alert(
+            should_alert, stage_name = should_send_alert(
             pair,
             pct_change,
             vol_spike_ratio if pd.notna(vol_spike_ratio) else 0.0,
