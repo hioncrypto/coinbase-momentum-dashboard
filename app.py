@@ -1787,8 +1787,6 @@ if pairs:
     # DEBUG: Check if function is being called
     print(f"DEBUG: Checking alert for {pair}, is_green={is_green}")
     print(f"DEBUG: pct_change={pct_change}, min_pct={st.session_state.get('min_pct', 'NOT SET')}")
-    
-    should_alert, stage_name = should_send_alert(
     if is_green:
         should_alert, stage_name = should_send_alert(
             pair,
