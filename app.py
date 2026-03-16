@@ -1847,6 +1847,13 @@ else:
 
     st.success(f"✅ Processed {len(rows)} pairs successfully!")
 if rows:
+        # Display debug messages
+    if "debug_msgs" in st.session_state:
+        st.write("### Debug - Alert Checks:")
+        for msg in st.session_state.debug_msgs:
+            st.write(msg)
+    
+    df_results = pd.DataFrame(rows)
     df_results = pd.DataFrame(rows)
     chg_col = f"% Change ({sort_tf})"
     ascending = not st.session_state["sort_desc"]
