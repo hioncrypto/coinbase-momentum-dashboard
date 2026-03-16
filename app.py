@@ -706,48 +706,47 @@ def check_progressive_stages(df: pd.DataFrame, settings: dict) -> Dict[str, Any]
     return result
 
 
-def should_send_alert(pair, delta_pct, rel_volume, alerted_pairs, alert_mode="Balanced"):
+def should_send_alert(pair, delta_pct, rel_volume, alerted_pairs, alert_mode="Balanced", use_vol_spike=False):
     """
     Dynamic price-ladder alert logic.
-
-    Base thresholds come from existing sliders:
-    - min_pct   -> minimum % change required
-    - vol_mult  -> minimum volume spike multiple required
-
-    Behavior:
-    - initial alert when both thresholds are first met
-    - re-alert every +5.0 delta points above the last alerted delta
-    - volume must remain above threshold
-    - reset if pair falls below either threshold
+    Checks Gates (Delta + Volume if enabled) AND Price Ladder (Initial/+5%).
     """
-
     base_delta = float(st.session_state.get("min_pct", 0.0))
     base_volume = float(st.session_state.get("vol_mult", 1.10))
     DELTA_STEP = 5.0
-
-    qualified = (delta_pct >= base_delta) and (rel_volume >= base_volume)
-
+    
+    # ✅ Check Delta (Always Required)
+    delta_ok = delta_pct >= base_delta
+    
+    # ✅ Check Volume (Only if Volume Gate is Enabled)
+    volume_ok = True
+    if use_vol_spike:
+        volume_ok = rel_volume >= base_volume
+    
+    qualified = delta_ok and volume_ok
+    
     if not qualified:
+        # ✅ Reset State if Gates Fail
         if pair in alerted_pairs:
             alerted_pairs.pop(pair, None)
         return False, None
-
+    
+    # ✅ Price Ladder Logic (Initial vs. +5% Re-Alert)
     pair_state = alerted_pairs.get(pair)
-
     if not pair_state:
+        # Initial Alert
         alerted_pairs[pair] = {
             "last_alerted_delta": float(delta_pct)
         }
         return True, f"initial_{delta_pct:.2f}"
-
+    
     last_alerted_delta = float(pair_state.get("last_alerted_delta", base_delta))
-
     if delta_pct >= last_alerted_delta + DELTA_STEP:
+        # Re-Alert (+5% Momentum)
         alerted_pairs[pair]["last_alerted_delta"] = float(delta_pct)
         return True, f"delta_{delta_pct:.2f}"
-
+    
     return False, None
-
 
 # =============================================================================
 # ALERT SENDING
