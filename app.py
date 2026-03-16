@@ -1764,7 +1764,12 @@ if pairs:
         ws_price = st.session_state.get("ws_prices", {}).get(pair)
         last_price = float(ws_price) if ws_price else float(df["close"].iloc[-1])
         pct_change = meta["delta_pct"]
-
+            # DEBUG: Check if function is being called
+    if "debug_msgs" not in st.session_state:
+        st.session_state.debug_msgs = []
+    st.session_state.debug_msgs.append(f"{pair}: green={is_green}, change={pct_change:.2f}%")
+    # Keep only last 10
+    st.session_state.debug_msgs = st.session_state.debug_msgs[-10:]
         signal = ""
         if is_green:
             signal = "Strong Buy"
@@ -1784,12 +1789,7 @@ if pairs:
             "_ws_active": ws_price is not None,
         }
         rows.append(row_data)
-        # DEBUG: Check if function is being called
-    if "debug_msgs" not in st.session_state:
-        st.session_state.debug_msgs = []
-    st.session_state.debug_msgs.append(f"{pair}: green={is_green}, change={pct_change:.2f}%")
-    # Keep only last 10
-    st.session_state.debug_msgs = st.session_state.debug_msgs[-10:]
+    
     if is_green:
         should_alert, stage_name = should_send_alert(
             pair,
