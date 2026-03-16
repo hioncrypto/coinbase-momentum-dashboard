@@ -722,15 +722,7 @@ def should_send_alert(pair, delta_pct, rel_volume, alerted_pairs, alert_mode="Ba
     volume_ok = True
     if use_vol_spike:
         volume_ok = rel_volume >= base_volume
-        qualified = delta_ok and volume_ok
-    # DEBUG: Store in session state for viewing
-    if "debug_log" not in st.session_state:
-        st.session_state.debug_log = []
-    st.session_state.debug_log.append(f"{pair}: delta_ok={delta_ok}, volume_ok={volume_ok}, qualified={qualified}")
-    # Keep only last 20 entries
-    st.session_state.debug_log = st.session_state.debug_log[-20:]
-
-    
+        qualified = delta_ok and volume_o
     if not qualified:
         # ✅ Reset State if Gates Fail
         if pair in alerted_pairs:
