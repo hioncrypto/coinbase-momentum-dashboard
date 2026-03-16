@@ -722,7 +722,10 @@ def should_send_alert(pair, delta_pct, rel_volume, alerted_pairs, alert_mode="Ba
     volume_ok = True
     if use_vol_spike:
         volume_ok = rel_volume >= base_volume
-    
+    # DEBUG: Print values
+    print(f"DEBUG: pair={pair}, delta_pct={delta_pct}, base_delta={base_delta}, delta_ok={delta_ok}")
+    print(f"DEBUG: use_vol_spike={use_vol_spike}, rel_volume={rel_volume}, base_volume={base_volume}, volume_ok={volume_ok}")
+    print(f"DEBUG: qualified={qualified}")
     qualified = delta_ok and volume_ok
     
     if not qualified:
