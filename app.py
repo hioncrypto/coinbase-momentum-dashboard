@@ -1766,8 +1766,8 @@ if pairs:
         pct_change = meta["delta_pct"]
             # DEBUG: Check if function is being called
         if "debug_msgs" not in st.session_state:
-        st.session_state.debug_msgs = []
-        st.session_state.debug_msgs.append(f"{pair}: green={is_green}, change={pct_change:.2f}%")
+            st.session_state.debug_msgs = []
+            st.session_state.debug_msgs.append(f"{pair}: green={is_green}, change={pct_change:.2f}%")
         # Keep only last 10
         st.session_state.debug_msgs = st.session_state.debug_msgs[-10:]
         signal = ""
