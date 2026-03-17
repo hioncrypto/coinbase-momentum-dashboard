@@ -1763,7 +1763,7 @@ if pairs:
             if mode == "Custom (K/Y)" and not (is_green or is_yellow):
                 continue
 
-        ws_price = st.session_state.get("ws_prices", {}).get(pair)
+            ws_price = st.session_state.get("ws_prices", {}).get(pair)
         last_price = float(ws_price) if ws_price else float(df["close"].iloc[-1])
         pct_change = meta["delta_pct"]
             # DEBUG: Check if function is being called
