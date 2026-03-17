@@ -1856,7 +1856,7 @@ if rows:
     df_results = pd.DataFrame(rows)
     df_results = pd.DataFrame(rows)
     chg_col = f"% Change ({sort_tf})"
-    ascending = not st.session_state["sort_desc"]
+    ascending = not st.session_state.get("sort_desc", False)
     
     # FIX: Sort without reset_index to reduce delay
     df_results = df_results.sort_values(chg_col, ascending=ascending)
