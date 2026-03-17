@@ -1802,6 +1802,11 @@ if pairs:
                     "stage": stage_name,
                 }
             )
+            # DEBUG: Show in UI
+            if "alert_debug" not in st.session_state:
+                st.session_state.alert_debug = []
+            st.session_state.alert_debug.append(f"{pair}: should_alert={should_alert}, stage={stage_name}")
+            st.session_state.alert_debug = st.session_state.alert_debug[-20:]
     else:
         # Reset state when pair is NOT Green (has red crosses)
         if pair in alerted_pairs:
