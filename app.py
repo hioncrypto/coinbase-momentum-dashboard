@@ -1747,7 +1747,7 @@ if pairs:
         # Determine is_green/is_yellow based on gates FIRST (independent of mode)
         is_green = passed >= enabled and enabled > 0
         is_yellow = (0 < passed < enabled) and (passed >= enabled - 1) if enabled > 0 else False
-
+        
         # Now apply alert mode as an OPTIONAL filter
         if mode == "ALL":
             include = enabled > 0 and passed == enabled
