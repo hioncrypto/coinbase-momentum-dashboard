@@ -1790,7 +1790,7 @@ if pairs:
             "_yellow": is_yellow,
             "_ws_active": ws_price is not None,
         }
-        rows.append(row_data)
+            rows.append(row_data)
     
     if is_green:
         st.write(f"🟢 {pair} is GREEN - delta={pct_change}%")
