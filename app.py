@@ -1849,7 +1849,7 @@ else:
     save_alerted_pairs(alerted_pairs)
 
     if alerts_to_send:
-        if st.session_state.get("email_to"):
+        if st.secrets.get("email", {}).get("recipient_email") or st.session_state.get("email_to"):
             send_email_alert(alerts_to_send)
         if st.session_state.get("webhook_url"):
             send_webhook_alert(alerts_to_send)
