@@ -1153,7 +1153,7 @@ with expander("Mode & Timeframes"):
     new_mode = st.radio(
         "Data Source",
         ["REST only", "WebSocket + REST"],
-        index=0 if st.session_state["mode"] == "REST only" else 1,
+        index=0 if st.session_state.get("mode", "") == "REST only" else 1,
         key="mode_widget",
         help="REST = API polling, WebSocket = real-time",
     )
