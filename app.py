@@ -1833,7 +1833,9 @@ else:
         ]
 
     save_alerted_pairs(alerted_pairs)
-
+    st.write(f"🔍 ALERTS TO SEND: {len(alerts_to_send)} alerts")
+if alerts_to_send:
+    st.write(f"Alerts: {alerts_to_send}")
     if alerts_to_send:
         if st.secrets.get("email", {}).get("recipient_email") or st.session_state.get("email_to"):
             send_email_alert(alerts_to_send)
