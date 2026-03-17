@@ -714,6 +714,8 @@ def should_send_alert(pair, delta_pct, rel_volume, alerted_pairs, alert_mode="Ba
     Dynamic price-ladder alert logic.
     Checks Gates (Delta + Volume if enabled) AND Price Ladder (Initial/+5%).
     """
+    # DEBUG: Log function entry
+    print(f"[ALERT CHECK] {pair}: delta={delta_pct:.2f}%, use_vol={use_vol_spike}")
     base_delta = float(st.session_state.get("min_pct", 0.0))
     base_volume = float(st.session_state.get("vol_mult", 1.10))
     DELTA_STEP = 5.0
@@ -734,6 +736,8 @@ def should_send_alert(pair, delta_pct, rel_volume, alerted_pairs, alert_mode="Ba
         if pair in alerted_pairs:
             alerted_pairs.pop(pair, None)
         return False, None
+    # DEBUG: Passed qualification check
+    print(f"[QUALIFIED] {pair}: delta_ok={delta_ok}, volume_ok={volume_ok}")
             # ✅ Price Ladder Logic (Initial vs. +5% Re-Alert)
         pair_state = alerted_pairs.get(pair)
     if not pair_state:
@@ -741,14 +745,16 @@ def should_send_alert(pair, delta_pct, rel_volume, alerted_pairs, alert_mode="Ba
         alerted_pairs[pair] = {
             "last_alerted_delta": float(delta_pct)
         }
+        print(f"[ALERT TRIGGERED - INITIAL] {pair}")
         return True, f"initial_{delta_pct:.2f}"
     
     last_alerted_delta = float(pair_state.get("last_alerted_delta", base_delta))
     if delta_pct >= last_alerted_delta + DELTA_STEP:
+        print(f"[ALERT TRIGGERED - RE-ALERT] {pair}")
         # Re-Alert (+5% Momentum)
         alerted_pairs[pair]["last_alerted_delta"] = float(delta_pct)
         return True, f"delta_{delta_pct:.2f}"
-    
+    print(f"[ALERT REJECTED - Price Ladder] {pair}")
     return False, None
     
     # ✅ Price Ladder Logic (Initial vs. +5% Re-Alert)
