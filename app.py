@@ -2018,14 +2018,16 @@ st.markdown(
 
 st.markdown("---")
 st.caption("🚀 Enhanced Crypto Tracker with Progressive Alerts — by hioncrypto")
-# TEST EMAIL BUTTON
-if st.sidebar.button("🧪 TEST EMAIL"):
+
+# TEST EMAIL BUTTON (in main area)
+st.markdown("---")
+if st.button("🧪 TEST EMAIL ALERT"):
     try:
         test_alert = [{"pair": "TEST", "price": 1.0, "pct": 10.0, "timeframe": "1h", "exchange": "Test", "signal": "Test", "stage": "test"}]
         success, msg = send_email_alert(test_alert)
         if success:
-            st.sidebar.success(f"✅ Test email sent! {msg}")
+            st.success(f"✅ Test email sent! {msg}")
         else:
-            st.sidebar.error(f"❌ Failed: {msg}")
+            st.error(f"❌ Failed: {msg}")
     except Exception as e:
-        st.sidebar.error(f"❌ Error: {str(e)}")
+        st.error(f"❌ Error: {str(e)}")
