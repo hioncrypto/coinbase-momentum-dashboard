@@ -1782,6 +1782,7 @@ if pairs:
         rows.append(row_data)
     
     if is_green:
+        st.write(f"DEBUG: {pair} is GREEN, calling should_send_alert...")
         should_alert, stage_name = should_send_alert(
             pair,
             pct_change,
