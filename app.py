@@ -721,13 +721,19 @@ def should_send_alert(pair, delta_pct, rel_volume, alerted_pairs, alert_mode="Ba
     # ✅ Check Delta (Always Required)
     delta_ok = delta_pct >= base_delta
     
-    # ✅ Check Volume (Only if Volume Gate is Enabled)
+        # ✅ Check Volume (Only if Volume Gate is Enabled)
     volume_ok = True
     if use_vol_spike:
         volume_ok = rel_volume >= base_volume
-        qualified = delta_ok and volume_o
+    
+    # ✅ Combine checks
+    qualified = delta_ok and volume_ok
+    
     if not qualified:
         # ✅ Reset State if Gates Fail
+        if pair in alerted_pairs:
+            alerted_pairs.pop(pair, None)
+        return False, None
         if pair in alerted_pairs:
             alerted_pairs.pop(pair, None)
         return False, None
