@@ -1764,8 +1764,8 @@ if pairs:
                 continue
 
             ws_price = st.session_state.get("ws_prices", {}).get(pair)
-        last_price = float(ws_price) if ws_price else float(df["close"].iloc[-1])
-        pct_change = meta["delta_pct"]
+            last_price = float(ws_price) if ws_price else float(df["close"].iloc[-1])
+            pct_change = meta["delta_pct"]
             # DEBUG: Check if function is being called
         if "debug_msgs" not in st.session_state:
             st.session_state.debug_msgs = []
