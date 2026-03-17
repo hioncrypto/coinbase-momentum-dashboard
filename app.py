@@ -749,7 +749,7 @@ def send_email_alert(pairs_data: List[dict]) -> Tuple[bool, str]:
         smtp_port = st.secrets.get("email", {}).get("smtp_port", 587)
         sender_email = st.secrets.get("email", {}).get("sender_email")
         sender_password = st.secrets.get("email", {}).get("sender_password")
-        recipient = st.session_state.get("email_to", "")
+        recipient = st.secrets.get("email", {}).get("recipient_email", "")
 
         print(f"[EMAIL CONFIG] sender_email={bool(sender_email)} sender_password={bool(sender_password)} recipient={bool(recipient)}")
 
