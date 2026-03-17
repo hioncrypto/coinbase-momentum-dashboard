@@ -1005,6 +1005,19 @@ def evaluate_gates(df: pd.DataFrame, settings: dict) -> Tuple[dict, int, str, in
 # =============================================================================
 # SIDEBAR CONTROLS
 # =============================================================================
+# TEST EMAIL BUTTON (in main area)
+st.markdown("---")
+if st.button("🧪 TEST EMAIL ALERT"):
+    try:
+        test_alert = [{"pair": "TEST", "price": 1.0, "pct": 10.0, "timeframe": "1h", "exchange": "Test", "signal": "Test", "stage": "test"}]
+        success, msg = send_email_alert(test_alert)
+        if success:
+            st.success(f"✅ Test email sent! {msg}")
+        else:
+            st.error(f"❌ Failed: {msg}")
+    except Exception as e:
+        st.error(f"❌ Error: {str(e)}")
+
 def expander(title: str):
     expanded = not st.session_state.get("collapse_all", False)
     return st.sidebar.expander(title, expanded=expanded)
