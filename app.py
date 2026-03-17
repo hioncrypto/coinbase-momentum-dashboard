@@ -735,7 +735,7 @@ def should_send_alert(pair, delta_pct, rel_volume, alerted_pairs, alert_mode="Ba
             alerted_pairs.pop(pair, None)
         return False, None
             # ✅ Price Ladder Logic (Initial vs. +5% Re-Alert)
-            pair_state = alerted_pairs.get(pair)
+        pair_state = alerted_pairs.get(pair)
         if not pair_state:
         # Initial Alert
         alerted_pairs[pair] = {
