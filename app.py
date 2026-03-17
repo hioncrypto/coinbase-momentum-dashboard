@@ -740,24 +740,6 @@ def should_send_alert(pair, delta_pct, rel_volume, alerted_pairs, alert_mode="Ba
         return True, f"delta_{delta_pct:.2f}"
     print(f"[ALERT REJECTED - Price Ladder] {pair}")
     return False, None
-    
-    # ✅ Price Ladder Logic (Initial vs. +5% Re-Alert)
-    pair_state = alerted_pairs.get(pair)
-    if not pair_state:
-        # Initial Alert
-        alerted_pairs[pair] = {
-            "last_alerted_delta": float(delta_pct)
-        }
-        return True, f"initial_{delta_pct:.2f}"
-    
-    last_alerted_delta = float(pair_state.get("last_alerted_delta", base_delta))
-    if delta_pct >= last_alerted_delta + DELTA_STEP:
-        # Re-Alert (+5% Momentum)
-        alerted_pairs[pair]["last_alerted_delta"] = float(delta_pct)
-        return True, f"delta_{delta_pct:.2f}"
-    
-    return False, None
-
 # =============================================================================
 # ALERT SENDING
 # =============================================================================
