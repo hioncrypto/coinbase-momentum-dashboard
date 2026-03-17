@@ -1778,7 +1778,7 @@ if pairs:
             elif is_yellow:
                 signal = "Watch"
 
-        row_data = {
+            row_data = {
             "Pair": pair,
             "Price": f"${last_price:.6f}",
             f"% Change ({sort_tf})": pct_change,
