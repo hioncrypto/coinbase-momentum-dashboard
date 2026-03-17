@@ -720,22 +720,6 @@ def should_send_alert(pair, delta_pct, rel_volume, alerted_pairs, alert_mode="Ba
     base_volume = float(st.session_state.get("vol_mult", 1.10))
     DELTA_STEP = 5.0
     
-    # ✅ Check Delta (Always Required)
-    delta_ok = delta_pct >= base_delta
-    
-        # ✅ Check Volume (Only if Volume Gate is Enabled)
-    volume_ok = True
-    if use_vol_spike:
-        volume_ok = rel_volume >= base_volume
-    
-    # ✅ Combine checks
-    qualified = delta_ok and volume_ok
-    
-    if not qualified:
-        # ✅ Reset State if Gates Fail
-        if pair in alerted_pairs:
-            alerted_pairs.pop(pair, None)
-        return False, None
     # DEBUG: Passed qualification check
     print(f"[QUALIFIED] {pair}: delta_ok={delta_ok}, volume_ok={volume_ok}")
     # ✅ Price Ladder Logic (Initial vs. +5% Re-Alert)
