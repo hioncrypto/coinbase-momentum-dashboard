@@ -1842,6 +1842,11 @@ else:
             send_webhook_alert(alerts_to_send)
 
     st.success(f"✅ Processed {len(rows)} pairs successfully!")
+# Show alert debug in UI
+if "alert_debug" in st.session_state:
+    st.write("### Alert Function Debug:")
+    for msg in st.session_state.alert_debug[-10:]:
+        st.write(msg)
 if rows:
         # Display debug messages
     if "debug_msgs" in st.session_state:
