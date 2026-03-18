@@ -1784,8 +1784,8 @@ if pairs:
         if is_green and mode != "OFF":
             # This calls the logic at Line 727 to check the +5% jump
             include, alert_type = should_send_alert(
-                pair, delta_pct, rel_vol, st.session_state.alerted_pairs, 
-                alert_mode=mode, use_vol_spike=use_vol
+            pair, delta_pct, rel_vol, st.session_state.alerted_pairs, 
+            alert_mode=mode, use_vol_spike=use_vol
             )
             
             if include:
