@@ -1513,30 +1513,6 @@ with expander("Gates"):
             ),
             key="Y_yellow",
         )
-
-with expander("🎯 Alert Strategy"):
-    st.caption("Progressive 3-stage alerts: MACD Cross → Histogram+ → Threshold")
-
-    alert_modes = ["Conservative", "Balanced", "Aggressive"]
-    current_mode = st.session_state.get("alert_mode", "")
-    mode_index = alert_modes.index(current_mode) if current_mode in alert_modes else None
-
-    new_alert_mode = st.radio(
-        "Alert Mode",
-        alert_modes,
-        index=mode_index,
-        key="alert_mode_widget",
-        help="Conservative: Stage 3 only | Balanced: Stage 2 & 3 | Aggressive: all stages",
-    )
-    if new_alert_mode != st.session_state.get("alert_mode"):
-        st.session_state["alert_mode"] = new_alert_mode
-        save_to_url("alert_mode", new_alert_mode)
-
-    if st.session_state.get("alert_mode"):
-        st.info(f"✅ Alerts active in {st.session_state['alert_mode']} mode")
-    else:
-        st.caption("Select a mode to enable alerts")
-
 with expander("🔔 Notifications"):
     st.caption("Email requires SMTP in st.secrets.toml")
 
