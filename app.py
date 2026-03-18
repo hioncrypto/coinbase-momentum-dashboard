@@ -1741,6 +1741,7 @@ if pairs:
 
         meta, passed, chips, enabled = evaluate_gates(df, gate_settings)
         delta_pct = meta.get("delta_pct", 0.0)
+        rel_vol = vol_spike_ratio
 
         # Gates determine green/yellow FIRST (independent of alert mode)
         is_green = passed >= enabled and enabled > 0
