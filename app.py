@@ -195,6 +195,8 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+
 # =============================================================================
 # URL PARAMETER MAPPING
 # =============================================================================
@@ -718,10 +720,26 @@ def should_send_alert(pair, delta_pct, rel_volume, alerted_pairs, alert_mode="Ba
     base_volume = float(st.session_state.get("vol_mult", 1.10))
     DELTA_STEP = 5.0
     
+    # ✅ Check Delta (Always Required)
+    delta_ok = delta_pct >= base_delta
+    
+        # ✅ Check Volume (Only if Volume Gate is Enabled)
+    volume_ok = True
+    if use_vol_spike:
+        volume_ok = rel_volume >= base_volume
+    
+    # ✅ Combine checks
+    qualified = delta_ok and volume_ok
+    
+    if not qualified:
+        # ✅ Reset State if Gates Fail
+        if pair in alerted_pairs:
+            alerted_pairs.pop(pair, None)
+        return False, None
     # DEBUG: Passed qualification check
     print(f"[QUALIFIED] {pair}: delta_ok={delta_ok}, volume_ok={volume_ok}")
-    # ✅ Price Ladder Logic (Initial vs. +5% Re-Alert)
-    pair_state = alerted_pairs.get(pair)
+            # ✅ Price Ladder Logic (Initial vs. +5% Re-Alert)
+        pair_state = alerted_pairs.get(pair)
     if not pair_state:
         # Initial Alert
         alerted_pairs[pair] = {
@@ -738,6 +756,24 @@ def should_send_alert(pair, delta_pct, rel_volume, alerted_pairs, alert_mode="Ba
         return True, f"delta_{delta_pct:.2f}"
     print(f"[ALERT REJECTED - Price Ladder] {pair}")
     return False, None
+    
+    # ✅ Price Ladder Logic (Initial vs. +5% Re-Alert)
+    pair_state = alerted_pairs.get(pair)
+    if not pair_state:
+        # Initial Alert
+        alerted_pairs[pair] = {
+            "last_alerted_delta": float(delta_pct)
+        }
+        return True, f"initial_{delta_pct:.2f}"
+    
+    last_alerted_delta = float(pair_state.get("last_alerted_delta", base_delta))
+    if delta_pct >= last_alerted_delta + DELTA_STEP:
+        # Re-Alert (+5% Momentum)
+        alerted_pairs[pair]["last_alerted_delta"] = float(delta_pct)
+        return True, f"delta_{delta_pct:.2f}"
+    
+    return False, None
+
 # =============================================================================
 # ALERT SENDING
 # =============================================================================
@@ -747,7 +783,7 @@ def send_email_alert(pairs_data: List[dict]) -> Tuple[bool, str]:
         smtp_port = st.secrets.get("email", {}).get("smtp_port", 587)
         sender_email = st.secrets.get("email", {}).get("sender_email")
         sender_password = st.secrets.get("email", {}).get("sender_password")
-        recipient = st.secrets.get("email", {}).get("recipient_email", "")
+        recipient = st.session_state.get("email_to", "")
 
         print(f"[EMAIL CONFIG] sender_email={bool(sender_email)} sender_password={bool(sender_password)} recipient={bool(recipient)}")
 
@@ -1005,19 +1041,6 @@ def evaluate_gates(df: pd.DataFrame, settings: dict) -> Tuple[dict, int, str, in
 # =============================================================================
 # SIDEBAR CONTROLS
 # =============================================================================
-# TEST EMAIL BUTTON (in main area)
-st.markdown("---")
-if st.button("🧪 TEST EMAIL ALERT"):
-    try:
-        test_alert = [{"pair": "TEST", "price": 1.0, "pct": 10.0, "timeframe": "1h", "exchange": "Test", "signal": "Test", "stage": "test"}]
-        success, msg = send_email_alert(test_alert)
-        if success:
-            st.success(f"✅ Test email sent! {msg}")
-        else:
-            st.error(f"❌ Failed: {msg}")
-    except Exception as e:
-        st.error(f"❌ Error: {str(e)}")
-
 def expander(title: str):
     expanded = not st.session_state.get("collapse_all", False)
     return st.sidebar.expander(title, expanded=expanded)
@@ -1146,7 +1169,7 @@ with expander("Mode & Timeframes"):
     new_mode = st.radio(
         "Data Source",
         ["REST only", "WebSocket + REST"],
-        index=0 if st.session_state.get("mode", "") == "REST only" else 1,
+        index=0 if st.session_state["mode"] == "REST only" else 1,
         key="mode_widget",
         help="REST = API polling, WebSocket = real-time",
     )
@@ -1744,41 +1767,41 @@ if pairs:
 
         meta, passed, chips, enabled = evaluate_gates(df, gate_settings)
 
-            # Determine is_green/is_yellow based on gates FIRST (independent of mode)
-    is_green = passed >= enabled and enabled > 0
-    is_yellow = (0 < passed < enabled) and (passed >= enabled - 1) if enabled > 0 else False
-    
-    # Now apply alert mode as an OPTIONAL filter
-    if mode == "ALL":
-        include = enabled > 0 and passed == enabled
-    elif mode == "ANY":
-        include = passed >= 1
-    else:  # Custom (K/Y) or no mode
-        include = True  # Show all gate-passing pairs
-        
+        if mode == "ALL":
+            include = enabled > 0 and passed == enabled
+            is_green = include
+            is_yellow = (0 < passed < enabled) and (passed >= enabled - 1)
+        elif mode == "ANY":
+            include = True
+            is_green = passed >= 1
+            is_yellow = False
+        else:
+            include = True
+            is_green = passed >= k_required
+            is_yellow = (not is_green) and (passed >= y_required)
 
-    if hard_filter:
+        if hard_filter:
             if mode in {"ALL", "ANY"} and not include:
                 continue
             if mode == "Custom (K/Y)" and not (is_green or is_yellow):
                 continue
 
-            ws_price = st.session_state.get("ws_prices", {}).get(pair)
-            last_price = float(ws_price) if ws_price else float(df["close"].iloc[-1])
-            pct_change = meta["delta_pct"]
+        ws_price = st.session_state.get("ws_prices", {}).get(pair)
+        last_price = float(ws_price) if ws_price else float(df["close"].iloc[-1])
+        pct_change = meta["delta_pct"]
             # DEBUG: Check if function is being called
-            if "debug_msgs" not in st.session_state:
-                st.session_state.debug_msgs = []
-                st.session_state.debug_msgs.append(f"{pair}: green={is_green}, change={pct_change:.2f}%")
-            # Keep only last 10
-            st.session_state.debug_msgs = st.session_state.debug_msgs[-10:]
-            signal = ""
-            if is_green:
-                signal = "Strong Buy"
-            elif is_yellow:
-                signal = "Watch"
+        if "debug_msgs" not in st.session_state:
+            st.session_state.debug_msgs = []
+            st.session_state.debug_msgs.append(f"{pair}: green={is_green}, change={pct_change:.2f}%")
+        # Keep only last 10
+        st.session_state.debug_msgs = st.session_state.debug_msgs[-10:]
+        signal = ""
+        if is_green:
+            signal = "Strong Buy"
+        elif is_yellow:
+            signal = "Watch"
 
-            row_data = {
+        row_data = {
             "Pair": pair,
             "Price": f"${last_price:.6f}",
             f"% Change ({sort_tf})": pct_change,
@@ -1790,11 +1813,9 @@ if pairs:
             "_yellow": is_yellow,
             "_ws_active": ws_price is not None,
         }
-            rows.append(row_data)
+        rows.append(row_data)
     
     if is_green:
-        st.write(f"🟢 {pair} is GREEN - delta={pct_change}%")
-        st.write(f"DEBUG: {pair} is GREEN, calling should_send_alert...")
         should_alert, stage_name = should_send_alert(
             pair,
             pct_change,
@@ -1815,11 +1836,6 @@ if pairs:
                     "stage": stage_name,
                 }
             )
-            # DEBUG: Show in UI
-            if "alert_debug" not in st.session_state:
-                st.session_state.alert_debug = []
-            st.session_state.alert_debug.append(f"{pair}: should_alert={should_alert}, stage={stage_name}")
-            st.session_state.alert_debug = st.session_state.alert_debug[-20:]
     else:
         # Reset state when pair is NOT Green (has red crosses)
         if pair in alerted_pairs:
@@ -1847,21 +1863,14 @@ else:
         ]
 
     save_alerted_pairs(alerted_pairs)
-    st.write(f"🔍 ALERTS TO SEND: {len(alerts_to_send)} alerts")
-if alerts_to_send:
-    st.write(f"Alerts: {alerts_to_send}")
+
     if alerts_to_send:
-        if st.secrets.get("email", {}).get("recipient_email") or st.session_state.get("email_to"):
+        if st.session_state.get("email_to"):
             send_email_alert(alerts_to_send)
         if st.session_state.get("webhook_url"):
             send_webhook_alert(alerts_to_send)
 
     st.success(f"✅ Processed {len(rows)} pairs successfully!")
-# Show alert debug in UI
-if "alert_debug" in st.session_state:
-    st.write("### Alert Function Debug:")
-    for msg in st.session_state.alert_debug[-10:]:
-        st.write(msg)
 if rows:
         # Display debug messages
     if "debug_msgs" in st.session_state:
@@ -2034,16 +2043,3 @@ st.markdown(
 
 st.markdown("---")
 st.caption("🚀 Enhanced Crypto Tracker with Progressive Alerts — by hioncrypto")
-
-# TEST EMAIL BUTTON (in main area)
-st.markdown("---")
-if st.button("🧪 TEST EMAIL ALERT"):
-    try:
-        test_alert = [{"pair": "TEST", "price": 1.0, "pct": 10.0, "timeframe": "1h", "exchange": "Test", "signal": "Test", "stage": "test"}]
-        success, msg = send_email_alert(test_alert)
-        if success:
-            st.success(f"✅ Test email sent! {msg}")
-        else:
-            st.error(f"❌ Failed: {msg}")
-    except Exception as e:
-        st.error(f"❌ Error: {str(e)}")
