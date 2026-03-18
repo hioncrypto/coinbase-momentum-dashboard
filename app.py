@@ -1839,14 +1839,6 @@ if pairs:
         # Reset state when pair is NOT Green (has red crosses)
         if pair in alerted_pairs:
             alerted_pairs.pop(pair, None)
-else:
-    # ✅ Reset state when pair is NOT Green (has red crosses)
-    if pair in alerted_pairs:
-        alerted_pairs.pop(pair, None)
-    else:
-        # Reset state when pair is NOT Green (has red crosses)
-        if pair in alerted_pairs:
-            alerted_pairs.pop(pair, None)
 
     progress_placeholder.empty()
     status_placeholder.empty()
