@@ -237,7 +237,7 @@ URL_PARAM_MAP = {
     "K_green": "kg",
     "Y_yellow": "yy",
     "preset": "pr",
-    "alert_mode": "am",
+    
     "email_to": "et",
     "webhook_url": "wu",
     "font_scale": "fs",
@@ -363,7 +363,7 @@ def init_session_state():
         "K_green": 3,
         "Y_yellow": 2,
         "preset": "None",
-        "alert_mode": "",
+        
         "email_to": "",
         "webhook_url": "",
         "font_scale": 1.0,
