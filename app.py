@@ -706,7 +706,7 @@ def check_progressive_stages(df: pd.DataFrame, settings: dict) -> Dict[str, Any]
     return result
 
 
-def should_send_alert(pair, delta_pct, rel_volume, alerted_pairs, alert_mode="Balanced", use_vol_spike=False):
+def should_send_alert(pair, delta_pct, rel_volume, alerted_pairs, use_vol_spike=False):
     """
     Dynamic price-ladder alert logic.
     Checks Gates (Delta + Volume if enabled) AND Price Ladder (Initial/+5%).
