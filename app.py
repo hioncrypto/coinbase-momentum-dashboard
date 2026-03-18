@@ -739,7 +739,7 @@ def should_send_alert(pair, delta_pct, rel_volume, alerted_pairs, alert_mode="Ba
     # DEBUG: Passed qualification check
     print(f"[QUALIFIED] {pair}: delta_ok={delta_ok}, volume_ok={volume_ok}")
             # ✅ Price Ladder Logic (Initial vs. +5% Re-Alert)
-        pair_state = alerted_pairs.get(pair)
+    pair_state = alerted_pairs.get(pair)
     if not pair_state:
         # Initial Alert
         alerted_pairs[pair] = {
