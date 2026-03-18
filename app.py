@@ -1770,7 +1770,7 @@ if pairs:
             
             if include:
                 # This sends the actual email notification
-                send_alert_notification(pair, delta_pct, rel_vol, alert_type)
+                # send_alert_notification(pair, delta_pct, rel_vol, alert_type)
         else:
             # If the pair is NOT green, remove it from memory so it can reset
             if pair in st.session_state.alerted_pairs:
