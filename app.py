@@ -720,6 +720,10 @@ def send_alert_notification(pair, delta_pct, rel_vol, alert_type):
     
     # Check if we have SMTP credentials in secrets
     smtp_configured = "smtp_server" in st.secrets
+
+    # 🔔 ADD THESE DEBUG LINES TOO:
+    print(f"📧 Email recipient: {email_recipient}")
+    print(f"🔐 SMTP configured: {smtp_configured}")
     
     # Prepare alert message
     subject = f"🚀 Alert: {pair} - {alert_type}"
