@@ -1834,7 +1834,8 @@ if pairs:
             pair, delta_pct, rel_vol, st.session_state.alerted_pairs, 
             use_vol_spike=use_vol
             )
-            
+            # 🔔 DEBUG: Show what should_send_alert returned
+            print(f" should_send_alert result: include={include}, alert_type={alert_type}")
             if include:
                 # This sends the actual email notification
                 send_alert_notification(pair, delta_pct, rel_vol, alert_type)   
