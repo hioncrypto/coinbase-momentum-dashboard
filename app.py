@@ -1767,18 +1767,17 @@ if pairs:
 
         meta, passed, chips, enabled = evaluate_gates(df, gate_settings)
 
+        # Gates determine green/yellow FIRST (independent of alert mode)
+        is_green = passed >= enabled and enabled > 0
+        is_yellow = (0 < passed < enabled) and (passed >= enabled - 1) if enabled > 0 else False
+
+        # Alert mode is OPTIONAL filter
         if mode == "ALL":
-            include = enabled > 0 and passed == enabled
-            is_green = include
-            is_yellow = (0 < passed < enabled) and (passed >= enabled - 1)
+             include = enabled > 0 and passed == enabled
         elif mode == "ANY":
+            include = passed >= 1
+        else:  # Custom (K/Y) or no mode
             include = True
-            is_green = passed >= 1
-            is_yellow = False
-        else:
-            include = True
-            is_green = passed >= k_required
-            is_yellow = (not is_green) and (passed >= y_required)
 
         if hard_filter:
             if mode in {"ALL", "ANY"} and not include:
