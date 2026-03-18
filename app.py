@@ -1769,12 +1769,32 @@ if pairs:
         is_yellow = (0 < passed < enabled) and (passed >= enabled - 1) if enabled > 0 else False
 
         # Alert mode is OPTIONAL filter
+        # 1. Determine if the pair is 'Green'
         if mode == "ALL":
-             include = enabled > 0 and passed == enabled
+            is_green = (enabled > 0 and passed == enabled)
         elif mode == "ANY":
-            include = passed >= 1
-        else:  # Custom (K/Y) or no mode
-            include = True
+            is_green = (passed >= 1)
+        elif mode == "BALANCED":
+            is_green = (passed >= (enabled // 2 + 1)) if enabled > 0 else False
+        else:
+            is_green = False
+
+        # 2. Check for Acceleration (+5%)
+        include = False 
+        if is_green and mode != "OFF":
+            # This calls the logic at Line 727 to check the +5% jump
+            include, alert_type = should_send_alert(
+                pair, delta_pct, rel_vol, st.session_state.alerted_pairs, 
+                alert_mode=mode, use_vol_spike=use_vol
+            )
+            
+            if include:
+                # This sends the actual email notification
+                send_alert_notification(pair, delta_pct, rel_vol, alert_type)
+        else:
+            # If the pair is NOT green, remove it from memory so it can reset
+            if pair in st.session_state.alerted_pairs:
+                st.session_state.alerted_pairs.pop(pair, None)
 
         if hard_filter:
             if mode in {"ALL", "ANY"} and not include:
