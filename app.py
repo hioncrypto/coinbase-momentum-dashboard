@@ -1833,6 +1833,8 @@ if pairs:
             
             if include:
                 # This sends the actual email notification
+                print(f"📧 Email recipient: {email_recipient}")
+                print(f"🔐 SMTP configured: {smtp_configured}")
                 send_alert_notification(pair, delta_pct, rel_vol, alert_type)   
         else:
             # If the pair is NOT green, remove it from memory so it can reset
