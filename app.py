@@ -1813,7 +1813,7 @@ if pairs:
             pct_change,
             vol_spike_ratio if pd.notna(vol_spike_ratio) else 0.0,
             alerted_pairs,
-            alert_mode,
+            
             use_vol_spike=st.session_state.get("use_vol_spike", False)
         )
         if should_alert:
