@@ -719,7 +719,7 @@ def send_alert_notification(pair, delta_pct, rel_vol, alert_type):
     webhook_url = st.session_state.get("webhook_url", "")
     
     # Check if we have SMTP credentials in secrets
-    smtp_configured = "smtp_server" in st.secrets
+    smtp_configured = "email" in st.secrets
 
     # 🔔 ADD THESE DEBUG LINES TOO:
     print(f"📧 Email recipient: {email_recipient}")
@@ -742,14 +742,14 @@ def send_alert_notification(pair, delta_pct, rel_vol, alert_type):
     if smtp_configured and email_recipient:
         try:
             msg = MIMEMultipart()
-            msg['From'] = st.secrets["smtp_from"]
+            msg['From'] = st.secrets["email"]["sender_email"]
             msg['To'] = email_recipient
             msg['Subject'] = subject
             msg.attach(MIMEText(message, 'plain'))
             
-            server = smtplib.SMTP(st.secrets["smtp_server"], st.secrets["smtp_port"])
+            server = smtplib.SMTP(st.secrets["email"]["smtp_host"], st.secrets["email"]["smtp_port"])
             server.starttls()
-            server.login(st.secrets["smtp_user"], st.secrets["smtp_password"])
+            server.login(st.secrets["email"]["sender_email"], st.secrets["email"]["sender_password"])
             server.send_message(msg)
             server.quit()
             print(f"✅ Email sent to {email_recipient}")
