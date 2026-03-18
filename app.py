@@ -715,7 +715,7 @@ def send_alert_notification(pair, delta_pct, rel_vol, alert_type):
     from email.mime.multipart import MIMEMultipart
     
     # Get email settings from session state
-    email_recipient = st.session_state.get("email_recipient", "")
+    email_recipient = st.session_state.get("email_to", "")
     webhook_url = st.session_state.get("webhook_url", "")
     
     # Check if we have SMTP credentials in secrets
