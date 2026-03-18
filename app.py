@@ -706,7 +706,70 @@ def check_progressive_stages(df: pd.DataFrame, settings: dict) -> Dict[str, Any]
 
     return result
 
-
+def send_alert_notification(pair, delta_pct, rel_vol, alert_type):
+    """
+    Send email and/or webhook notifications for alert.
+    """
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    
+    # Get email settings from session state
+    email_recipient = st.session_state.get("email_recipient", "")
+    webhook_url = st.session_state.get("webhook_url", "")
+    
+    # Check if we have SMTP credentials in secrets
+    smtp_configured = "smtp_server" in st.secrets
+    
+    # Prepare alert message
+    subject = f"🚀 Alert: {pair} - {alert_type}"
+    message = f"""
+    Crypto Alert Triggered!
+    
+    Pair: {pair}
+    Alert Type: {alert_type}
+    Price Change: {delta_pct:.2f}%
+    Relative Volume: {rel_vol:.2f}x
+    
+    Check your dashboard for more details.
+    """
+    
+    # Send email if configured
+    if smtp_configured and email_recipient:
+        try:
+            msg = MIMEMultipart()
+            msg['From'] = st.secrets["smtp_from"]
+            msg['To'] = email_recipient
+            msg['Subject'] = subject
+            msg.attach(MIMEText(message, 'plain'))
+            
+            server = smtplib.SMTP(st.secrets["smtp_server"], st.secrets["smtp_port"])
+            server.starttls()
+            server.login(st.secrets["smtp_user"], st.secrets["smtp_password"])
+            server.send_message(msg)
+            server.quit()
+            print(f"✅ Email sent to {email_recipient}")
+        except Exception as e:
+            print(f"❌ Failed to send email: {e}")
+    
+    # Send webhook if configured
+    if webhook_url:
+        try:
+            import requests
+            payload = {
+                "pair": pair,
+                "alert_type": alert_type,
+                "delta_pct": delta_pct,
+                "rel_vol": rel_vol,
+                "message": message
+            }
+            response = requests.post(webhook_url, json=payload)
+            if response.status_code == 200:
+                print(f"✅ Webhook sent successfully")
+            else:
+                print(f"❌ Webhook failed: {response.status_code}")
+        except Exception as e:
+            print(f"❌ Failed to send webhook: {e}")
 def should_send_alert(pair, delta_pct, rel_volume, alerted_pairs, use_vol_spike=False):
     """
     Dynamic price-ladder alert logic.
