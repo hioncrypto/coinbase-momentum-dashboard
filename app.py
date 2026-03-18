@@ -1709,7 +1709,7 @@ mode = st.session_state["gate_mode"]
 hard_filter = st.session_state["hard_filter"]
 k_required = st.session_state.get("K_green", 3)
 y_required = st.session_state.get("Y_yellow", 2)
-alert_mode = st.session_state.get("alert_mode", "")
+
 
 effective_exchange = (
     "Coinbase"
