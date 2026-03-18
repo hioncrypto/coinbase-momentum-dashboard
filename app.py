@@ -6,6 +6,7 @@
 # requests>=2.31
 # websocket-client>=1.6
 
+
 import streamlit as st
 
 # Page configuration - MUST be first Streamlit command
