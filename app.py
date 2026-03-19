@@ -189,6 +189,10 @@ st.markdown(
             max-width: 100% !important;
         }
     }
+    /* Prevent App Dimming - Force Full Opacity */
+    [data-testid="stAppViewContainer"] { opacity: 1 !important; }
+    [data-testid="stAppViewContainer"] > div { opacity: 1 !important; }
+    section[data-testid="stSidebar"] { opacity: 1 !important; }
     </style>
     """,
     unsafe_allow_html=True,
