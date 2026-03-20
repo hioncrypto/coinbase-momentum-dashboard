@@ -189,10 +189,6 @@ st.markdown(
             max-width: 100% !important;
         }
     }
-    /* Prevent App Dimming - Force Full Opacity */
-    [data-testid="stAppViewContainer"] { opacity: 1 !important; }
-    [data-testid="stAppViewContainer"] > div { opacity: 1 !important; }
-    section[data-testid="stSidebar"] { opacity: 1 !important; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -839,49 +835,6 @@ def should_send_alert(pair, delta_pct, rel_volume, alerted_pairs, use_vol_spike=
     if delta_pct >= last_alerted_delta + DELTA_STEP:
         # Re-Alert (+5% Momentum)
         alerted_pairs[pair]["last_alerted_delta"] = float(delta_pct)
-        def check_alert_strategy(df, mode, min_pct=20.0):
-    """Moonshot Alert Strategy Logic"""
-    if df is None or len(df) < 10:
-        return False
-
-    # Calculate MACD
-    exp1 = df['close'].ewm(span=12, adjust=False).mean()
-    exp2 = df['close'].ewm(span=26, adjust=False).mean()
-    macd = exp1 - exp2
-    signal = macd.ewm(span=9, adjust=False).mean()
-    hist = macd - signal
-
-    # Check Recency (≤ 5 bars)
-    cross_bars_ago = 999
-    for i in range(1, 6):
-        if macd.iloc[-i] > signal.iloc[-i] and macd.iloc[-i-1] <= signal.iloc[-i-1]:
-            if macd.iloc[-i] < 0:  # Below Zero
-                cross_bars_ago = i
-                break
-
-    if cross_bars_ago > 5:
-        return False
-
-    # Stage 1 Met
-    stage1 = True
-
-    # Stage 2 (Histogram > 0)
-    stage2 = hist.iloc[-1] > 0
-
-    # Stage 3 (Price ≥ 20%)
-    recent_low = df['close'].iloc[-5:].min()
-    pct_move = ((df['close'].iloc[-1] - recent_low) / recent_low) * 100
-    stage3 = pct_move >= min_pct
-
-    # Mode Logic
-    if mode == "Aggressive":
-        return stage1
-    elif mode == "Balanced":
-        return stage1 and stage2
-    elif mode == "Conservative":
-        return stage1 and stage2 and stage3
-    else:
-        return False
         return True, f"delta_{delta_pct:.2f}"
     
     return False, None
