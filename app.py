@@ -585,7 +585,48 @@ def fetch_data(
 # =============================================================================
 _refresh_ttl = int(max(5, st.session_state.get("refresh_sec", 30)))
 
+_refresh_ttl = int(max(5, st.session_state.get("refresh_sec", 30)))
 
+
+def check_alert_strategy(df, mode, min_pct=20.0):
+    if df is None or len(df) < 10:
+        return False
+
+    exp1 = df['close'].ewm(span=12, adjust=False).mean()
+    exp2 = df['close'].ewm(span=26, adjust=False).mean()
+    macd = exp1 - exp2
+    signal = macd.ewm(span=9, adjust=False).mean()
+    hist = macd - signal
+
+    cross_bars_ago = 999
+    for i in range(1, 6):
+        if macd.iloc[-i] > signal.iloc[-i] and macd.iloc[-i-1] <= signal.iloc[-i-1]:
+            if macd.iloc[-i] < 0:
+                cross_bars_ago = i
+                break
+
+    if cross_bars_ago > 5:
+        return False
+
+    stage1 = True
+    stage2 = hist.iloc[-1] > 0
+
+    recent_low = df['close'].iloc[-5:].min()
+    pct_move = ((df['close'].iloc[-1] - recent_low) / recent_low) * 100
+    stage3 = pct_move >= min_pct
+
+    if mode == "Aggressive":
+        return stage1
+    elif mode == "Balanced":
+        return stage1 and stage2
+    elif mode == "Conservative":
+        return stage1 and stage2 and stage3
+    else:
+        return False
+
+
+@st.cache_data(show_spinner=False, ttl=_refresh_ttl)
+def get_cached_data(exchange: str, pair: str, timeframe: str) -> Optional[pd.DataFrame]:
 @st.cache_data(show_spinner=False, ttl=_refresh_ttl)
 def get_cached_data(exchange: str, pair: str, timeframe: str) -> Optional[pd.DataFrame]:
     try:
