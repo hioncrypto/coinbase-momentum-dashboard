@@ -1252,6 +1252,14 @@ with st.sidebar:
     avail_count = len(avail_pairs)
 
     st.sidebar.subheader("Discover Settings")
+      # Alert Strategy: Easy Start for Novice Users
+    alert_mode = st.radio(
+        "Easy Start: Pre-Set Alert Logic",
+        ["Aggressive", "Balanced", "Conservative", "Off"],
+        index=3,
+        help="Designed for novice users until you learn manual controls."
+    )
+
     ptd = st.sidebar.slider(
         f"Pairs to discover{f' (Available: {avail_count})' if avail_count else ''}",
         min_value=5,
