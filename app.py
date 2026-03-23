@@ -925,6 +925,7 @@ Signal: {data['signal']}
             return False, f"SMTP Error: {str(e)}"
         
         body = "\n---\n".join(body_parts)
+        body += "\n\n📌 Note: Re-alerts require ≥5% price increase from previous alert"
         body += f"\n\nTimestamp: {dt.datetime.now(dt.timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
         body += "\n\nhioncrypto's Crypto Tracker"
 
