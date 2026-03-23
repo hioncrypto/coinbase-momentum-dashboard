@@ -1290,7 +1290,7 @@ with expander("Mode & Timeframes"):
         "WebSocket chunk size",
         2,
         20,
-        value=int(st.session_state.get("ws_chunk", 5)),
+        value=int(st.session_state.get("ws_chunk", 13)),
         step=1,
         key="ws_chunk_widget",
         help="Pairs to stream simultaneously",
