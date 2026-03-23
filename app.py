@@ -1964,14 +1964,11 @@ if pairs:
                     "signal": signal,
                     "stage": alert_type,
                 })
-                else:
+  
         # Reset state ONLY when pair is NOT Green
         if not is_green and pair in alerted_pairs:
             alerted_pairs.pop(pair, None)
-        # Reset state when pair is NOT Green (has red crosses)
-        if pair in alerted_pairs:
-            alerted_pairs.pop(pair, None)
-
+       
     progress_placeholder.empty()
     status_placeholder.empty()
 
