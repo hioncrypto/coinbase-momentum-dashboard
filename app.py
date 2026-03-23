@@ -1922,12 +1922,9 @@ if pairs:
         }
         rows.append(row_data)
     
-        if is_green:
-        # Check Alert Strategy based on radio button selection
-        if alert_mode == "Off":
-            # No filter - app works as before
-            strategy_approved = True
-        else:
+        # Check Alert Strategy (if enabled via radio button)
+        strategy_approved = True
+        if alert_mode != "Off" and is_green:
             # Fetch Timeframes for Strategy Check
             df_4h = get_cached_data(effective_exchange, pair, "4h")
             df_1d = get_cached_data(effective_exchange, pair, "1D")
@@ -1948,28 +1945,29 @@ if pairs:
                     if pct_move_15m < 20.0:
                         strategy_approved = False
         
-        # Send Alert if Strategy Approved
-        if strategy_approved:
-            should_alert, stage_name = should_send_alert(
-                pair,
-                pct_change,
-                vol_spike_ratio if pd.notna(vol_spike_ratio) else 0.0,
-                alerted_pairs,
-                alert_mode,
-                use_vol_spike=st.session_state.get("use_vol_spike", False)
+        # Send Alert if Strategy Approved (wrap existing logic)
+        if is_green and strategy_approved and mode != "OFF":
+            include, alert_type = should_send_alert(
+                pair, delta_pct, rel_vol, st.session_state.alerted_pairs, 
+                use_vol_spike=use_vol
             )
-            if should_alert:
-                {
+            print(f" should_send_alert result: include={include}, alert_type={alert_type}")
+            if include:
+                send_alert_notification(pair, delta_pct, rel_vol, alert_type)
+                # Also add to email/webhook list if needed
+                alerts_to_send.append({
                     "pair": pair,
                     "price": last_price,
                     "pct": pct_change,
                     "timeframe": sort_tf,
                     "exchange": effective_exchange,
                     "signal": signal,
-                    "stage": stage_name,
-                }
-            )
-    else:
+                    "stage": alert_type,
+                })
+        else:
+            # Reset state when pair is NOT Green or strategy not approved
+            if pair in alerted_pairs:
+                alerted_pairs.pop(pair, None)
         # Reset state when pair is NOT Green (has red crosses)
         if pair in alerted_pairs:
             alerted_pairs.pop(pair, None)
