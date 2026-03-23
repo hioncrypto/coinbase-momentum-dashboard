@@ -1922,17 +1922,43 @@ if pairs:
         }
         rows.append(row_data)
     
-    if is_green:
-        should_alert, stage_name = should_send_alert(
-            pair,
-            pct_change,
-            vol_spike_ratio if pd.notna(vol_spike_ratio) else 0.0,
-            alerted_pairs,
+        if is_green:
+        # Check Alert Strategy based on radio button selection
+        if alert_mode == "Off":
+            # No filter - app works as before
+            strategy_approved = True
+        else:
+            # Fetch Timeframes for Strategy Check
+            df_4h = get_cached_data(effective_exchange, pair, "4h")
+            df_1d = get_cached_data(effective_exchange, pair, "1D")
             
-            use_vol_spike=st.session_state.get("use_vol_spike", False)
-        )
-        if should_alert:
-            alerts_to_send.append(
+            # Stage 1 & 2: Daily First → 4h Fallback
+            strategy_approved = False
+            if check_alert_strategy(df_1d, alert_mode, 20.0):
+                strategy_approved = True
+            elif check_alert_strategy(df_4h, alert_mode, 20.0):
+                strategy_approved = True
+            
+            # Stage 3 (Conservative Only): Check 15m for 20% Move
+            if alert_mode == "Conservative" and strategy_approved:
+                df_15m = get_cached_data(effective_exchange, pair, "15m")
+                if df_15m is not None:
+                    recent_low_15m = df_15m['close'].iloc[-5:].min()
+                    pct_move_15m = ((df_15m['close'].iloc[-1] - recent_low_15m) / recent_low_15m) * 100
+                    if pct_move_15m < 20.0:
+                        strategy_approved = False
+        
+        # Send Alert if Strategy Approved
+        if strategy_approved:
+            should_alert, stage_name = should_send_alert(
+                pair,
+                pct_change,
+                vol_spike_ratio if pd.notna(vol_spike_ratio) else 0.0,
+                alerted_pairs,
+                alert_mode,
+                use_vol_spike=st.session_state.get("use_vol_spike", False)
+            )
+            if should_alert:
                 {
                     "pair": pair,
                     "price": last_price,
