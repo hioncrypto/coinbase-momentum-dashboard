@@ -1730,6 +1730,55 @@ with expander("Listing Radar"):
             st.session_state.get("lr_feeds", ""),
             key="lr_feeds",
         )
+            # Listing Radar: Detect new listings
+    if st.session_state.get("lr_enabled", False):
+        lr_quotes = [q.strip() for q in st.session_state.get("lr_watch_quotes", "USD,USDT,USDC").split(",")]
+        lr_window = st.session_state.get("lr_upcoming_window_h", 48)
+        
+        for exchange_name in ["Coinbase", "Binance"]:
+            watch_key = f"lr_watch_{exchange_name.lower()}"
+            if st.session_state.get(watch_key, True):
+                for quote in lr_quotes:
+                    try:
+                        current_products = get_products(exchange_name, quote)
+                        known = st.session_state.get("lr_baselines", {}).get(exchange_name, set())
+                        
+                        # Find new listings
+                        new_listings = [p for p in current_products if p not in known]
+                        
+                        if new_listings:
+                            for pair in new_listings:
+                                if "lr_events" not in st.session_state:
+                                    st.session_state.lr_events = []
+                                st.session_state.lr_events.append({
+                                    "pair": pair,
+                                    "exchange": exchange_name,
+                                    "quote": quote,
+                                    "detected_at": dt.datetime.now(dt.timezone.utc).isoformat()
+                                })
+                                print(f"🆕 NEW LISTING: {pair} on {exchange_name}")
+                        
+                        # Update baselines
+                        if "lr_baselines" not in st.session_state:
+                            st.session_state.lr_baselines = {}
+                        st.session_state.lr_baselines[exchange_name] = set(current_products)
+                        
+                    except Exception as e:
+                        print(f"LR Error {exchange_name} {quote}: {e}")
+
+# Display Listing Radar in sidebar
+if st.session_state.get("lr_events"):
+    with st.sidebar.expander("🆕 Listing Radar"):
+        cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=lr_window)
+        recent = [e for e in st.session_state.lr_events 
+                  if dt.datetime.fromisoformat(e["detected_at"]) > cutoff]
+        
+        if recent:
+            st.write(f"**New listings (last {lr_window}h):**")
+            for event in recent[-20:]:  # Show last 20
+                st.write(f"🆕 {event['pair']} ({event['exchange']})")
+        else:
+            st.write("No new listings in window")
 
 # =============================================================================
 # MAIN DISPLAY
