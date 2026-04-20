@@ -1977,7 +1977,7 @@ if pairs:
         if alert_mode != "Off" and is_green:
             # Fetch Timeframes for Strategy Check
             df_4h = get_cached_data(effective_exchange, pair, "4h")
-            df_1d = get_cached_data(effective_exchange, pair, "1D")
+            df_1d = get_cached_data(effective_exchange, pair, "1d")
             
             # Stage 1 & 2: Daily First → 4h Fallback
             strategy_approved = False
