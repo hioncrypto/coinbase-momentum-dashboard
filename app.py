@@ -1423,7 +1423,8 @@ with expander("Gates"):
     if new_lookback != st.session_state.get("lookback_candles"):
         st.session_state["lookback_candles"] = new_lookback
         save_to_url("lookback_candles", new_lookback)
-
+    st.caption(f"Scan window: {new_lookback * {'5m':0.08,'15m':0.25,'1h':1,'4h':4,'1d':24}.get(st.session_state.get('sort_tf','1h'),1):.1f}h")
+    
     new_min_pct = st.slider(
         "Min +% change (Δ gate)",
         0.0,
