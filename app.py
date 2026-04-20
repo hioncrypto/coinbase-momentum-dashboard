@@ -530,9 +530,12 @@ def fetch_binance_data(pair: str, timeframe: str, limit: int) -> Optional[pd.Dat
     except ValueError:
         return None
 
-    interval_map = {"5m": "5m", "15m": "15m", "1h": "1h", "4h": "4h"}
+    interval_map = {"5m": "5m", "15m": "15m", "1h": "1h", "4h": "4h", "1d": "1d"} 
     interval = interval_map.get(timeframe, "1h")
     params = {"symbol": symbol, "interval": interval, "limit": max(50, limit)}
+        resp = requests.get("https://api.binance.com/api/v3/klines", params=params, timeout=10)
+    df = pd.DataFrame(resp.json(), columns=["timestamp","open","high","low","close","volume","close_time","quote_asset_volume","num_trades","taker_buy_base","taker_buy_quote","ignore"])
+    return df.set_index("timestamp")
 
     try:
         response = requests.get(
