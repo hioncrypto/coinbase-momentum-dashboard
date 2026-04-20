@@ -1302,7 +1302,7 @@ with expander("Mode & Timeframes"):
         st.session_state["ws_chunk"] = new_ws_chunk
         save_to_url("ws_chunk", new_ws_chunk)
 
-    timeframe_options = ["5m", "15m", "1h", "4h"]
+    timeframe_options = ["5m", "15m", "1h", "4h", "1d"]
     current_tf_index = (
         timeframe_options.index(st.session_state.get("sort_tf", "1h"))
         if st.session_state.get("sort_tf") in timeframe_options
