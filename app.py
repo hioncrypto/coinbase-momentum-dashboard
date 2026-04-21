@@ -729,7 +729,7 @@ def check_progressive_stages(df: pd.DataFrame, settings: dict) -> Dict[str, Any]
             result["stage2_bars_ago"] = i
             break
 
-    lookback = max(1, min(settings.get("lookback_candles", 3), 20, len(df) - 1))
+    lookback = max(1, min(settings.get("lookback_candles", 3), 50, len(df) - 1))
     current_close = float(df["close"].iloc[-1])
 
     if lookback > 1:
