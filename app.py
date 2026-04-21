@@ -1018,7 +1018,7 @@ def check_macd_cross(
 
 def evaluate_gates(df: pd.DataFrame, settings: dict) -> Tuple[dict, int, str, int]:
     n = len(df)
-    lookback = max(1, min(settings.get("lookback_candles", 3), 20, n - 1))
+    lookback = max(1, min(settings.get("lookback_candles", 3), 50, n - 1))
 
     current_close = float(df["close"].iloc[-1])
 
