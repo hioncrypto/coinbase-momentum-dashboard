@@ -328,7 +328,7 @@ def init_session_state():
         "quote": "USD",
         "pairs_to_discover": 400,
         "mode": "REST only",
-        "ws_chunk": 5,
+        "ws_chunk": 13,
         "sort_tf": "1h",
         "sort_desc": True,
         "min_bars": 8,
