@@ -1028,14 +1028,18 @@ def evaluate_gates(df: pd.DataFrame, settings: dict) -> Tuple[dict, int, str, in
 
     current_close = float(df["close"].iloc[-1])
 
-    if lookback > 1:
-        window = df.iloc[-(lookback - 1) :].copy()
-        lowest_low = float(window["low"].min())
-    else:
-        lowest_low = float(df["low"].iloc[-1])
-
-    delta_pct = ((current_close - lowest_low) / lowest_low) * 100.0
-
+    # Calculate the index for 'lookback' bars ago
+    start_index = -(lookback + 1)
+    
+    # Safety check to ensure the index exists
+    if abs(start_index) >= n:
+        start_index = -(n - 1)
+        
+    # Use the OPEN price of that candle
+    start_price = float(df["open"].iloc[start_index])
+    
+    # Calculate % change from that Open price
+    delta_pct = ((current_close - start_price) / start_price) * 100.0
     macd_line, signal_line, hist = macd_core(
         df["close"],
         settings.get("macd_fast", 12),
