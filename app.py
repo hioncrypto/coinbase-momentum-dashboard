@@ -732,13 +732,19 @@ def check_progressive_stages(df: pd.DataFrame, settings: dict) -> Dict[str, Any]
     lookback = max(1, min(settings.get("lookback_candles", 3), 50, len(df) - 1))
     current_close = float(df["close"].iloc[-1])
 
-    if lookback > 1:
-        window = df.iloc[-(lookback - 1) :].copy()
-        lowest_low = float(window["low"].min())
-    else:
-        lowest_low = float(df["low"].iloc[-1])
-
-    delta_pct = ((current_close - lowest_low) / lowest_low) * 100.0
+        # Calculate the index for 'lookback' bars ago
+    # iloc[-1] is current, so -(lookback + 1) gets the candle lookback days ago
+    start_index = -(lookback + 1)
+    
+    # Safety check to ensure the index exists in the dataframe
+    if abs(start_index) > len(df):
+        start_index = -(len(df))
+        
+    # Get the OPEN price of that specific candle
+    start_price = float(df["open"].iloc[start_index])
+    
+    # Calculate % change from that Open price to current Close
+    delta_pct = ((current_close - start_price) / start_price) * 100.0
     result["current_pct"] = delta_pct
     result["stage3_met"] = delta_pct >= settings.get("min_pct", 3.0)
 
