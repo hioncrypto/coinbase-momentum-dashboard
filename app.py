@@ -2039,31 +2039,7 @@ if pairs:
     # Filter alerts to Top 10 by % change (not by threshold)
     if alerts_to_send and rows:
         temp_df = pd.DataFrame(rows)
-       # --- DYNAMIC HEADER FIX ---
-lookback = st.session_state.get("lookback_candles", 3)
-
-if sort_tf.endswith("d"):
-    # If timeframe is days, show total days (e.g., 20d)
-    display_duration = f"{lookback}d"
-elif sort_tf.endswith("h"):
-    # If timeframe is hours, show total hours (e.g., 80h for 20 candles of 4h)
-    try:
-        tf_hours = int(sort_tf.replace("h", ""))
-        display_duration = f"{lookback * tf_hours}h"
-    except:
-        display_duration = sort_tf
-elif sort_tf.endswith("m"):
-    # If timeframe is minutes, show total minutes
-    try:
-        tf_mins = int(sort_tf.replace("m", ""))
-        display_duration = f"{lookback * tf_mins}m"
-    except:
-        display_duration = sort_tf
-else:
-    display_duration = sort_tf
-
-chg_col = f"% Change ({display_duration})"
-# --- END FIX ---
+        chg_col = f"% Change ({sort_tf})"
         temp_df = temp_df.sort_values(chg_col, ascending=False)
         top_10_pairs = temp_df[temp_df["_green"] == True].head(10)["Pair"].tolist()
         alerts_to_send = [
@@ -2088,31 +2064,7 @@ if rows:
     
     df_results = pd.DataFrame(rows)
     df_results = pd.DataFrame(rows)
-    # --- DYNAMIC HEADER FIX ---
-lookback = st.session_state.get("lookback_candles", 3)
-
-if sort_tf.endswith("d"):
-    # If timeframe is days, show total days (e.g., 20d)
-    display_duration = f"{lookback}d"
-elif sort_tf.endswith("h"):
-    # If timeframe is hours, show total hours (e.g., 80h for 20 candles of 4h)
-    try:
-        tf_hours = int(sort_tf.replace("h", ""))
-        display_duration = f"{lookback * tf_hours}h"
-    except:
-        display_duration = sort_tf
-elif sort_tf.endswith("m"):
-    # If timeframe is minutes, show total minutes
-    try:
-        tf_mins = int(sort_tf.replace("m", ""))
-        display_duration = f"{lookback * tf_mins}m"
-    except:
-        display_duration = sort_tf
-else:
-    display_duration = sort_tf
-
-chg_col = f"% Change ({display_duration})"
-# --- END FIX ---
+    chg_col = f"% Change ({sort_tf})"
     ascending = not st.session_state["sort_desc"]
     
     # FIX: Sort without reset_index to reduce delay
