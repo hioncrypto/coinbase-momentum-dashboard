@@ -2038,8 +2038,8 @@ if pairs:
 
     # Filter alerts to Top 10 by % change (not by threshold)
     if alerts_to_send and rows:
-        temp_df = pd.DataFrame(rows)
-        chg_col = f"% Change ({sort_tf})"
+        lookback = st.session_state.get("lookback_candles", 3); display_tf = f"{lookback}d" if sort_tf.endswith("d") else f"{int(sort_tf.replace('h','')) * lookback}h" if sort_tf.endswith("h") else sort_tf; chg_col = f"% Change ({display_tf})"
+        
         temp_df = temp_df.sort_values(chg_col, ascending=False)
         top_10_pairs = temp_df[temp_df["_green"] == True].head(10)["Pair"].tolist()
         alerts_to_send = [
@@ -2064,7 +2064,7 @@ if rows:
     
     df_results = pd.DataFrame(rows)
     df_results = pd.DataFrame(rows)
-    chg_col = f"% Change ({sort_tf})"
+    lookback = st.session_state.get("lookback_candles", 3); display_tf = f"{lookback}d" if sort_tf.endswith("d") else f"{int(sort_tf.replace('h','')) * lookback}h" if sort_tf.endswith("h") else sort_tf; chg_col = f"% Change ({display_tf})"
     ascending = not st.session_state["sort_desc"]
     
     # FIX: Sort without reset_index to reduce delay
