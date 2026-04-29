@@ -730,7 +730,7 @@ def check_progressive_stages(df: pd.DataFrame, settings: dict) -> Dict[str, Any]
             break
 
     lookback = max(1, min(settings.get("lookback_candles", 3), 50, len(df) - 1))
-    current_close = float(df["close"].iloc[-1])
+    current_price = float(st.session_state.get("ws_prices", {}).get(pair, df["close"].iloc[-1]))
         # Calculate the index for 'lookback' bars ago
     # iloc[-1] is current, so -(lookback + 1) gets the candle lookback days ago
     start_index = -(lookback + 1)
