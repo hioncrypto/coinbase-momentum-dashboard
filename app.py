@@ -741,7 +741,7 @@ def check_progressive_stages(df: pd.DataFrame, settings: dict) -> Dict[str, Any]
         start_index = -(len(df))
         
     # Get the OPEN price of that specific candle
-    start_price = float(df["open"].iloc[start_index])
+    start_price = float(df["low"].iloc[start_index])
     
     # Calculate % change from that Open price to current Close
     delta_pct = ((current_close - start_price) / start_price) * 100.0
