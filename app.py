@@ -1451,7 +1451,7 @@ with expander("Gates"):
         "Min rows (bars)",
         1,
         20,
-        value=int(st.session_state.get("min_bars", 3)),
+        value=int(st.session_state.get("min_bars", 2)),
         step=1,
         key="min_bars_widget",
         help="Minimum bars required",
