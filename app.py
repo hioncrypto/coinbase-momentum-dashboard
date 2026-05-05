@@ -1538,7 +1538,7 @@ with expander("Gates"):
             )
             st.slider(
                 "Breakout within",
-                5,
+                0,
                 96,
                 value=int(st.session_state.get("trend_within", 48)),
                 step=1,
