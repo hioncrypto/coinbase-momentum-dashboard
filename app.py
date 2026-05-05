@@ -1470,7 +1470,7 @@ with expander("Gates"):
                 "Spike multiple",
                 1.0,
                 20.0,
-                value=float(st.session_state.get("vol_mult", 1.10)),
+                value=float(st.session_state.get("vol_mult", 3.0)),
                 step=0.05,
                 key="vol_mult",
             )
