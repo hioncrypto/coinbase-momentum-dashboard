@@ -454,7 +454,7 @@ def find_pivots(close: pd.Series, span: int = 3) -> Tuple[List[int], List[int]]:
     return highs, lows
 
 
-def trend_breakout_up(df: pd.DataFrame, span: int = 3, within_bars: int = 48) -> bool:
+def trend_breakout_up(df: pd.DataFrame, span: int = 3, within_bars: int = 3) -> bool:
     if df is None or len(df) < span * 2 + 5:
         return False
 
