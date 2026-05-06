@@ -1452,6 +1452,7 @@ with expander("Gates"):
         step=0.5,
         key="min_pct_widget",
         help="Minimum % gain from lowest LOW",
+        on_change=save,
     )
     if new_min_pct != st.session_state.get("min_pct"):
         st.session_state["min_pct"] = new_min_pct
