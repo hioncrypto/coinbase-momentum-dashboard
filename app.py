@@ -1178,7 +1178,7 @@ with st.sidebar:
             st.session_state["collapse_all"] = True
             st.rerun()
     with c2:
-        if st.button("Expand All", use_container_width=True, key="expand_btn"):
+        if st.button("Expand All", key="expand_btn"):
             st.session_state["collapse_all"] = False
             st.rerun()
     with c3:
