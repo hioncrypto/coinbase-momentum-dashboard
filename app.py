@@ -1504,7 +1504,7 @@ with expander("Gates"):
             if new_mr != st.session_state.get("min_rsi"):
                 save_to_url("min_rsi", new_mr)
     with c3:
-        new_use_macd = st.toggle("MACD hist", key="use_macd", help="Histogram indicator"), on_change=save
+        new_use_macd = st.toggle("MACD hist", key="use_macd", help="Histogram indicator", on_change=save)
         if new_use_macd != load_from_url("use_macd", False, bool):
             save_to_url("use_macd", new_use_macd)
         if st.session_state.get("use_macd"):
