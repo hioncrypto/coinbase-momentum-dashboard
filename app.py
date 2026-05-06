@@ -1473,7 +1473,7 @@ with expander("Gates"):
 
     c1, c2, c3 = st.columns(3)
     with c1:
-        new_use_vol = st.toggle("Volume spike", key="use_vol_spike", help="Volume exceeds average")on_change=save)
+        new_use_vol = st.toggle("Volume spike", key="use_vol_spike", help="Volume exceeds average"on_change=save)
         if new_use_vol != load_from_url("use_vol_spike", False, bool):
             save_to_url("use_vol_spike", new_use_vol)
         if st.session_state.get("use_vol_spike"):
