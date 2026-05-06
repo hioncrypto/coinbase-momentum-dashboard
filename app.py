@@ -75,6 +75,14 @@ import numpy as np
 import pandas as pd
 import requests
 
+import json, os
+
+F = "settings.json"
+if os.path.exists(F):
+    for k, v in json.load(open(F)).items(): st.session_state.setdefault(k, v)
+
+def save(): json.dump(dict(st.session_state), open(F, "w"), default=str)
+
 # Optional dependencies
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -86,6 +94,8 @@ try:
     WS_AVAILABLE = True
 except ImportError:
     WS_AVAILABLE = False
+
+
 
 # =============================================================================
 # CONFIGURATION & CONSTANTS
