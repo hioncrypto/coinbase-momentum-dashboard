@@ -1489,7 +1489,7 @@ with expander("Gates"):
             if new_vm != st.session_state.get("vol_mult"):
                 save_to_url("vol_mult", new_vm)
     with c2:
-        new_use_rsi = st.toggle("RSI", key="use_rsi", help="Momentum indicator"), on_change=save
+        new_use_rsi = st.toggle("RSI", key="use_rsi", help="Momentum indicator", on_change=save)
         if new_use_rsi != load_from_url("use_rsi", False, bool):
             save_to_url("use_rsi", new_use_rsi)
         if st.session_state.get("use_rsi"):
