@@ -1522,7 +1522,7 @@ with expander("Gates"):
 
     c4, c5, c6 = st.columns(3)
     with c4:
-        new_use_atr = st.toggle("ATR %", key="use_atr", help="Volatility filter"), on_change=save
+        new_use_atr = st.toggle("ATR %", key="use_atr", help="Volatility filter", on_change=save)
         if new_use_atr != load_from_url("use_atr", False, bool):
             save_to_url("use_atr", new_use_atr)
         if st.session_state.get("use_atr"):
