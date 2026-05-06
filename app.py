@@ -1537,7 +1537,7 @@ with expander("Gates"):
             if new_ma != st.session_state.get("min_atr"):
                 save_to_url("min_atr", new_ma)
     with c5:
-        new_use_trend = st.toggle("Trend breakout", key="use_trend", help="Resistance break"on_change=save,)
+        new_use_trend = st.toggle("Trend breakout", key="use_trend", help="Resistance break"on_change=save)
         if new_use_trend != load_from_url("use_trend", False, bool):
             save_to_url("use_trend", new_use_trend)
         if st.session_state.get("use_trend"):
