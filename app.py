@@ -1465,6 +1465,7 @@ with expander("Gates"):
         step=1,
         key="min_bars_widget",
         help="Minimum bars required",
+        on_change=save,
     )
     if new_min_bars != st.session_state.get("min_bars"):
         st.session_state["min_bars"] = new_min_bars
@@ -1472,7 +1473,7 @@ with expander("Gates"):
 
     c1, c2, c3 = st.columns(3)
     with c1:
-        new_use_vol = st.toggle("Volume spike", key="use_vol_spike", help="Volume exceeds average")
+        new_use_vol = st.toggle("Volume spike", key="use_vol_spike", help="Volume exceeds average")on_change=save)
         if new_use_vol != load_from_url("use_vol_spike", False, bool):
             save_to_url("use_vol_spike", new_use_vol)
         if st.session_state.get("use_vol_spike"):
@@ -1483,11 +1484,12 @@ with expander("Gates"):
                 value=float(st.session_state.get("vol_mult", 3.0)),
                 step=0.05,
                 key="vol_mult",
+                on_change=save,
             )
             if new_vm != st.session_state.get("vol_mult"):
                 save_to_url("vol_mult", new_vm)
     with c2:
-        new_use_rsi = st.toggle("RSI", key="use_rsi", help="Momentum indicator")
+        new_use_rsi = st.toggle("RSI", key="use_rsi", help="Momentum indicator"), on_change=save
         if new_use_rsi != load_from_url("use_rsi", False, bool):
             save_to_url("use_rsi", new_use_rsi)
         if st.session_state.get("use_rsi"):
@@ -1502,7 +1504,7 @@ with expander("Gates"):
             if new_mr != st.session_state.get("min_rsi"):
                 save_to_url("min_rsi", new_mr)
     with c3:
-        new_use_macd = st.toggle("MACD hist", key="use_macd", help="Histogram indicator")
+        new_use_macd = st.toggle("MACD hist", key="use_macd", help="Histogram indicator"), on_change=save
         if new_use_macd != load_from_url("use_macd", False, bool):
             save_to_url("use_macd", new_use_macd)
         if st.session_state.get("use_macd"):
@@ -1513,13 +1515,14 @@ with expander("Gates"):
                 value=float(st.session_state.get("min_mhist", 0.0)),
                 step=0.05,
                 key="min_mhist",
+                on_change=save,
             )
             if new_mh != st.session_state.get("min_mhist"):
                 save_to_url("min_mhist", new_mh)
 
     c4, c5, c6 = st.columns(3)
     with c4:
-        new_use_atr = st.toggle("ATR %", key="use_atr", help="Volatility filter")
+        new_use_atr = st.toggle("ATR %", key="use_atr", help="Volatility filter"), on_change=save
         if new_use_atr != load_from_url("use_atr", False, bool):
             save_to_url("use_atr", new_use_atr)
         if st.session_state.get("use_atr"):
@@ -1534,7 +1537,7 @@ with expander("Gates"):
             if new_ma != st.session_state.get("min_atr"):
                 save_to_url("min_atr", new_ma)
     with c5:
-        new_use_trend = st.toggle("Trend breakout", key="use_trend", help="Resistance break")
+        new_use_trend = st.toggle("Trend breakout", key="use_trend", help="Resistance break")on_change=save,
         if new_use_trend != load_from_url("use_trend", False, bool):
             save_to_url("use_trend", new_use_trend)
         if st.session_state.get("use_trend"):
@@ -1545,6 +1548,7 @@ with expander("Gates"):
                 value=int(st.session_state.get("pivot_span", 4)),
                 step=1,
                 key="pivot_span",
+                on_change=save,
             )
             st.slider(
                 "Breakout within",
