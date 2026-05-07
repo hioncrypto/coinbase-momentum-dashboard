@@ -1176,17 +1176,17 @@ with st.sidebar:
     
 def collapse_all():
     st.session_state["collapse_all"] = True
+    st.rerun()
 
 def expand_all():
     st.session_state["collapse_all"] = False
+    st.rerun()
 
 with c1:
-    if st.button("Collapse All", key="collapse_btn", on_click=collapse_all):
-        st.rerun()
+    st.button("Collapse All", key="collapse_btn", on_click=collapse_all)
 
 with c2:
-    if st.button("Expand All", key="expand_btn", on_click=expand_all):
-        st.rerun()
+    st.button("Expand All", key="expand_btn", on_click=expand_all)
     with c3:
         use_my_pairs = st.toggle("⭐ My Pairs", key="use_my_pairs")
         if use_my_pairs != load_from_url("use_my_pairs", False, bool):
