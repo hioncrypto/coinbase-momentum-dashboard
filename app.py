@@ -1174,13 +1174,19 @@ with st.sidebar:
 
     c1, c2, c3 = st.columns([1, 1, 1])
     with c1:
-        if st.button("Collapse All", key="collapse_btn"):
-            st.session_state["collapse_all"] = True
-            st.rerun()
-    with c2:
-        if st.button("Expand All", key="expand_btn"):
-            st.session_state["collapse_all"] = False
-            st.rerun()
+        def collapse_all():
+    st.session_state["collapse_all"] = True
+
+def expand_all():
+    st.session_state["collapse_all"] = False
+
+with c1:
+    if st.button("Collapse All", key="collapse_btn", on_click=collapse_all):
+        st.rerun()
+
+with c2:
+    if st.button("Expand All", key="expand_btn", on_click=expand_all):
+        st.rerun()
     with c3:
         use_my_pairs = st.toggle("⭐ My Pairs", key="use_my_pairs")
         if use_my_pairs != load_from_url("use_my_pairs", False, bool):
