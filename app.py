@@ -75,14 +75,6 @@ import numpy as np
 import pandas as pd
 import requests
 
-import json, os
-
-F = "settings.json"
-if os.path.exists(F):
-    for k, v in json.load(open(F)).items(): st.session_state.setdefault(k, v)
-
-def save(): json.dump(dict(st.session_state), open(F, "w"), default=str)
-
 # Optional dependencies
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -94,8 +86,6 @@ try:
     WS_AVAILABLE = True
 except ImportError:
     WS_AVAILABLE = False
-
-
 
 # =============================================================================
 # CONFIGURATION & CONSTANTS
@@ -464,7 +454,7 @@ def find_pivots(close: pd.Series, span: int = 3) -> Tuple[List[int], List[int]]:
     return highs, lows
 
 
-def trend_breakout_up(df: pd.DataFrame, span: int = 3, within_bars: int = 3) -> bool:
+def trend_breakout_up(df: pd.DataFrame, span: int = 3, within_bars: int = 48) -> bool:
     if df is None or len(df) < span * 2 + 5:
         return False
 
@@ -1173,20 +1163,14 @@ with st.sidebar:
     st.title("🚀 Crypto Tracker")
 
     c1, c2, c3 = st.columns([1, 1, 1])
-    
-def collapse_all():
-    st.session_state["collapse_all"] = True
-    st.rerun()
-
-def expand_all():
-    st.session_state["collapse_all"] = False
-    st.rerun()
-
-with c1:
-    st.button("Collapse All", key="collapse_btn", on_click=collapse_all)
-
-with c2:
-    st.button("Expand All", key="expand_btn", on_click=expand_all)
+    with c1:
+        if st.button("Collapse All", use_container_width=True, key="collapse_btn"):
+            st.session_state["collapse_all"] = True
+            st.rerun()
+    with c2:
+        if st.button("Expand All", use_container_width=True, key="expand_btn"):
+            st.session_state["collapse_all"] = False
+            st.rerun()
     with c3:
         use_my_pairs = st.toggle("⭐ My Pairs", key="use_my_pairs")
         if use_my_pairs != load_from_url("use_my_pairs", False, bool):
@@ -1458,7 +1442,6 @@ with expander("Gates"):
         step=0.5,
         key="min_pct_widget",
         help="Minimum % gain from lowest LOW",
-        on_change=save,
     )
     if new_min_pct != st.session_state.get("min_pct"):
         st.session_state["min_pct"] = new_min_pct
@@ -1468,11 +1451,10 @@ with expander("Gates"):
         "Min rows (bars)",
         1,
         20,
-        value=int(st.session_state.get("min_bars", 2)),
+        value=int(st.session_state.get("min_bars", 3)),
         step=1,
         key="min_bars_widget",
         help="Minimum bars required",
-        on_change=save,
     )
     if new_min_bars != st.session_state.get("min_bars"):
         st.session_state["min_bars"] = new_min_bars
@@ -1480,7 +1462,7 @@ with expander("Gates"):
 
     c1, c2, c3 = st.columns(3)
     with c1:
-        new_use_vol = st.toggle("Volume spike", key="use_vol_spike", help="Volume exceeds average", on_change=save)
+        new_use_vol = st.toggle("Volume spike", key="use_vol_spike", help="Volume exceeds average")
         if new_use_vol != load_from_url("use_vol_spike", False, bool):
             save_to_url("use_vol_spike", new_use_vol)
         if st.session_state.get("use_vol_spike"):
@@ -1488,15 +1470,14 @@ with expander("Gates"):
                 "Spike multiple",
                 1.0,
                 20.0,
-                value=float(st.session_state.get("vol_mult", 3.0)),
+                value=float(st.session_state.get("vol_mult", 1.10)),
                 step=0.05,
                 key="vol_mult",
-                on_change=save,
             )
             if new_vm != st.session_state.get("vol_mult"):
                 save_to_url("vol_mult", new_vm)
     with c2:
-        new_use_rsi = st.toggle("RSI", key="use_rsi", help="Momentum indicator", on_change=save)
+        new_use_rsi = st.toggle("RSI", key="use_rsi", help="Momentum indicator")
         if new_use_rsi != load_from_url("use_rsi", False, bool):
             save_to_url("use_rsi", new_use_rsi)
         if st.session_state.get("use_rsi"):
@@ -1511,7 +1492,7 @@ with expander("Gates"):
             if new_mr != st.session_state.get("min_rsi"):
                 save_to_url("min_rsi", new_mr)
     with c3:
-        new_use_macd = st.toggle("MACD hist", key="use_macd", help="Histogram indicator", on_change=save)
+        new_use_macd = st.toggle("MACD hist", key="use_macd", help="Histogram indicator")
         if new_use_macd != load_from_url("use_macd", False, bool):
             save_to_url("use_macd", new_use_macd)
         if st.session_state.get("use_macd"):
@@ -1522,14 +1503,13 @@ with expander("Gates"):
                 value=float(st.session_state.get("min_mhist", 0.0)),
                 step=0.05,
                 key="min_mhist",
-                on_change=save,
             )
             if new_mh != st.session_state.get("min_mhist"):
                 save_to_url("min_mhist", new_mh)
 
     c4, c5, c6 = st.columns(3)
     with c4:
-        new_use_atr = st.toggle("ATR %", key="use_atr", help="Volatility filter", on_change=save)
+        new_use_atr = st.toggle("ATR %", key="use_atr", help="Volatility filter")
         if new_use_atr != load_from_url("use_atr", False, bool):
             save_to_url("use_atr", new_use_atr)
         if st.session_state.get("use_atr"):
@@ -1544,7 +1524,7 @@ with expander("Gates"):
             if new_ma != st.session_state.get("min_atr"):
                 save_to_url("min_atr", new_ma)
     with c5:
-        new_use_trend = st.toggle("Trend breakout", key="use_trend", help="Resistance break", on_change=save)
+        new_use_trend = st.toggle("Trend breakout", key="use_trend", help="Resistance break")
         if new_use_trend != load_from_url("use_trend", False, bool):
             save_to_url("use_trend", new_use_trend)
         if st.session_state.get("use_trend"):
@@ -1555,7 +1535,6 @@ with expander("Gates"):
                 value=int(st.session_state.get("pivot_span", 4)),
                 step=1,
                 key="pivot_span",
-                on_change=save,
             )
             st.slider(
                 "Breakout within",
@@ -1574,7 +1553,7 @@ with expander("Gates"):
                 "Min ROC %",
                 0.0,
                 50.0,
-                value=float(st.session_state.get("min_roc", 3.5)),
+                value=float(st.session_state.get("min_roc", 1.0)),
                 step=0.5,
                 key="min_roc",
             )
