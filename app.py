@@ -1174,7 +1174,7 @@ with st.sidebar:
 
     c1, c2, c3 = st.columns([1, 1, 1])
     with c1:
-    def collapse_all():
+def collapse_all():
     st.session_state["collapse_all"] = True
 
 def expand_all():
