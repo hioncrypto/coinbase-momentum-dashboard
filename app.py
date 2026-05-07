@@ -1174,13 +1174,14 @@ with st.sidebar:
 
     c1, c2, c3 = st.columns([1, 1, 1])
     with c1:
-        def collapse_all():
-        st.session_state["collapse_all"] = True
+    def collapse_all():
+    st.session_state["collapse_all"] = True
 
-        def expand_all():
-        st.session_state["collapse_all"] = False
+def expand_all():
+    st.session_state["collapse_all"] = False
 
-        with c1:
+with c1:
+    if
     if st.button("Collapse All", key="collapse_btn", on_click=collapse_all):
         st.rerun()
 
