@@ -333,7 +333,7 @@ def init_session_state():
         "sort_desc": True,
         "min_bars": 3,
         "lookback_candles": 3,
-        "min_pct": 3.0,
+        "min_pct": 15.0,
         "use_vol_spike": True,
         "vol_mult": 4.0,
         "vol_window": 20,
