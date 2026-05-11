@@ -1603,7 +1603,7 @@ with expander("Gates"):
                 help="Cross must be below zero line",
             )
             st.toggle(
-                "✚ Cross Sync",
+                "✚ Cross Sync Vol. + MACD Cross",
                 key="macd_cross_sync",
                 help="Alert only when MACD Cross + Volume Spike align on 4h/Daily",
             )
