@@ -753,6 +753,22 @@ def send_alert_notification(pair, delta_pct, rel_vol, alert_type):
     """
     Send email and/or webhook notifications for alert.
     """
+    # CROSS SYNC LOGIC
+    if st.session_state.get("macd_cross_sync"):
+        # Only apply to MACD signals
+        if "MACD" in str(alert_type):
+            # Get current settings
+            tf = st.session_state.get("sort_tf", "1h")
+            vol_req = st.session_state.get("spike_multiple", 3.5)
+            
+            # SILENT SUPPRESSION: Return immediately if conditions aren't met
+            # This stops the alert without affecting the scanner's score or dashboard
+            if tf not in ["4h", "1d", "1D", "Daily"] or rel_vol < vol_req:
+                return 
+            
+            # Update Alert Message Format to "Pair | Timeframe"
+            alert_type = f"{pair} | {tf}"
+    
     import smtplib
     from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
