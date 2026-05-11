@@ -1602,11 +1602,11 @@ with expander("Gates"):
                 key="macd_cross_below_zero",
                 help="Cross must be below zero line",
             )
-        st.toggle(
-            "✚ Cross Sync",
-            key="macd_cross_sync",
-            help="Alert only when MACD Cross + Volume Spike align on 4h/Daily",
-        )
+            st.toggle(
+                "✚ Cross Sync",
+                key="macd_cross_sync",
+                help="Alert only when MACD Cross + Volume Spike align on 4h/Daily",
+            )
     if st.session_state.get("use_macd_cross"):
         st.slider(
             "Histogram > 0 within",
