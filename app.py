@@ -352,7 +352,7 @@ def init_session_state():
         "pivot_span": 4,
         "trend_within": 48,
         "use_roc": True,
-        "min_roc": 3.5,
+        "min_roc": 10.0,
         "use_macd_cross": False,
         "macd_cross_bars": 5,
         "macd_cross_only_bull": True,
