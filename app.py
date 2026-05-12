@@ -1568,7 +1568,7 @@ with expander("Gates"):
             new_mro = st.slider(
                 "Min ROC %",
                 0.0,
-                50.0,
+                100.0,
                 value=float(st.session_state.get("min_roc", 1.0)),
                 step=0.5,
                 key="min_roc",
