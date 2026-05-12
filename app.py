@@ -1453,7 +1453,7 @@ with expander("Gates"):
     new_min_pct = st.slider(
         "Min +% change (Δ gate)",
         0.0,
-        50.0,
+        100.0,
         value=float(st.session_state["min_pct"]),
         step=0.5,
         key="min_pct_widget",
