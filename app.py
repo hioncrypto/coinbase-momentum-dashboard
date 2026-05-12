@@ -1467,7 +1467,7 @@ with expander("Gates"):
             max_value=100000,   # $100B
             value=10,           # Default: $10M
             step=0.5,             # $1M increments
-            format="%.1fM",       # Shows "10M", "41M", "500M" etc.
+            
             key="min_market_cap_millions"
         )
     st.markdown("**Δ (Delta) gate is always active.** Other gates optional.")
