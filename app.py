@@ -2183,11 +2183,7 @@ if rows:
                 elif top_10_filtered.iloc[idx]["_yellow"]:
                     return ["background-color: #eab308; color: black"] * len(row)
             return [""] * len(row)
-    if not top_10_filtered.empty:
-            # Reorder Columns: Market Cap between % Change and Signal
-        cols = ["Rank", "Pair", "Price", "% Change (1d)", "Market Cap", "Signal", "Gates"]
-        cols = [c for c in cols if c in top_10_filtered.columns]
-        top_10_filtered = top_10_filtered[cols]
+
         display_cols = [c for c in top_10_filtered.columns if not c.startswith("_")]
         styled_df = top_10_filtered[display_cols].style.apply(style_top10_rows, axis=1)
         st.dataframe(styled_df, use_container_width=True, hide_index=True)
