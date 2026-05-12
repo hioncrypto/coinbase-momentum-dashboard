@@ -1452,24 +1452,24 @@ with expander("Gates"):
                     "min_pct": 10.0,
                 }
             )
-            # MARKET CAP FILTER TOGGLE
-            mc_enabled = st.sidebar.toggle(
-                "📊 Filter by Market Cap",
-                key="mc_filter_enabled",
-                help="Only scan coins above minimum market cap"
-            )
+    # MARKET CAP FILTER TOGGLE
+    mc_enabled = st.sidebar.toggle(
+        "📊 Filter by Market Cap",
+        key="mc_filter_enabled",
+        help="Only scan coins above minimum market cap"
+    )
         
-            # CONDITIONAL SLIDER (Hidden unless toggle is ON)
-            if mc_enabled:
-                st.sidebar.slider(
-                    "Minimum Market Cap",
-                    min_value=1,        # $1M
-                    max_value=100000,   # $100B
-                    value=10,           # Default: $10M
-                    step=1,             # $1M increments
-                    format="%dM",       # Shows "10M", "41M", "500M" etc.
-                    key="min_market_cap_millions"
-            )
+    # CONDITIONAL SLIDER (Hidden unless toggle is ON)
+    if mc_enabled:
+        st.sidebar.slider(
+        "Minimum Market Cap",
+        min_value=1,        # $1M
+        max_value=100000,   # $100B
+        value=10,           # Default: $10M
+        step=1,             # $1M increments
+        format="%dM",       # Shows "10M", "41M", "500M" etc.
+        key="min_market_cap_millions"
+    )
     st.markdown("**Δ (Delta) gate is always active.** Other gates optional.")
 
     new_lookback = st.slider(
