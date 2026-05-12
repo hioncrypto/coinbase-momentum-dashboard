@@ -86,6 +86,25 @@ try:
     WS_AVAILABLE = True
 except ImportError:
     WS_AVAILABLE = False
+@st.cache_data(ttl=3600)
+def get_market_caps():
+    """Fetches market cap data for top 250 coins (Refreshes every 1 hour)"""
+    try:
+        url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=1&sparkline=false"
+        resp = requests.get(url, timeout=10)
+        if resp.status_code == 200:
+            return {coin['symbol'].upper(): coin['market_cap'] for coin in resp.json()}
+    except Exception:
+        pass
+    return {}
+
+def format_market_cap(val):
+    """Converts raw number (e.g., 41000000) to clean string (e.g., '41M')"""
+    if val >= 1_000_000_000:
+        return f"{val/1_000_000_000:.1f}B"
+    elif val >= 1_000_000:
+        return f"{int(val/1_000_000)}M"
+    return "--"
 
 # =============================================================================
 # CONFIGURATION & CONSTANTS
