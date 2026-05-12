@@ -1453,7 +1453,7 @@ with expander("Gates"):
                 }
             )
             # MARKET CAP FILTER TOGGLE
-            mc_enabled = st.toggle(
+            mc_enabled = st.sidebar.toggle(
                 "📊 Filter by Market Cap",
                 key="mc_filter_enabled",
                 help="Only scan coins above minimum market cap"
@@ -1461,7 +1461,7 @@ with expander("Gates"):
         
             # CONDITIONAL SLIDER (Hidden unless toggle is ON)
             if mc_enabled:
-                st.slider(
+                st.sidebar.slider(
                     "Minimum Market Cap",
                     min_value=1,        # $1M
                     max_value=100000,   # $100B
