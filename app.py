@@ -1074,11 +1074,11 @@ def evaluate_gates(df: pd.DataFrame, settings: dict) -> Tuple[dict, int, str, in
     gate_chips.append(f"Δ{'✅' if delta_pass else '❌'}({delta_pct:+.2f}%)")
 
     # Volume spike gate
-    if settings.get("use_vol_spike", False):
+    if settings.get("use_vol_spike", True):
         vol_spike_ratio = volume_spike(df, settings.get("vol_window", 20))
         vol_pass = (
             pd.notna(vol_spike_ratio)
-            and vol_spike_ratio >= settings.get("vol_mult", 1.10)
+            and vol_spike_ratio >= settings.get("vol_mult", 4.0)
         )
         gates_passed += int(vol_pass)
         gates_enabled += 1
