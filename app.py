@@ -2183,7 +2183,7 @@ if rows:
                 elif top_10_filtered.iloc[idx]["_yellow"]:
                     return ["background-color: #eab308; color: black"] * len(row)
             return [""] * len(row)
-
+    if not top_10_filtered.empty:
             # Reorder Columns: Market Cap between % Change and Signal
     cols = ["Rank", "Pair", "Price", "% Change (1d)", "Market Cap", "Signal", "Gates"]
     cols = [c for c in cols if c in top_10_filtered.columns]
