@@ -2158,7 +2158,16 @@ if rows:
     # Simply take top 10 by % change - no threshold filtering that blocks display
     top_10_filtered = df_results.head(10).copy()
     top_10_filtered = top_10_filtered.reset_index(drop=True)
-
+    # Add Market Cap Column
+    mc_data = get_market_caps()
+    def format_market_cap(val):
+        if val >= 1_000_000_000: return f"{val/1_000_000_000:.1f}B"
+        elif val >= 1_000_000: return f"{int(val/1_000_000)}M"
+        return "--"
+        
+    top_10_filtered["Market Cap"] = top_10_filtered["Pair"].apply(
+        lambda x: format_market_cap(mc_data.get(x.split("-")[0], 0))
+    )
     if "#" in top_10_filtered.columns:
         top_10_filtered = top_10_filtered.drop(columns=["#"])
     top_10_filtered.insert(0, "Rank", range(1, len(top_10_filtered) + 1))
