@@ -1137,13 +1137,13 @@ def evaluate_gates(df: pd.DataFrame, settings: dict) -> Tuple[dict, int, str, in
         gate_chips.append(" T–")
 
     # ROC gate
-    if settings.get("use_roc", False):
+    if settings.get("use_roc", True):
         if lookback > 1:
             ref_close = float(df["close"].iloc[-(lookback - 1)])
         else:
             ref_close = float(df["close"].iloc[-1])
         roc = ((current_close / ref_close) - 1.0) * 100.0 if n > lookback else np.nan
-        roc_pass = pd.notna(roc) and roc >= settings.get("min_roc", 1.0)
+        roc_pass = pd.notna(roc) and roc >= settings.get("min_roc", 10.0)
         gates_passed += int(roc_pass)
         gates_enabled += 1
         roc_display = f"({roc:+.2f}%)" if pd.notna(roc) else "(N/A)"
