@@ -1439,7 +1439,7 @@ with expander("Gates"):
     new_lookback = st.slider(
         "Δ lookback (candles)",
         1,
-        20,
+        500,
         value=int(st.session_state["lookback_candles"]),
         step=1,
         key="lookback_widget",
