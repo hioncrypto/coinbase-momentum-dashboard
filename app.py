@@ -1930,6 +1930,17 @@ gate_settings = {
 }
 
 rows = []
+# MARKET CAP FILTER LOGIC
+if st.session_state.get("mc_filter_enabled"):
+    mc_data = get_market_caps()
+    min_mc = st.session_state.get("min_market_cap_millions", 10) * 1_000_000
+    
+    def normalize_symbol(pair):
+        return pair.split("-")[0].upper()
+    
+    original_count = len(pairs)
+    pairs = [p for p in pairs if mc_data.get(normalize_symbol(p), 0) >= min_mc]
+    st.info(f"📊 Market Cap Filter: {original_count} → {len(pairs)} pairs (Min: {min_mc/1_000_000:.0f}M)")        
 alerts_to_send = []
 
 # FIX: Use proper fallback for sort_tf (was referencing undefined sort_timeframe)
