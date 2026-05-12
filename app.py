@@ -2188,11 +2188,11 @@ if rows:
     cols = ["Rank", "Pair", "Price", "% Change (1d)", "Market Cap", "Signal", "Gates"]
     cols = [c for c in cols if c in top_10_filtered.columns]
     top_10_filtered = top_10_filtered[cols]
-        display_cols = [c for c in top_10_filtered.columns if not c.startswith("_")]
-        styled_df = top_10_filtered[display_cols].style.apply(style_top10_rows, axis=1)
-        st.dataframe(styled_df, use_container_width=True, hide_index=True)
+    display_cols = [c for c in top_10_filtered.columns if not c.startswith("_")]
+    styled_df = top_10_filtered[display_cols].style.apply(style_top10_rows, axis=1)
+    st.dataframe(styled_df, use_container_width=True, hide_index=True)
     else:
-        st.info("No pairs found.")
+    st.info("No pairs found.")
 
     # FIX: Default "Show all pairs" to True so pairs always render
     col1, col2 = st.columns([3, 1])
