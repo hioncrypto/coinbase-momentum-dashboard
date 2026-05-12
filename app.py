@@ -1452,7 +1452,6 @@ with expander("Gates"):
                     "min_pct": 10.0,
                 }
             )
-    st.markdown("**Δ (Delta) gate is always active.** Other gates optional.")
         # MARKET CAP FILTER TOGGLE
     mc_enabled = st.sidebar.toggle(
         "📊 Filter by Market Cap",
@@ -1471,6 +1470,8 @@ with expander("Gates"):
             format="%dM",       # Shows "10M", "41M", "500M" etc.
             key="min_market_cap_millions"
         )
+    st.markdown("**Δ (Delta) gate is always active.** Other gates optional.")
+
     new_lookback = st.slider(
         "Δ lookback (candles)",
         1,
