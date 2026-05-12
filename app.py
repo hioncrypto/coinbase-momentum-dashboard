@@ -1463,10 +1463,10 @@ with expander("Gates"):
     if mc_enabled:
         st.sidebar.slider(
             "Minimum Market Cap",
-            min_value=1,        # $1M
+            min_value=0.5,        # $1M
             max_value=100000,   # $100B
             value=10,           # Default: $10M
-            step=1,             # $1M increments
+            step=0.5,             # $1M increments
             format="%dM",       # Shows "10M", "41M", "500M" etc.
             key="min_market_cap_millions"
         )
