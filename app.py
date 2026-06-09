@@ -1959,7 +1959,7 @@ effective_exchange = (
 )
 
 if "alerted_pairs" not in st.session_state:
-    st.session_state["alerted_pairs"] = {}
+    st.session_state["alerted_pairs"] = load_alerted_pairs()
 alerted_pairs = st.session_state["alerted_pairs"]
 
 if pairs:
