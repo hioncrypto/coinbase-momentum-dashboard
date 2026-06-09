@@ -2112,7 +2112,7 @@ if pairs:
             alert for alert in alerts_to_send if alert["pair"] in top_10_pairs
         ]
 
-    save_alerted_pairs(alerted_pairs)
+    save_alerted_pairs(st.session_state["alerted_pairs"])
 
     if alerts_to_send:
         if st.session_state.get("email_to"):
