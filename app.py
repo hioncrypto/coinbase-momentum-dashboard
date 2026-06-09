@@ -2076,6 +2076,9 @@ if pairs:
                         strategy_approved = False
         
         # Send Alert if Strategy Approved (wrap existing logic)
+
+        print(f"[ALERT GATE CHECK] pair={pair}, is_green={is_green}, strategy_approved={strategy_approved}, mode={mode}, delta={delta_pct:.2f}, rel_vol={rel_vol:.2f}")
+        
         if is_green and strategy_approved and mode != "OFF":
             include, alert_type = should_send_alert(
                 pair, delta_pct, rel_vol, st.session_state.alerted_pairs, 
