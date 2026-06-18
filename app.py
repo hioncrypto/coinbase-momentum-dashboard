@@ -543,27 +543,62 @@ def fetch_coinbase_data(pair: str, timeframe: str, limit: int) -> Optional[pd.Da
 
 
 def fetch_binance_data(pair: str, timeframe: str, limit: int) -> Optional[pd.DataFrame]:
-    url = "https://api.binance.com/api/v3/klines"
-    params = {"symbol": pair.upper(), "interval": timeframe, "limit": limit}
     try:
-        resp = requests.get(url, params=params, timeout=10)
-        resp.raise_for_status()
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Failed to fetch Binance data for {pair}: {e}")
+        base, quote = pair.split("-")
+        symbol = f"{base}{quote}"
+    except ValueError:
         return None
+
+    interval_map = {"5m": "5m", "15m": "15m", "1h": "1h", "4h": "4h", "1d": "1d"} 
+    interval = interval_map.get(timeframe, "1h")
+    params = {"symbol": symbol, "interval": interval, "limit": max(50, limit)}
+    resp = requests.get("https://api.binance.com/api/v3/klines", params=params, timeout=10)
+    df = pd.DataFrame(resp.json(), columns=["timestamp","open","high","low","close","volume","close_time","quote_asset_volume","num_trades","taker_buy_base","taker_buy_quote","ignore"])
+    return df.set_index("timestamp")
+
     try:
-        data = resp.json()
-        if not data: return None
-        columns = ["timestamp", "open", "high", "low", "close", "volume", "close_time", "quote_volume", "trades", "taker_buy_base", "taker_buy_quote", "ignore"]
-        df = pd.DataFrame(data, columns=columns)
-        for col in ["open", "high", "low", "close", "volume"]:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-        df["time"] = pd.to_datetime(df["timestamp"], unit="ms")
-        df.set_index("time", inplace=True)
-        return df[["open", "high", "low", "close", "volume"]]
-    except (ValueError, KeyError) as e:
-        logger.error(f"Error parsing Binance data for {pair}: {e}")
+        response = requests.get(
+            f"{CONFIG.BINANCE_BASE}/api/v3/klines", params=params, timeout=20
+        )
+
+        if response.status_code != 200:
+            return None
+
+        rows = []
+        for kline in response.json():
+            rows.append(
+                {
+                    "time": pd.to_datetime(kline[0], unit="ms", utc=True),
+                    "open": float(kline[1]),
+                    "high": float(kline[2]),
+                    "low": float(kline[3]),
+                    "close": float(kline[4]),
+                    "volume": float(kline[5]),
+                }
+            )
+
+        df = pd.DataFrame(rows).sort_values("time").reset_index(drop=True)
+        return df if not df.empty else None
+
+    except Exception:
         return None
+
+
+def fetch_data(
+    exchange: str, pair: str, timeframe: str, limit: Optional[int] = None
+) -> Optional[pd.DataFrame]:
+    if limit is None:
+        limit = get_bars_limit(timeframe)
+
+    limit = max(1, min(300, limit))
+    exchange_lower = exchange.lower()
+
+    if exchange_lower.startswith("coinbase"):
+        return fetch_coinbase_data(pair, timeframe, limit)
+    elif exchange_lower.startswith("binance"):
+        return fetch_binance_data(pair, timeframe, limit)
+    else:
+        return fetch_coinbase_data(pair, timeframe, limit)
 
 
 # =============================================================================
