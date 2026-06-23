@@ -35,7 +35,7 @@ st.markdown(
         pointer-events: none !important;
     }
 
-    /* Expand sidebar — visible when sidebar is collapsed */
+    /* Expand sidebar — when collapsed */
     [data-testid="collapsedControl"] {
         display: flex !important;
         visibility: visible !important;
@@ -53,6 +53,7 @@ st.markdown(
         min-height: 36px !important;
         align-items: center !important;
         justify-content: center !important;
+        pointer-events: auto !important;
     }
 
     [data-testid="collapsedControl"] button,
@@ -62,55 +63,27 @@ st.markdown(
         opacity: 1 !important;
     }
 
-    /* Native sidebar collapse — bring to front, always visible (no custom overlay) */
-    section[data-testid="stSidebar"] [data-testid="stSidebarHeader"] {
-        display: flex !important;
-        visibility: visible !important;
-        opacity: 1 !important;
+    /* Custom always-visible collapse bar (sticky while sidebar scrolls) */
+    #hion-sidebar-collapse-bar {
         position: sticky !important;
         top: 0 !important;
-        z-index: 10015 !important;
+        z-index: 10050 !important;
+        display: flex !important;
+        justify-content: flex-end !important;
         align-items: center !important;
-        justify-content: space-between !important;
-        width: 100% !important;
-        max-width: none !important;
-        margin: 0 !important;
-        padding: 6px 4px 6px 8px !important;
-        background: #262730 !important;
-        overflow: visible !important;
-        clip-path: none !important;
-        pointer-events: auto !important;
+        padding: 4px 0 8px 0 !important;
+        margin-bottom: 4px !important;
+        background: linear-gradient(180deg, #262730 70%, rgba(38, 39, 48, 0)) !important;
+        pointer-events: none !important;
     }
 
-    section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] {
-        display: flex !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        width: auto !important;
-        height: auto !important;
-        min-width: 36px !important;
-        min-height: 36px !important;
-        max-width: none !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        border: none !important;
-        overflow: visible !important;
-        clip-path: none !important;
-        z-index: 10020 !important;
-        position: relative !important;
+    #hion-sidebar-collapse-bar button {
         pointer-events: auto !important;
-        flex-shrink: 0 !important;
-    }
-
-    section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] button {
         display: flex !important;
-        visibility: visible !important;
-        opacity: 1 !important;
         align-items: center !important;
         justify-content: center !important;
         width: 36px !important;
         min-width: 36px !important;
-        max-width: none !important;
         height: 36px !important;
         min-height: 36px !important;
         margin: 0 !important;
@@ -118,21 +91,49 @@ st.markdown(
         background: #3b4252 !important;
         border: 1px solid #9ca3af !important;
         border-radius: 8px !important;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35) !important;
         color: #f9fafb !important;
-        pointer-events: auto !important;
+        font-size: 20px !important;
+        line-height: 1 !important;
+        cursor: pointer !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35) !important;
     }
 
-    section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] button:hover {
+    #hion-sidebar-collapse-bar button:hover {
         background: #4b5563 !important;
     }
 
-    section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] svg {
+    /* Custom expand button when sidebar is collapsed */
+    #hion-expand-sidebar-btn {
+        position: fixed !important;
+        top: 12px !important;
+        left: 12px !important;
+        z-index: 999999 !important;
+        display: none !important;
+        align-items: center !important;
+        justify-content: center !important;
+        width: 36px !important;
+        min-width: 36px !important;
+        height: 36px !important;
+        min-height: 36px !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #3b4252 !important;
+        border: 1px solid #9ca3af !important;
+        border-radius: 8px !important;
         color: #f9fafb !important;
-        fill: #f9fafb !important;
-        opacity: 1 !important;
-        width: 20px !important;
-        height: 20px !important;
+        font-size: 20px !important;
+        line-height: 1 !important;
+        cursor: pointer !important;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45) !important;
+    }
+
+    #hion-expand-sidebar-btn:hover {
+        background: #4b5563 !important;
+    }
+
+    /* Hide native collapse chrome (custom buttons replace it) */
+    section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] {
+        display: none !important;
     }
 
     /* Global mobile-friendly tweaks */
@@ -153,50 +154,85 @@ components.html(
     (function () {
         const doc = window.parent.document;
 
-        function setupSidebarToggle() {
+        function clickNativeCollapse() {
+            const wrap = doc.querySelector("[data-testid='stSidebarCollapseButton']");
+            const btn = wrap && wrap.querySelector("button");
+            if (btn) {
+                btn.click();
+                return true;
+            }
+            return false;
+        }
+
+        function clickNativeExpand() {
+            const ctrl = doc.querySelector("[data-testid='collapsedControl']");
+            const btn = ctrl && ctrl.querySelector("button");
+            if (btn) {
+                btn.click();
+                return true;
+            }
+            return false;
+        }
+
+        function isSidebarOpen() {
+            const sidebar = doc.querySelector("section[data-testid='stSidebar']");
+            if (!sidebar) return false;
+            return sidebar.getBoundingClientRect().width > 80;
+        }
+
+        function setupSidebarToggles() {
+            const sidebar = doc.querySelector("section[data-testid='stSidebar']");
+            const content = doc.querySelector("[data-testid='stSidebarContent']");
             const expandCtrl = doc.querySelector("[data-testid='collapsedControl']");
+
             if (expandCtrl) {
                 expandCtrl.style.display = "flex";
                 expandCtrl.style.visibility = "visible";
                 expandCtrl.style.opacity = "1";
             }
 
-            const oldToggle = doc.getElementById("hion-sidebar-float-toggle");
-            if (oldToggle) {
-                oldToggle.remove();
+            let expandBtn = doc.getElementById("hion-expand-sidebar-btn");
+            if (!expandBtn) {
+                expandBtn = doc.createElement("button");
+                expandBtn.id = "hion-expand-sidebar-btn";
+                expandBtn.type = "button";
+                expandBtn.title = "Expand sidebar";
+                expandBtn.setAttribute("aria-label", "Expand sidebar");
+                expandBtn.innerHTML = "&#x203A;";
+                expandBtn.addEventListener("click", function () {
+                    clickNativeExpand();
+                });
+                doc.body.appendChild(expandBtn);
             }
 
-            const header = doc.querySelector("[data-testid='stSidebarHeader']");
-            const collapseWrap = doc.querySelector("[data-testid='stSidebarCollapseButton']");
-            const collapseBtn = collapseWrap && collapseWrap.querySelector("button");
+            if (sidebar && content) {
+                let collapseBar = doc.getElementById("hion-sidebar-collapse-bar");
+                if (!collapseBar) {
+                    collapseBar = doc.createElement("div");
+                    collapseBar.id = "hion-sidebar-collapse-bar";
+                    collapseBar.innerHTML =
+                        "<button type='button' title='Collapse sidebar' aria-label='Collapse sidebar'>&#x2039;</button>";
+                    content.insertBefore(collapseBar, content.firstChild);
+                    collapseBar.querySelector("button").addEventListener("click", function () {
+                        clickNativeCollapse();
+                    });
+                }
+            }
 
-            if (header) {
-                header.style.display = "flex";
-                header.style.visibility = "visible";
-                header.style.opacity = "1";
-                header.style.zIndex = "10015";
-                header.style.overflow = "visible";
+            const open = isSidebarOpen();
+            const collapseBar = doc.getElementById("hion-sidebar-collapse-bar");
+            if (collapseBar) {
+                collapseBar.style.display = open ? "flex" : "none";
             }
-            if (collapseWrap) {
-                collapseWrap.style.display = "flex";
-                collapseWrap.style.visibility = "visible";
-                collapseWrap.style.opacity = "1";
-                collapseWrap.style.zIndex = "10020";
-                collapseWrap.style.overflow = "visible";
-                collapseWrap.style.clipPath = "none";
-            }
-            if (collapseBtn) {
-                collapseBtn.style.display = "flex";
-                collapseBtn.style.visibility = "visible";
-                collapseBtn.style.opacity = "1";
-                collapseBtn.style.pointerEvents = "auto";
+            if (expandBtn) {
+                expandBtn.style.display = open ? "none" : "flex";
             }
         }
 
-        const observer = new MutationObserver(setupSidebarToggle);
+        const observer = new MutationObserver(setupSidebarToggles);
         observer.observe(doc.body, { childList: true, subtree: true });
-        setupSidebarToggle();
-        setInterval(setupSidebarToggle, 1000);
+        setupSidebarToggles();
+        setInterval(setupSidebarToggles, 800);
     })();
     </script>
     """,
@@ -285,15 +321,12 @@ st.markdown(
     <style>
     section[data-testid="stSidebar"] {
         padding-top: 0 !important;
-        overflow: visible !important;
-        z-index: 1000 !important;
     }
 
     section[data-testid="stSidebar"] > div:first-child {
         height: 100vh !important;
         display: flex !important;
         flex-direction: column !important;
-        overflow: visible !important;
     }
 
     section[data-testid="stSidebar"] > div:first-child > div:first-child {
@@ -301,15 +334,8 @@ st.markdown(
         min-width: 360px !important;
         max-width: 520px !important;
         resize: horizontal;
-        overflow: visible !important;
+        overflow: auto;
         background: #262730 !important;
-    }
-
-    section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
-        overflow-y: auto !important;
-        overflow-x: visible !important;
-        max-height: calc(100vh - 52px) !important;
-        flex: 1 1 auto !important;
     }
 
     section[data-testid="stSidebar"] * {
@@ -328,9 +354,11 @@ st.markdown(
         width: 100% !important;
     }
 
-    /* Don't stretch native sidebar collapse button */
+    /* Don't stretch custom / native sidebar toggle buttons */
     section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"],
-    section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] button {
+    #hion-sidebar-collapse-bar,
+    #hion-sidebar-collapse-bar button,
+    #hion-expand-sidebar-btn {
         width: auto !important;
         max-width: none !important;
     }
