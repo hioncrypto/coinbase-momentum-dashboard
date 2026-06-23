@@ -62,54 +62,77 @@ st.markdown(
         opacity: 1 !important;
     }
 
-    /* Hide native sidebar header + collapse control (artefact source); JS still clicks inner button */
-    section[data-testid="stSidebar"] [data-testid="stSidebarHeader"],
-    section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"],
-    section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] * {
-        display: none !important;
-        visibility: hidden !important;
-        width: 0 !important;
-        height: 0 !important;
-        min-width: 0 !important;
-        min-height: 0 !important;
+    /* Native sidebar collapse — bring to front, always visible (no custom overlay) */
+    section[data-testid="stSidebar"] [data-testid="stSidebarHeader"] {
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 10015 !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        width: 100% !important;
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 6px 4px 6px 8px !important;
+        background: #262730 !important;
+        overflow: visible !important;
+        clip-path: none !important;
+        pointer-events: auto !important;
+    }
+
+    section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] {
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        width: auto !important;
+        height: auto !important;
+        min-width: 36px !important;
+        min-height: 36px !important;
+        max-width: none !important;
         margin: 0 !important;
         padding: 0 !important;
         border: none !important;
-        box-shadow: none !important;
-        overflow: hidden !important;
-        opacity: 0 !important;
-        pointer-events: none !important;
-        clip-path: inset(100%) !important;
-    }
-
-    /* Custom floating collapse control inside scrollable sidebar content */
-    #hion-sidebar-float-toggle {
-        position: sticky !important;
-        top: 8px !important;
-        z-index: 10002 !important;
-        display: flex !important;
-        justify-content: flex-end !important;
-        padding: 0 8px 6px 8px !important;
-        margin-bottom: 4px !important;
-        pointer-events: none !important;
-    }
-
-    #hion-sidebar-float-toggle button {
+        overflow: visible !important;
+        clip-path: none !important;
+        z-index: 10020 !important;
+        position: relative !important;
         pointer-events: auto !important;
+        flex-shrink: 0 !important;
+    }
+
+    section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] button {
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        align-items: center !important;
+        justify-content: center !important;
+        width: 36px !important;
+        min-width: 36px !important;
+        max-width: none !important;
+        height: 36px !important;
+        min-height: 36px !important;
+        margin: 0 !important;
+        padding: 0 !important;
         background: #3b4252 !important;
         border: 1px solid #9ca3af !important;
         border-radius: 8px !important;
-        color: #f9fafb !important;
-        min-width: 36px !important;
-        min-height: 36px !important;
-        font-size: 18px !important;
-        line-height: 1 !important;
-        cursor: pointer !important;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35) !important;
+        color: #f9fafb !important;
+        pointer-events: auto !important;
     }
 
-    #hion-sidebar-float-toggle button:hover {
+    section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] button:hover {
         background: #4b5563 !important;
+    }
+
+    section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] svg {
+        color: #f9fafb !important;
+        fill: #f9fafb !important;
+        opacity: 1 !important;
+        width: 20px !important;
+        height: 20px !important;
     }
 
     /* Global mobile-friendly tweaks */
@@ -130,59 +153,50 @@ components.html(
     (function () {
         const doc = window.parent.document;
 
-        function setupSidebarFloatToggle() {
-            const sidebar = doc.querySelector("section[data-testid='stSidebar']");
-            const content = doc.querySelector("[data-testid='stSidebarContent']");
+        function setupSidebarToggle() {
             const expandCtrl = doc.querySelector("[data-testid='collapsedControl']");
-
             if (expandCtrl) {
                 expandCtrl.style.display = "flex";
                 expandCtrl.style.visibility = "visible";
                 expandCtrl.style.opacity = "1";
             }
 
-            const nativeHeader = doc.querySelector("[data-testid='stSidebarHeader']");
-            if (nativeHeader) {
-                nativeHeader.style.display = "none";
-                nativeHeader.style.visibility = "hidden";
+            const oldToggle = doc.getElementById("hion-sidebar-float-toggle");
+            if (oldToggle) {
+                oldToggle.remove();
             }
 
-            const nativeCollapseWrap = doc.querySelector("[data-testid='stSidebarCollapseButton']");
-            if (nativeCollapseWrap) {
-                nativeCollapseWrap.style.display = "none";
-                nativeCollapseWrap.style.visibility = "hidden";
+            const header = doc.querySelector("[data-testid='stSidebarHeader']");
+            const collapseWrap = doc.querySelector("[data-testid='stSidebarCollapseButton']");
+            const collapseBtn = collapseWrap && collapseWrap.querySelector("button");
+
+            if (header) {
+                header.style.display = "flex";
+                header.style.visibility = "visible";
+                header.style.opacity = "1";
+                header.style.zIndex = "10015";
+                header.style.overflow = "visible";
             }
-
-            const nativeCollapseBtn =
-                nativeCollapseWrap && nativeCollapseWrap.querySelector("button");
-            const clickTarget = nativeCollapseBtn || nativeCollapseWrap;
-
-            if (!sidebar || !content || !clickTarget) return;
-
-            let wrap = doc.getElementById("hion-sidebar-float-toggle");
-            if (!wrap) {
-                wrap = doc.createElement("div");
-                wrap.id = "hion-sidebar-float-toggle";
-                wrap.innerHTML =
-                    "<button type='button' title='Collapse sidebar' aria-label='Collapse sidebar'>&#x2039;</button>";
-                content.insertBefore(wrap, content.firstChild);
-                wrap.querySelector("button").addEventListener("click", function () {
-                    clickTarget.click();
-                });
+            if (collapseWrap) {
+                collapseWrap.style.display = "flex";
+                collapseWrap.style.visibility = "visible";
+                collapseWrap.style.opacity = "1";
+                collapseWrap.style.zIndex = "10020";
+                collapseWrap.style.overflow = "visible";
+                collapseWrap.style.clipPath = "none";
             }
-
-            const visible =
-                sidebar.offsetParent !== null && sidebar.getBoundingClientRect().width > 40;
-            wrap.style.display = visible ? "flex" : "none";
+            if (collapseBtn) {
+                collapseBtn.style.display = "flex";
+                collapseBtn.style.visibility = "visible";
+                collapseBtn.style.opacity = "1";
+                collapseBtn.style.pointerEvents = "auto";
+            }
         }
 
-        const observer = new MutationObserver(function () {
-            setupSidebarFloatToggle();
-        });
-
+        const observer = new MutationObserver(setupSidebarToggle);
         observer.observe(doc.body, { childList: true, subtree: true });
-        setupSidebarFloatToggle();
-        setInterval(setupSidebarFloatToggle, 1000);
+        setupSidebarToggle();
+        setInterval(setupSidebarToggle, 1000);
     })();
     </script>
     """,
@@ -271,12 +285,15 @@ st.markdown(
     <style>
     section[data-testid="stSidebar"] {
         padding-top: 0 !important;
+        overflow: visible !important;
+        z-index: 1000 !important;
     }
 
     section[data-testid="stSidebar"] > div:first-child {
         height: 100vh !important;
         display: flex !important;
         flex-direction: column !important;
+        overflow: visible !important;
     }
 
     section[data-testid="stSidebar"] > div:first-child > div:first-child {
@@ -284,8 +301,15 @@ st.markdown(
         min-width: 360px !important;
         max-width: 520px !important;
         resize: horizontal;
-        overflow: auto;
+        overflow: visible !important;
         background: #262730 !important;
+    }
+
+    section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
+        overflow-y: auto !important;
+        overflow-x: visible !important;
+        max-height: calc(100vh - 52px) !important;
+        flex: 1 1 auto !important;
     }
 
     section[data-testid="stSidebar"] * {
@@ -304,10 +328,9 @@ st.markdown(
         width: 100% !important;
     }
 
-    /* Don't stretch native / floating sidebar toggle buttons */
+    /* Don't stretch native sidebar collapse button */
     section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"],
-    #hion-sidebar-float-toggle,
-    #hion-sidebar-float-toggle button {
+    section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] button {
         width: auto !important;
         max-width: none !important;
     }
