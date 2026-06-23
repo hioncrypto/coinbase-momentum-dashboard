@@ -35,51 +35,30 @@ st.markdown(
         pointer-events: none !important;
     }
 
-    /* Expand sidebar — when collapsed */
+    /* Native Streamlit toggles — hidden; custom buttons trigger them via JS */
     [data-testid="collapsedControl"] {
-        display: flex !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        position: fixed !important;
-        top: 12px !important;
-        left: 12px !important;
-        z-index: 999999 !important;
-        background: #3b4252 !important;
-        border: 1px solid #9ca3af !important;
-        border-radius: 8px !important;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45) !important;
-        padding: 2px !important;
-        min-width: 36px !important;
-        min-height: 36px !important;
-        align-items: center !important;
-        justify-content: center !important;
-        pointer-events: auto !important;
-    }
-
-    [data-testid="collapsedControl"] button,
-    [data-testid="collapsedControl"] svg {
-        color: #f9fafb !important;
-        fill: #f9fafb !important;
-        opacity: 1 !important;
-    }
-
-    /* Custom always-visible collapse bar (sticky while sidebar scrolls) */
-    #hion-sidebar-collapse-bar {
-        position: sticky !important;
-        top: 0 !important;
-        z-index: 10050 !important;
-        display: flex !important;
-        justify-content: flex-end !important;
-        align-items: center !important;
-        padding: 4px 0 8px 0 !important;
-        margin-bottom: 4px !important;
-        background: linear-gradient(180deg, #262730 70%, rgba(38, 39, 48, 0)) !important;
+        display: none !important;
+        visibility: hidden !important;
         pointer-events: none !important;
     }
 
-    #hion-sidebar-collapse-bar button {
-        pointer-events: auto !important;
-        display: flex !important;
+    section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"],
+    section[data-testid="stSidebar"] [data-testid="stSidebarHeader"] {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+    }
+
+    /* Custom collapse button — fixed inside sidebar edge (not clipped by overflow) */
+    #hion-collapse-sidebar-btn {
+        position: fixed !important;
+        top: 12px !important;
+        z-index: 999999 !important;
+        display: none !important;
         align-items: center !important;
         justify-content: center !important;
         width: 36px !important;
@@ -95,10 +74,11 @@ st.markdown(
         font-size: 20px !important;
         line-height: 1 !important;
         cursor: pointer !important;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35) !important;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45) !important;
+        pointer-events: auto !important;
     }
 
-    #hion-sidebar-collapse-bar button:hover {
+    #hion-collapse-sidebar-btn:hover {
         background: #4b5563 !important;
     }
 
@@ -129,11 +109,6 @@ st.markdown(
 
     #hion-expand-sidebar-btn:hover {
         background: #4b5563 !important;
-    }
-
-    /* Hide native collapse chrome (custom buttons replace it) */
-    section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] {
-        display: none !important;
     }
 
     /* Global mobile-friendly tweaks */
@@ -182,13 +157,10 @@ components.html(
 
         function setupSidebarToggles() {
             const sidebar = doc.querySelector("section[data-testid='stSidebar']");
-            const content = doc.querySelector("[data-testid='stSidebarContent']");
-            const expandCtrl = doc.querySelector("[data-testid='collapsedControl']");
 
-            if (expandCtrl) {
-                expandCtrl.style.display = "flex";
-                expandCtrl.style.visibility = "visible";
-                expandCtrl.style.opacity = "1";
+            const oldBar = doc.getElementById("hion-sidebar-collapse-bar");
+            if (oldBar) {
+                oldBar.remove();
             }
 
             let expandBtn = doc.getElementById("hion-expand-sidebar-btn");
@@ -205,28 +177,33 @@ components.html(
                 doc.body.appendChild(expandBtn);
             }
 
-            if (sidebar && content) {
-                let collapseBar = doc.getElementById("hion-sidebar-collapse-bar");
-                if (!collapseBar) {
-                    collapseBar = doc.createElement("div");
-                    collapseBar.id = "hion-sidebar-collapse-bar";
-                    collapseBar.innerHTML =
-                        "<button type='button' title='Collapse sidebar' aria-label='Collapse sidebar'>&#x2039;</button>";
-                    content.insertBefore(collapseBar, content.firstChild);
-                    collapseBar.querySelector("button").addEventListener("click", function () {
-                        clickNativeCollapse();
-                    });
-                }
+            let collapseBtn = doc.getElementById("hion-collapse-sidebar-btn");
+            if (!collapseBtn) {
+                collapseBtn = doc.createElement("button");
+                collapseBtn.id = "hion-collapse-sidebar-btn";
+                collapseBtn.type = "button";
+                collapseBtn.title = "Collapse sidebar";
+                collapseBtn.setAttribute("aria-label", "Collapse sidebar");
+                collapseBtn.innerHTML = "&#x2039;";
+                collapseBtn.addEventListener("click", function () {
+                    clickNativeCollapse();
+                });
+                doc.body.appendChild(collapseBtn);
             }
 
             const open = isSidebarOpen();
-            const collapseBar = doc.getElementById("hion-sidebar-collapse-bar");
-            if (collapseBar) {
-                collapseBar.style.display = open ? "flex" : "none";
+            if (sidebar && open) {
+                const rect = sidebar.getBoundingClientRect();
+                const inset = 12;
+                const btnSize = 36;
+                collapseBtn.style.display = "flex";
+                collapseBtn.style.top = inset + "px";
+                collapseBtn.style.left = Math.max(inset, rect.right - btnSize - inset) + "px";
+            } else {
+                collapseBtn.style.display = "none";
             }
-            if (expandBtn) {
-                expandBtn.style.display = open ? "none" : "flex";
-            }
+
+            expandBtn.style.display = open ? "none" : "flex";
         }
 
         const observer = new MutationObserver(setupSidebarToggles);
@@ -354,10 +331,9 @@ st.markdown(
         width: 100% !important;
     }
 
-    /* Don't stretch custom / native sidebar toggle buttons */
+    /* Don't stretch custom sidebar toggle buttons */
     section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"],
-    #hion-sidebar-collapse-bar,
-    #hion-sidebar-collapse-bar button,
+    #hion-collapse-sidebar-btn,
     #hion-expand-sidebar-btn {
         width: auto !important;
         max-width: none !important;
