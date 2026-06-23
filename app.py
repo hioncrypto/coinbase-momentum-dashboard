@@ -749,18 +749,18 @@ def check_progressive_stages(df: pd.DataFrame, settings: dict) -> Dict[str, Any]
             break
 
     lookback = max(1, min(settings.get("lookback_candles", 3), 50, len(df) - 1))
-    current_price = float(st.session_state.get("ws_prices", {}).get(pair, df["close"].iloc[-1]))
-        # Calculate the index for 'lookback' bars ago
+    current_close = float(df["close"].iloc[-1])
+    # Calculate the index for 'lookback' bars ago
     # iloc[-1] is current, so -(lookback + 1) gets the candle lookback days ago
     start_index = -(lookback + 1)
-    
+
     # Safety check to ensure the index exists in the dataframe
     if abs(start_index) > len(df):
         start_index = -(len(df))
-        
-    # Get the OPEN price of that specific candle
+
+    # Get the LOW price of that specific candle
     start_price = float(df["low"].iloc[start_index])
-    
+
     # Calculate % change from that Low price to current Close
     delta_pct = ((current_close - start_price) / start_price) * 100.0
     result["current_pct"] = delta_pct
@@ -2108,7 +2108,8 @@ if pairs:
     # Filter alerts to Top 10 by % change (not by threshold)
     if alerts_to_send and rows:
         chg_col = f"% Change ({sort_tf})"
-        
+
+        temp_df = pd.DataFrame(rows)
         temp_df = temp_df.sort_values(chg_col, ascending=False)
         top_10_pairs = temp_df[temp_df["_green"] == True].head(10)["Pair"].tolist()
         alerts_to_send = [
@@ -2118,6 +2119,7 @@ if pairs:
     save_alerted_pairs(st.session_state["alerted_pairs"])
 
     if alerts_to_send:
+        st.warning("ALERT LOGIC TRIGGERED")
         if st.session_state.get("email_to"):
             send_email_alert(alerts_to_send)
         if st.session_state.get("webhook_url"):
