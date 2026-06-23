@@ -2052,6 +2052,9 @@ if pairs:
             is_green = (passed >= 1)
         elif mode == "BALANCED":
             is_green = (passed >= (enabled // 2 + 1)) if enabled > 0 else False
+        elif mode == "Custom (K/Y)":
+            is_green = passed >= k_required
+            is_yellow = (passed >= y_required) and (passed < k_required)
         else:
             is_green = False
 
