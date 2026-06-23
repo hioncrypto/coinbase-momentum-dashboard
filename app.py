@@ -543,29 +543,43 @@ def fetch_coinbase_data(pair: str, timeframe: str, limit: int) -> Optional[pd.Da
 
 
 def fetch_binance_data(pair: str, timeframe: str, limit: int) -> Optional[pd.DataFrame]:
+    url = f"{CONFIG.BINANCE_BASE}/api/v3/klines"
+    print(f"[BINANCE DEBUG] fetch_binance_data called: pair={pair}, timeframe={timeframe}, limit={limit}")
+
     try:
         base, quote = pair.split("-")
         symbol = f"{base}{quote}"
-    except ValueError:
+    except ValueError as e:
+        print(f"[BINANCE DEBUG] fetch_binance_data: failed to parse pair '{pair}': {e}")
         return None
 
-    interval_map = {"5m": "5m", "15m": "15m", "1h": "1h", "4h": "4h", "1d": "1d"} 
+    interval_map = {"5m": "5m", "15m": "15m", "1h": "1h", "4h": "4h", "1d": "1d"}
     interval = interval_map.get(timeframe, "1h")
     params = {"symbol": symbol, "interval": interval, "limit": max(50, limit)}
-    resp = requests.get("https://api.binance.com/api/v3/klines", params=params, timeout=10)
-    df = pd.DataFrame(resp.json(), columns=["timestamp","open","high","low","close","volume","close_time","quote_asset_volume","num_trades","taker_buy_base","taker_buy_quote","ignore"])
-    return df.set_index("timestamp")
+    print(f"[BINANCE DEBUG] fetch_binance_data: requesting {url} params={params}")
 
     try:
-        response = requests.get(
-            f"{CONFIG.BINANCE_BASE}/api/v3/klines", params=params, timeout=20
-        )
+        response = requests.get(url, params=params, timeout=20)
+        print(f"[BINANCE DEBUG] fetch_binance_data: status_code={response.status_code} for {symbol}")
 
         if response.status_code != 200:
+            body_preview = response.text[:300] if response.text else "(empty body)"
+            print(f"[BINANCE DEBUG] fetch_binance_data: non-200 response body preview: {body_preview}")
             return None
 
+        raw = response.json()
+        if not raw:
+            print(f"[BINANCE DEBUG] fetch_binance_data: response JSON is empty for {symbol}")
+            return None
+
+        if not isinstance(raw, list):
+            print(f"[BINANCE DEBUG] fetch_binance_data: unexpected JSON type {type(raw).__name__} for {symbol}: {str(raw)[:300]}")
+            return None
+
+        print(f"[BINANCE DEBUG] fetch_binance_data: received {len(raw)} klines for {symbol}")
+
         rows = []
-        for kline in response.json():
+        for kline in raw:
             rows.append(
                 {
                     "time": pd.to_datetime(kline[0], unit="ms", utc=True),
@@ -578,9 +592,16 @@ def fetch_binance_data(pair: str, timeframe: str, limit: int) -> Optional[pd.Dat
             )
 
         df = pd.DataFrame(rows).sort_values("time").reset_index(drop=True)
+        df = df[["time", "open", "high", "low", "close", "volume"]]
+
+        if len(df) > limit:
+            df = df.iloc[-limit:].reset_index(drop=True)
+
+        print(f"[BINANCE DEBUG] fetch_binance_data: parsed {len(df)} rows for {symbol}, columns={list(df.columns)}")
         return df if not df.empty else None
 
-    except Exception:
+    except Exception as e:
+        print(f"[BINANCE DEBUG] fetch_binance_data: parsing/request error for {symbol}: {type(e).__name__}: {e}")
         return None
 
 
@@ -677,22 +698,57 @@ def get_coinbase_products(quote: str) -> List[str]:
 
 
 def get_binance_products(quote: str) -> List[str]:
+    url = f"{CONFIG.BINANCE_BASE}/api/v3/exchangeInfo"
+    quote_upper = quote.upper()
+    print(f"[BINANCE DEBUG] get_binance_products called: quote={quote_upper}")
+    print(f"[BINANCE DEBUG] get_binance_products: requesting {url}")
+
     try:
-        response = requests.get(
-            f"{CONFIG.BINANCE_BASE}/api/v3/exchangeInfo", timeout=25
-        )
-        response.raise_for_status()
+        response = requests.get(url, timeout=25)
+        print(f"[BINANCE DEBUG] get_binance_products: status_code={response.status_code}")
+
+        if response.status_code != 200:
+            body_preview = response.text[:500] if response.text else "(empty body)"
+            print(f"[BINANCE DEBUG] get_binance_products: non-200 response body preview: {body_preview}")
+            return []
+
+        data = response.json()
+        if not data:
+            print("[BINANCE DEBUG] get_binance_products: response JSON is empty")
+            return []
+
+        all_symbols = data.get("symbols", [])
+        print(f"[BINANCE DEBUG] get_binance_products: total symbols in response={len(all_symbols)}")
+
+        if not all_symbols:
+            print("[BINANCE DEBUG] get_binance_products: 'symbols' key missing or empty in response")
+            return []
 
         products = []
-        quote_upper = quote.upper()
+        trading_count = 0
+        quote_match_count = 0
 
-        for symbol in response.json().get("symbols", []):
+        for symbol in all_symbols:
+            if symbol.get("status") == "TRADING":
+                trading_count += 1
             if symbol.get("status") == "TRADING" and symbol.get("quoteAsset") == quote_upper:
+                quote_match_count += 1
                 pair = f"{symbol['baseAsset']}-{quote_upper}"
                 products.append(pair)
 
-        return sorted(products)
-    except Exception:
+        products = sorted(products)
+        print(
+            f"[BINANCE DEBUG] get_binance_products: TRADING symbols={trading_count}, "
+            f"quote={quote_upper} matches={quote_match_count}, pairs after filter={len(products)}"
+        )
+        if products:
+            print(f"[BINANCE DEBUG] get_binance_products: sample pairs (first 5): {products[:5]}")
+        else:
+            print(f"[BINANCE DEBUG] get_binance_products: no pairs matched quote={quote_upper}")
+
+        return products
+    except Exception as e:
+        print(f"[BINANCE DEBUG] get_binance_products: error {type(e).__name__}: {e}")
         return []
 
 
