@@ -24,10 +24,11 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* Hide ONLY the vertical resize handle next to the sidebar */
+    /* Hide resize handle / separator (display:none avoids subpixel artefacts) */
     section[data-testid="stSidebar"] [data-testid="stVerticalBlockBorder"],
     section[data-testid="stSidebar"] [data-testid="stSidebarResizer"],
     section[data-testid="stSidebar"] div[role="separator"][aria-orientation="vertical"] {
+        display: none !important;
         opacity: 0 !important;
         border: none !important;
         background: transparent !important;
@@ -61,15 +62,24 @@ st.markdown(
         opacity: 1 !important;
     }
 
-    /* Collapse sidebar — floats at top of sidebar while content scrolls */
-    section[data-testid="stSidebar"] [data-testid="stSidebarHeader"] {
-        position: sticky !important;
-        top: 0 !important;
-        z-index: 10000 !important;
-        background: #262730 !important;
-        border-bottom: 1px solid rgba(156, 163, 175, 0.35) !important;
-        padding: 4px 8px !important;
-        margin-bottom: 4px !important;
+    /* Hide native sidebar header + collapse control (artefact source); JS still clicks inner button */
+    section[data-testid="stSidebar"] [data-testid="stSidebarHeader"],
+    section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"],
+    section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] * {
+        display: none !important;
+        visibility: hidden !important;
+        width: 0 !important;
+        height: 0 !important;
+        min-width: 0 !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+        box-shadow: none !important;
+        overflow: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        clip-path: inset(100%) !important;
     }
 
     /* Custom floating collapse control inside scrollable sidebar content */
@@ -102,21 +112,6 @@ st.markdown(
         background: #4b5563 !important;
     }
 
-    /* Keep native collapse in DOM for JS; visible control is the floating button */
-    button[data-testid="stSidebarCollapseButton"] {
-        position: absolute !important;
-        width: 1px !important;
-        height: 1px !important;
-        min-width: 1px !important;
-        min-height: 1px !important;
-        opacity: 0 !important;
-        pointer-events: none !important;
-        overflow: hidden !important;
-        padding: 0 !important;
-        border: none !important;
-        box-shadow: none !important;
-    }
-
     /* Global mobile-friendly tweaks */
     @media (max-width: 768px) {
         .stDataFrame { font-size: 11px; }
@@ -138,7 +133,6 @@ components.html(
         function setupSidebarFloatToggle() {
             const sidebar = doc.querySelector("section[data-testid='stSidebar']");
             const content = doc.querySelector("[data-testid='stSidebarContent']");
-            const nativeCollapse = doc.querySelector("[data-testid='stSidebarCollapseButton']");
             const expandCtrl = doc.querySelector("[data-testid='collapsedControl']");
 
             if (expandCtrl) {
@@ -147,7 +141,23 @@ components.html(
                 expandCtrl.style.opacity = "1";
             }
 
-            if (!sidebar || !content || !nativeCollapse) return;
+            const nativeHeader = doc.querySelector("[data-testid='stSidebarHeader']");
+            if (nativeHeader) {
+                nativeHeader.style.display = "none";
+                nativeHeader.style.visibility = "hidden";
+            }
+
+            const nativeCollapseWrap = doc.querySelector("[data-testid='stSidebarCollapseButton']");
+            if (nativeCollapseWrap) {
+                nativeCollapseWrap.style.display = "none";
+                nativeCollapseWrap.style.visibility = "hidden";
+            }
+
+            const nativeCollapseBtn =
+                nativeCollapseWrap && nativeCollapseWrap.querySelector("button");
+            const clickTarget = nativeCollapseBtn || nativeCollapseWrap;
+
+            if (!sidebar || !content || !clickTarget) return;
 
             let wrap = doc.getElementById("hion-sidebar-float-toggle");
             if (!wrap) {
@@ -157,7 +167,7 @@ components.html(
                     "<button type='button' title='Collapse sidebar' aria-label='Collapse sidebar'>&#x2039;</button>";
                 content.insertBefore(wrap, content.firstChild);
                 wrap.querySelector("button").addEventListener("click", function () {
-                    nativeCollapse.click();
+                    clickTarget.click();
                 });
             }
 
@@ -295,7 +305,7 @@ st.markdown(
     }
 
     /* Don't stretch native / floating sidebar toggle buttons */
-    section[data-testid="stSidebar"] button[data-testid="stSidebarCollapseButton"],
+    section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"],
     #hion-sidebar-float-toggle,
     #hion-sidebar-float-toggle button {
         width: auto !important;
