@@ -8,6 +8,7 @@
 
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 # Page configuration - MUST be first Streamlit command
 st.set_page_config(
@@ -18,7 +19,7 @@ st.set_page_config(
 )
 
 # ============================================================================
-# GLOBAL CSS (MOBILE TWEAKS + REMOVES SIDEBAR COLLAPSE ARTIFACTS)
+# GLOBAL CSS (MOBILE TWEAKS + SIDEBAR RESIZE HANDLE)
 # ============================================================================
 st.markdown(
     """
@@ -32,17 +33,88 @@ st.markdown(
         background: transparent !important;
         pointer-events: none !important;
     }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
 
-st.markdown(
-    """
-    <style>
-    /* Completely hide Streamlit's built-in sidebar collapse control */
+    /* Expand sidebar — visible when sidebar is collapsed */
     [data-testid="collapsedControl"] {
-        display: none !important;
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        position: fixed !important;
+        top: 12px !important;
+        left: 12px !important;
+        z-index: 999999 !important;
+        background: #3b4252 !important;
+        border: 1px solid #9ca3af !important;
+        border-radius: 8px !important;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45) !important;
+        padding: 2px !important;
+        min-width: 36px !important;
+        min-height: 36px !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    [data-testid="collapsedControl"] button,
+    [data-testid="collapsedControl"] svg {
+        color: #f9fafb !important;
+        fill: #f9fafb !important;
+        opacity: 1 !important;
+    }
+
+    /* Collapse sidebar — floats at top of sidebar while content scrolls */
+    section[data-testid="stSidebar"] [data-testid="stSidebarHeader"] {
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 10000 !important;
+        background: #262730 !important;
+        border-bottom: 1px solid rgba(156, 163, 175, 0.35) !important;
+        padding: 4px 8px !important;
+        margin-bottom: 4px !important;
+    }
+
+    /* Custom floating collapse control inside scrollable sidebar content */
+    #hion-sidebar-float-toggle {
+        position: sticky !important;
+        top: 8px !important;
+        z-index: 10002 !important;
+        display: flex !important;
+        justify-content: flex-end !important;
+        padding: 0 8px 6px 8px !important;
+        margin-bottom: 4px !important;
+        pointer-events: none !important;
+    }
+
+    #hion-sidebar-float-toggle button {
+        pointer-events: auto !important;
+        background: #3b4252 !important;
+        border: 1px solid #9ca3af !important;
+        border-radius: 8px !important;
+        color: #f9fafb !important;
+        min-width: 36px !important;
+        min-height: 36px !important;
+        font-size: 18px !important;
+        line-height: 1 !important;
+        cursor: pointer !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35) !important;
+    }
+
+    #hion-sidebar-float-toggle button:hover {
+        background: #4b5563 !important;
+    }
+
+    /* Keep native collapse in DOM for JS; visible control is the floating button */
+    button[data-testid="stSidebarCollapseButton"] {
+        position: absolute !important;
+        width: 1px !important;
+        height: 1px !important;
+        min-width: 1px !important;
+        min-height: 1px !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        overflow: hidden !important;
+        padding: 0 !important;
+        border: none !important;
+        box-shadow: none !important;
     }
 
     /* Global mobile-friendly tweaks */
@@ -55,6 +127,56 @@ st.markdown(
     </style>
     """,
     unsafe_allow_html=True,
+)
+
+components.html(
+    """
+    <script>
+    (function () {
+        const doc = window.parent.document;
+
+        function setupSidebarFloatToggle() {
+            const sidebar = doc.querySelector("section[data-testid='stSidebar']");
+            const content = doc.querySelector("[data-testid='stSidebarContent']");
+            const nativeCollapse = doc.querySelector("[data-testid='stSidebarCollapseButton']");
+            const expandCtrl = doc.querySelector("[data-testid='collapsedControl']");
+
+            if (expandCtrl) {
+                expandCtrl.style.display = "flex";
+                expandCtrl.style.visibility = "visible";
+                expandCtrl.style.opacity = "1";
+            }
+
+            if (!sidebar || !content || !nativeCollapse) return;
+
+            let wrap = doc.getElementById("hion-sidebar-float-toggle");
+            if (!wrap) {
+                wrap = doc.createElement("div");
+                wrap.id = "hion-sidebar-float-toggle";
+                wrap.innerHTML =
+                    "<button type='button' title='Collapse sidebar' aria-label='Collapse sidebar'>&#x2039;</button>";
+                content.insertBefore(wrap, content.firstChild);
+                wrap.querySelector("button").addEventListener("click", function () {
+                    nativeCollapse.click();
+                });
+            }
+
+            const visible =
+                sidebar.offsetParent !== null && sidebar.getBoundingClientRect().width > 40;
+            wrap.style.display = visible ? "flex" : "none";
+        }
+
+        const observer = new MutationObserver(function () {
+            setupSidebarFloatToggle();
+        });
+
+        observer.observe(doc.body, { childList: true, subtree: true });
+        setupSidebarFloatToggle();
+        setInterval(setupSidebarFloatToggle, 1000);
+    })();
+    </script>
+    """,
+    height=0,
 )
 
 # ============================================================================
@@ -170,6 +292,14 @@ st.markdown(
     section[data-testid="stSidebar"] .stRadio,
     section[data-testid="stSidebar"] .stCheckbox {
         width: 100% !important;
+    }
+
+    /* Don't stretch native / floating sidebar toggle buttons */
+    section[data-testid="stSidebar"] button[data-testid="stSidebarCollapseButton"],
+    #hion-sidebar-float-toggle,
+    #hion-sidebar-float-toggle button {
+        width: auto !important;
+        max-width: none !important;
     }
 
     [data-testid="stAppViewContainer"] .main {
