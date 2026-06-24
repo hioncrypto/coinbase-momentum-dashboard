@@ -2132,6 +2132,10 @@ with expander("Display"):
         value=int(st.session_state.get("refresh_sec", 30)),
         step=1,
         key="refresh_sec",
+        help=(
+            "Scans chain immediately after each run finishes. This value is only used "
+            "as a fallback delay if the scan loop stops, or on first load."
+        ),
     )
     if new_rs != st.session_state.get("refresh_sec"):
         save_to_url("refresh_sec", new_rs)
@@ -2842,9 +2846,12 @@ if "last_update" not in st.session_state:
 refresh_interval = st.session_state["refresh_sec"]
 time_since_update = current_time - st.session_state["last_update"]
 need_rescan = (
-    time_since_update >= refresh_interval
-    or st.session_state.get("scan_rows") is None
+    st.session_state.get("scan_rows") is None
+    or st.session_state.pop("immediate_rescan", False)
+    or time_since_update >= refresh_interval
 )
+
+scan_completed_this_run = False
 
 if pairs:
     scan_progress_ph = st.empty()
@@ -2999,6 +3006,7 @@ if pairs:
         st.session_state["last_update"] = int(time.time())
         display_rows = rows
         display_tf = sort_tf
+        scan_completed_this_run = True
     else:
         display_rows = cached_rows
         display_tf = cached_tf
@@ -3021,7 +3029,11 @@ sync_ws_to_session()
 ws_symbol, ws_label = get_websocket_status_label()
 ws_status_placeholder.caption(f"WebSocket: {ws_symbol} | {ws_label}")
 
-# Auto-refresh — schedule next rerun without interrupting a finished scan display
+if scan_completed_this_run:
+    st.session_state["immediate_rescan"] = True
+    st.rerun()
+
+# Fallback timer if the continuous scan loop is not active
 time_since_update = int(time.time()) - st.session_state["last_update"]
 remaining = max(0, refresh_interval - time_since_update)
 
@@ -3045,10 +3057,15 @@ elif remaining > 0:
 else:
     st.rerun()
 
+_countdown_label = (
+    "Chaining scans…"
+    if st.session_state.get("immediate_rescan") or scan_completed_this_run
+    else f"Next: {max(0, refresh_interval - time_since_update)}s"
+)
 st.markdown(
     f"""
 <div style="position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.7); color: white; padding: 5px 10px; border-radius: 15px; font-size: 12px; z-index: 1000;">
-    🔄 Next: {max(0, refresh_interval - time_since_update)}s
+    🔄 {_countdown_label}
 </div>
 """,
     unsafe_allow_html=True,
