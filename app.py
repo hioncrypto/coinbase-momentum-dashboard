@@ -353,25 +353,17 @@ st.markdown(
         padding-right: 12px !important;
     }
 
-    /* Keep table fully visible */
-    div[data-testid="stDataFrame"] {
+    /* Keep table fully visible — including stale/rerun overlays */
+    div[data-testid="stDataFrame"],
+    div[data-testid="stDataFrame"] * {
         opacity: 1 !important;
+        filter: none !important;
     }
 
-    /* Prevent dimming on table rows */
-    div[data-testid="stDataFrame"] tr {
+    [data-stale="true"] div[data-testid="stDataFrame"],
+    [data-stale="true"] div[data-testid="stDataFrame"] * {
         opacity: 1 !important;
-    }
-
-    /* Keep table headers bright */
-    div[data-testid="stDataFrame"] thead {
-        opacity: 1 !important;
-    }
-
-    /* Ensure all table elements stay fully visible */
-    div[data-testid="stDataFrame"] td,
-    div[data-testid="stDataFrame"] th {
-        opacity: 1 !important;
+        filter: none !important;
     }
 
     div[data-testid="stDataEditor"],
@@ -2246,6 +2238,8 @@ with col1:
     if st.button("🔄 Refresh Now", type="primary"):
         get_cached_data.clear()
         st.session_state["ws_prices"] = {}
+        st.session_state["last_update"] = 0
+        st.session_state.pop("scan_rows", None)
         st.rerun()
 
 with col2:
@@ -2349,141 +2343,167 @@ if "alerted_pairs" not in st.session_state:
     st.session_state["alerted_pairs"] = load_alerted_pairs()
 alerted_pairs = st.session_state["alerted_pairs"]
 
+current_time = int(time.time())
+if "last_update" not in st.session_state:
+    st.session_state["last_update"] = 0
+refresh_interval = st.session_state["refresh_sec"]
+time_since_update = current_time - st.session_state["last_update"]
+need_rescan = (
+    time_since_update >= refresh_interval
+    or st.session_state.get("scan_rows") is None
+)
+
 if pairs:
-    status_placeholder = st.empty()
-    progress_placeholder = st.empty()
+    if need_rescan:
+        status_placeholder = st.empty()
+        progress_placeholder = st.empty()
 
-    for i, pair in enumerate(pairs):
-        progress = (i + 1) / len(pairs)
-        progress_placeholder.progress(progress)
-        status_placeholder.text(f"Processing {pair}... ({i + 1}/{len(pairs)})")
+        for i, pair in enumerate(pairs):
+            progress = (i + 1) / len(pairs)
+            progress_placeholder.progress(progress)
+            status_placeholder.text(f"Processing {pair}... ({i + 1}/{len(pairs)})")
 
-        df = get_cached_data(effective_exchange, pair, sort_tf)
-        if df is None or df.empty or len(df) < st.session_state.get("min_bars", 8):
-            continue
-        if gate_settings.get("use_vol_spike", False):
-            vol_spike_ratio = volume_spike(df, gate_settings.get("vol_window", 20))
-        else:
-            vol_spike_ratio = 0.0
-
-        meta, passed, chips, enabled = evaluate_gates(df, gate_settings)
-        delta_pct = meta.get("delta_pct", 0.0)
-        rel_vol = vol_spike_ratio
-        use_vol = st.session_state.get("use_vol_spike", False)
-
-        # Gates determine green/yellow FIRST (independent of alert mode)
-        is_green = passed >= enabled and enabled > 0
-        is_yellow = (0 < passed < enabled) and (passed >= enabled - 1) if enabled > 0 else False
-
-        # Alert mode is OPTIONAL filter
-        # 1. Determine if the pair is 'Green'
-        if mode == "ALL":
-            is_green = (enabled > 0 and passed == enabled)
-        elif mode == "ANY":
-            is_green = (passed >= 1)
-        elif mode == "BALANCED":
-            is_green = (passed >= (enabled // 2 + 1)) if enabled > 0 else False
-        elif mode == "Custom (K/Y)":
-            is_green = passed >= k_required
-            is_yellow = (passed >= y_required) and (passed < k_required)
-        else:
-            is_green = False
-
-        include = False
-        ws_price = st.session_state.get("ws_prices", {}).get(pair)
-        last_price = float(ws_price) if ws_price else float(df["close"].iloc[-1])
-        pct_change = meta["delta_pct"]
-
-        strategy_approved = True
-        if alert_mode != "Off" and is_green:
-            df_4h = get_cached_data(effective_exchange, pair, "4h")
-            df_1d = get_cached_data(effective_exchange, pair, "1d")
-
-            strategy_approved = False
-            if check_alert_strategy(df_1d, alert_mode, 20.0):
-                strategy_approved = True
-            elif check_alert_strategy(df_4h, alert_mode, 20.0):
-                strategy_approved = True
-
-            if alert_mode == "Conservative" and strategy_approved:
-                df_15m = get_cached_data(effective_exchange, pair, "15m")
-                if df_15m is not None:
-                    recent_low_15m = df_15m['close'].iloc[-5:].min()
-                    pct_move_15m = ((df_15m['close'].iloc[-1] - recent_low_15m) / recent_low_15m) * 100
-                    if pct_move_15m < 20.0:
-                        strategy_approved = False
-
-        print(f"[ALERT GATE CHECK] pair={pair}, is_green={is_green}, strategy_approved={strategy_approved}, alert_mode={alert_mode}, delta={delta_pct:.2f}, rel_vol={rel_vol:.2f}")
-
-        if is_green and strategy_approved and alert_mode != "Off":
-            include, alert_type = should_send_alert(
-                pair, delta_pct, rel_vol, st.session_state.alerted_pairs,
-                use_vol_spike=use_vol
-            )
-            print(f" should_send_alert result: include={include}, alert_type={alert_type}")
-            if include:
-                send_alert_notification(pair, delta_pct, rel_vol, alert_type)
-                alerts_to_send.append({
-                    "pair": pair,
-                    "price": last_price,
-                    "pct": pct_change,
-                    "timeframe": sort_tf,
-                    "exchange": effective_exchange,
-                    "signal": "Strong Buy",
-                    "stage": alert_type,
-                })
-
-        if not is_green and pair in alerted_pairs:
-            alerted_pairs.pop(pair, None)
-
-        if hard_filter:
-            if mode in {"ALL", "ANY"} and not is_green:
+            df = get_cached_data(effective_exchange, pair, sort_tf)
+            if df is None or df.empty or len(df) < st.session_state.get("min_bars", 8):
                 continue
-            if mode == "Custom (K/Y)" and not (is_green or is_yellow):
-                continue
+            if gate_settings.get("use_vol_spike", False):
+                vol_spike_ratio = volume_spike(df, gate_settings.get("vol_window", 20))
+            else:
+                vol_spike_ratio = 0.0
 
-        signal = ""
-        if is_green:
-            signal = "Strong Buy"
-        elif is_yellow:
-            signal = "Watch"
+            meta, passed, chips, enabled = evaluate_gates(df, gate_settings)
+            delta_pct = meta.get("delta_pct", 0.0)
+            rel_vol = vol_spike_ratio
+            use_vol = st.session_state.get("use_vol_spike", False)
 
-        row_data = {
-            "Pair": pair,
-            "Price": f"${last_price:.6f}",
-            f"% Change ({sort_tf})": pct_change,
-            "Signal": signal,
-            "Gates": chips,
-            "_passed": passed,
-            "_enabled": enabled,
-            "_green": is_green,
-            "_yellow": is_yellow,
-            "_ws_active": ws_price is not None,
-        }
-        rows.append(row_data)
-    progress_placeholder.empty()
-    status_placeholder.empty()
+            # Gates determine green/yellow FIRST (independent of alert mode)
+            is_green = passed >= enabled and enabled > 0
+            is_yellow = (0 < passed < enabled) and (passed >= enabled - 1) if enabled > 0 else False
 
-    # Filter alerts to Top 10 by % change (not by threshold)
-    if alerts_to_send and rows:
-        chg_col = f"% Change ({sort_tf})"
+            # Alert mode is OPTIONAL filter
+            # 1. Determine if the pair is 'Green'
+            if mode == "ALL":
+                is_green = (enabled > 0 and passed == enabled)
+            elif mode == "ANY":
+                is_green = (passed >= 1)
+            elif mode == "BALANCED":
+                is_green = (passed >= (enabled // 2 + 1)) if enabled > 0 else False
+            elif mode == "Custom (K/Y)":
+                is_green = passed >= k_required
+                is_yellow = (passed >= y_required) and (passed < k_required)
+            else:
+                is_green = False
 
-        temp_df = pd.DataFrame(rows)
-        temp_df = temp_df.sort_values(chg_col, ascending=False)
-        top_10_pairs = temp_df[temp_df["_green"] == True].head(10)["Pair"].tolist()
-        alerts_to_send = [
-            alert for alert in alerts_to_send if alert["pair"] in top_10_pairs
-        ]
+            include = False
+            ws_price = st.session_state.get("ws_prices", {}).get(pair)
+            last_price = float(ws_price) if ws_price else float(df["close"].iloc[-1])
+            pct_change = meta["delta_pct"]
 
-    save_alerted_pairs(st.session_state["alerted_pairs"])
+            strategy_approved = True
+            if alert_mode != "Off" and is_green:
+                df_4h = get_cached_data(effective_exchange, pair, "4h")
+                df_1d = get_cached_data(effective_exchange, pair, "1d")
 
-    if alerts_to_send:
-        if st.session_state.get("email_to"):
-            send_email_alert(alerts_to_send)
-        if st.session_state.get("webhook_url"):
-            send_webhook_alert(alerts_to_send)
+                strategy_approved = False
+                if check_alert_strategy(df_1d, alert_mode, 20.0):
+                    strategy_approved = True
+                elif check_alert_strategy(df_4h, alert_mode, 20.0):
+                    strategy_approved = True
 
-    st.success(f"✅ Processed {len(rows)} pairs successfully!")
+                if alert_mode == "Conservative" and strategy_approved:
+                    df_15m = get_cached_data(effective_exchange, pair, "15m")
+                    if df_15m is not None:
+                        recent_low_15m = df_15m['close'].iloc[-5:].min()
+                        pct_move_15m = ((df_15m['close'].iloc[-1] - recent_low_15m) / recent_low_15m) * 100
+                        if pct_move_15m < 20.0:
+                            strategy_approved = False
+
+            print(f"[ALERT GATE CHECK] pair={pair}, is_green={is_green}, strategy_approved={strategy_approved}, alert_mode={alert_mode}, delta={delta_pct:.2f}, rel_vol={rel_vol:.2f}")
+
+            if is_green and strategy_approved and alert_mode != "Off":
+                include, alert_type = should_send_alert(
+                    pair, delta_pct, rel_vol, st.session_state.alerted_pairs,
+                    use_vol_spike=use_vol
+                )
+                print(f" should_send_alert result: include={include}, alert_type={alert_type}")
+                if include:
+                    send_alert_notification(pair, delta_pct, rel_vol, alert_type)
+                    alerts_to_send.append({
+                        "pair": pair,
+                        "price": last_price,
+                        "pct": pct_change,
+                        "timeframe": sort_tf,
+                        "exchange": effective_exchange,
+                        "signal": "Strong Buy",
+                        "stage": alert_type,
+                    })
+
+            if not is_green and pair in alerted_pairs:
+                alerted_pairs.pop(pair, None)
+
+            if hard_filter:
+                if mode in {"ALL", "ANY"} and not is_green:
+                    continue
+                if mode == "Custom (K/Y)" and not (is_green or is_yellow):
+                    continue
+
+            signal = ""
+            if is_green:
+                signal = "Strong Buy"
+            elif is_yellow:
+                signal = "Watch"
+
+            row_data = {
+                "Pair": pair,
+                "Price": f"${last_price:.6f}",
+                f"% Change ({sort_tf})": pct_change,
+                "Signal": signal,
+                "Gates": chips,
+                "_passed": passed,
+                "_enabled": enabled,
+                "_green": is_green,
+                "_yellow": is_yellow,
+                "_ws_active": ws_price is not None,
+            }
+            rows.append(row_data)
+        progress_placeholder.empty()
+        status_placeholder.empty()
+
+        # Filter alerts to Top 10 by % change (not by threshold)
+        if alerts_to_send and rows:
+            chg_col = f"% Change ({sort_tf})"
+
+            temp_df = pd.DataFrame(rows)
+            temp_df = temp_df.sort_values(chg_col, ascending=False)
+            top_10_pairs = temp_df[temp_df["_green"] == True].head(10)["Pair"].tolist()
+            alerts_to_send = [
+                alert for alert in alerts_to_send if alert["pair"] in top_10_pairs
+            ]
+
+        save_alerted_pairs(st.session_state["alerted_pairs"])
+
+        if alerts_to_send:
+            if st.session_state.get("email_to"):
+                send_email_alert(alerts_to_send)
+            if st.session_state.get("webhook_url"):
+                send_webhook_alert(alerts_to_send)
+
+        st.session_state["scan_rows"] = rows
+        st.session_state["scan_sort_tf"] = sort_tf
+        st.session_state["last_update"] = int(time.time())
+    else:
+        rows = list(st.session_state.get("scan_rows") or [])
+        sort_tf = st.session_state.get("scan_sort_tf", sort_tf)
+
+    if need_rescan:
+        st.success(f"✅ Processed {len(rows)} pairs successfully!")
+    else:
+        age = int(time.time()) - st.session_state.get("last_update", 0)
+        next_scan = max(0, refresh_interval - age)
+        st.caption(
+            f"Showing cached results ({len(rows)} pairs, updated {age}s ago). "
+            f"Next scan in {next_scan}s."
+        )
 
     if rows:
         df_results = pd.DataFrame(rows)
@@ -2636,16 +2656,28 @@ if (
             st.session_state["ws_thread"] = ws_thread
             ws_thread.start()
 
-# Auto-refresh
-current_time = int(time.time())
-if "last_update" not in st.session_state:
-    st.session_state["last_update"] = 0
+# Auto-refresh — schedule next rerun without interrupting a finished scan display
+time_since_update = int(time.time()) - st.session_state["last_update"]
+remaining = max(0, refresh_interval - time_since_update)
 
-time_since_update = current_time - st.session_state["last_update"]
-refresh_interval = st.session_state["refresh_sec"]
-
-if time_since_update >= refresh_interval:
-    st.session_state["last_update"] = current_time
+if st_autorefresh:
+    st_autorefresh(
+        interval=max(5000, remaining * 1000),
+        limit=1,
+        key="main_scan_refresh",
+    )
+elif remaining > 0:
+    components.html(
+        f"""
+        <script>
+        setTimeout(function () {{
+            window.parent.location.reload();
+        }}, {remaining * 1000});
+        </script>
+        """,
+        height=0,
+    )
+else:
     st.rerun()
 
 st.markdown(
