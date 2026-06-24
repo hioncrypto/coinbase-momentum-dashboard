@@ -718,6 +718,13 @@ def init_session_state():
         "ws_thread": None,
         "ws_alive": False,
         "ws_prices": {},
+        "ws_runtime": {
+            "connected": False,
+            "connecting": False,
+            "last_msg": 0.0,
+            "error": None,
+            "subscribed": 0,
+        },
         "lr_enabled": False,
         "lr_baseline": {"Coinbase": set(), "Binance": set()},
         "lr_events": [],
@@ -2229,6 +2236,152 @@ if st.session_state.get("lr_events"):
             st.write("No new listings in window")
 
 # =============================================================================
+# WEBSOCKET HELPERS
+# =============================================================================
+WS_MSG_STALE_SEC = 45
+
+
+def _ws_runtime() -> dict:
+    if "ws_runtime" not in st.session_state:
+        st.session_state["ws_runtime"] = {
+            "connected": False,
+            "connecting": False,
+            "last_msg": 0.0,
+            "error": None,
+            "subscribed": 0,
+        }
+    return st.session_state["ws_runtime"]
+
+
+def ensure_coinbase_websocket(pairs: list, exchange: str) -> None:
+    mode = st.session_state.get("mode", "REST only")
+    if not mode.startswith("WebSocket") or exchange != "Coinbase" or not WS_AVAILABLE:
+        return
+
+    if not pairs:
+        return
+
+    thread = st.session_state.get("ws_thread")
+    if thread is not None and thread.is_alive():
+        return
+
+    st.session_state.setdefault("ws_prices", {})
+    runtime = _ws_runtime()
+    runtime["connecting"] = True
+    runtime["connected"] = False
+    runtime["error"] = None
+
+    ws_pairs = pairs[: int(st.session_state.get("ws_chunk", 13))]
+    runtime["subscribed"] = len(ws_pairs)
+
+    def ws_worker(product_ids):
+        ws = None
+        runtime = st.session_state["ws_runtime"]
+        try:
+            print(
+                f"[WS] Connecting to {CONFIG.COINBASE_WS} "
+                f"({len(product_ids)} pairs: {', '.join(product_ids[:3])}...)"
+            )
+            ws = websocket.WebSocket()
+            ws.connect(CONFIG.COINBASE_WS, timeout=10)
+            ws.settimeout(1.0)
+
+            subscribe_msg = {
+                "type": "subscribe",
+                "channels": [{"name": "ticker", "product_ids": product_ids}],
+            }
+            ws.send(json.dumps(subscribe_msg))
+            runtime["connected"] = True
+            runtime["connecting"] = False
+            st.session_state["ws_alive"] = True
+            print(f"[WS] Connected and subscribed to {len(product_ids)} tickers")
+
+            while st.session_state.get("ws_alive", False):
+                try:
+                    message = ws.recv()
+                    if not message:
+                        continue
+                    data = json.loads(message)
+                    if data.get("type") == "ticker":
+                        product_id = data.get("product_id")
+                        price = data.get("price")
+                        if product_id and price:
+                            st.session_state["ws_prices"][product_id] = float(price)
+                            runtime["last_msg"] = time.time()
+                except websocket.WebSocketTimeoutException:
+                    continue
+                except Exception as recv_err:
+                    print(f"[WS] Receive error: {type(recv_err).__name__}: {recv_err}")
+                    break
+        except Exception as conn_err:
+            runtime["error"] = str(conn_err)
+            print(f"[WS] Connection failed: {type(conn_err).__name__}: {conn_err}")
+        finally:
+            runtime["connected"] = False
+            runtime["connecting"] = False
+            st.session_state["ws_alive"] = False
+            print("[WS] Connection closed")
+            if ws is not None:
+                try:
+                    ws.close()
+                except Exception:
+                    pass
+
+    ws_thread = threading.Thread(target=ws_worker, args=(ws_pairs,), daemon=True)
+    st.session_state["ws_thread"] = ws_thread
+    ws_thread.start()
+    print(f"[WS] Worker thread started ({len(ws_pairs)} pairs)")
+
+
+def get_websocket_status_label() -> Tuple[str, str]:
+    mode = st.session_state.get("mode", "REST only")
+    exchange = st.session_state.get("exchange", "Coinbase")
+    effective = (
+        "Coinbase"
+        if "coming soon" in exchange.lower()
+        else exchange
+    )
+    price_count = len(st.session_state.get("ws_prices", {}))
+
+    if not mode.startswith("WebSocket"):
+        return "⚪", f"REST only (WebSocket off) | Cached prices: {price_count}"
+
+    if not WS_AVAILABLE:
+        return "🔴", "WebSocket library not installed"
+
+    if effective != "Coinbase":
+        return "⚪", f"WebSocket N/A for {effective}"
+
+    runtime = st.session_state.get("ws_runtime", {})
+    thread = st.session_state.get("ws_thread")
+    thread_alive = thread is not None and thread.is_alive()
+    last_msg = float(runtime.get("last_msg", 0))
+    age = time.time() - last_msg if last_msg > 0 else None
+
+    if runtime.get("connecting") and thread_alive:
+        return "🟡", f"Connecting... | Pairs in cache: {price_count}"
+
+    is_live = (
+        thread_alive
+        and last_msg > 0
+        and age is not None
+        and age < WS_MSG_STALE_SEC
+    )
+
+    if is_live:
+        return "🟢", (
+            f"Connected | {price_count} pairs in cache | "
+            f"Last tick {int(age)}s ago"
+        )
+
+    if runtime.get("error"):
+        return "🔴", f"Disconnected ({runtime['error']}) | Cache: {price_count}"
+
+    stale_note = f" | Last tick {int(age)}s ago" if age is not None else ""
+    return "🔴", f"Disconnected | Pairs in cache: {price_count}{stale_note}"
+
+
+# =============================================================================
 # MAIN DISPLAY
 # =============================================================================
 st.title("🚀 hioncrypto's: Crypto Tracker")
@@ -2238,6 +2391,8 @@ with col1:
     if st.button("🔄 Refresh Now", type="primary"):
         get_cached_data.clear()
         st.session_state["ws_prices"] = {}
+        st.session_state["ws_alive"] = False
+        st.session_state.pop("ws_thread", None)
         st.session_state["last_update"] = 0
         st.session_state.pop("scan_rows", None)
         st.rerun()
@@ -2250,11 +2405,9 @@ with col2:
         st.rerun()
 
 with col3:
-    is_ws_active = st.session_state.get("ws_alive", False)
-    ws_symbol = "🟢" if is_ws_active else "🔴"
-    st.caption(
-        f"WebSocket: {ws_symbol} | Pairs in cache: {len(st.session_state.get('ws_prices', {}))}"
-    )
+    ws_status_placeholder = st.empty()
+    _ws_sym, _ws_lbl = get_websocket_status_label()
+    ws_status_placeholder.caption(f"WebSocket: {_ws_sym} | {_ws_lbl}")
 
 # Determine pairs
 if st.session_state["use_my_pairs"]:
@@ -2279,6 +2432,14 @@ else:
 
 cap = max(5, min(500, st.session_state.get("pairs_to_discover", 400)))
 pairs = pairs[:cap]
+
+effective_exchange = (
+    "Coinbase"
+    if "coming soon" in st.session_state["exchange"].lower()
+    else st.session_state["exchange"]
+)
+
+ensure_coinbase_websocket(pairs, effective_exchange)
 
 # Gate settings dict
 gate_settings = {
@@ -2331,13 +2492,6 @@ mode = st.session_state["gate_mode"]
 hard_filter = st.session_state["hard_filter"]
 k_required = st.session_state.get("K_green", 3)
 y_required = st.session_state.get("Y_yellow", 2)
-
-
-effective_exchange = (
-    "Coinbase"
-    if "coming soon" in st.session_state["exchange"].lower()
-    else st.session_state["exchange"]
-)
 
 if "alerted_pairs" not in st.session_state:
     st.session_state["alerted_pairs"] = load_alerted_pairs()
@@ -2606,55 +2760,8 @@ if pairs:
 else:
     st.info("No pairs found. Adjust settings.")
 
-# WebSocket management
-if (
-    st.session_state["mode"].startswith("WebSocket")
-    and effective_exchange == "Coinbase"
-    and WS_AVAILABLE
-):
-    if not st.session_state.get("ws_alive", False) and pairs:
-        ws_pairs = pairs[: st.session_state["ws_chunk"]]
-
-        def ws_worker(product_ids):
-            try:
-                ws = websocket.WebSocket()
-                ws.connect(CONFIG.COINBASE_WS, timeout=10)
-                ws.settimeout(1.0)
-
-                subscribe_msg = {
-                    "type": "subscribe",
-                    "channels": [{"name": "ticker", "product_ids": product_ids}],
-                }
-                ws.send(json.dumps(subscribe_msg))
-                st.session_state["ws_alive"] = True
-
-                while st.session_state.get("ws_alive", False):
-                    try:
-                        message = ws.recv()
-                        if message:
-                            data = json.loads(message)
-                            if data.get("type") == "ticker":
-                                product_id = data.get("product_id")
-                                price = data.get("price")
-                                if product_id and price:
-                                    st.session_state["ws_prices"][product_id] = float(price)
-                    except websocket.WebSocketTimeoutException:
-                        continue
-                    except Exception:
-                        break
-            except Exception:
-                pass
-            finally:
-                st.session_state["ws_alive"] = False
-                try:
-                    ws.close()
-                except Exception:
-                    pass
-
-        if not st.session_state.get("ws_thread") or not st.session_state["ws_thread"].is_alive():
-            ws_thread = threading.Thread(target=ws_worker, args=(ws_pairs,), daemon=True)
-            st.session_state["ws_thread"] = ws_thread
-            ws_thread.start()
+ws_symbol, ws_label = get_websocket_status_label()
+ws_status_placeholder.caption(f"WebSocket: {ws_symbol} | {ws_label}")
 
 # Auto-refresh — schedule next rerun without interrupting a finished scan display
 time_since_update = int(time.time()) - st.session_state["last_update"]
