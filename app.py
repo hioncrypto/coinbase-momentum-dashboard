@@ -21,7 +21,14 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    div[data-testid="stSidebar"] .stSlider [data-baseweb="slider"] {
+    /* Restore normal sidebar width */
+    section[data-testid='stSidebar'] {
+        width: 300px !important;
+        min-width: 300px !important;
+    }
+
+    /* Fix thin sliders safely without affecting sidebar */
+    section[data-testid='stSidebar'] .stSlider [data-baseweb='slider'] {
         width: 100% !important;
     }
     </style>
