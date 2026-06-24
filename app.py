@@ -2302,8 +2302,9 @@ WS_RECV_TIMEOUT = 5.0
 WS_MAX_RETRIES = 3
 WS_RETRY_DELAY_SEC = 2.0
 WS_STAGGER_SEC = 1.0
-WS_START_GRACE_SEC = 90
+WS_START_GRACE_SEC = 300
 WS_ERROR_LOG_INTERVAL = 30.0
+SCAN_STALE_SEC = 600  # reset stuck scan_in_progress after 10 min
 
 # Streamlit session_state is main-thread only — workers use this shared store.
 _WS_LOCK = threading.Lock()
@@ -2497,9 +2498,11 @@ def stop_websocket_workers(clear_cache: bool = False) -> None:
     st.session_state["ws_alive"] = False
     st.session_state.pop("ws_threads", None)
     st.session_state.pop("ws_thread", None)
-    st.session_state.pop("ws_pairs_key", None)
+    # Keep ws_pairs_key — clearing it forces redundant reconnects on the next ensure() call.
     if clear_cache:
         clear_ws_shared()
+        st.session_state.pop("ws_pairs_key", None)
+        st.session_state.pop("ws_started_at", None)
     runtime = st.session_state.get("ws_runtime")
     if runtime:
         runtime["connected"] = False
@@ -2521,6 +2524,9 @@ def ensure_coinbase_websocket(pairs: list, exchange: str) -> None:
     pairs_key = (tuple(pairs), 0)
 
     alive = _ws_count_alive_threads()
+    if pairs_key == st.session_state.get("ws_pairs_key") and alive > 0:
+        return
+
     snap = _ws_snapshot()
     last_msg = float(snap["last_msg"])
     msg_fresh = last_msg > 0 and (time.time() - last_msg) < WS_MSG_STALE_SEC
@@ -2529,13 +2535,9 @@ def ensure_coinbase_websocket(pairs: list, exchange: str) -> None:
         price_count = len(snap["prices"])
         started_at = float(st.session_state.get("ws_started_at", 0))
         in_grace = (time.time() - started_at) < WS_START_GRACE_SEC
-        if alive >= len(chunks):
-            return
-        if in_grace and (alive > 0 or snap["connecting"]):
+        if in_grace:
             return
         if msg_fresh and price_count > 0:
-            return
-        if alive > 0 and msg_fresh:
             return
 
     stop_websocket_workers(clear_cache=False)
@@ -2894,7 +2896,14 @@ def scan_results_panel() -> None:
         st.info("No pairs found. Adjust settings.")
         return
 
-    ensure_coinbase_websocket(pairs, effective_exchange)
+    scan_busy = st.session_state.get("scan_in_progress", False)
+    scan_started = float(st.session_state.get("scan_started_at", 0))
+    if scan_busy and scan_started and (time.time() - scan_started) > SCAN_STALE_SEC:
+        st.session_state["scan_in_progress"] = False
+        scan_busy = False
+
+    if not scan_busy:
+        ensure_coinbase_websocket(pairs, effective_exchange)
 
     if "alerted_pairs" not in st.session_state:
         st.session_state["alerted_pairs"] = load_alerted_pairs()
@@ -2909,7 +2918,6 @@ def scan_results_panel() -> None:
     if "last_update" not in st.session_state:
         st.session_state["last_update"] = 0
     time_since_update = current_time - st.session_state["last_update"]
-    scan_busy = st.session_state.get("scan_in_progress", False)
     cached_tf = st.session_state.get("scan_sort_tf", sort_tf)
     config_stale = cached_tf != sort_tf
     need_rescan = (
@@ -2946,6 +2954,7 @@ def scan_results_panel() -> None:
 
     if need_rescan:
         st.session_state["scan_in_progress"] = True
+        st.session_state["scan_started_at"] = time.time()
         scan_id = time.time()
         st.session_state["_current_scan_id"] = scan_id
         rows = []
@@ -3148,7 +3157,6 @@ def scan_results_panel() -> None:
 
     if scan_ran:
         st.session_state["immediate_rescan"] = True
-        st.rerun()
 
 
 # =============================================================================
@@ -3193,7 +3201,8 @@ def refresh_ws_status_caption() -> None:
 refresh_ws_status_caption()
 
 refresh_interval = int(st.session_state.get("refresh_sec", 30))
-scan_results_fragment = st_fragment(run_every=max(5, refresh_interval))(scan_results_panel)
+# Poll every 5s so chained rescans start soon after completion; refresh_sec gates scan cadence.
+scan_results_fragment = st_fragment(run_every=5)(scan_results_panel)
 scan_results_fragment()
 
 st.markdown("---")
