@@ -737,9 +737,11 @@ def init_session_state():
             "chunk_status": {},
         },
         "lr_enabled": False,
-        "lr_baseline": {"Coinbase": set(), "Binance": set()},
+        "lr_baselines": {},
         "lr_events": [],
         "lr_unacked": 0,
+        "lr_last_poll": 0.0,
+        "lr_feed_hashes": {},
         "lr_watch_coinbase": True,
         "lr_watch_binance": True,
         "lr_watch_quotes": "USD, USDT, USDC",
@@ -759,6 +761,163 @@ def init_session_state():
 
 
 init_session_state()
+
+
+# =============================================================================
+# SCAN / EXCHANGE HELPERS (read live session_state — safe inside fragments)
+# =============================================================================
+def get_effective_exchange() -> str:
+    exchange = st.session_state.get("exchange", "Coinbase")
+    return "Coinbase" if "coming soon" in exchange.lower() else exchange
+
+
+def build_gate_settings() -> dict:
+    return {
+        "lookback_candles": int(st.session_state.get("lookback_candles", 3)),
+        "min_pct": float(st.session_state.get("min_pct", 3.0)),
+        "use_vol_spike": bool(st.session_state.get("use_vol_spike", False)),
+        "vol_mult": float(st.session_state.get("vol_mult", 1.10)),
+        "vol_window": int(st.session_state.get("vol_window", 20)),
+        "use_rsi": bool(st.session_state.get("use_rsi", False)),
+        "rsi_len": int(st.session_state.get("rsi_len", 14)),
+        "min_rsi": int(st.session_state.get("min_rsi", 55)),
+        "use_macd": bool(st.session_state.get("use_macd", False)),
+        "macd_fast": int(st.session_state.get("macd_fast", 12)),
+        "macd_slow": int(st.session_state.get("macd_slow", 26)),
+        "macd_sig": int(st.session_state.get("macd_sig", 9)),
+        "min_mhist": float(st.session_state.get("min_mhist", 0.0)),
+        "use_atr": bool(st.session_state.get("use_atr", False)),
+        "atr_len": int(st.session_state.get("atr_len", 14)),
+        "min_atr": float(st.session_state.get("min_atr", 0.5)),
+        "use_trend": bool(st.session_state.get("use_trend", False)),
+        "pivot_span": int(st.session_state.get("pivot_span", 4)),
+        "trend_within": int(st.session_state.get("trend_within", 48)),
+        "use_roc": bool(st.session_state.get("use_roc", False)),
+        "min_roc": float(st.session_state.get("min_roc", 1.0)),
+        "use_macd_cross": bool(st.session_state.get("use_macd_cross", False)),
+        "macd_cross_bars": int(st.session_state.get("macd_cross_bars", 5)),
+        "macd_cross_only_bull": bool(st.session_state.get("macd_cross_only_bull", True)),
+        "macd_cross_below_zero": bool(st.session_state.get("macd_cross_below_zero", True)),
+        "macd_hist_confirm_bars": int(st.session_state.get("macd_hist_confirm_bars", 3)),
+    }
+
+
+def build_scan_pairs() -> list:
+    if st.session_state.get("use_my_pairs", False):
+        pairs = [
+            p.strip().upper()
+            for p in st.session_state.get("my_pairs", "").split(",")
+            if p.strip()
+        ]
+    elif st.session_state.get("use_watch", False):
+        pairs = [
+            p.strip().upper()
+            for p in st.session_state.get("watchlist", "").split(",")
+            if p.strip()
+        ]
+    else:
+        pairs = get_products(get_effective_exchange(), st.session_state.get("quote", "USD"))
+
+    cap = max(5, min(500, int(st.session_state.get("pairs_to_discover", 400))))
+    pairs = pairs[:cap]
+
+    if st.session_state.get("mc_filter_enabled"):
+        mc_data = get_market_caps()
+        min_mc = st.session_state.get("min_market_cap_millions", 10) * 1_000_000
+
+        def normalize_symbol(pair: str) -> str:
+            return pair.split("-")[0].upper()
+
+        pairs = [p for p in pairs if mc_data.get(normalize_symbol(p), 0) >= min_mc]
+
+    return pairs
+
+
+def migrate_lr_baselines() -> None:
+    if "lr_baselines" not in st.session_state:
+        st.session_state["lr_baselines"] = {}
+    legacy = st.session_state.get("lr_baseline")
+    if legacy and not st.session_state["lr_baselines"]:
+        for name, products in legacy.items():
+            st.session_state["lr_baselines"][name] = (
+                set(products) if not isinstance(products, set) else products
+            )
+
+
+def run_listing_radar_poll(force: bool = False) -> None:
+    if not st.session_state.get("lr_enabled", False):
+        return
+
+    migrate_lr_baselines()
+    interval = int(st.session_state.get("lr_poll_sec", 30))
+    last_poll = float(st.session_state.get("lr_last_poll", 0.0))
+    if not force and (time.time() - last_poll) < interval:
+        return
+
+    st.session_state["lr_last_poll"] = time.time()
+    lr_quotes = [
+        q.strip().upper()
+        for q in st.session_state.get("lr_watch_quotes", "USD,USDT,USDC").split(",")
+        if q.strip()
+    ]
+
+    for exchange_name in ["Coinbase", "Binance"]:
+        watch_key = f"lr_watch_{exchange_name.lower()}"
+        if not st.session_state.get(watch_key, True):
+            continue
+        for quote in lr_quotes:
+            try:
+                current_products = get_products(exchange_name, quote)
+                known = st.session_state["lr_baselines"].get(exchange_name, set())
+                if not known:
+                    st.session_state["lr_baselines"][exchange_name] = set(current_products)
+                    continue
+
+                new_listings = [p for p in current_products if p not in known]
+                if new_listings:
+                    if "lr_events" not in st.session_state:
+                        st.session_state["lr_events"] = []
+                    for pair in new_listings:
+                        st.session_state["lr_events"].append({
+                            "pair": pair,
+                            "exchange": exchange_name,
+                            "quote": quote,
+                            "detected_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+                            "type": "listing",
+                        })
+
+                st.session_state["lr_baselines"][exchange_name] = set(current_products)
+            except Exception:
+                pass
+
+    feeds_raw = (st.session_state.get("lr_feeds") or "").strip()
+    if feeds_raw:
+        feed_hashes = st.session_state.setdefault("lr_feed_hashes", {})
+        for url in feeds_raw.splitlines():
+            url = url.strip()
+            if not url:
+                continue
+            try:
+                resp = requests.get(url, timeout=12, headers={"User-Agent": "crypto-tracker/2.0"})
+                if resp.status_code != 200:
+                    continue
+                snippet = resp.text[:8000]
+                content_hash = str(hash(snippet))
+                prev = feed_hashes.get(url)
+                if prev is not None and prev != content_hash:
+                    if "lr_events" not in st.session_state:
+                        st.session_state["lr_events"] = []
+                    st.session_state["lr_events"].append({
+                        "pair": url,
+                        "exchange": "Feed",
+                        "quote": "",
+                        "detected_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+                        "type": "feed",
+                    })
+                feed_hashes[url] = content_hash
+            except Exception:
+                pass
+
 
 # =============================================================================
 # TECHNICAL INDICATORS
@@ -885,39 +1044,26 @@ def fetch_coinbase_data(pair: str, timeframe: str, limit: int) -> Optional[pd.Da
 
 def fetch_binance_data(pair: str, timeframe: str, limit: int) -> Optional[pd.DataFrame]:
     url = f"{CONFIG.BINANCE_BASE}/api/v3/klines"
-    print(f"[BINANCE DEBUG] fetch_binance_data called: pair={pair}, timeframe={timeframe}, limit={limit}")
 
     try:
         base, quote = pair.split("-")
         symbol = f"{base}{quote}"
-    except ValueError as e:
-        print(f"[BINANCE DEBUG] fetch_binance_data: failed to parse pair '{pair}': {e}")
+    except ValueError:
         return None
 
     interval_map = {"5m": "5m", "15m": "15m", "1h": "1h", "4h": "4h", "1d": "1d"}
     interval = interval_map.get(timeframe, "1h")
     params = {"symbol": symbol, "interval": interval, "limit": max(50, limit)}
-    print(f"[BINANCE DEBUG] fetch_binance_data: requesting {url} params={params}")
 
     try:
         response = requests.get(url, params=params, timeout=20)
-        print(f"[BINANCE DEBUG] fetch_binance_data: status_code={response.status_code} for {symbol}")
 
         if response.status_code != 200:
-            body_preview = response.text[:300] if response.text else "(empty body)"
-            print(f"[BINANCE DEBUG] fetch_binance_data: non-200 response body preview: {body_preview}")
             return None
 
         raw = response.json()
-        if not raw:
-            print(f"[BINANCE DEBUG] fetch_binance_data: response JSON is empty for {symbol}")
+        if not raw or not isinstance(raw, list):
             return None
-
-        if not isinstance(raw, list):
-            print(f"[BINANCE DEBUG] fetch_binance_data: unexpected JSON type {type(raw).__name__} for {symbol}: {str(raw)[:300]}")
-            return None
-
-        print(f"[BINANCE DEBUG] fetch_binance_data: received {len(raw)} klines for {symbol}")
 
         rows = []
         for kline in raw:
@@ -938,11 +1084,9 @@ def fetch_binance_data(pair: str, timeframe: str, limit: int) -> Optional[pd.Dat
         if len(df) > limit:
             df = df.iloc[-limit:].reset_index(drop=True)
 
-        print(f"[BINANCE DEBUG] fetch_binance_data: parsed {len(df)} rows for {symbol}, columns={list(df.columns)}")
         return df if not df.empty else None
 
-    except Exception as e:
-        print(f"[BINANCE DEBUG] fetch_binance_data: parsing/request error for {symbol}: {type(e).__name__}: {e}")
+    except Exception:
         return None
 
 
@@ -966,35 +1110,49 @@ def fetch_data(
 # =============================================================================
 # CACHING
 # =============================================================================
-_refresh_ttl = int(max(5, st.session_state.get("refresh_sec", 30)))
+@st.cache_data(show_spinner=False, ttl=300)
+def get_cached_data(
+    exchange: str, pair: str, timeframe: str, refresh_sec: int,
+) -> Optional[pd.DataFrame]:
+    try:
+        limit = get_bars_limit(timeframe)
+        return fetch_data(exchange, pair, timeframe, limit)
+    except Exception:
+        return None
+
+
+def fetch_pair_data(exchange: str, pair: str, timeframe: str) -> Optional[pd.DataFrame]:
+    refresh_sec = int(st.session_state.get("refresh_sec", 30))
+    return get_cached_data(exchange, pair, timeframe, refresh_sec)
+
 
 def check_alert_strategy(df, mode, min_pct=20.0):
     if df is None or len(df) < 10:
         return False
-    
-    exp1 = df['close'].ewm(span=12, adjust=False).mean()
-    exp2 = df['close'].ewm(span=26, adjust=False).mean()
+
+    exp1 = df["close"].ewm(span=12, adjust=False).mean()
+    exp2 = df["close"].ewm(span=26, adjust=False).mean()
     macd = exp1 - exp2
     signal = macd.ewm(span=9, adjust=False).mean()
     hist = macd - signal
-    
+
     cross_bars_ago = 999
     for i in range(1, 6):
-        if macd.iloc[-i] > signal.iloc[-i] and macd.iloc[-i-1] <= signal.iloc[-i-1]:
+        if macd.iloc[-i] > signal.iloc[-i] and macd.iloc[-i - 1] <= signal.iloc[-i - 1]:
             if macd.iloc[-i] < 0:
                 cross_bars_ago = i
                 break
-    
+
     if cross_bars_ago > 5:
         return False
-    
+
     stage1 = True
     stage2 = hist.iloc[-1] > 0
-    
-    recent_low = df['close'].iloc[-5:].min()
-    pct_move = ((df['close'].iloc[-1] - recent_low) / recent_low) * 100
+
+    recent_low = df["close"].iloc[-5:].min()
+    pct_move = ((df["close"].iloc[-1] - recent_low) / recent_low) * 100
     stage3 = pct_move >= min_pct
-    
+
     if mode == "Aggressive":
         return stage1
     elif mode == "Balanced":
@@ -1003,15 +1161,6 @@ def check_alert_strategy(df, mode, min_pct=20.0):
         return stage1 and stage2 and stage3
     else:
         return False
-
-
-@st.cache_data(show_spinner=False, ttl=_refresh_ttl)
-def get_cached_data(exchange: str, pair: str, timeframe: str) -> Optional[pd.DataFrame]:
-    try:
-        limit = get_bars_limit(timeframe)
-        return fetch_data(exchange, pair, timeframe, limit)
-    except Exception:
-        return None
 
 
 # =============================================================================
@@ -1041,58 +1190,33 @@ def get_coinbase_products(quote: str) -> List[str]:
 def get_binance_products(quote: str) -> List[str]:
     url = f"{CONFIG.BINANCE_BASE}/api/v3/exchangeInfo"
     quote_upper = quote.upper()
-    print(f"[BINANCE DEBUG] get_binance_products called: quote={quote_upper}")
-    print(f"[BINANCE DEBUG] get_binance_products: requesting {url}")
 
     try:
         response = requests.get(url, timeout=25)
-        print(f"[BINANCE DEBUG] get_binance_products: status_code={response.status_code}")
 
         if response.status_code != 200:
-            body_preview = response.text[:500] if response.text else "(empty body)"
-            print(f"[BINANCE DEBUG] get_binance_products: non-200 response body preview: {body_preview}")
             return []
 
         data = response.json()
         if not data:
-            print("[BINANCE DEBUG] get_binance_products: response JSON is empty")
             return []
 
         all_symbols = data.get("symbols", [])
-        print(f"[BINANCE DEBUG] get_binance_products: total symbols in response={len(all_symbols)}")
-
         if not all_symbols:
-            print("[BINANCE DEBUG] get_binance_products: 'symbols' key missing or empty in response")
             return []
 
         products = []
-        trading_count = 0
-        quote_match_count = 0
-
         for symbol in all_symbols:
-            if symbol.get("status") == "TRADING":
-                trading_count += 1
             if symbol.get("status") == "TRADING" and symbol.get("quoteAsset") == quote_upper:
-                quote_match_count += 1
                 pair = f"{symbol['baseAsset']}-{quote_upper}"
                 products.append(pair)
 
-        products = sorted(products)
-        print(
-            f"[BINANCE DEBUG] get_binance_products: TRADING symbols={trading_count}, "
-            f"quote={quote_upper} matches={quote_match_count}, pairs after filter={len(products)}"
-        )
-        if products:
-            print(f"[BINANCE DEBUG] get_binance_products: sample pairs (first 5): {products[:5]}")
-        else:
-            print(f"[BINANCE DEBUG] get_binance_products: no pairs matched quote={quote_upper}")
-
-        return products
-    except Exception as e:
-        print(f"[BINANCE DEBUG] get_binance_products: error {type(e).__name__}: {e}")
+        return sorted(products)
+    except Exception:
         return []
 
 
+@st.cache_data(ttl=300, show_spinner=False)
 def get_products(exchange: str, quote: str) -> List[str]:
     exchange_lower = exchange.lower()
 
@@ -1165,167 +1289,57 @@ def check_progressive_stages(df: pd.DataFrame, settings: dict) -> Dict[str, Any]
 
     return result
 
-def send_alert_notification(pair, delta_pct, rel_vol, alert_type):
-    """
-    Send email and/or webhook notifications for alert.
-    """
-    # CROSS SYNC LOGIC
-    if st.session_state.get("macd_cross_sync"):
-        # Only apply to MACD signals
-        if "MACD" in str(alert_type):
-            # Get current settings
-            tf = st.session_state.get("sort_tf", "1h")
-            vol_req = st.session_state.get("spike_multiple", 3.5)
-            
-            # SILENT SUPPRESSION: Return immediately if conditions aren't met
-            # This stops the alert without affecting the scanner's score or dashboard
-            if tf not in ["4h", "1d", "1D", "Daily"] or rel_vol < vol_req:
-                return 
-            
-            # Update Alert Message Format to "Pair | Timeframe"
-            alert_type = f"{pair} | {tf}"
-    
-    import smtplib
-    from email.mime.text import MIMEText
-    from email.mime.multipart import MIMEMultipart
-    
-    # Get email settings from session state
-    email_recipient = st.session_state.get("email_to", "")
-    webhook_url = st.session_state.get("webhook_url", "")
-    
-    # Check if we have SMTP credentials in secrets
-    smtp_configured = "email" in st.secrets
 
-    # 🔔 ADD THESE DEBUG LINES TOO:
-    print(f"📧 Email recipient: {email_recipient}")
-    print(f"🔐 SMTP configured: {smtp_configured}")
-    
-    # Prepare alert message
-    subject = f"🚀 Alert: {pair} - {alert_type}"
-    message = f"""
-    Crypto Alert Triggered!
-    
-    Pair: {pair}
-    Alert Type: {alert_type}
-    Price Change: {delta_pct:.2f}%
-    Relative Volume: {rel_vol:.2f}x
-    
-    Check your dashboard for more details.
-    """
-    
-    # Send email if configured
-    if smtp_configured and email_recipient:
-        try:
-            msg = MIMEMultipart()
-            msg['From'] = st.secrets["email"]["sender_email"]
-            msg['To'] = email_recipient
-            msg['Subject'] = subject
-            msg.attach(MIMEText(message, 'plain'))
-            
-            server = smtplib.SMTP(st.secrets["email"]["smtp_host"], st.secrets["email"]["smtp_port"])
-            server.starttls()
-            server.login(st.secrets["email"]["sender_email"], st.secrets["email"]["sender_password"])
-            server.send_message(msg)
-            server.quit()
-            print(f"✅ Email sent to {email_recipient}")
-        except Exception as e:
-            print(f"❌ Failed to send email: {e}")
-    
-    # Send webhook if configured
-    if webhook_url:
-        try:
-            import requests
-            payload = {
-                "pair": pair,
-                "alert_type": alert_type,
-                "delta_pct": delta_pct,
-                "rel_vol": rel_vol,
-                "message": message
-            }
-            response = requests.post(webhook_url, json=payload)
-            if response.status_code == 200:
-                print(f"✅ Webhook sent successfully")
-            else:
-                print(f"❌ Webhook failed: {response.status_code}")
-        except Exception as e:
-            print(f"❌ Failed to send webhook: {e}")
+def format_alert_stage(pair: str, alert_type: str, rel_vol: float) -> Optional[str]:
+    """Apply MACD cross-sync filter; return None to suppress delivery."""
+    if st.session_state.get("macd_cross_sync") and "MACD" in str(alert_type):
+        tf = st.session_state.get("sort_tf", "1h")
+        vol_req = float(st.session_state.get("spike_multiple", 3.5))
+        if tf not in ("4h", "1d", "1D", "Daily") or rel_vol < vol_req:
+            return None
+        return f"{pair} | {tf}"
+    return alert_type
+
+
 def should_send_alert(pair, delta_pct, rel_volume, alerted_pairs, use_vol_spike=False):
-    """
-    Dynamic price-ladder alert logic.
-    Checks Gates (Delta + Volume if enabled) AND Price Ladder (Initial/+5%).
-    """
-    # DEBUG: Log function entry
-    print(f"[ALERT CHECK] {pair}: delta={delta_pct:.2f}%, use_vol={use_vol_spike}")
+    """Dynamic price-ladder alert logic (delta + optional volume gate)."""
     base_delta = float(st.session_state.get("min_pct", 0.0))
     base_volume = float(st.session_state.get("vol_mult", 1.10))
-    DELTA_STEP = 5.0
-    
-    # ✅ Check Delta (Always Required)
+    delta_step = 5.0
+
     delta_ok = delta_pct >= base_delta
-    
-        # ✅ Check Volume (Only if Volume Gate is Enabled)
     volume_ok = True
     if use_vol_spike:
         volume_ok = rel_volume >= base_volume
-    
-    # ✅ Combine checks
-    qualified = delta_ok and volume_ok
-    
-    if not qualified:
-        # ✅ Reset State if Gates Fail
+
+    if not (delta_ok and volume_ok):
         if pair in alerted_pairs:
             alerted_pairs.pop(pair, None)
         return False, None
-    # DEBUG: Passed qualification check
-    print(f"[QUALIFIED] {pair}: delta_ok={delta_ok}, volume_ok={volume_ok}")
-            # ✅ Price Ladder Logic (Initial vs. +5% Re-Alert)
+
     pair_state = alerted_pairs.get(pair)
     if not pair_state:
-        # Initial Alert
-        alerted_pairs[pair] = {
-            "last_alerted_delta": float(delta_pct)
-        }
-        print(f"[ALERT TRIGGERED - INITIAL] {pair}")
+        alerted_pairs[pair] = {"last_alerted_delta": float(delta_pct)}
         return True, f"initial_{delta_pct:.2f}"
-    
+
     last_alerted_delta = float(pair_state.get("last_alerted_delta", base_delta))
-    if delta_pct >= last_alerted_delta + DELTA_STEP:
-        print(f"[ALERT TRIGGERED - RE-ALERT] {pair}")
-        # Re-Alert (+5% Momentum)
+    if delta_pct >= last_alerted_delta + delta_step:
         alerted_pairs[pair]["last_alerted_delta"] = float(delta_pct)
         return True, f"delta_{delta_pct:.2f}"
-    print(f"[ALERT REJECTED - Price Ladder] {pair}")
-    return False, None
-    
-    # ✅ Price Ladder Logic (Initial vs. +5% Re-Alert)
-    pair_state = alerted_pairs.get(pair)
-    if not pair_state:
-        # Initial Alert
-        alerted_pairs[pair] = {
-            "last_alerted_delta": float(delta_pct)
-        }
-        return True, f"initial_{delta_pct:.2f}"
-    
-    last_alerted_delta = float(pair_state.get("last_alerted_delta", base_delta))
-    if delta_pct >= last_alerted_delta + DELTA_STEP:
-        # Re-Alert (+5% Momentum)
-        alerted_pairs[pair]["last_alerted_delta"] = float(delta_pct)
-        return True, f"delta_{delta_pct:.2f}"
-    
+
     return False, None
 
+
 # =============================================================================
-# ALERT SENDING
+# ALERT SENDING (batch only — one email/webhook per scan)
 # =============================================================================
 def send_email_alert(pairs_data: List[dict]) -> Tuple[bool, str]:
     try:
         smtp_host = st.secrets.get("email", {}).get("smtp_host", "smtp.gmail.com")
-        smtp_port = st.secrets.get("email", {}).get("smtp_port", 587)
+        smtp_port = int(st.secrets.get("email", {}).get("smtp_port", 587))
         sender_email = st.secrets.get("email", {}).get("sender_email")
         sender_password = st.secrets.get("email", {}).get("sender_password")
         recipient = st.session_state.get("email_to", "")
-
-        print(f"[EMAIL CONFIG] sender_email={bool(sender_email)} sender_password={bool(sender_password)} recipient={bool(recipient)}")
 
         if not all([sender_email, sender_password, recipient]):
             return False, "Email not configured"
@@ -1333,37 +1347,18 @@ def send_email_alert(pairs_data: List[dict]) -> Tuple[bool, str]:
         subject = f"🚀 {len(pairs_data)} Alert{'s' if len(pairs_data) > 1 else ''}"
 
         body_parts = []
-        stage_names = {"stage1": "MACD Cross", "stage2": "Histogram+", "stage3": "Threshold Hit"}
         for data in pairs_data:
             body_parts.append(
                 f"""
-{data['pair']} - {stage_names.get(data['stage'], data['stage'])}
+{data['pair']} - {data['stage']}
 Price: ${data['price']:.6f}
 Change: {data['pct']:+.2f}%
 Timeframe: {data['timeframe']}
 Exchange: {data['exchange']}
 Signal: {data['signal']}
 """
-        )
-        import smtplib
-        from email.message import EmailMessage
+            )
 
-        # ... after line 781 ...
-        msg = EmailMessage()
-        msg.set_content("\n".join(body_parts))
-        msg["Subject"] = subject
-        msg["From"] = sender_email
-        msg["To"] = recipient
-
-        try:
-            with smtplib.SMTP("smtp.gmail.com", 587) as server:
-                server.starttls()  # Secure the connection
-                server.login(sender_email, sender_password)
-                server.send_message(msg)
-            return True, "Alert sent successfully"
-        except Exception as e:
-            return False, f"SMTP Error: {str(e)}"
-        
         body = "\n---\n".join(body_parts)
         body += "\n\n📌 Note: Re-alerts require ≥5% price increase from previous alert"
         body += f"\n\nTimestamp: {dt.datetime.now(dt.timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
@@ -1459,17 +1454,12 @@ def evaluate_gates(df: pd.DataFrame, settings: dict) -> Tuple[dict, int, str, in
 
     current_close = float(df["close"].iloc[-1])
 
-    # Calculate the index for 'lookback' bars ago
-    start_index = -(lookback + 1)
-    
-    # Safety check to ensure the index exists
-    if abs(start_index) >= n:
-        start_index = -(n - 1)
-        
-    # Use the OPEN price of that candle
-    start_price = float(df["open"].iloc[start_index])
-    
-    # Calculate % change from that Open price
+    if lookback > 0 and n > 1:
+        window = df.iloc[-(lookback + 1):-1]
+        start_price = float(window["low"].min()) if len(window) else float(df["low"].iloc[-2])
+    else:
+        start_price = float(df["low"].iloc[-1])
+
     delta_pct = ((current_close - start_price) / start_price) * 100.0
     macd_line, signal_line, hist = macd_core(
         df["close"],
@@ -1687,12 +1677,7 @@ with st.sidebar:
             if p.strip()
         ]
     else:
-        effective_exchange = (
-            "Coinbase"
-            if "coming soon" in st.session_state["exchange"].lower()
-            else st.session_state["exchange"]
-        )
-        avail_pairs = get_products(effective_exchange, st.session_state["quote"])
+        avail_pairs = get_products(get_effective_exchange(), st.session_state["quote"])
 
     avail_count = len(avail_pairs)
 
@@ -2057,7 +2042,7 @@ with expander("Gates"):
 
     st.markdown("---")
 
-    gate_modes = ["ALL", "ANY", "Custom (K/Y)"]
+    gate_modes = ["ALL", "ANY", "BALANCED", "Custom (K/Y)"]
     current_mode_idx = (
         gate_modes.index(st.session_state.get("gate_mode", "ANY"))
         if st.session_state.get("gate_mode") in gate_modes
@@ -2139,11 +2124,12 @@ with expander("Display"):
         step=1,
         key="refresh_sec",
         help=(
-            "Scans chain immediately after each run finishes. This value is only used "
-            "as a fallback delay if the scan loop stops, or on first load."
+            "Minimum seconds between automatic scans. The results panel also "
+            "refreshes on this interval via the fragment timer."
         ),
     )
     if new_rs != st.session_state.get("refresh_sec"):
+        get_cached_data.clear()
         save_to_url("refresh_sec", new_rs)
 
 with expander("Listing Radar"):
@@ -2160,6 +2146,8 @@ with expander("Listing Radar"):
     if new_lre != current_lr_enabled:
         st.session_state["lr_enabled"] = new_lre
         save_to_url("lr_enabled", new_lre)
+        if new_lre:
+            run_listing_radar_poll(force=True)
 
     if st.session_state.get("lr_enabled", False):
         c1, c2 = st.columns(2)
@@ -2205,43 +2193,10 @@ with expander("Listing Radar"):
             st.session_state.get("lr_feeds", ""),
             key="lr_feeds",
         )
-            # Listing Radar: Detect new listings
-    if st.session_state.get("lr_enabled", False):
-        lr_quotes = [q.strip() for q in st.session_state.get("lr_watch_quotes", "USD,USDT,USDC").split(",")]
-        lr_window = st.session_state.get("lr_upcoming_window_h", 48)
-        
-        for exchange_name in ["Coinbase", "Binance"]:
-            watch_key = f"lr_watch_{exchange_name.lower()}"
-            if st.session_state.get(watch_key, True):
-                for quote in lr_quotes:
-                    try:
-                        current_products = get_products(exchange_name, quote)
-                        known = st.session_state.get("lr_baselines", {}).get(exchange_name, set())
-                        
-                        # Find new listings
-                        new_listings = [p for p in current_products if p not in known]
-                        
-                        if new_listings:
-                            for pair in new_listings:
-                                if "lr_events" not in st.session_state:
-                                    st.session_state.lr_events = []
-                                st.session_state.lr_events.append({
-                                    "pair": pair,
-                                    "exchange": exchange_name,
-                                    "quote": quote,
-                                    "detected_at": dt.datetime.now(dt.timezone.utc).isoformat()
-                                })
-                                print(f"🆕 NEW LISTING: {pair} on {exchange_name}")
-                        
-                        # Update baselines
-                        if "lr_baselines" not in st.session_state:
-                            st.session_state.lr_baselines = {}
-                        st.session_state.lr_baselines[exchange_name] = set(current_products)
-                        
-                    except Exception as e:
-                        print(f"LR Error {exchange_name} {quote}: {e}")
 
-# Display Listing Radar in sidebar
+run_listing_radar_poll()
+
+lr_window = int(st.session_state.get("lr_upcoming_window_h", 48))
 if st.session_state.get("lr_events"):
     with st.sidebar.expander("🆕 Listing Radar"):
         cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=lr_window)
@@ -2250,8 +2205,9 @@ if st.session_state.get("lr_events"):
         
         if recent:
             st.write(f"**New listings (last {lr_window}h):**")
-            for event in recent[-20:]:  # Show last 20
-                st.write(f"🆕 {event['pair']} ({event['exchange']})")
+            for event in recent[-20:]:
+                icon = "📰" if event.get("type") == "feed" else "🆕"
+                st.write(f"{icon} {event['pair']} ({event['exchange']})")
         else:
             st.write("No new listings in window")
 
@@ -2267,6 +2223,8 @@ WS_STAGGER_SEC = 0.4
 
 # Streamlit session_state is main-thread only — workers use this shared store.
 _WS_LOCK = threading.Lock()
+_WS_THREADS_LOCK = threading.Lock()
+_WS_WORKERS: Dict[int, threading.Thread] = {}
 _WS_SHARED: Dict[str, Any] = {
     "stop": False,
     "prices": {},
@@ -2338,8 +2296,8 @@ def _ws_runtime() -> dict:
 
 
 def _ws_count_alive_threads() -> int:
-    threads = st.session_state.get("ws_threads", {})
-    return sum(1 for t in threads.values() if t.is_alive())
+    with _WS_THREADS_LOCK:
+        return sum(1 for t in _WS_WORKERS.values() if t.is_alive())
 
 
 def _ws_handle_coinbase_message(data: dict) -> None:
@@ -2370,6 +2328,13 @@ def _ws_handle_coinbase_message(data: dict) -> None:
 def stop_websocket_workers(clear_cache: bool = False) -> None:
     with _WS_LOCK:
         _WS_SHARED["stop"] = True
+    with _WS_THREADS_LOCK:
+        workers = list(_WS_WORKERS.values())
+    for worker in workers:
+        if worker.is_alive():
+            worker.join(timeout=WS_RECV_TIMEOUT + 3)
+    with _WS_THREADS_LOCK:
+        _WS_WORKERS.clear()
     st.session_state["ws_stop"] = True
     st.session_state["ws_alive"] = False
     st.session_state.pop("ws_threads", None)
@@ -2470,7 +2435,6 @@ def ensure_coinbase_websocket(pairs: list, exchange: str) -> None:
                         _WS_SHARED["connected"] = True
                         _WS_SHARED["connecting"] = False
                         _WS_SHARED["chunk_status"][chunk_id] = "connected"
-                    st.session_state["ws_alive"] = True
                     connected_ok = True
 
                     while not _WS_SHARED.get("stop"):
@@ -2521,12 +2485,15 @@ def ensure_coinbase_websocket(pairs: list, exchange: str) -> None:
                 _WS_SHARED["chunk_status"][chunk_id] = "disconnected"
             print(f"[WS #{chunk_id}] Connection closed")
 
-            others_alive = _ws_count_alive_threads() > 1
+            with _WS_THREADS_LOCK:
+                others_alive = sum(
+                    1 for tid, t in _WS_WORKERS.items()
+                    if tid != chunk_id and t.is_alive()
+                )
             if not others_alive:
                 with _WS_LOCK:
                     _WS_SHARED["connected"] = False
                     _WS_SHARED["connecting"] = False
-                st.session_state["ws_alive"] = False
 
             if _WS_SHARED.get("stop"):
                 return
@@ -2547,10 +2514,13 @@ def ensure_coinbase_websocket(pairs: list, exchange: str) -> None:
             name=f"coinbase-ws-{i}",
         )
         ws_threads[i] = ws_thread
+        with _WS_THREADS_LOCK:
+            _WS_WORKERS[i] = ws_thread
         ws_thread.start()
 
     st.session_state["ws_threads"] = ws_threads
     st.session_state["ws_thread"] = ws_threads.get(0)
+    st.session_state["ws_alive"] = True
     print(
         f"[WS] Started {len(chunks)} connections for {len(pairs)} pairs "
         f"({chunk_size} pairs/connection) → {CONFIG.COINBASE_WS}"
@@ -2577,8 +2547,6 @@ def get_websocket_status_label() -> Tuple[str, str]:
         return "⚪", f"WebSocket N/A for {effective}"
 
     snap = _ws_snapshot()
-    threads = st.session_state.get("ws_threads", {})
-    thread_alive = any(t.is_alive() for t in threads.values())
     alive_count = _ws_count_alive_threads()
     subscribed = int(snap["subscribed"])
     conn_count = int(snap["connection_count"])
@@ -2587,7 +2555,7 @@ def get_websocket_status_label() -> Tuple[str, str]:
     last_msg = float(snap["last_msg"])
     age = time.time() - last_msg if last_msg > 0 else None
 
-    if snap["connecting"] and (thread_alive or price_count > 0):
+    if snap["connecting"] and (alive_count > 0 or price_count > 0):
         return (
             "🟡",
             f"Connecting {conn_count} connections for {subscribed} pairs "
@@ -2734,18 +2702,27 @@ def render_scan_results(
         st.info("No pairs match filters.")
 
 
-def scan_results_panel(
-    pairs: list,
-    effective_exchange: str,
-    gate_settings: dict,
-    sort_tf: str,
-    hard_filter: bool,
-    refresh_interval: int,
-) -> None:
-    """Scan + results island — reruns alone so sidebar/header stay stable."""
+def scan_results_panel() -> None:
+    """Scan + results island — reads live session_state so fragment reruns stay current."""
+    pairs = build_scan_pairs()
+    effective_exchange = get_effective_exchange()
+    gate_settings = build_gate_settings()
+    sort_tf = st.session_state.get("sort_tf", "1h")
+    hard_filter = bool(st.session_state.get("hard_filter", False))
+    refresh_interval = int(st.session_state.get("refresh_sec", 30))
+    min_bars = int(st.session_state.get("min_bars", 3))
+
+    if st.session_state.get("mc_filter_enabled") and pairs:
+        st.caption(
+            f"Market cap filter active — scanning {len(pairs)} pairs "
+            f"(min ${st.session_state.get('min_market_cap_millions', 10)}M)."
+        )
+
     if not pairs:
         st.info("No pairs found. Adjust settings.")
         return
+
+    ensure_coinbase_websocket(pairs, effective_exchange)
 
     if "alerted_pairs" not in st.session_state:
         st.session_state["alerted_pairs"] = load_alerted_pairs()
@@ -2775,7 +2752,6 @@ def scan_results_panel(
 
     cached_rows = list(st.session_state.get("scan_rows") or [])
     cached_tf = st.session_state.get("scan_sort_tf", sort_tf)
-    scan_completed = False
 
     if need_rescan and cached_rows:
         with results_ph.container():
@@ -2790,140 +2766,144 @@ def scan_results_panel(
     if need_rescan:
         st.session_state["scan_in_progress"] = True
         rows = []
-        total_pairs = len(pairs)
-        for i, pair in enumerate(pairs):
-            done = i + 1
-            left = total_pairs - done
-            progress_ph.progress(done / total_pairs)
-            status_ph.caption(f"Processing {pair}... ({done}/{total_pairs})")
-            remaining_ph.caption(f"{left} pairs remaining")
-            if done % 50 == 0:
-                refresh_ws_status_caption()
+        try:
+            total_pairs = len(pairs)
+            for i, pair in enumerate(pairs):
+                done = i + 1
+                left = total_pairs - done
+                progress_ph.progress(done / total_pairs)
+                status_ph.caption(f"Processing {pair}... ({done}/{total_pairs})")
+                remaining_ph.caption(f"{left} pairs remaining")
+                if done % 50 == 0:
+                    refresh_ws_status_caption()
 
-            df = get_cached_data(effective_exchange, pair, sort_tf)
-            if df is None or df.empty or len(df) < st.session_state.get("min_bars", 8):
-                continue
-            if gate_settings.get("use_vol_spike", False):
-                vol_spike_ratio = volume_spike(df, gate_settings.get("vol_window", 20))
-            else:
-                vol_spike_ratio = 0.0
-
-            meta, passed, chips, enabled = evaluate_gates(df, gate_settings)
-            delta_pct = meta.get("delta_pct", 0.0)
-            rel_vol = vol_spike_ratio
-            use_vol = st.session_state.get("use_vol_spike", False)
-
-            is_green = passed >= enabled and enabled > 0
-            is_yellow = (0 < passed < enabled) and (passed >= enabled - 1) if enabled > 0 else False
-
-            if mode == "ALL":
-                is_green = (enabled > 0 and passed == enabled)
-            elif mode == "ANY":
-                is_green = (passed >= 1)
-            elif mode == "BALANCED":
-                is_green = (passed >= (enabled // 2 + 1)) if enabled > 0 else False
-            elif mode == "Custom (K/Y)":
-                is_green = passed >= k_required
-                is_yellow = (passed >= y_required) and (passed < k_required)
-            else:
-                is_green = False
-
-            ws_price = get_ws_price(pair)
-            last_price = float(ws_price) if ws_price else float(df["close"].iloc[-1])
-            pct_change = meta["delta_pct"]
-
-            strategy_approved = True
-            if alert_mode != "Off" and is_green:
-                df_4h = get_cached_data(effective_exchange, pair, "4h")
-                df_1d = get_cached_data(effective_exchange, pair, "1d")
-
-                strategy_approved = False
-                if check_alert_strategy(df_1d, alert_mode, 20.0):
-                    strategy_approved = True
-                elif check_alert_strategy(df_4h, alert_mode, 20.0):
-                    strategy_approved = True
-
-                if alert_mode == "Conservative" and strategy_approved:
-                    df_15m = get_cached_data(effective_exchange, pair, "15m")
-                    if df_15m is not None:
-                        recent_low_15m = df_15m['close'].iloc[-5:].min()
-                        pct_move_15m = ((df_15m['close'].iloc[-1] - recent_low_15m) / recent_low_15m) * 100
-                        if pct_move_15m < 20.0:
-                            strategy_approved = False
-
-            if is_green and strategy_approved and alert_mode != "Off":
-                include, alert_type = should_send_alert(
-                    pair, delta_pct, rel_vol, st.session_state.alerted_pairs,
-                    use_vol_spike=use_vol
-                )
-                if include:
-                    send_alert_notification(pair, delta_pct, rel_vol, alert_type)
-                    alerts_to_send.append({
-                        "pair": pair,
-                        "price": last_price,
-                        "pct": pct_change,
-                        "timeframe": sort_tf,
-                        "exchange": effective_exchange,
-                        "signal": "Strong Buy",
-                        "stage": alert_type,
-                    })
-
-            if not is_green and pair in alerted_pairs:
-                alerted_pairs.pop(pair, None)
-
-            if hard_filter:
-                if mode in {"ALL", "ANY"} and not is_green:
+                df = fetch_pair_data(effective_exchange, pair, sort_tf)
+                if df is None or df.empty or len(df) < min_bars:
                     continue
-                if mode == "Custom (K/Y)" and not (is_green or is_yellow):
-                    continue
+                if gate_settings.get("use_vol_spike", False):
+                    vol_spike_ratio = volume_spike(df, gate_settings.get("vol_window", 20))
+                else:
+                    vol_spike_ratio = 0.0
 
-            signal = ""
-            if is_green:
-                signal = "Strong Buy"
-            elif is_yellow:
-                signal = "Watch"
+                meta, passed, chips, enabled = evaluate_gates(df, gate_settings)
+                delta_pct = meta.get("delta_pct", 0.0)
+                rel_vol = vol_spike_ratio
+                use_vol = st.session_state.get("use_vol_spike", False)
 
-            rows.append({
-                "Pair": pair,
-                "Price": f"${last_price:.6f}",
-                f"% Change ({sort_tf})": pct_change,
-                "Signal": signal,
-                "Gates": chips,
-                "_passed": passed,
-                "_enabled": enabled,
-                "_green": is_green,
-                "_yellow": is_yellow,
-                "_ws_active": ws_price is not None,
-            })
+                is_green = passed >= enabled and enabled > 0
+                is_yellow = (0 < passed < enabled) and (passed >= enabled - 1) if enabled > 0 else False
 
-        progress_ph.empty()
-        status_ph.empty()
-        remaining_ph.empty()
+                if mode == "ALL":
+                    is_green = (enabled > 0 and passed == enabled)
+                elif mode == "ANY":
+                    is_green = (passed >= 1)
+                elif mode == "BALANCED":
+                    is_green = (passed >= (enabled // 2 + 1)) if enabled > 0 else False
+                elif mode == "Custom (K/Y)":
+                    is_green = passed >= k_required
+                    is_yellow = (passed >= y_required) and (passed < k_required)
+                else:
+                    is_green = False
 
-        if alerts_to_send and rows:
-            chg_col = f"% Change ({sort_tf})"
-            temp_df = pd.DataFrame(rows)
-            temp_df = temp_df.sort_values(chg_col, ascending=False)
-            top_10_pairs = temp_df[temp_df["_green"] == True].head(10)["Pair"].tolist()
-            alerts_to_send = [
-                alert for alert in alerts_to_send if alert["pair"] in top_10_pairs
-            ]
+                ws_price = get_ws_price(pair)
+                last_price = float(ws_price) if ws_price else float(df["close"].iloc[-1])
+                pct_change = meta["delta_pct"]
 
-        save_alerted_pairs(st.session_state["alerted_pairs"])
+                strategy_approved = True
+                if alert_mode != "Off" and is_green:
+                    df_4h = fetch_pair_data(effective_exchange, pair, "4h")
+                    df_1d = fetch_pair_data(effective_exchange, pair, "1d")
 
-        if alerts_to_send:
-            if st.session_state.get("email_to"):
-                send_email_alert(alerts_to_send)
-            if st.session_state.get("webhook_url"):
-                send_webhook_alert(alerts_to_send)
+                    strategy_approved = False
+                    if check_alert_strategy(df_1d, alert_mode, 20.0):
+                        strategy_approved = True
+                    elif check_alert_strategy(df_4h, alert_mode, 20.0):
+                        strategy_approved = True
 
-        st.session_state["scan_rows"] = rows
-        st.session_state["scan_sort_tf"] = sort_tf
-        st.session_state["last_update"] = int(time.time())
-        st.session_state["scan_in_progress"] = False
-        display_rows = rows
-        display_tf = sort_tf
-        scan_completed = True
+                    if alert_mode == "Conservative" and strategy_approved:
+                        df_15m = fetch_pair_data(effective_exchange, pair, "15m")
+                        if df_15m is not None:
+                            recent_low_15m = df_15m["close"].iloc[-5:].min()
+                            pct_move_15m = (
+                                (df_15m["close"].iloc[-1] - recent_low_15m) / recent_low_15m
+                            ) * 100
+                            if pct_move_15m < 20.0:
+                                strategy_approved = False
+
+                if is_green and strategy_approved and alert_mode != "Off":
+                    include, alert_type = should_send_alert(
+                        pair, delta_pct, rel_vol, st.session_state["alerted_pairs"],
+                        use_vol_spike=use_vol,
+                    )
+                    if include:
+                        stage = format_alert_stage(pair, alert_type, rel_vol)
+                        if stage is not None:
+                            alerts_to_send.append({
+                                "pair": pair,
+                                "price": last_price,
+                                "pct": pct_change,
+                                "timeframe": sort_tf,
+                                "exchange": effective_exchange,
+                                "signal": "Strong Buy",
+                                "stage": stage,
+                            })
+
+                if not is_green and pair in alerted_pairs:
+                    alerted_pairs.pop(pair, None)
+
+                if hard_filter:
+                    if mode in {"ALL", "ANY", "BALANCED"} and not is_green:
+                        continue
+                    if mode == "Custom (K/Y)" and not (is_green or is_yellow):
+                        continue
+
+                signal = ""
+                if is_green:
+                    signal = "Strong Buy"
+                elif is_yellow:
+                    signal = "Watch"
+
+                rows.append({
+                    "Pair": pair,
+                    "Price": f"${last_price:.6f}",
+                    f"% Change ({sort_tf})": pct_change,
+                    "Signal": signal,
+                    "Gates": chips,
+                    "_passed": passed,
+                    "_enabled": enabled,
+                    "_green": is_green,
+                    "_yellow": is_yellow,
+                    "_ws_active": ws_price is not None,
+                })
+
+            progress_ph.empty()
+            status_ph.empty()
+            remaining_ph.empty()
+
+            if alerts_to_send and rows:
+                chg_col = f"% Change ({sort_tf})"
+                temp_df = pd.DataFrame(rows)
+                temp_df = temp_df.sort_values(chg_col, ascending=False)
+                top_10_pairs = temp_df[temp_df["_green"] == True].head(10)["Pair"].tolist()
+                alerts_to_send = [
+                    alert for alert in alerts_to_send if alert["pair"] in top_10_pairs
+                ]
+
+            save_alerted_pairs(st.session_state["alerted_pairs"])
+
+            if alerts_to_send:
+                if st.session_state.get("email_to"):
+                    send_email_alert(alerts_to_send)
+                if st.session_state.get("webhook_url"):
+                    send_webhook_alert(alerts_to_send)
+
+            st.session_state["scan_rows"] = rows
+            st.session_state["scan_sort_tf"] = sort_tf
+            st.session_state["last_update"] = int(time.time())
+            display_rows = rows
+            display_tf = sort_tf
+        finally:
+            st.session_state["scan_in_progress"] = False
     else:
         display_rows = cached_rows
         display_tf = cached_tf
@@ -2942,10 +2922,6 @@ def scan_results_panel(
 
     refresh_ws_status_caption()
 
-    if scan_completed:
-        st.session_state["immediate_rescan"] = True
-        st.rerun()
-
 
 # =============================================================================
 # MAIN DISPLAY
@@ -2956,6 +2932,7 @@ col1, col2, col3 = st.columns([1, 1, 2])
 with col1:
     if st.button("🔄 Refresh Now", type="primary"):
         get_cached_data.clear()
+        get_products.clear()
         st.session_state["ws_prices"] = {}
         stop_websocket_workers(clear_cache=True)
         st.session_state["last_update"] = 0
@@ -2966,43 +2943,20 @@ with col1:
 with col2:
     if st.button("🧹 Clear Cache"):
         get_cached_data.clear()
-        st.session_state.clear()
+        get_products.clear()
+        get_market_caps.clear()
+        stop_websocket_workers(clear_cache=True)
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        init_session_state()
         clear_alerted_pairs()
         st.rerun()
 
 with col3:
     ws_status_placeholder = st.empty()
 
-# Determine pairs
-if st.session_state["use_my_pairs"]:
-    pairs = [
-        p.strip().upper()
-        for p in st.session_state.get("my_pairs", "").split(",")
-        if p.strip()
-    ]
-elif st.session_state["use_watch"]:
-    pairs = [
-        p.strip().upper()
-        for p in st.session_state["watchlist"].split(",")
-        if p.strip()
-    ]
-else:
-    effective_exchange = (
-        "Coinbase"
-        if "coming soon" in st.session_state["exchange"].lower()
-        else st.session_state["exchange"]
-    )
-    pairs = get_products(effective_exchange, st.session_state["quote"])
-
-cap = max(5, min(500, st.session_state.get("pairs_to_discover", 400)))
-pairs = pairs[:cap]
-
-effective_exchange = (
-    "Coinbase"
-    if "coming soon" in st.session_state["exchange"].lower()
-    else st.session_state["exchange"]
-)
-
+pairs = build_scan_pairs()
+effective_exchange = get_effective_exchange()
 ensure_coinbase_websocket(pairs, effective_exchange)
 
 
@@ -3014,61 +2968,9 @@ def refresh_ws_status_caption() -> None:
 
 refresh_ws_status_caption()
 
-# Gate settings dict
-gate_settings = {
-    "lookback_candles": int(st.session_state.get("lookback_candles", 3)),
-    "min_pct": float(st.session_state.get("min_pct", 3.0)),
-    "use_vol_spike": bool(st.session_state.get("use_vol_spike", False)),
-    "vol_mult": float(st.session_state.get("vol_mult", 1.10)),
-    "vol_window": int(st.session_state.get("vol_window", 20)),
-    "use_rsi": bool(st.session_state.get("use_rsi", False)),
-    "rsi_len": int(st.session_state.get("rsi_len", 14)),
-    "min_rsi": int(st.session_state.get("min_rsi", 55)),
-    "use_macd": bool(st.session_state.get("use_macd", False)),
-    "macd_fast": int(st.session_state.get("macd_fast", 12)),
-    "macd_slow": int(st.session_state.get("macd_slow", 26)),
-    "macd_sig": int(st.session_state.get("macd_sig", 9)),
-    "min_mhist": float(st.session_state.get("min_mhist", 0.0)),
-    "use_atr": bool(st.session_state.get("use_atr", False)),
-    "atr_len": int(st.session_state.get("atr_len", 14)),
-    "min_atr": float(st.session_state.get("min_atr", 0.5)),
-    "use_trend": bool(st.session_state.get("use_trend", False)),
-    "pivot_span": int(st.session_state.get("pivot_span", 4)),
-    "trend_within": int(st.session_state.get("trend_within", 48)),
-    "use_roc": bool(st.session_state.get("use_roc", False)),
-    "min_roc": float(st.session_state.get("min_roc", 1.0)),
-    "use_macd_cross": bool(st.session_state.get("use_macd_cross", False)),
-    "macd_cross_bars": int(st.session_state.get("macd_cross_bars", 5)),
-    "macd_cross_only_bull": bool(st.session_state.get("macd_cross_only_bull", True)),
-    "macd_cross_below_zero": bool(st.session_state.get("macd_cross_below_zero", True)),
-    "macd_hist_confirm_bars": int(st.session_state.get("macd_hist_confirm_bars", 3)),
-}
-
-# MARKET CAP FILTER LOGIC
-if st.session_state.get("mc_filter_enabled"):
-    mc_data = get_market_caps()
-    min_mc = st.session_state.get("min_market_cap_millions", 10) * 1_000_000
-    
-    def normalize_symbol(pair):
-        return pair.split("-")[0].upper()
-    
-    original_count = len(pairs)
-    pairs = [p for p in pairs if mc_data.get(normalize_symbol(p), 0) >= min_mc]
-    st.info(f"📊 Market Cap Filter: {original_count} → {len(pairs)} pairs (Min: {min_mc/1_000_000:.0f}M)")        
-
-sort_tf = st.session_state.get("sort_tf", "1h")
-hard_filter = st.session_state["hard_filter"]
-refresh_interval = st.session_state["refresh_sec"]
-
+refresh_interval = int(st.session_state.get("refresh_sec", 30))
 scan_results_fragment = st_fragment(run_every=max(5, refresh_interval))(scan_results_panel)
-scan_results_fragment(
-    pairs,
-    effective_exchange,
-    gate_settings,
-    sort_tf,
-    hard_filter,
-    refresh_interval,
-)
+scan_results_fragment()
 
 st.markdown("---")
 st.caption("🚀 Enhanced Crypto Tracker with Progressive Alerts — by hioncrypto")
