@@ -2718,6 +2718,12 @@ def get_websocket_status_label() -> Tuple[str, str]:
             f"Cache: {price_count} prices",
         )
 
+    if alive_count > 0 and (snap["connecting"] or price_count == 0 or not snap.get("connected")):
+        return (
+            "🟡",
+            f"Connecting ticker feed ({subscribed} pairs) | Cache: {price_count}",
+        )
+
     if snap["connecting"] and (alive_count > 0 or price_count > 0):
         return (
             "🟡",
@@ -2877,7 +2883,10 @@ def render_scan_results(
 
 
 def ws_status_panel() -> None:
-    """WebSocket status — isolated fragment so scan panel does not touch main-page widgets."""
+    """WebSocket status — isolated fragment; also nudges WS reconnect if the worker died."""
+    mode = st.session_state.get("mode", "REST only")
+    if mode.startswith("WebSocket"):
+        ensure_coinbase_websocket(build_scan_pairs(), get_effective_exchange())
     sync_ws_to_session()
     sym, lbl = get_websocket_status_label()
     st.caption(f"WebSocket: {sym} | {lbl}")
@@ -2907,8 +2916,24 @@ def scan_results_panel() -> None:
     scan_started = float(st.session_state.get("scan_started_at", 0))
     scan_elapsed = (time.time() - scan_started) if scan_started else 0
 
-    if not scan_busy:
-        ensure_coinbase_websocket(pairs, effective_exchange)
+    current_time = int(time.time())
+    if "last_update" not in st.session_state:
+        st.session_state["last_update"] = 0
+    time_since_update = current_time - st.session_state["last_update"]
+    cached_tf = st.session_state.get("scan_sort_tf", sort_tf)
+    config_stale = cached_tf != sort_tf
+    will_rescan = (
+        st.session_state.get("scan_rows") is None
+        or config_stale
+        or st.session_state.get("immediate_rescan", False)
+        or time_since_update >= refresh_interval
+    )
+    # Clear orphan scan flag before WS ensure so WebSocket still starts when recovering.
+    if will_rescan and scan_busy:
+        st.session_state["scan_in_progress"] = False
+        scan_busy = False
+
+    ensure_coinbase_websocket(pairs, effective_exchange)
 
     if "alerted_pairs" not in st.session_state:
         st.session_state["alerted_pairs"] = load_alerted_pairs()
@@ -2919,22 +2944,12 @@ def scan_results_panel() -> None:
     y_required = st.session_state.get("Y_yellow", 2)
     alert_mode = st.session_state.get("alert_mode", "Off")
 
-    current_time = int(time.time())
-    if "last_update" not in st.session_state:
-        st.session_state["last_update"] = 0
-    time_since_update = current_time - st.session_state["last_update"]
-    cached_tf = st.session_state.get("scan_sort_tf", sort_tf)
-    config_stale = cached_tf != sort_tf
     need_rescan = (
         st.session_state.get("scan_rows") is None
         or config_stale
         or st.session_state.pop("immediate_rescan", False)
         or time_since_update >= refresh_interval
     )
-    # Orphan scan_in_progress (crashed run) blocks rescans — clear before starting anew.
-    if need_rescan and scan_busy:
-        st.session_state["scan_in_progress"] = False
-        scan_busy = False
 
     progress_ph = st.empty()
     status_ph = st.empty()
