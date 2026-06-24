@@ -2396,7 +2396,10 @@ def ensure_coinbase_websocket(pairs: list, exchange: str) -> None:
     msg_fresh = last_msg > 0 and (time.time() - last_msg) < WS_MSG_STALE_SEC
 
     if pairs_key == st.session_state.get("ws_pairs_key"):
+        price_count = len(snap["prices"])
         if alive >= len(chunks):
+            return
+        if msg_fresh and price_count > 0:
             return
         if alive > 0 and msg_fresh:
             return
@@ -2589,7 +2592,7 @@ def get_websocket_status_label() -> Tuple[str, str]:
         last_msg > 0
         and age is not None
         and age < WS_MSG_STALE_SEC
-        and (connected_chunks > 0 or alive_count > 0)
+        and (connected_chunks > 0 or alive_count > 0 or price_count > 0)
     )
 
     if is_live:
@@ -2749,8 +2752,6 @@ with col2:
 
 with col3:
     ws_status_placeholder = st.empty()
-    _ws_sym, _ws_lbl = get_websocket_status_label()
-    ws_status_placeholder.caption(f"WebSocket: {_ws_sym} | {_ws_lbl}")
 
 # Determine pairs
 if st.session_state["use_my_pairs"]:
@@ -2783,7 +2784,15 @@ effective_exchange = (
 )
 
 ensure_coinbase_websocket(pairs, effective_exchange)
-sync_ws_to_session()
+
+
+def refresh_ws_status_caption() -> None:
+    sync_ws_to_session()
+    sym, lbl = get_websocket_status_label()
+    ws_status_placeholder.caption(f"WebSocket: {sym} | {lbl}")
+
+
+refresh_ws_status_caption()
 
 # Gate settings dict
 gate_settings = {
@@ -2881,6 +2890,8 @@ if pairs:
             progress_ph.progress(done / total_pairs)
             status_ph.caption(f"Processing {pair}... ({done}/{total_pairs})")
             remaining_ph.caption(f"{left} pairs remaining")
+            if done % 50 == 0:
+                refresh_ws_status_caption()
 
             df = get_cached_data(effective_exchange, pair, sort_tf)
             if df is None or df.empty or len(df) < st.session_state.get("min_bars", 8):
@@ -3032,9 +3043,7 @@ if pairs:
 else:
     st.info("No pairs found. Adjust settings.")
 
-sync_ws_to_session()
-ws_symbol, ws_label = get_websocket_status_label()
-ws_status_placeholder.caption(f"WebSocket: {ws_symbol} | {ws_label}")
+refresh_ws_status_caption()
 
 if scan_completed_this_run:
     st.session_state["immediate_rescan"] = True
