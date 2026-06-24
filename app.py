@@ -2418,10 +2418,6 @@ if pairs:
             if mode == "Custom (K/Y)" and not (is_green or is_yellow):
                 continue
 
-        if "debug_msgs" not in st.session_state:
-            st.session_state.debug_msgs = []
-        st.session_state.debug_msgs.append(f"{pair}: green={is_green}, change={pct_change:.2f}%")
-        st.session_state.debug_msgs = st.session_state.debug_msgs[-10:]
         signal = ""
         if is_green:
             signal = "Strong Buy"
@@ -2458,7 +2454,6 @@ if pairs:
     save_alerted_pairs(st.session_state["alerted_pairs"])
 
     if alerts_to_send:
-        st.warning("ALERT LOGIC TRIGGERED")
         if st.session_state.get("email_to"):
             send_email_alert(alerts_to_send)
         if st.session_state.get("webhook_url"):
@@ -2467,11 +2462,6 @@ if pairs:
     st.success(f"✅ Processed {len(rows)} pairs successfully!")
 
     if rows:
-        if "debug_msgs" in st.session_state:
-            st.write("### Debug - Alert Checks:")
-            for msg in st.session_state.debug_msgs:
-                st.write(msg)
-
         df_results = pd.DataFrame(rows)
         chg_col = f"% Change ({sort_tf})"
         ascending = not st.session_state["sort_desc"]
