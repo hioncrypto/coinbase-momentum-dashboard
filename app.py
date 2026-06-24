@@ -2413,7 +2413,7 @@ if pairs:
             alerted_pairs.pop(pair, None)
 
         if hard_filter:
-            if mode in {"ALL", "ANY"} and not include:
+            if mode in {"ALL", "ANY"} and not is_green:
                 continue
             if mode == "Custom (K/Y)" and not (is_green or is_yellow):
                 continue
@@ -2465,111 +2465,110 @@ if pairs:
             send_webhook_alert(alerts_to_send)
 
     st.success(f"✅ Processed {len(rows)} pairs successfully!")
-if rows:
-        # Display debug messages
-    if "debug_msgs" in st.session_state:
-        st.write("### Debug - Alert Checks:")
-        for msg in st.session_state.debug_msgs:
-            st.write(msg)
-    
-    df_results = pd.DataFrame(rows)
-    df_results = pd.DataFrame(rows)
-    chg_col = f"% Change ({sort_tf})"
-    ascending = not st.session_state["sort_desc"]
-    
-    # FIX: Sort without reset_index to reduce delay
-    df_results = df_results.sort_values(chg_col, ascending=ascending)
-    df_results.insert(0, "#", range(1, len(df_results) + 1))
 
-    green_count = df_results["_green"].sum()
-    yellow_count = df_results["_yellow"].sum()
-    total_count = len(df_results)
-    max_pct = df_results[chg_col].max() if not df_results.empty else 0
+    if rows:
+        if "debug_msgs" in st.session_state:
+            st.write("### Debug - Alert Checks:")
+            for msg in st.session_state.debug_msgs:
+                st.write(msg)
 
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Total Pairs", total_count)
-    with col2:
-        st.metric("Strong Buy", green_count)
-    with col3:
-        st.metric("Watch", yellow_count)
-    with col4:
-        st.metric("Max % Change", f"{max_pct:.2f}%")
+        df_results = pd.DataFrame(rows)
+        chg_col = f"% Change ({sort_tf})"
+        ascending = not st.session_state["sort_desc"]
 
-    # FIX: Top 10 - Show top 10 by % change, NOT filtered by threshold
-    st.subheader("🔥 Top 10 Opportunities")
-    
-    # Simply take top 10 by % change - no threshold filtering that blocks display
-    top_10_filtered = df_results.head(10).copy()
-    top_10_filtered = top_10_filtered.reset_index(drop=True)
-    # Add Market Cap Column
-    mc_data = get_market_caps()
-    def format_market_cap(val):
-        if val >= 1_000_000_000: return f"{val/1_000_000_000:.1f}B"
-        elif val >= 1_000_000: return f"{int(val/1_000_000)}M"
-        return "--"
-        
-    top_10_filtered["Market Cap"] = top_10_filtered["Pair"].apply(
-        lambda x: format_market_cap(mc_data.get(x.split("-")[0], 0))
-    )
-    if "#" in top_10_filtered.columns:
-        top_10_filtered = top_10_filtered.drop(columns=["#"])
-    top_10_filtered.insert(0, "Rank", range(1, len(top_10_filtered) + 1))
+        df_results = df_results.sort_values(chg_col, ascending=ascending)
+        df_results.insert(0, "#", range(1, len(df_results) + 1))
 
-    if not top_10_filtered.empty:
-        def style_top10_rows(row):
-            idx = row.name
-            if idx < len(top_10_filtered):
-                if top_10_filtered.iloc[idx]["_green"]:
-                    return [
-                        "background-color: #16a34a; color: white; font-weight: 600"
-                    ] * len(row)
-                elif top_10_filtered.iloc[idx]["_yellow"]:
-                    return ["background-color: #eab308; color: black"] * len(row)
-            return [""] * len(row)
+        green_count = df_results["_green"].sum()
+        yellow_count = df_results["_yellow"].sum()
+        total_count = len(df_results)
+        max_pct = df_results[chg_col].max() if not df_results.empty else 0
 
-        display_cols = [c for c in top_10_filtered.columns if not c.startswith("_")]
-        styled_df = top_10_filtered[display_cols].style.apply(style_top10_rows, axis=1)
-        st.dataframe(styled_df, use_container_width=True, hide_index=True)
-    else:
-        st.info("No pairs found.")
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Total Pairs", total_count)
+        with col2:
+            st.metric("Strong Buy", green_count)
+        with col3:
+            st.metric("Watch", yellow_count)
+        with col4:
+            st.metric("Max % Change", f"{max_pct:.2f}%")
 
-    # FIX: Default "Show all pairs" to True so pairs always render
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        show_all = st.checkbox("Show all pairs", value=True, key="show_all_pairs")
-    with col2:
-        sort_option = st.selectbox("Sort by", ["% Change", "Signal", "Pair"], index=0)
+        st.subheader("🔥 Top 10 Opportunities")
 
-    if not show_all:
-        display_df = df_results[df_results["_green"] | df_results["_yellow"]]
-    else:
-        display_df = df_results
+        top_10_filtered = df_results.head(10).copy()
+        top_10_filtered = top_10_filtered.reset_index(drop=True)
+        mc_data = get_market_caps()
 
-    if sort_option == "Signal":
-        display_df = display_df.sort_values(["_green", "_yellow"], ascending=[False, False])
-    elif sort_option == "Pair":
-        display_df = display_df.sort_values("Pair")
+        def format_market_cap(val):
+            if val >= 1_000_000_000:
+                return f"{val/1_000_000_000:.1f}B"
+            elif val >= 1_000_000:
+                return f"{int(val/1_000_000)}M"
+            return "--"
 
-    if not display_df.empty:
-        display_cols = [c for c in display_df.columns if not c.startswith("_")]
-        final_display = display_df[display_cols].reset_index(drop=True)
+        top_10_filtered["Market Cap"] = top_10_filtered["Pair"].apply(
+            lambda x: format_market_cap(mc_data.get(x.split("-")[0], 0))
+        )
+        if "#" in top_10_filtered.columns:
+            top_10_filtered = top_10_filtered.drop(columns=["#"])
+        top_10_filtered.insert(0, "Rank", range(1, len(top_10_filtered) + 1))
 
-        def style_all_rows(row):
-            if row.name < len(display_df):
-                original_idx = display_df.index[row.name]
-                if display_df.loc[original_idx, "_green"]:
-                    return [
-                        "background-color: #16a34a; color: white; font-weight: 600"
-                    ] * len(row)
-                elif display_df.loc[original_idx, "_yellow"]:
-                    return ["background-color: #eab308; color: black"] * len(row)
-            return [""] * len(row)
+        if not top_10_filtered.empty:
+            def style_top10_rows(row):
+                idx = row.name
+                if idx < len(top_10_filtered):
+                    if top_10_filtered.iloc[idx]["_green"]:
+                        return [
+                            "background-color: #16a34a; color: white; font-weight: 600"
+                        ] * len(row)
+                    elif top_10_filtered.iloc[idx]["_yellow"]:
+                        return ["background-color: #eab308; color: black"] * len(row)
+                return [""] * len(row)
 
-        styled_all = final_display.style.apply(style_all_rows, axis=1)
-        st.dataframe(styled_all, use_container_width=True, hide_index=True, height=600)
-    else:
-        st.info("No pairs match filters.")
+            display_cols = [c for c in top_10_filtered.columns if not c.startswith("_")]
+            styled_df = top_10_filtered[display_cols].style.apply(style_top10_rows, axis=1)
+            st.dataframe(styled_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No pairs found.")
+
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            show_all = st.checkbox("Show all pairs", value=True, key="show_all_pairs")
+        with col2:
+            sort_option = st.selectbox("Sort by", ["% Change", "Signal", "Pair"], index=0)
+
+        if not show_all:
+            display_df = df_results[df_results["_green"] | df_results["_yellow"]]
+        else:
+            display_df = df_results
+
+        if sort_option == "Signal":
+            display_df = display_df.sort_values(["_green", "_yellow"], ascending=[False, False])
+        elif sort_option == "Pair":
+            display_df = display_df.sort_values("Pair")
+
+        if not display_df.empty:
+            display_cols = [c for c in display_df.columns if not c.startswith("_")]
+            final_display = display_df[display_cols].reset_index(drop=True)
+
+            def style_all_rows(row):
+                if row.name < len(display_df):
+                    original_idx = display_df.index[row.name]
+                    if display_df.loc[original_idx, "_green"]:
+                        return [
+                            "background-color: #16a34a; color: white; font-weight: 600"
+                        ] * len(row)
+                    elif display_df.loc[original_idx, "_yellow"]:
+                        return ["background-color: #eab308; color: black"] * len(row)
+                return [""] * len(row)
+
+            styled_all = final_display.style.apply(style_all_rows, axis=1)
+            st.dataframe(styled_all, use_container_width=True, hide_index=True, height=600)
+        else:
+            st.info("No pairs match filters.")
+    elif hard_filter:
+        st.info("Hard filter is ON — no pairs passed gate classification. Adjust gates or turn off hard filter.")
 else:
     st.info("No pairs found. Adjust settings.")
 
