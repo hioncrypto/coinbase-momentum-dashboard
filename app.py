@@ -1748,6 +1748,7 @@ with expander("Mode & Timeframes"):
     )
     if new_tf != st.session_state.get("sort_tf"):
         st.session_state["sort_tf"] = new_tf
+        st.session_state["scan_in_progress"] = False
         save_to_url("sort_tf", new_tf)
 
     new_sort_desc = st.toggle(
@@ -2599,10 +2600,22 @@ def render_scan_results(
                 "Hard filter is ON — no pairs passed gate classification. "
                 "Adjust gates or turn off hard filter."
             )
+        else:
+            st.info(
+                "No pairs in the current scan results. "
+                "If you changed timeframe or filters, wait for the next scan to finish."
+            )
         return
 
     df_results = pd.DataFrame(rows)
     chg_col = f"% Change ({sort_tf})"
+    if chg_col not in df_results.columns:
+        alt_cols = [c for c in df_results.columns if c.startswith("% Change (")]
+        if alt_cols:
+            chg_col = alt_cols[0]
+        else:
+            st.warning("Results column mismatch — run Refresh Now to rescan.")
+            return
     ascending = not st.session_state["sort_desc"]
 
     df_results = df_results.sort_values(chg_col, ascending=ascending)
@@ -2738,8 +2751,11 @@ def scan_results_panel() -> None:
         st.session_state["last_update"] = 0
     time_since_update = current_time - st.session_state["last_update"]
     scan_busy = st.session_state.get("scan_in_progress", False)
+    cached_tf = st.session_state.get("scan_sort_tf", sort_tf)
+    config_stale = cached_tf != sort_tf
     need_rescan = (
         st.session_state.get("scan_rows") is None
+        or config_stale
         or st.session_state.pop("immediate_rescan", False)
         or (not scan_busy and time_since_update >= refresh_interval)
     )
@@ -2751,15 +2767,21 @@ def scan_results_panel() -> None:
     alerts_to_send = []
 
     cached_rows = list(st.session_state.get("scan_rows") or [])
-    cached_tf = st.session_state.get("scan_sort_tf", sort_tf)
+    scan_ran = False
+    scan_warning = None
 
     if need_rescan and cached_rows:
+        stale_note = (
+            f"Rescanning on {sort_tf}… showing previous {cached_tf} results until the new scan completes."
+            if config_stale
+            else "Rescanning… showing previous results until the new scan completes."
+        )
         with results_ph.container():
             render_scan_results(
                 cached_rows,
                 cached_tf,
                 hard_filter,
-                header_note="Rescanning… showing previous results until the new scan completes.",
+                header_note=stale_note,
                 interactive=False,
             )
 
@@ -2897,11 +2919,28 @@ def scan_results_panel() -> None:
                 if st.session_state.get("webhook_url"):
                     send_webhook_alert(alerts_to_send)
 
-            st.session_state["scan_rows"] = rows
-            st.session_state["scan_sort_tf"] = sort_tf
+            scan_ran = True
+            if rows:
+                st.session_state["scan_rows"] = rows
+                st.session_state["scan_sort_tf"] = sort_tf
+                display_rows = rows
+                display_tf = sort_tf
+            elif cached_rows:
+                st.session_state["scan_rows"] = cached_rows
+                display_rows = cached_rows
+                display_tf = cached_tf
+                scan_warning = (
+                    f"Scan on {sort_tf} returned 0 pairs "
+                    f"({'hard filter hiding non-passers' if hard_filter else 'no data passed gates'}). "
+                    f"Showing previous {cached_tf} results."
+                )
+            else:
+                st.session_state["scan_rows"] = rows
+                st.session_state["scan_sort_tf"] = sort_tf
+                display_rows = rows
+                display_tf = sort_tf
+
             st.session_state["last_update"] = int(time.time())
-            display_rows = rows
-            display_tf = sort_tf
         finally:
             st.session_state["scan_in_progress"] = False
     else:
@@ -2909,8 +2948,15 @@ def scan_results_panel() -> None:
         display_tf = cached_tf
 
     with results_ph.container():
-        if need_rescan:
+        if scan_ran:
             st.success(f"✅ Processed {len(display_rows)} pairs successfully!")
+            if scan_warning:
+                st.warning(scan_warning)
+        elif config_stale and cached_rows:
+            st.caption(
+                f"Timeframe changed to {sort_tf} — rescan will run shortly. "
+                f"Showing previous {cached_tf} results ({len(cached_rows)} pairs)."
+            )
         else:
             age = int(time.time()) - st.session_state.get("last_update", 0)
             next_scan = max(0, refresh_interval - age)
