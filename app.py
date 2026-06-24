@@ -531,15 +531,36 @@ def save_user_settings() -> None:
 
 
 def on_email_saved():
-    save_to_url("email_to", st.session_state.get("email_to", ""))
+    email = (st.session_state.get("email_to") or "").strip()
+    st.session_state.pop("email_save_msg", None)
+    if not email:
+        return
+    save_to_url("email_to", email)
     save_user_settings()
-    st.toast("✓ Email saved - will persist after closing", icon="✅")
+    st.session_state["email_save_msg"] = "✓ Email saved - will persist after closing"
+    st.session_state["email_saved_snapshot"] = email
 
 
 def on_webhook_saved():
-    save_to_url("webhook_url", st.session_state.get("webhook_url", ""))
+    webhook = (st.session_state.get("webhook_url") or "").strip()
+    st.session_state.pop("webhook_save_msg", None)
+    if not webhook:
+        return
+    save_to_url("webhook_url", webhook)
     save_user_settings()
-    st.toast("✓ Webhook saved - will persist after closing", icon="✅")
+    st.session_state["webhook_save_msg"] = "✓ Webhook saved - will persist after closing"
+    st.session_state["webhook_saved_snapshot"] = webhook
+
+
+def clear_notification_save_msgs_if_edited():
+    if st.session_state.get("email_save_msg"):
+        current = (st.session_state.get("email_to") or "").strip()
+        if current != st.session_state.get("email_saved_snapshot", ""):
+            st.session_state.pop("email_save_msg", None)
+    if st.session_state.get("webhook_save_msg"):
+        current = (st.session_state.get("webhook_url") or "").strip()
+        if current != st.session_state.get("webhook_saved_snapshot", ""):
+            st.session_state.pop("webhook_save_msg", None)
 
 
 # =============================================================================
@@ -1965,19 +1986,25 @@ with expander("Gates"):
 with expander("🔔 Notifications"):
     st.caption("Email requires SMTP in st.secrets.toml")
 
+    clear_notification_save_msgs_if_edited()
+
     st.text_input(
         "Email recipient",
         key="email_to",
         on_change=on_email_saved,
-        help="Press Enter or click away to save",
+        help="Press Enter or click away to save (non-empty only)",
     )
+    if st.session_state.get("email_save_msg"):
+        st.success(st.session_state["email_save_msg"])
 
     st.text_input(
         "Webhook URL",
         key="webhook_url",
         on_change=on_webhook_saved,
-        help="Press Enter or click away to save",
+        help="Press Enter or click away to save (non-empty only)",
     )
+    if st.session_state.get("webhook_save_msg"):
+        st.success(st.session_state["webhook_save_msg"])
 
 with expander("Display"):
     new_fs = st.slider(
