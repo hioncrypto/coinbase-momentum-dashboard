@@ -2304,7 +2304,7 @@ WS_RETRY_DELAY_SEC = 2.0
 WS_STAGGER_SEC = 1.0
 WS_START_GRACE_SEC = 300
 WS_ERROR_LOG_INTERVAL = 30.0
-SCAN_STALE_SEC = 600  # reset stuck scan_in_progress after 10 min
+FRAGMENT_POLL_SEC = 5
 
 # Streamlit session_state is main-thread only — workers use this shared store.
 _WS_LOCK = threading.Lock()
@@ -2876,6 +2876,13 @@ def render_scan_results(
         st.info("No pairs match filters.")
 
 
+def ws_status_panel() -> None:
+    """WebSocket status — isolated fragment so scan panel does not touch main-page widgets."""
+    sync_ws_to_session()
+    sym, lbl = get_websocket_status_label()
+    st.caption(f"WebSocket: {sym} | {lbl}")
+
+
 def scan_results_panel() -> None:
     """Scan + results island — reads live session_state so fragment reruns stay current."""
     pairs = build_scan_pairs()
@@ -2898,9 +2905,7 @@ def scan_results_panel() -> None:
 
     scan_busy = st.session_state.get("scan_in_progress", False)
     scan_started = float(st.session_state.get("scan_started_at", 0))
-    if scan_busy and scan_started and (time.time() - scan_started) > SCAN_STALE_SEC:
-        st.session_state["scan_in_progress"] = False
-        scan_busy = False
+    scan_elapsed = (time.time() - scan_started) if scan_started else 0
 
     if not scan_busy:
         ensure_coinbase_websocket(pairs, effective_exchange)
@@ -2924,8 +2929,12 @@ def scan_results_panel() -> None:
         st.session_state.get("scan_rows") is None
         or config_stale
         or st.session_state.pop("immediate_rescan", False)
-        or (not scan_busy and time_since_update >= refresh_interval)
+        or time_since_update >= refresh_interval
     )
+    # Orphan scan_in_progress (crashed run) blocks rescans — clear before starting anew.
+    if need_rescan and scan_busy:
+        st.session_state["scan_in_progress"] = False
+        scan_busy = False
 
     progress_ph = st.empty()
     status_ph = st.empty()
@@ -2936,21 +2945,6 @@ def scan_results_panel() -> None:
     cached_rows = list(st.session_state.get("scan_rows") or [])
     scan_ran = False
     scan_warning = None
-
-    if need_rescan and cached_rows:
-        stale_note = (
-            f"Rescanning on {sort_tf}… showing previous {cached_tf} results until the new scan completes."
-            if config_stale
-            else "Rescanning… showing previous results until the new scan completes."
-        )
-        with results_ph.container():
-            render_scan_results(
-                cached_rows,
-                cached_tf,
-                hard_filter,
-                header_note=stale_note,
-                interactive=False,
-            )
 
     if need_rescan:
         st.session_state["scan_in_progress"] = True
@@ -2966,8 +2960,6 @@ def scan_results_panel() -> None:
                 progress_ph.progress(done / total_pairs)
                 status_ph.caption(f"Processing {pair}... ({done}/{total_pairs})")
                 remaining_ph.caption(f"{left} pairs remaining")
-                if done % 50 == 0:
-                    refresh_ws_status_caption()
 
                 df = fetch_pair_data(effective_exchange, pair, sort_tf)
                 if df is None or df.empty or len(df) < min_bars:
@@ -3082,9 +3074,8 @@ def scan_results_panel() -> None:
                     "_ws_active": ws_price is not None,
                 })
 
-            progress_ph.empty()
-            status_ph.empty()
-            remaining_ph.empty()
+            status_ph.caption("Scan finished.")
+            remaining_ph.caption("")
 
             if alerts_to_send and rows:
                 chg_col = f"% Change ({sort_tf})"
@@ -3144,6 +3135,8 @@ def scan_results_panel() -> None:
                 f"Timeframe changed to {sort_tf} — rescan will run shortly. "
                 f"Showing previous {cached_tf} results ({len(cached_rows)} pairs)."
             )
+        elif scan_busy and scan_started:
+            st.caption(f"Scan in progress ({int(scan_elapsed)}s)…")
         else:
             age = int(time.time()) - st.session_state.get("last_update", 0)
             next_scan = max(0, refresh_interval - age)
@@ -3152,8 +3145,6 @@ def scan_results_panel() -> None:
                 f"Next scan in {next_scan}s."
             )
         render_scan_results(display_rows, display_tf, hard_filter, interactive=True)
-
-    refresh_ws_status_caption()
 
     if scan_ran:
         st.session_state["immediate_rescan"] = True
@@ -3189,20 +3180,11 @@ with col2:
         st.rerun()
 
 with col3:
-    ws_status_placeholder = st.empty()
-
-
-def refresh_ws_status_caption() -> None:
-    sync_ws_to_session()
-    sym, lbl = get_websocket_status_label()
-    ws_status_placeholder.caption(f"WebSocket: {sym} | {lbl}")
-
-
-refresh_ws_status_caption()
+    ws_status_fragment = st_fragment(run_every=10)(ws_status_panel)
+    ws_status_fragment()
 
 refresh_interval = int(st.session_state.get("refresh_sec", 30))
-# Poll every 5s so chained rescans start soon after completion; refresh_sec gates scan cadence.
-scan_results_fragment = st_fragment(run_every=5)(scan_results_panel)
+scan_results_fragment = st_fragment(run_every=FRAGMENT_POLL_SEC)(scan_results_panel)
 scan_results_fragment()
 
 st.markdown("---")
