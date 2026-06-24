@@ -10,6 +10,11 @@
 import streamlit as st
 import streamlit.components.v1 as components
 
+# st.fragment landed after experimental_fragment; 1.36 still uses the experimental name
+st_fragment = getattr(st, "fragment", None) or getattr(st, "experimental_fragment", None)
+if st_fragment is None:
+    raise RuntimeError("Streamlit >= 1.33 is required (fragment / experimental_fragment missing).")
+
 # Page configuration - MUST be first Streamlit command
 st.set_page_config(
     page_title="hioncrypto's: Crypto Tracker",
@@ -3055,7 +3060,7 @@ sort_tf = st.session_state.get("sort_tf", "1h")
 hard_filter = st.session_state["hard_filter"]
 refresh_interval = st.session_state["refresh_sec"]
 
-scan_results_fragment = st.fragment(run_every=max(5, refresh_interval))(scan_results_panel)
+scan_results_fragment = st_fragment(run_every=max(5, refresh_interval))(scan_results_panel)
 scan_results_fragment(
     pairs,
     effective_exchange,
