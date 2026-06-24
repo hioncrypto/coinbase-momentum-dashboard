@@ -995,6 +995,31 @@ def trend_breakout_up(df: pd.DataFrame, span: int = 3, within_bars: int = 48) ->
 # =============================================================================
 # DATA FETCHING
 # =============================================================================
+REST_MIN_GAP_SEC = 0.12  # ~8 req/s — stays under Coinbase public limits
+_REST_LOCK = threading.Lock()
+_LAST_REST_AT = 0.0
+_REST_BACKOFF_UNTIL = 0.0
+
+
+def _rest_throttle() -> None:
+    global _LAST_REST_AT, _REST_BACKOFF_UNTIL
+    with _REST_LOCK:
+        now = time.time()
+        if now < _REST_BACKOFF_UNTIL:
+            time.sleep(_REST_BACKOFF_UNTIL - now)
+            now = time.time()
+        gap = REST_MIN_GAP_SEC - (now - _LAST_REST_AT)
+        if gap > 0:
+            time.sleep(gap)
+        _LAST_REST_AT = time.time()
+
+
+def _rest_backoff(seconds: float) -> None:
+    global _REST_BACKOFF_UNTIL
+    with _REST_LOCK:
+        _REST_BACKOFF_UNTIL = max(_REST_BACKOFF_UNTIL, time.time() + seconds)
+
+
 def get_bars_limit(timeframe: str) -> int:
     limits = {"5m": 120, "15m": 96, "1h": 48, "4h": 24, "1d": 30}
     return limits.get(timeframe, 48)
@@ -1021,6 +1046,7 @@ def _fetch_coinbase_candles_raw(
 
     for attempt in range(3):
         try:
+            _rest_throttle()
             response = requests.get(url, params=params, headers=headers, timeout=15)
 
             if response.status_code == 200:
@@ -1041,6 +1067,7 @@ def _fetch_coinbase_candles_raw(
                 return df if not df.empty else None
 
             elif response.status_code in (429, 500, 502, 503, 504):
+                _rest_backoff(1.5 * (attempt + 1))
                 time.sleep(0.6 * (attempt + 1))
                 continue
             else:
@@ -1087,9 +1114,12 @@ def fetch_binance_data(pair: str, timeframe: str, limit: int) -> Optional[pd.Dat
     params = {"symbol": symbol, "interval": interval, "limit": max(50, limit)}
 
     try:
+        _rest_throttle()
         response = requests.get(url, params=params, timeout=20)
 
         if response.status_code != 200:
+            if response.status_code == 429:
+                _rest_backoff(2.0)
             return None
 
         raw = response.json()
@@ -1139,7 +1169,7 @@ def fetch_data(
 
 
 # Bump when fetch logic changes (e.g. Coinbase 4h built from 1h candles).
-_FETCH_CACHE_REV = 4
+_FETCH_CACHE_REV = 5
 # =============================================================================
 # CACHING
 # =============================================================================
@@ -1338,6 +1368,25 @@ def format_alert_stage(pair: str, alert_type: str, rel_vol: float) -> Optional[s
             return None
         return f"{pair} | {tf}"
     return alert_type
+
+
+def dispatch_scan_alerts(alerts_to_send: List[dict], scan_id: float) -> None:
+    """One email + one webhook per scan cycle (no duplicate sends on fragment reruns)."""
+    if not alerts_to_send:
+        return
+    if st.session_state.get("_alerts_sent_scan_id") == scan_id:
+        return
+
+    sent = False
+    if st.session_state.get("email_to"):
+        ok, _ = send_email_alert(alerts_to_send)
+        sent = sent or ok
+    if st.session_state.get("webhook_url"):
+        ok, _ = send_webhook_alert(alerts_to_send)
+        sent = sent or ok
+
+    if sent or alerts_to_send:
+        st.session_state["_alerts_sent_scan_id"] = scan_id
 
 
 def should_send_alert(pair, delta_pct, rel_volume, alerted_pairs, use_vol_spike=False):
@@ -2828,6 +2877,8 @@ def scan_results_panel() -> None:
 
     if need_rescan:
         st.session_state["scan_in_progress"] = True
+        scan_id = time.time()
+        st.session_state["_current_scan_id"] = scan_id
         rows = []
         try:
             total_pairs = len(pairs)
@@ -2907,7 +2958,7 @@ def scan_results_panel() -> None:
                             if pct_move_15m < 20.0:
                                 strategy_approved = False
 
-                if is_green and strategy_approved and alert_mode != "Off":
+                if is_green and strategy_approved:
                     include, alert_type = should_send_alert(
                         pair, delta_pct, rel_vol, st.session_state["alerted_pairs"],
                         use_vol_spike=use_vol,
@@ -2968,11 +3019,7 @@ def scan_results_panel() -> None:
 
             save_alerted_pairs(st.session_state["alerted_pairs"])
 
-            if alerts_to_send:
-                if st.session_state.get("email_to"):
-                    send_email_alert(alerts_to_send)
-                if st.session_state.get("webhook_url"):
-                    send_webhook_alert(alerts_to_send)
+            dispatch_scan_alerts(alerts_to_send, scan_id)
 
             scan_ran = True
             scanned_count = len(rows)
@@ -3029,6 +3076,10 @@ def scan_results_panel() -> None:
         render_scan_results(display_rows, display_tf, hard_filter, interactive=True)
 
     refresh_ws_status_caption()
+
+    if scan_ran:
+        st.session_state["immediate_rescan"] = True
+        st.rerun()
 
 
 # =============================================================================
