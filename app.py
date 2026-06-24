@@ -18,24 +18,6 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-st.markdown(
-    """
-    <style>
-    /* Restore normal sidebar width */
-    section[data-testid='stSidebar'] {
-        width: 300px !important;
-        min-width: 300px !important;
-    }
-
-    /* Fix thin sliders safely without affecting sidebar */
-    section[data-testid='stSidebar'] .stSlider [data-baseweb='slider'] {
-        width: 100% !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
 # ============================================================================
 # GLOBAL CSS (MOBILE TWEAKS + SIDEBAR RESIZE HANDLE)
 # ============================================================================
