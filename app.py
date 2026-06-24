@@ -2357,7 +2357,7 @@ def _ws_handle_coinbase_message(data: dict) -> None:
             _WS_SHARED["last_msg"] = time.time()
 
 
-def stop_websocket_workers() -> None:
+def stop_websocket_workers(clear_cache: bool = False) -> None:
     with _WS_LOCK:
         _WS_SHARED["stop"] = True
     st.session_state["ws_stop"] = True
@@ -2365,7 +2365,8 @@ def stop_websocket_workers() -> None:
     st.session_state.pop("ws_threads", None)
     st.session_state.pop("ws_thread", None)
     st.session_state.pop("ws_pairs_key", None)
-    clear_ws_shared()
+    if clear_cache:
+        clear_ws_shared()
     runtime = st.session_state.get("ws_runtime")
     if runtime:
         runtime["connected"] = False
@@ -2396,7 +2397,7 @@ def ensure_coinbase_websocket(pairs: list, exchange: str) -> None:
         if alive > 0 and msg_fresh:
             return
 
-    stop_websocket_workers()
+    stop_websocket_workers(clear_cache=False)
     with _WS_LOCK:
         _WS_SHARED["stop"] = False
     st.session_state["ws_stop"] = False
@@ -2573,7 +2574,7 @@ def get_websocket_status_label() -> Tuple[str, str]:
     last_msg = float(snap["last_msg"])
     age = time.time() - last_msg if last_msg > 0 else None
 
-    if snap["connecting"] and thread_alive:
+    if snap["connecting"] and (thread_alive or price_count > 0):
         return (
             "🟡",
             f"Connecting {conn_count} connections for {subscribed} pairs "
@@ -2601,6 +2602,125 @@ def get_websocket_status_label() -> Tuple[str, str]:
     return "🔴", f"Disconnected | Pairs in cache: {price_count}{stale_note}"
 
 
+def render_scan_results(
+    rows: list,
+    sort_tf: str,
+    hard_filter: bool,
+    header_note: Optional[str] = None,
+    interactive: bool = True,
+) -> None:
+    if header_note:
+        st.caption(header_note)
+
+    if not rows:
+        if hard_filter:
+            st.info(
+                "Hard filter is ON — no pairs passed gate classification. "
+                "Adjust gates or turn off hard filter."
+            )
+        return
+
+    df_results = pd.DataFrame(rows)
+    chg_col = f"% Change ({sort_tf})"
+    ascending = not st.session_state["sort_desc"]
+
+    df_results = df_results.sort_values(chg_col, ascending=ascending)
+    df_results.insert(0, "#", range(1, len(df_results) + 1))
+
+    green_count = df_results["_green"].sum()
+    yellow_count = df_results["_yellow"].sum()
+    total_count = len(df_results)
+    max_pct = df_results[chg_col].max() if not df_results.empty else 0
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Pairs", total_count)
+    with col2:
+        st.metric("Strong Buy", green_count)
+    with col3:
+        st.metric("Watch", yellow_count)
+    with col4:
+        st.metric("Max % Change", f"{max_pct:.2f}%")
+
+    st.subheader("🔥 Top 10 Opportunities")
+
+    top_10_filtered = df_results.head(10).copy()
+    top_10_filtered = top_10_filtered.reset_index(drop=True)
+    mc_data = get_market_caps()
+
+    def format_market_cap(val):
+        if val >= 1_000_000_000:
+            return f"{val/1_000_000_000:.1f}B"
+        elif val >= 1_000_000:
+            return f"{int(val/1_000_000)}M"
+        return "--"
+
+    top_10_filtered["Market Cap"] = top_10_filtered["Pair"].apply(
+        lambda x: format_market_cap(mc_data.get(x.split("-")[0], 0))
+    )
+    if "#" in top_10_filtered.columns:
+        top_10_filtered = top_10_filtered.drop(columns=["#"])
+    top_10_filtered.insert(0, "Rank", range(1, len(top_10_filtered) + 1))
+
+    if not top_10_filtered.empty:
+        def style_top10_rows(row):
+            idx = row.name
+            if idx < len(top_10_filtered):
+                if top_10_filtered.iloc[idx]["_green"]:
+                    return [
+                        "background-color: #16a34a; color: white; font-weight: 600"
+                    ] * len(row)
+                elif top_10_filtered.iloc[idx]["_yellow"]:
+                    return ["background-color: #eab308; color: black"] * len(row)
+            return [""] * len(row)
+
+        display_cols = [c for c in top_10_filtered.columns if not c.startswith("_")]
+        styled_df = top_10_filtered[display_cols].style.apply(style_top10_rows, axis=1)
+        st.dataframe(styled_df, use_container_width=True, hide_index=True)
+    else:
+        st.info("No pairs found.")
+
+    col1, col2 = st.columns([3, 1])
+    if interactive:
+        with col1:
+            show_all = st.checkbox("Show all pairs", value=True, key="show_all_pairs")
+        with col2:
+            sort_option = st.selectbox("Sort by", ["% Change", "Signal", "Pair"], index=0)
+    else:
+        show_all = True
+        sort_option = "% Change"
+
+    if not show_all:
+        display_df = df_results[df_results["_green"] | df_results["_yellow"]]
+    else:
+        display_df = df_results
+
+    if sort_option == "Signal":
+        display_df = display_df.sort_values(["_green", "_yellow"], ascending=[False, False])
+    elif sort_option == "Pair":
+        display_df = display_df.sort_values("Pair")
+
+    if not display_df.empty:
+        display_cols = [c for c in display_df.columns if not c.startswith("_")]
+        final_display = display_df[display_cols].reset_index(drop=True)
+
+        def style_all_rows(row):
+            if row.name < len(display_df):
+                original_idx = display_df.index[row.name]
+                if display_df.loc[original_idx, "_green"]:
+                    return [
+                        "background-color: #16a34a; color: white; font-weight: 600"
+                    ] * len(row)
+                elif display_df.loc[original_idx, "_yellow"]:
+                    return ["background-color: #eab308; color: black"] * len(row)
+            return [""] * len(row)
+
+        styled_all = final_display.style.apply(style_all_rows, axis=1)
+        st.dataframe(styled_all, use_container_width=True, hide_index=True, height=600)
+    else:
+        st.info("No pairs match filters.")
+
+
 # =============================================================================
 # MAIN DISPLAY
 # =============================================================================
@@ -2611,7 +2731,7 @@ with col1:
     if st.button("🔄 Refresh Now", type="primary"):
         get_cached_data.clear()
         st.session_state["ws_prices"] = {}
-        stop_websocket_workers()
+        stop_websocket_workers(clear_cache=True)
         st.session_state["last_update"] = 0
         st.session_state.pop("scan_rows", None)
         st.rerun()
@@ -2691,7 +2811,6 @@ gate_settings = {
     "macd_hist_confirm_bars": int(st.session_state.get("macd_hist_confirm_bars", 3)),
 }
 
-rows = []
 # MARKET CAP FILTER LOGIC
 if st.session_state.get("mc_filter_enabled"):
     mc_data = get_market_caps()
@@ -2728,14 +2847,28 @@ need_rescan = (
 )
 
 if pairs:
-    if need_rescan:
-        status_placeholder = st.empty()
-        progress_placeholder = st.empty()
+    scan_progress_ph = st.empty()
+    results_ph = st.empty()
 
+    cached_rows = list(st.session_state.get("scan_rows") or [])
+    cached_tf = st.session_state.get("scan_sort_tf", sort_tf)
+
+    if need_rescan and cached_rows:
+        with results_ph.container():
+            render_scan_results(
+                cached_rows,
+                cached_tf,
+                hard_filter,
+                header_note="Rescanning… showing previous results until the new scan completes.",
+                interactive=False,
+            )
+
+    if need_rescan:
+        rows = []
         for i, pair in enumerate(pairs):
             progress = (i + 1) / len(pairs)
-            progress_placeholder.progress(progress)
-            status_placeholder.text(f"Processing {pair}... ({i + 1}/{len(pairs)})")
+            scan_progress_ph.progress(progress)
+            scan_progress_ph.caption(f"Processing {pair}... ({i + 1}/{len(pairs)})")
 
             df = get_cached_data(effective_exchange, pair, sort_tf)
             if df is None or df.empty or len(df) < st.session_state.get("min_bars", 8):
@@ -2840,8 +2973,7 @@ if pairs:
                 "_ws_active": ws_price is not None,
             }
             rows.append(row_data)
-        progress_placeholder.empty()
-        status_placeholder.empty()
+        scan_progress_ph.empty()
 
         # Filter alerts to Top 10 by % change (not by threshold)
         if alerts_to_send and rows:
@@ -2865,118 +2997,23 @@ if pairs:
         st.session_state["scan_rows"] = rows
         st.session_state["scan_sort_tf"] = sort_tf
         st.session_state["last_update"] = int(time.time())
+        display_rows = rows
+        display_tf = sort_tf
     else:
-        rows = list(st.session_state.get("scan_rows") or [])
-        sort_tf = st.session_state.get("scan_sort_tf", sort_tf)
+        display_rows = cached_rows
+        display_tf = cached_tf
 
-    if need_rescan:
-        st.success(f"✅ Processed {len(rows)} pairs successfully!")
-    else:
-        age = int(time.time()) - st.session_state.get("last_update", 0)
-        next_scan = max(0, refresh_interval - age)
-        st.caption(
-            f"Showing cached results ({len(rows)} pairs, updated {age}s ago). "
-            f"Next scan in {next_scan}s."
-        )
-
-    if rows:
-        df_results = pd.DataFrame(rows)
-        chg_col = f"% Change ({sort_tf})"
-        ascending = not st.session_state["sort_desc"]
-
-        df_results = df_results.sort_values(chg_col, ascending=ascending)
-        df_results.insert(0, "#", range(1, len(df_results) + 1))
-
-        green_count = df_results["_green"].sum()
-        yellow_count = df_results["_yellow"].sum()
-        total_count = len(df_results)
-        max_pct = df_results[chg_col].max() if not df_results.empty else 0
-
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Total Pairs", total_count)
-        with col2:
-            st.metric("Strong Buy", green_count)
-        with col3:
-            st.metric("Watch", yellow_count)
-        with col4:
-            st.metric("Max % Change", f"{max_pct:.2f}%")
-
-        st.subheader("🔥 Top 10 Opportunities")
-
-        top_10_filtered = df_results.head(10).copy()
-        top_10_filtered = top_10_filtered.reset_index(drop=True)
-        mc_data = get_market_caps()
-
-        def format_market_cap(val):
-            if val >= 1_000_000_000:
-                return f"{val/1_000_000_000:.1f}B"
-            elif val >= 1_000_000:
-                return f"{int(val/1_000_000)}M"
-            return "--"
-
-        top_10_filtered["Market Cap"] = top_10_filtered["Pair"].apply(
-            lambda x: format_market_cap(mc_data.get(x.split("-")[0], 0))
-        )
-        if "#" in top_10_filtered.columns:
-            top_10_filtered = top_10_filtered.drop(columns=["#"])
-        top_10_filtered.insert(0, "Rank", range(1, len(top_10_filtered) + 1))
-
-        if not top_10_filtered.empty:
-            def style_top10_rows(row):
-                idx = row.name
-                if idx < len(top_10_filtered):
-                    if top_10_filtered.iloc[idx]["_green"]:
-                        return [
-                            "background-color: #16a34a; color: white; font-weight: 600"
-                        ] * len(row)
-                    elif top_10_filtered.iloc[idx]["_yellow"]:
-                        return ["background-color: #eab308; color: black"] * len(row)
-                return [""] * len(row)
-
-            display_cols = [c for c in top_10_filtered.columns if not c.startswith("_")]
-            styled_df = top_10_filtered[display_cols].style.apply(style_top10_rows, axis=1)
-            st.dataframe(styled_df, use_container_width=True, hide_index=True)
+    with results_ph.container():
+        if need_rescan:
+            st.success(f"✅ Processed {len(display_rows)} pairs successfully!")
         else:
-            st.info("No pairs found.")
-
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            show_all = st.checkbox("Show all pairs", value=True, key="show_all_pairs")
-        with col2:
-            sort_option = st.selectbox("Sort by", ["% Change", "Signal", "Pair"], index=0)
-
-        if not show_all:
-            display_df = df_results[df_results["_green"] | df_results["_yellow"]]
-        else:
-            display_df = df_results
-
-        if sort_option == "Signal":
-            display_df = display_df.sort_values(["_green", "_yellow"], ascending=[False, False])
-        elif sort_option == "Pair":
-            display_df = display_df.sort_values("Pair")
-
-        if not display_df.empty:
-            display_cols = [c for c in display_df.columns if not c.startswith("_")]
-            final_display = display_df[display_cols].reset_index(drop=True)
-
-            def style_all_rows(row):
-                if row.name < len(display_df):
-                    original_idx = display_df.index[row.name]
-                    if display_df.loc[original_idx, "_green"]:
-                        return [
-                            "background-color: #16a34a; color: white; font-weight: 600"
-                        ] * len(row)
-                    elif display_df.loc[original_idx, "_yellow"]:
-                        return ["background-color: #eab308; color: black"] * len(row)
-                return [""] * len(row)
-
-            styled_all = final_display.style.apply(style_all_rows, axis=1)
-            st.dataframe(styled_all, use_container_width=True, hide_index=True, height=600)
-        else:
-            st.info("No pairs match filters.")
-    elif hard_filter:
-        st.info("Hard filter is ON — no pairs passed gate classification. Adjust gates or turn off hard filter.")
+            age = int(time.time()) - st.session_state.get("last_update", 0)
+            next_scan = max(0, refresh_interval - age)
+            st.caption(
+                f"Showing cached results ({len(display_rows)} pairs, updated {age}s ago). "
+                f"Next scan in {next_scan}s."
+            )
+        render_scan_results(display_rows, display_tf, hard_filter, interactive=True)
 else:
     st.info("No pairs found. Adjust settings.")
 
