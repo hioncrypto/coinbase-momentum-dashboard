@@ -280,6 +280,9 @@ class Config:
     COINBASE_V2 = "https://api.coinbase.com/v2"
     BINANCE_BASE = "https://api.binance.com"
     COINBASE_WS = "wss://ws-feed.exchange.coinbase.com"
+    # Exchange feed (matches api.exchange.coinbase.com REST). Advanced Trade uses
+    # wss://advanced-trade-ws.coinbase.com with a different message schema.
+    COINBASE_WS_CHANNELS = ("ticker_batch", "heartbeat")
 
     TIMEFRAMES = {"5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "1d": 86400}
     QUOTES = ["USD", "USDC", "USDT", "BTC", "ETH", "EUR"]
@@ -718,6 +721,7 @@ def init_session_state():
         "ws_thread": None,
         "ws_alive": False,
         "ws_prices": {},
+        "ws_stop": False,
         "ws_runtime": {
             "connected": False,
             "connecting": False,
@@ -725,6 +729,7 @@ def init_session_state():
             "error": None,
             "subscribed": 0,
             "connection_count": 0,
+            "chunk_status": {},
         },
         "lr_enabled": False,
         "lr_baseline": {"Coinbase": set(), "Binance": set()},
@@ -2244,6 +2249,11 @@ if st.session_state.get("lr_events"):
 # WEBSOCKET HELPERS
 # =============================================================================
 WS_MSG_STALE_SEC = 45
+WS_CONNECT_TIMEOUT = 20
+WS_RECV_TIMEOUT = 5.0
+WS_MAX_RETRIES = 3
+WS_RETRY_DELAY_SEC = 2.0
+WS_STAGGER_SEC = 0.4
 
 
 def _ws_runtime() -> dict:
@@ -2255,15 +2265,36 @@ def _ws_runtime() -> dict:
             "error": None,
             "subscribed": 0,
             "connection_count": 0,
+            "chunk_status": {},
         }
     return st.session_state["ws_runtime"]
 
 
-def _ws_threads_alive(expected: int) -> bool:
+def _ws_count_alive_threads() -> int:
     threads = st.session_state.get("ws_threads", {})
-    if len(threads) != expected:
-        return False
-    return all(t.is_alive() for t in threads.values())
+    return sum(1 for t in threads.values() if t.is_alive())
+
+
+def _ws_handle_coinbase_message(data: dict, runtime: dict) -> None:
+    msg_type = data.get("type")
+
+    if msg_type == "error":
+        err = data.get("message", str(data))
+        runtime["error"] = err
+        print(f"[WS] Server error: {err}")
+        return
+
+    if msg_type == "subscriptions":
+        print(f"[WS] Subscriptions confirmed: {data.get('channels', data)}")
+        runtime["last_msg"] = time.time()
+        return
+
+    if msg_type in ("ticker", "ticker_batch", "heartbeat"):
+        product_id = data.get("product_id")
+        price = data.get("price")
+        if product_id and price:
+            st.session_state.setdefault("ws_prices", {})[product_id] = float(price)
+        runtime["last_msg"] = time.time()
 
 
 def stop_websocket_workers() -> None:
@@ -2276,6 +2307,7 @@ def stop_websocket_workers() -> None:
     if runtime:
         runtime["connected"] = False
         runtime["connecting"] = False
+        runtime["chunk_status"] = {}
 
 
 def ensure_coinbase_websocket(pairs: list, exchange: str) -> None:
@@ -2290,8 +2322,16 @@ def ensure_coinbase_websocket(pairs: list, exchange: str) -> None:
     chunks = [pairs[i : i + chunk_size] for i in range(0, len(pairs), chunk_size)]
     pairs_key = (tuple(pairs), chunk_size)
 
-    if pairs_key == st.session_state.get("ws_pairs_key") and _ws_threads_alive(len(chunks)):
-        return
+    alive = _ws_count_alive_threads()
+    runtime = _ws_runtime()
+    last_msg = float(runtime.get("last_msg", 0))
+    msg_fresh = last_msg > 0 and (time.time() - last_msg) < WS_MSG_STALE_SEC
+
+    if pairs_key == st.session_state.get("ws_pairs_key"):
+        if alive >= len(chunks):
+            return
+        if alive > 0 and msg_fresh:
+            return
 
     stop_websocket_workers()
     st.session_state["ws_stop"] = False
@@ -2304,71 +2344,117 @@ def ensure_coinbase_websocket(pairs: list, exchange: str) -> None:
     runtime["error"] = None
     runtime["subscribed"] = len(pairs)
     runtime["connection_count"] = len(chunks)
+    runtime["chunk_status"] = {}
 
     def ws_worker(chunk_id: int, product_ids: list):
-        ws = None
+        time.sleep(chunk_id * WS_STAGGER_SEC)
         runtime = st.session_state["ws_runtime"]
-        try:
-            print(
-                f"[WS #{chunk_id}] Connecting to {CONFIG.COINBASE_WS} "
-                f"({len(product_ids)} pairs: {', '.join(product_ids[:3])}...)"
-            )
-            ws = websocket.WebSocket()
-            ws.connect(CONFIG.COINBASE_WS, timeout=10)
-            ws.settimeout(1.0)
+        runtime["chunk_status"][chunk_id] = "connecting"
 
-            subscribe_msg = {
-                "type": "subscribe",
-                "channels": [{"name": "ticker", "product_ids": product_ids}],
-            }
-            ws.send(json.dumps(subscribe_msg))
-            runtime["connected"] = True
-            runtime["connecting"] = False
-            st.session_state["ws_alive"] = True
-            print(f"[WS #{chunk_id}] Connected and subscribed to {len(product_ids)} tickers")
+        while not st.session_state.get("ws_stop", False):
+            ws = None
+            connected_ok = False
 
-            while not st.session_state.get("ws_stop", False):
+            for attempt in range(1, WS_MAX_RETRIES + 1):
+                if st.session_state.get("ws_stop", False):
+                    return
                 try:
-                    message = ws.recv()
-                    if not message:
-                        continue
-                    data = json.loads(message)
-                    if data.get("type") == "ticker":
-                        product_id = data.get("product_id")
-                        price = data.get("price")
-                        if product_id and price:
-                            st.session_state["ws_prices"][product_id] = float(price)
-                            runtime["last_msg"] = time.time()
-                except websocket.WebSocketTimeoutException:
-                    continue
-                except Exception as recv_err:
-                    print(f"[WS #{chunk_id}] Receive error: {type(recv_err).__name__}: {recv_err}")
+                    print(
+                        f"[WS #{chunk_id}] Attempt {attempt}/{WS_MAX_RETRIES}: "
+                        f"connecting to {CONFIG.COINBASE_WS} "
+                        f"({len(product_ids)} pairs)"
+                    )
+                    ws = websocket.WebSocket()
+                    ws.connect(CONFIG.COINBASE_WS, timeout=WS_CONNECT_TIMEOUT)
+                    ws.settimeout(WS_RECV_TIMEOUT)
+
+                    subscribe_msg = {
+                        "type": "subscribe",
+                        "product_ids": product_ids,
+                        "channels": list(CONFIG.COINBASE_WS_CHANNELS),
+                    }
+                    ws.send(json.dumps(subscribe_msg))
+                    print(
+                        f"[WS #{chunk_id}] Subscribe sent: "
+                        f"{len(product_ids)} products, channels={CONFIG.COINBASE_WS_CHANNELS}"
+                    )
+
+                    runtime["connected"] = True
+                    runtime["connecting"] = False
+                    runtime["chunk_status"][chunk_id] = "connected"
+                    st.session_state["ws_alive"] = True
+                    connected_ok = True
+
+                    while not st.session_state.get("ws_stop", False):
+                        try:
+                            message = ws.recv()
+                            if not message:
+                                continue
+                            data = json.loads(message)
+                            _ws_handle_coinbase_message(data, runtime)
+                        except websocket.WebSocketTimeoutException:
+                            continue
+                        except Exception as recv_err:
+                            print(
+                                f"[WS #{chunk_id}] Receive error: "
+                                f"{type(recv_err).__name__}: {recv_err}"
+                            )
+                            break
+
                     break
-        except Exception as conn_err:
-            err_msg = f"chunk {chunk_id}: {conn_err}"
-            runtime["error"] = err_msg
-            print(f"[WS #{chunk_id}] Connection failed: {type(conn_err).__name__}: {conn_err}")
-        finally:
-            threads = st.session_state.get("ws_threads", {})
-            others_alive = any(
-                t.is_alive()
-                for idx, t in threads.items()
-                if idx != chunk_id
-            )
-            if not others_alive:
-                runtime["connected"] = False
-                runtime["connecting"] = False
-                st.session_state["ws_alive"] = False
-            print(f"[WS #{chunk_id}] Connection closed")
+
+                except Exception as conn_err:
+                    err_msg = f"chunk {chunk_id} attempt {attempt}: {conn_err}"
+                    runtime["error"] = err_msg
+                    runtime["chunk_status"][chunk_id] = f"error ({attempt})"
+                    print(
+                        f"[WS #{chunk_id}] Connection failed (attempt {attempt}): "
+                        f"{type(conn_err).__name__}: {conn_err}"
+                    )
+                    if ws is not None:
+                        try:
+                            ws.close()
+                        except Exception:
+                            pass
+                        ws = None
+                    if attempt < WS_MAX_RETRIES:
+                        delay = WS_RETRY_DELAY_SEC * attempt
+                        print(f"[WS #{chunk_id}] Retrying in {delay:.0f}s...")
+                        time.sleep(delay)
+
             if ws is not None:
                 try:
                     ws.close()
                 except Exception:
                     pass
 
+            runtime["chunk_status"][chunk_id] = "disconnected"
+            print(f"[WS #{chunk_id}] Connection closed")
+
+            others_alive = _ws_count_alive_threads() > 1
+            if not others_alive:
+                runtime["connected"] = False
+                runtime["connecting"] = False
+                st.session_state["ws_alive"] = False
+
+            if st.session_state.get("ws_stop", False):
+                return
+
+            if not connected_ok:
+                print(f"[WS #{chunk_id}] All retries failed; waiting before reconnect...")
+                time.sleep(WS_RETRY_DELAY_SEC * WS_MAX_RETRIES)
+            else:
+                print(f"[WS #{chunk_id}] Reconnecting after drop...")
+                time.sleep(WS_RETRY_DELAY_SEC)
+
     ws_threads = {}
     for i, chunk in enumerate(chunks):
-        ws_thread = threading.Thread(target=ws_worker, args=(i, chunk), daemon=True)
+        ws_thread = threading.Thread(
+            target=ws_worker,
+            args=(i, chunk),
+            daemon=True,
+            name=f"coinbase-ws-{i}",
+        )
         ws_threads[i] = ws_thread
         ws_thread.start()
 
@@ -2376,7 +2462,7 @@ def ensure_coinbase_websocket(pairs: list, exchange: str) -> None:
     st.session_state["ws_thread"] = ws_threads.get(0)
     print(
         f"[WS] Started {len(chunks)} connections for {len(pairs)} pairs "
-        f"({chunk_size} pairs per connection)"
+        f"({chunk_size} pairs/connection) → {CONFIG.COINBASE_WS}"
     )
 
 
@@ -2402,8 +2488,11 @@ def get_websocket_status_label() -> Tuple[str, str]:
     runtime = st.session_state.get("ws_runtime", {})
     threads = st.session_state.get("ws_threads", {})
     thread_alive = any(t.is_alive() for t in threads.values())
+    alive_count = _ws_count_alive_threads()
     subscribed = int(runtime.get("subscribed", 0))
     conn_count = int(runtime.get("connection_count", 0))
+    chunk_status = runtime.get("chunk_status", {})
+    connected_chunks = sum(1 for v in chunk_status.values() if v == "connected")
     last_msg = float(runtime.get("last_msg", 0))
     age = time.time() - last_msg if last_msg > 0 else None
 
@@ -2415,17 +2504,17 @@ def get_websocket_status_label() -> Tuple[str, str]:
         )
 
     is_live = (
-        thread_alive
-        and last_msg > 0
+        last_msg > 0
         and age is not None
         and age < WS_MSG_STALE_SEC
+        and (connected_chunks > 0 or alive_count > 0)
     )
 
     if is_live:
         return (
             "🟢",
-            f"Connected ({conn_count} connections, {subscribed} pairs) | "
-            f"{price_count} in cache | Last tick {int(age)}s ago",
+            f"Connected ({connected_chunks}/{conn_count} live, {subscribed} pairs) | "
+            f"{price_count} in cache | Last msg {int(age)}s ago",
         )
 
     if runtime.get("error"):
