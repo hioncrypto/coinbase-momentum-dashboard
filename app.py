@@ -502,6 +502,34 @@ def clear_alerted_pairs():
         pass
 
 
+USER_SETTINGS_FILE = Path(__file__).resolve().parent / "user_settings.json"
+NOTIFICATION_SETTING_KEYS = ("email_to", "webhook_url")
+
+
+def load_user_settings() -> dict:
+    try:
+        if USER_SETTINGS_FILE.exists():
+            with open(USER_SETTINGS_FILE, "r") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    return data
+    except Exception:
+        pass
+    return {}
+
+
+def save_user_settings() -> None:
+    try:
+        settings = {
+            key: st.session_state.get(key, "")
+            for key in NOTIFICATION_SETTING_KEYS
+        }
+        with open(USER_SETTINGS_FILE, "w") as f:
+            json.dump(settings, f, indent=2)
+    except Exception:
+        pass
+
+
 # =============================================================================
 # STATE MANAGEMENT
 # =============================================================================
@@ -579,9 +607,14 @@ def init_session_state():
         "lr_feeds": "",
     }
 
+    saved_settings = load_user_settings()
+
     for key, default in defaults.items():
         if key not in st.session_state:
-            st.session_state[key] = load_from_url(key, default, type(default))
+            initial = default
+            if key in NOTIFICATION_SETTING_KEYS and saved_settings.get(key):
+                initial = saved_settings[key]
+            st.session_state[key] = load_from_url(key, initial, type(initial))
 
 
 init_session_state()
@@ -1929,6 +1962,7 @@ with expander("🔔 Notifications"):
     if new_email != st.session_state.get("email_to", ""):
         st.session_state["email_to"] = new_email
         save_to_url("email_to", new_email)
+        save_user_settings()
 
     new_webhook = st.text_input(
         "Webhook URL",
@@ -1939,6 +1973,11 @@ with expander("🔔 Notifications"):
     if new_webhook != st.session_state.get("webhook_url", ""):
         st.session_state["webhook_url"] = new_webhook
         save_to_url("webhook_url", new_webhook)
+        save_user_settings()
+
+    if st.button("Save Settings", key="save_notification_settings"):
+        save_user_settings()
+        st.success("Notification settings saved.")
 
 with expander("Display"):
     new_fs = st.slider(
@@ -2225,23 +2264,52 @@ if pairs:
         else:
             is_green = False
 
-        # 2. Check for Acceleration (+5%)
-        include = False 
-        if is_green and mode != "OFF":
-            # This calls the logic at Line 727 to check the +5% jump
+        include = False
+        ws_price = st.session_state.get("ws_prices", {}).get(pair)
+        last_price = float(ws_price) if ws_price else float(df["close"].iloc[-1])
+        pct_change = meta["delta_pct"]
+
+        strategy_approved = True
+        if alert_mode != "Off" and is_green:
+            df_4h = get_cached_data(effective_exchange, pair, "4h")
+            df_1d = get_cached_data(effective_exchange, pair, "1d")
+
+            strategy_approved = False
+            if check_alert_strategy(df_1d, alert_mode, 20.0):
+                strategy_approved = True
+            elif check_alert_strategy(df_4h, alert_mode, 20.0):
+                strategy_approved = True
+
+            if alert_mode == "Conservative" and strategy_approved:
+                df_15m = get_cached_data(effective_exchange, pair, "15m")
+                if df_15m is not None:
+                    recent_low_15m = df_15m['close'].iloc[-5:].min()
+                    pct_move_15m = ((df_15m['close'].iloc[-1] - recent_low_15m) / recent_low_15m) * 100
+                    if pct_move_15m < 20.0:
+                        strategy_approved = False
+
+        print(f"[ALERT GATE CHECK] pair={pair}, is_green={is_green}, strategy_approved={strategy_approved}, alert_mode={alert_mode}, delta={delta_pct:.2f}, rel_vol={rel_vol:.2f}")
+
+        if is_green and strategy_approved and alert_mode != "Off":
             include, alert_type = should_send_alert(
-            pair, delta_pct, rel_vol, st.session_state.alerted_pairs, 
-            use_vol_spike=use_vol
+                pair, delta_pct, rel_vol, st.session_state.alerted_pairs,
+                use_vol_spike=use_vol
             )
-            # 🔔 DEBUG: Show what should_send_alert returned
             print(f" should_send_alert result: include={include}, alert_type={alert_type}")
             if include:
-                # This sends the actual email notification
-                send_alert_notification(pair, delta_pct, rel_vol, alert_type)   
-        else:
-            # If the pair is NOT green, remove it from memory so it can reset
-            if pair in st.session_state.alerted_pairs:
-                st.session_state.alerted_pairs.pop(pair, None)
+                send_alert_notification(pair, delta_pct, rel_vol, alert_type)
+                alerts_to_send.append({
+                    "pair": pair,
+                    "price": last_price,
+                    "pct": pct_change,
+                    "timeframe": sort_tf,
+                    "exchange": effective_exchange,
+                    "signal": "Strong Buy",
+                    "stage": alert_type,
+                })
+
+        if not is_green and pair in alerted_pairs:
+            alerted_pairs.pop(pair, None)
 
         if hard_filter:
             if mode in {"ALL", "ANY"} and not include:
@@ -2249,14 +2317,9 @@ if pairs:
             if mode == "Custom (K/Y)" and not (is_green or is_yellow):
                 continue
 
-        ws_price = st.session_state.get("ws_prices", {}).get(pair)
-        last_price = float(ws_price) if ws_price else float(df["close"].iloc[-1])
-        pct_change = meta["delta_pct"]
-            # DEBUG: Check if function is being called
         if "debug_msgs" not in st.session_state:
             st.session_state.debug_msgs = []
-            st.session_state.debug_msgs.append(f"{pair}: green={is_green}, change={pct_change:.2f}%")
-        # Keep only last 10
+        st.session_state.debug_msgs.append(f"{pair}: green={is_green}, change={pct_change:.2f}%")
         st.session_state.debug_msgs = st.session_state.debug_msgs[-10:]
         signal = ""
         if is_green:
@@ -2277,57 +2340,6 @@ if pairs:
             "_ws_active": ws_price is not None,
         }
         rows.append(row_data)
-    
-        # Check Alert Strategy (if enabled via radio button)
-        strategy_approved = True
-        if alert_mode != "Off" and is_green:
-            # Fetch Timeframes for Strategy Check
-            df_4h = get_cached_data(effective_exchange, pair, "4h")
-            df_1d = get_cached_data(effective_exchange, pair, "1d")
-            
-            # Stage 1 & 2: Daily First → 4h Fallback
-            strategy_approved = False
-            if check_alert_strategy(df_1d, alert_mode, 20.0):
-                strategy_approved = True
-            elif check_alert_strategy(df_4h, alert_mode, 20.0):
-                strategy_approved = True
-            
-            # Stage 3 (Conservative Only): Check 15m for 20% Move
-            if alert_mode == "Conservative" and strategy_approved:
-                df_15m = get_cached_data(effective_exchange, pair, "15m")
-                if df_15m is not None:
-                    recent_low_15m = df_15m['close'].iloc[-5:].min()
-                    pct_move_15m = ((df_15m['close'].iloc[-1] - recent_low_15m) / recent_low_15m) * 100
-                    if pct_move_15m < 20.0:
-                        strategy_approved = False
-        
-        # Send Alert if Strategy Approved (wrap existing logic)
-
-        print(f"[ALERT GATE CHECK] pair={pair}, is_green={is_green}, strategy_approved={strategy_approved}, mode={mode}, delta={delta_pct:.2f}, rel_vol={rel_vol:.2f}")
-        
-        if is_green and strategy_approved and mode != "OFF":
-            include, alert_type = should_send_alert(
-                pair, delta_pct, rel_vol, st.session_state.alerted_pairs, 
-                use_vol_spike=use_vol
-            )
-            print(f" should_send_alert result: include={include}, alert_type={alert_type}")
-            if include:
-                send_alert_notification(pair, delta_pct, rel_vol, alert_type)
-                # Also add to email/webhook list if needed
-                alerts_to_send.append({
-                    "pair": pair,
-                    "price": last_price,
-                    "pct": pct_change,
-                    "timeframe": sort_tf,
-                    "exchange": effective_exchange,
-                    "signal": signal,
-                    "stage": alert_type,
-                })
-  
-        # Reset state ONLY when pair is NOT Green
-        if not is_green and pair in alerted_pairs:
-            alerted_pairs.pop(pair, None)
-       
     progress_placeholder.empty()
     status_placeholder.empty()
 
