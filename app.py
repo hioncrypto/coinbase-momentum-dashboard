@@ -2854,7 +2854,9 @@ need_rescan = (
 scan_completed_this_run = False
 
 if pairs:
-    scan_progress_ph = st.empty()
+    progress_ph = st.empty()
+    status_ph = st.empty()
+    remaining_ph = st.empty()
     results_ph = st.empty()
 
     cached_rows = list(st.session_state.get("scan_rows") or [])
@@ -2872,10 +2874,13 @@ if pairs:
 
     if need_rescan:
         rows = []
+        total_pairs = len(pairs)
         for i, pair in enumerate(pairs):
-            progress = (i + 1) / len(pairs)
-            scan_progress_ph.progress(progress)
-            scan_progress_ph.caption(f"Processing {pair}... ({i + 1}/{len(pairs)})")
+            done = i + 1
+            left = total_pairs - done
+            progress_ph.progress(done / total_pairs)
+            status_ph.caption(f"Processing {pair}... ({done}/{total_pairs})")
+            remaining_ph.caption(f"{left} pairs remaining")
 
             df = get_cached_data(effective_exchange, pair, sort_tf)
             if df is None or df.empty or len(df) < st.session_state.get("min_bars", 8):
@@ -2980,7 +2985,9 @@ if pairs:
                 "_ws_active": ws_price is not None,
             }
             rows.append(row_data)
-        scan_progress_ph.empty()
+        progress_ph.empty()
+        status_ph.empty()
+        remaining_ph.empty()
 
         # Filter alerts to Top 10 by % change (not by threshold)
         if alerts_to_send and rows:
