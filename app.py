@@ -18,6 +18,17 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+st.markdown(
+    """
+    <style>
+    div[data-testid="stSidebar"] .stSlider [data-baseweb="slider"] {
+        width: 100% !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # ============================================================================
 # GLOBAL CSS (MOBILE TWEAKS + SIDEBAR RESIZE HANDLE)
 # ============================================================================
