@@ -665,7 +665,7 @@ def init_session_state():
         "quote": "USD",
         "pairs_to_discover": 400,
         "mode": "REST only",
-        "ws_chunk": 13,
+        "ws_chunk": 50,
         "sort_tf": "1h",
         "sort_desc": True,
         "min_bars": 3,
@@ -724,6 +724,7 @@ def init_session_state():
             "last_msg": 0.0,
             "error": None,
             "subscribed": 0,
+            "connection_count": 0,
         },
         "lr_enabled": False,
         "lr_baseline": {"Coinbase": set(), "Binance": set()},
@@ -1720,13 +1721,17 @@ with expander("Mode & Timeframes"):
         save_to_url("mode", new_mode)
 
     new_ws_chunk = st.slider(
-        "WebSocket chunk size",
-        2,
-        20,
-        value=int(st.session_state.get("ws_chunk", 13)),
-        step=1,
+        "Pairs per WebSocket connection",
+        10,
+        100,
+        value=int(st.session_state.get("ws_chunk", 50)),
+        step=5,
         key="ws_chunk_widget",
-        help="Pairs to stream simultaneously",
+        help=(
+            "All discovered pairs are streamed live. Coinbase limits how many "
+            "tickers fit on one connection, so pairs are split across multiple "
+            "connections (e.g. 400 pairs at 50 = 8 connections)."
+        ),
     )
     if new_ws_chunk != st.session_state.get("ws_chunk"):
         st.session_state["ws_chunk"] = new_ws_chunk
@@ -2249,8 +2254,28 @@ def _ws_runtime() -> dict:
             "last_msg": 0.0,
             "error": None,
             "subscribed": 0,
+            "connection_count": 0,
         }
     return st.session_state["ws_runtime"]
+
+
+def _ws_threads_alive(expected: int) -> bool:
+    threads = st.session_state.get("ws_threads", {})
+    if len(threads) != expected:
+        return False
+    return all(t.is_alive() for t in threads.values())
+
+
+def stop_websocket_workers() -> None:
+    st.session_state["ws_stop"] = True
+    st.session_state["ws_alive"] = False
+    st.session_state.pop("ws_threads", None)
+    st.session_state.pop("ws_thread", None)
+    st.session_state.pop("ws_pairs_key", None)
+    runtime = st.session_state.get("ws_runtime")
+    if runtime:
+        runtime["connected"] = False
+        runtime["connecting"] = False
 
 
 def ensure_coinbase_websocket(pairs: list, exchange: str) -> None:
@@ -2261,25 +2286,31 @@ def ensure_coinbase_websocket(pairs: list, exchange: str) -> None:
     if not pairs:
         return
 
-    thread = st.session_state.get("ws_thread")
-    if thread is not None and thread.is_alive():
+    chunk_size = max(10, min(100, int(st.session_state.get("ws_chunk", 50))))
+    chunks = [pairs[i : i + chunk_size] for i in range(0, len(pairs), chunk_size)]
+    pairs_key = (tuple(pairs), chunk_size)
+
+    if pairs_key == st.session_state.get("ws_pairs_key") and _ws_threads_alive(len(chunks)):
         return
 
+    stop_websocket_workers()
+    st.session_state["ws_stop"] = False
+    st.session_state["ws_pairs_key"] = pairs_key
     st.session_state.setdefault("ws_prices", {})
+
     runtime = _ws_runtime()
     runtime["connecting"] = True
     runtime["connected"] = False
     runtime["error"] = None
+    runtime["subscribed"] = len(pairs)
+    runtime["connection_count"] = len(chunks)
 
-    ws_pairs = pairs[: int(st.session_state.get("ws_chunk", 13))]
-    runtime["subscribed"] = len(ws_pairs)
-
-    def ws_worker(product_ids):
+    def ws_worker(chunk_id: int, product_ids: list):
         ws = None
         runtime = st.session_state["ws_runtime"]
         try:
             print(
-                f"[WS] Connecting to {CONFIG.COINBASE_WS} "
+                f"[WS #{chunk_id}] Connecting to {CONFIG.COINBASE_WS} "
                 f"({len(product_ids)} pairs: {', '.join(product_ids[:3])}...)"
             )
             ws = websocket.WebSocket()
@@ -2294,9 +2325,9 @@ def ensure_coinbase_websocket(pairs: list, exchange: str) -> None:
             runtime["connected"] = True
             runtime["connecting"] = False
             st.session_state["ws_alive"] = True
-            print(f"[WS] Connected and subscribed to {len(product_ids)} tickers")
+            print(f"[WS #{chunk_id}] Connected and subscribed to {len(product_ids)} tickers")
 
-            while st.session_state.get("ws_alive", False):
+            while not st.session_state.get("ws_stop", False):
                 try:
                     message = ws.recv()
                     if not message:
@@ -2311,26 +2342,42 @@ def ensure_coinbase_websocket(pairs: list, exchange: str) -> None:
                 except websocket.WebSocketTimeoutException:
                     continue
                 except Exception as recv_err:
-                    print(f"[WS] Receive error: {type(recv_err).__name__}: {recv_err}")
+                    print(f"[WS #{chunk_id}] Receive error: {type(recv_err).__name__}: {recv_err}")
                     break
         except Exception as conn_err:
-            runtime["error"] = str(conn_err)
-            print(f"[WS] Connection failed: {type(conn_err).__name__}: {conn_err}")
+            err_msg = f"chunk {chunk_id}: {conn_err}"
+            runtime["error"] = err_msg
+            print(f"[WS #{chunk_id}] Connection failed: {type(conn_err).__name__}: {conn_err}")
         finally:
-            runtime["connected"] = False
-            runtime["connecting"] = False
-            st.session_state["ws_alive"] = False
-            print("[WS] Connection closed")
+            threads = st.session_state.get("ws_threads", {})
+            others_alive = any(
+                t.is_alive()
+                for idx, t in threads.items()
+                if idx != chunk_id
+            )
+            if not others_alive:
+                runtime["connected"] = False
+                runtime["connecting"] = False
+                st.session_state["ws_alive"] = False
+            print(f"[WS #{chunk_id}] Connection closed")
             if ws is not None:
                 try:
                     ws.close()
                 except Exception:
                     pass
 
-    ws_thread = threading.Thread(target=ws_worker, args=(ws_pairs,), daemon=True)
-    st.session_state["ws_thread"] = ws_thread
-    ws_thread.start()
-    print(f"[WS] Worker thread started ({len(ws_pairs)} pairs)")
+    ws_threads = {}
+    for i, chunk in enumerate(chunks):
+        ws_thread = threading.Thread(target=ws_worker, args=(i, chunk), daemon=True)
+        ws_threads[i] = ws_thread
+        ws_thread.start()
+
+    st.session_state["ws_threads"] = ws_threads
+    st.session_state["ws_thread"] = ws_threads.get(0)
+    print(
+        f"[WS] Started {len(chunks)} connections for {len(pairs)} pairs "
+        f"({chunk_size} pairs per connection)"
+    )
 
 
 def get_websocket_status_label() -> Tuple[str, str]:
@@ -2353,13 +2400,19 @@ def get_websocket_status_label() -> Tuple[str, str]:
         return "⚪", f"WebSocket N/A for {effective}"
 
     runtime = st.session_state.get("ws_runtime", {})
-    thread = st.session_state.get("ws_thread")
-    thread_alive = thread is not None and thread.is_alive()
+    threads = st.session_state.get("ws_threads", {})
+    thread_alive = any(t.is_alive() for t in threads.values())
+    subscribed = int(runtime.get("subscribed", 0))
+    conn_count = int(runtime.get("connection_count", 0))
     last_msg = float(runtime.get("last_msg", 0))
     age = time.time() - last_msg if last_msg > 0 else None
 
     if runtime.get("connecting") and thread_alive:
-        return "🟡", f"Connecting... | Pairs in cache: {price_count}"
+        return (
+            "🟡",
+            f"Connecting {conn_count} connections for {subscribed} pairs "
+            f"| Cache: {price_count}",
+        )
 
     is_live = (
         thread_alive
@@ -2369,9 +2422,10 @@ def get_websocket_status_label() -> Tuple[str, str]:
     )
 
     if is_live:
-        return "🟢", (
-            f"Connected | {price_count} pairs in cache | "
-            f"Last tick {int(age)}s ago"
+        return (
+            "🟢",
+            f"Connected ({conn_count} connections, {subscribed} pairs) | "
+            f"{price_count} in cache | Last tick {int(age)}s ago",
         )
 
     if runtime.get("error"):
@@ -2391,8 +2445,7 @@ with col1:
     if st.button("🔄 Refresh Now", type="primary"):
         get_cached_data.clear()
         st.session_state["ws_prices"] = {}
-        st.session_state["ws_alive"] = False
-        st.session_state.pop("ws_thread", None)
+        stop_websocket_workers()
         st.session_state["last_update"] = 0
         st.session_state.pop("scan_rows", None)
         st.rerun()
