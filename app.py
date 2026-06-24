@@ -810,6 +810,7 @@ def trigger_immediate_rescan(clear_fetch_cache: bool = False) -> None:
     st.session_state["scan_in_progress"] = False
     if clear_fetch_cache:
         get_cached_data.clear()
+        clear_session_candle_cache()
 
 
 def build_scan_config_fingerprint(
@@ -1041,7 +1042,7 @@ def trend_breakout_up(df: pd.DataFrame, span: int = 3, within_bars: int = 48) ->
 # =============================================================================
 # DATA FETCHING
 # =============================================================================
-REST_MIN_GAP_SEC = 0.12  # ~8 req/s — stays under Coinbase public limits
+REST_MIN_GAP_SEC = 0.06  # ~16 req/s — cached rescans skip network; cold scan stays under limits
 _REST_LOCK = threading.Lock()
 _LAST_REST_AT = 0.0
 _REST_BACKOFF_UNTIL = 0.0
@@ -1216,10 +1217,12 @@ def fetch_data(
 
 # Bump when fetch logic changes (e.g. Coinbase 4h built from 1h candles).
 _FETCH_CACHE_REV = 5
+_SESSION_CANDLE_CACHE: Dict[tuple, tuple] = {}
+_SESSION_CANDLE_LOCK = threading.Lock()
 # =============================================================================
 # CACHING
 # =============================================================================
-@st.cache_data(show_spinner=False, ttl=300)
+@st.cache_data(show_spinner=False, ttl=600)
 def get_cached_data(
     exchange: str,
     pair: str,
@@ -1236,9 +1239,24 @@ def get_cached_data(
 
 def fetch_pair_data(exchange: str, pair: str, timeframe: str) -> Optional[pd.DataFrame]:
     refresh_sec = int(st.session_state.get("refresh_sec", 30))
-    return get_cached_data(
+    key = (exchange, pair, timeframe)
+    now = time.time()
+    with _SESSION_CANDLE_LOCK:
+        cached = _SESSION_CANDLE_CACHE.get(key)
+        if cached and (now - cached[1]) < refresh_sec:
+            return cached[0]
+    df = get_cached_data(
         exchange, pair, timeframe, refresh_sec, _FETCH_CACHE_REV,
     )
+    if df is not None:
+        with _SESSION_CANDLE_LOCK:
+            _SESSION_CANDLE_CACHE[key] = (df, now)
+    return df
+
+
+def clear_session_candle_cache() -> None:
+    with _SESSION_CANDLE_LOCK:
+        _SESSION_CANDLE_CACHE.clear()
 
 
 def check_alert_strategy(df, mode, min_pct=20.0):
@@ -2278,12 +2296,10 @@ with expander("Display"):
         step=1,
         key="refresh_sec",
         help=(
-            "Minimum seconds between automatic scans. The results panel also "
-            "refreshes on this interval via the fragment timer."
+            "Minimum seconds between automatic scans when continuous mode pauses."
         ),
     )
     if new_rs != st.session_state.get("refresh_sec"):
-        get_cached_data.clear()
         save_to_url("refresh_sec", new_rs)
 
 with expander("Listing Radar"):
@@ -2376,7 +2392,7 @@ WS_RETRY_DELAY_SEC = 2.0
 WS_STAGGER_SEC = 1.0
 WS_START_GRACE_SEC = 300
 WS_ERROR_LOG_INTERVAL = 30.0
-FRAGMENT_POLL_SEC = 1
+FRAGMENT_POLL_SEC = 1  # legacy; scans run on full page rerun (no fragment timer)
 
 # Streamlit session_state is main-thread only — workers use this shared store.
 _WS_LOCK = threading.Lock()
@@ -3241,8 +3257,8 @@ def scan_results_panel() -> None:
         render_scan_results(display_rows, display_tf, hard_filter, interactive=True)
 
     if scan_ran:
-        # Chain the next scan via immediate_rescan + fragment timer (no st.rerun — crashes fragments on 1.36).
         st.session_state["immediate_rescan"] = True
+        st.rerun()
 
 
 # =============================================================================
@@ -3254,6 +3270,7 @@ col1, col2, col3 = st.columns([1, 1, 2])
 with col1:
     if st.button("🔄 Refresh Now", type="primary"):
         get_cached_data.clear()
+        clear_session_candle_cache()
         get_products.clear()
         st.session_state["ws_prices"] = {}
         stop_websocket_workers(clear_cache=True)
@@ -3265,6 +3282,7 @@ with col1:
 with col2:
     if st.button("🧹 Clear Cache"):
         get_cached_data.clear()
+        clear_session_candle_cache()
         get_products.clear()
         get_market_caps.clear()
         stop_websocket_workers(clear_cache=True)
@@ -3275,12 +3293,9 @@ with col2:
         st.rerun()
 
 with col3:
-    ws_status_fragment = st_fragment(run_every=10)(ws_status_panel)
-    ws_status_fragment()
+    ws_status_panel()
 
-refresh_interval = int(st.session_state.get("refresh_sec", 30))
-scan_results_fragment = st_fragment(run_every=FRAGMENT_POLL_SEC)(scan_results_panel)
-scan_results_fragment()
+scan_results_panel()
 
 st.markdown("---")
 st.caption("🚀 Enhanced Crypto Tracker with Progressive Alerts — by hioncrypto")
