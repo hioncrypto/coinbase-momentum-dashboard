@@ -1278,6 +1278,33 @@ def check_alert_strategy(df, mode, min_pct=20.0):
         return False
 
 
+def pair_passes_alert_strategy(
+    exchange: str,
+    pair: str,
+    alert_mode: str,
+) -> bool:
+    """Higher-timeframe alert filter — run after main scan so all pairs render quickly."""
+    if alert_mode == "Off":
+        return True
+    df_1d = fetch_pair_data(exchange, pair, "1d")
+    df_4h = fetch_pair_data(exchange, pair, "4h")
+    approved = False
+    if check_alert_strategy(df_1d, alert_mode, 20.0):
+        approved = True
+    elif check_alert_strategy(df_4h, alert_mode, 20.0):
+        approved = True
+    if alert_mode == "Conservative" and approved:
+        df_15m = fetch_pair_data(exchange, pair, "15m")
+        if df_15m is not None:
+            recent_low_15m = df_15m["close"].iloc[-5:].min()
+            pct_move_15m = (
+                (df_15m["close"].iloc[-1] - recent_low_15m) / recent_low_15m
+            ) * 100
+            if pct_move_15m < 20.0:
+                return False
+    return approved
+
+
 # =============================================================================
 # PRODUCT LISTING
 # =============================================================================
@@ -2848,9 +2875,54 @@ def render_scan_results(
     with col4:
         st.metric("Max % Change", f"{max_pct:.2f}%")
 
+    st.subheader(f"📋 All Pairs ({total_count})")
+
+    if interactive:
+        sort_option = st.selectbox(
+            "Sort all pairs by",
+            ["% Change", "Signal", "Pair"],
+            index=0,
+            key="all_pairs_sort",
+        )
+    else:
+        sort_option = "% Change"
+
+    display_df = df_results.copy()
+    if sort_option == "Signal":
+        display_df = display_df.sort_values(["_green", "_yellow"], ascending=[False, False])
+    elif sort_option == "Pair":
+        display_df = display_df.sort_values("Pair")
+    else:
+        display_df = display_df.sort_values(chg_col, ascending=ascending)
+
+    if not display_df.empty:
+        display_cols = [c for c in display_df.columns if not c.startswith("_")]
+        final_display = display_df[display_cols].reset_index(drop=True)
+
+        def style_all_rows(row):
+            if row.name < len(display_df):
+                original_idx = display_df.index[row.name]
+                if display_df.loc[original_idx, "_green"]:
+                    return [
+                        "background-color: #16a34a; color: white; font-weight: 600"
+                    ] * len(row)
+                elif display_df.loc[original_idx, "_yellow"]:
+                    return ["background-color: #eab308; color: black"] * len(row)
+            return [""] * len(row)
+
+        styled_all = final_display.style.apply(style_all_rows, axis=1)
+        st.dataframe(
+            styled_all,
+            use_container_width=True,
+            hide_index=True,
+            height=min(800, 28 * len(final_display) + 38),
+        )
+    else:
+        st.info("No pairs match filters.")
+
     st.subheader("🔥 Top 10 Opportunities")
 
-    top_10_filtered = df_results.head(10).copy()
+    top_10_filtered = df_results.sort_values(chg_col, ascending=False).head(10).copy()
     top_10_filtered = top_10_filtered.reset_index(drop=True)
     mc_data = get_market_caps()
 
@@ -2884,47 +2956,7 @@ def render_scan_results(
         styled_df = top_10_filtered[display_cols].style.apply(style_top10_rows, axis=1)
         st.dataframe(styled_df, use_container_width=True, hide_index=True)
     else:
-        st.info("No pairs found.")
-
-    col1, col2 = st.columns([3, 1])
-    if interactive:
-        with col1:
-            show_all = st.checkbox("Show all pairs", value=True, key="show_all_pairs")
-        with col2:
-            sort_option = st.selectbox("Sort by", ["% Change", "Signal", "Pair"], index=0)
-    else:
-        show_all = True
-        sort_option = "% Change"
-
-    if not show_all:
-        display_df = df_results[df_results["_green"] | df_results["_yellow"]]
-    else:
-        display_df = df_results
-
-    if sort_option == "Signal":
-        display_df = display_df.sort_values(["_green", "_yellow"], ascending=[False, False])
-    elif sort_option == "Pair":
-        display_df = display_df.sort_values("Pair")
-
-    if not display_df.empty:
-        display_cols = [c for c in display_df.columns if not c.startswith("_")]
-        final_display = display_df[display_cols].reset_index(drop=True)
-
-        def style_all_rows(row):
-            if row.name < len(display_df):
-                original_idx = display_df.index[row.name]
-                if display_df.loc[original_idx, "_green"]:
-                    return [
-                        "background-color: #16a34a; color: white; font-weight: 600"
-                    ] * len(row)
-                elif display_df.loc[original_idx, "_yellow"]:
-                    return ["background-color: #eab308; color: black"] * len(row)
-            return [""] * len(row)
-
-        styled_all = final_display.style.apply(style_all_rows, axis=1)
-        st.dataframe(styled_all, use_container_width=True, hide_index=True, height=600)
-    else:
-        st.info("No pairs match filters.")
+        st.info("No top opportunities yet.")
 
 
 def ws_status_panel() -> None:
@@ -3015,6 +3047,8 @@ def scan_results_panel() -> None:
         scan_id = time.time()
         st.session_state["_current_scan_id"] = scan_id
         rows = []
+        green_alert_candidates = []
+        use_vol = bool(st.session_state.get("use_vol_spike", False))
         try:
             total_pairs = len(pairs)
             for i, pair in enumerate(pairs):
@@ -3049,7 +3083,6 @@ def scan_results_panel() -> None:
                 meta, passed, chips, enabled = evaluate_gates(df, gate_settings)
                 delta_pct = meta.get("delta_pct", 0.0)
                 rel_vol = vol_spike_ratio
-                use_vol = st.session_state.get("use_vol_spike", False)
 
                 is_green = passed >= enabled and enabled > 0
                 is_yellow = (0 < passed < enabled) and (passed >= enabled - 1) if enabled > 0 else False
@@ -3070,44 +3103,14 @@ def scan_results_panel() -> None:
                 last_price = float(ws_price) if ws_price else float(df["close"].iloc[-1])
                 pct_change = meta["delta_pct"]
 
-                strategy_approved = True
-                if alert_mode != "Off" and is_green:
-                    df_4h = fetch_pair_data(effective_exchange, pair, "4h")
-                    df_1d = fetch_pair_data(effective_exchange, pair, "1d")
-
-                    strategy_approved = False
-                    if check_alert_strategy(df_1d, alert_mode, 20.0):
-                        strategy_approved = True
-                    elif check_alert_strategy(df_4h, alert_mode, 20.0):
-                        strategy_approved = True
-
-                    if alert_mode == "Conservative" and strategy_approved:
-                        df_15m = fetch_pair_data(effective_exchange, pair, "15m")
-                        if df_15m is not None:
-                            recent_low_15m = df_15m["close"].iloc[-5:].min()
-                            pct_move_15m = (
-                                (df_15m["close"].iloc[-1] - recent_low_15m) / recent_low_15m
-                            ) * 100
-                            if pct_move_15m < 20.0:
-                                strategy_approved = False
-
-                if is_green and strategy_approved:
-                    include, alert_type = should_send_alert(
-                        pair, delta_pct, rel_vol, st.session_state["alerted_pairs"],
-                        use_vol_spike=use_vol,
-                    )
-                    if include:
-                        stage = format_alert_stage(pair, alert_type, rel_vol)
-                        if stage is not None:
-                            alerts_to_send.append({
-                                "pair": pair,
-                                "price": last_price,
-                                "pct": pct_change,
-                                "timeframe": sort_tf,
-                                "exchange": effective_exchange,
-                                "signal": "Strong Buy",
-                                "stage": stage,
-                            })
+                if is_green:
+                    green_alert_candidates.append({
+                        "pair": pair,
+                        "delta_pct": delta_pct,
+                        "rel_vol": rel_vol,
+                        "last_price": last_price,
+                        "pct_change": pct_change,
+                    })
 
                 if not is_green and pair in alerted_pairs:
                     alerted_pairs.pop(pair, None)
@@ -3139,6 +3142,34 @@ def scan_results_panel() -> None:
 
             status_ph.caption("Scan finished.")
             remaining_ph.caption("")
+
+            if alert_mode != "Off" and green_alert_candidates:
+                status_ph.caption("Checking alert candidates…")
+                for cand in green_alert_candidates:
+                    pair = cand["pair"]
+                    if not pair_passes_alert_strategy(
+                        effective_exchange, pair, alert_mode,
+                    ):
+                        continue
+                    include, alert_type = should_send_alert(
+                        pair,
+                        cand["delta_pct"],
+                        cand["rel_vol"],
+                        st.session_state["alerted_pairs"],
+                        use_vol_spike=use_vol,
+                    )
+                    if include:
+                        stage = format_alert_stage(pair, alert_type, cand["rel_vol"])
+                        if stage is not None:
+                            alerts_to_send.append({
+                                "pair": pair,
+                                "price": cand["last_price"],
+                                "pct": cand["pct_change"],
+                                "timeframe": sort_tf,
+                                "exchange": effective_exchange,
+                                "signal": "Strong Buy",
+                                "stage": stage,
+                            })
 
             if alerts_to_send and rows:
                 chg_col = f"% Change ({sort_tf})"
