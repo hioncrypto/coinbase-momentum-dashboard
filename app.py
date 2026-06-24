@@ -353,8 +353,27 @@ st.markdown(
         padding-right: 12px !important;
     }
 
-    div[data-testid="stDataFrame"],
-    div[data-testid="stDataFrame"] *,
+    /* Keep table fully visible */
+    div[data-testid="stDataFrame"] {
+        opacity: 1 !important;
+    }
+
+    /* Prevent dimming on table rows */
+    div[data-testid="stDataFrame"] tr {
+        opacity: 1 !important;
+    }
+
+    /* Keep table headers bright */
+    div[data-testid="stDataFrame"] thead {
+        opacity: 1 !important;
+    }
+
+    /* Ensure all table elements stay fully visible */
+    div[data-testid="stDataFrame"] td,
+    div[data-testid="stDataFrame"] th {
+        opacity: 1 !important;
+    }
+
     div[data-testid="stDataEditor"],
     div[data-testid="stDataEditor"] * {
         opacity: 1 !important;
