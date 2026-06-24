@@ -268,6 +268,11 @@ def format_market_cap(val):
 # =============================================================================
 # CONFIGURATION & CONSTANTS
 # =============================================================================
+# CONFIGURATION
+# =============================================================================
+APP_DIR = Path(__file__).resolve().parent
+
+
 class Config:
     """Application configuration"""
 
@@ -285,7 +290,7 @@ class Config:
         "KuCoin (coming soon)",
     ]
 
-    ALERT_FILE = Path("/tmp/alerted_pairs.json")
+    ALERT_FILE = APP_DIR / "alerted_pairs.json"
 
 
 CONFIG = Config()
