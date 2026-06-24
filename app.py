@@ -530,26 +530,98 @@ def save_user_settings() -> None:
         pass
 
 
+NOTIFICATION_MSG_DURATION_SEC = 2.5
+
+
+def _set_notification_save_msg(msg_key: str, until_key: str, snapshot_key: str, value: str, message: str):
+    st.session_state[msg_key] = message
+    st.session_state[until_key] = time.time() + NOTIFICATION_MSG_DURATION_SEC
+    st.session_state[snapshot_key] = value
+
+
+def _clear_notification_save_msg_if_expired(msg_key: str, until_key: str):
+    until = st.session_state.get(until_key)
+    if until and time.time() >= until:
+        st.session_state.pop(msg_key, None)
+        st.session_state.pop(until_key, None)
+
+
+def _render_notification_save_msg(msg_key: str, until_key: str):
+    _clear_notification_save_msg_if_expired(msg_key, until_key)
+    if st.session_state.get(msg_key):
+        st.success(st.session_state[msg_key])
+
+
+def _schedule_notification_msg_dismiss():
+    deadlines = []
+    for until_key in ("email_save_msg_until", "webhook_save_msg_until"):
+        until = st.session_state.get(until_key)
+        if until and time.time() < until:
+            deadlines.append(until)
+    if not deadlines:
+        return
+
+    remaining_ms = int((min(deadlines) - time.time()) * 1000)
+    remaining_ms = max(500, remaining_ms)
+
+    if st_autorefresh:
+        st_autorefresh(interval=remaining_ms, limit=1, key="notification_msg_dismiss")
+
+    components.html(
+        f"""
+        <script>
+        (function () {{
+            const doc = window.parent.document;
+            setTimeout(function () {{
+                const sidebar = doc.querySelector("section[data-testid='stSidebar']");
+                if (!sidebar) return;
+                sidebar.querySelectorAll('[data-testid="stAlert"]').forEach(function (el) {{
+                    if (el.textContent.indexOf("will persist after closing") !== -1) {{
+                        el.style.transition = "opacity 0.4s ease";
+                        el.style.opacity = "0";
+                        setTimeout(function () {{ el.style.display = "none"; }}, 400);
+                    }}
+                }});
+            }}, {remaining_ms});
+        }})();
+        </script>
+        """,
+        height=0,
+    )
+
+
 def on_email_saved():
     email = (st.session_state.get("email_to") or "").strip()
     st.session_state.pop("email_save_msg", None)
+    st.session_state.pop("email_save_msg_until", None)
     if not email:
         return
     save_to_url("email_to", email)
     save_user_settings()
-    st.session_state["email_save_msg"] = "✓ Email saved - will persist after closing"
-    st.session_state["email_saved_snapshot"] = email
+    _set_notification_save_msg(
+        "email_save_msg",
+        "email_save_msg_until",
+        "email_saved_snapshot",
+        email,
+        "✓ Email saved - will persist after closing",
+    )
 
 
 def on_webhook_saved():
     webhook = (st.session_state.get("webhook_url") or "").strip()
     st.session_state.pop("webhook_save_msg", None)
+    st.session_state.pop("webhook_save_msg_until", None)
     if not webhook:
         return
     save_to_url("webhook_url", webhook)
     save_user_settings()
-    st.session_state["webhook_save_msg"] = "✓ Webhook saved - will persist after closing"
-    st.session_state["webhook_saved_snapshot"] = webhook
+    _set_notification_save_msg(
+        "webhook_save_msg",
+        "webhook_save_msg_until",
+        "webhook_saved_snapshot",
+        webhook,
+        "✓ Webhook saved - will persist after closing",
+    )
 
 
 def clear_notification_save_msgs_if_edited():
@@ -557,10 +629,12 @@ def clear_notification_save_msgs_if_edited():
         current = (st.session_state.get("email_to") or "").strip()
         if current != st.session_state.get("email_saved_snapshot", ""):
             st.session_state.pop("email_save_msg", None)
+            st.session_state.pop("email_save_msg_until", None)
     if st.session_state.get("webhook_save_msg"):
         current = (st.session_state.get("webhook_url") or "").strip()
         if current != st.session_state.get("webhook_saved_snapshot", ""):
             st.session_state.pop("webhook_save_msg", None)
+            st.session_state.pop("webhook_save_msg_until", None)
 
 
 # =============================================================================
@@ -1994,8 +2068,7 @@ with expander("🔔 Notifications"):
         on_change=on_email_saved,
         help="Press Enter or click away to save (non-empty only)",
     )
-    if st.session_state.get("email_save_msg"):
-        st.success(st.session_state["email_save_msg"])
+    _render_notification_save_msg("email_save_msg", "email_save_msg_until")
 
     st.text_input(
         "Webhook URL",
@@ -2003,8 +2076,9 @@ with expander("🔔 Notifications"):
         on_change=on_webhook_saved,
         help="Press Enter or click away to save (non-empty only)",
     )
-    if st.session_state.get("webhook_save_msg"):
-        st.success(st.session_state["webhook_save_msg"])
+    _render_notification_save_msg("webhook_save_msg", "webhook_save_msg_until")
+
+    _schedule_notification_msg_dismiss()
 
 with expander("Display"):
     new_fs = st.slider(
