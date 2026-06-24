@@ -530,6 +530,18 @@ def save_user_settings() -> None:
         pass
 
 
+def on_email_saved():
+    save_to_url("email_to", st.session_state.get("email_to", ""))
+    save_user_settings()
+    st.toast("✓ Email saved - will persist after closing", icon="✅")
+
+
+def on_webhook_saved():
+    save_to_url("webhook_url", st.session_state.get("webhook_url", ""))
+    save_user_settings()
+    st.toast("✓ Webhook saved - will persist after closing", icon="✅")
+
+
 # =============================================================================
 # STATE MANAGEMENT
 # =============================================================================
@@ -1953,31 +1965,19 @@ with expander("Gates"):
 with expander("🔔 Notifications"):
     st.caption("Email requires SMTP in st.secrets.toml")
 
-    new_email = st.text_input(
+    st.text_input(
         "Email recipient",
-        value=st.session_state.get("email_to", ""),
-        key="email_to_widget",
-        help="Gmail address for alerts",
+        key="email_to",
+        on_change=on_email_saved,
+        help="Press Enter or click away to save",
     )
-    if new_email != st.session_state.get("email_to", ""):
-        st.session_state["email_to"] = new_email
-        save_to_url("email_to", new_email)
-        save_user_settings()
 
-    new_webhook = st.text_input(
+    st.text_input(
         "Webhook URL",
-        value=st.session_state.get("webhook_url", ""),
-        key="webhook_url_widget",
-        help="JSON POST endpoint",
+        key="webhook_url",
+        on_change=on_webhook_saved,
+        help="Press Enter or click away to save",
     )
-    if new_webhook != st.session_state.get("webhook_url", ""):
-        st.session_state["webhook_url"] = new_webhook
-        save_to_url("webhook_url", new_webhook)
-        save_user_settings()
-
-    if st.button("Save Settings", key="save_notification_settings"):
-        save_user_settings()
-        st.success("Notification settings saved.")
 
 with expander("Display"):
     new_fs = st.slider(
