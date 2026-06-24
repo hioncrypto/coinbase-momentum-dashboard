@@ -996,17 +996,27 @@ def trend_breakout_up(df: pd.DataFrame, span: int = 3, within_bars: int = 48) ->
 # DATA FETCHING
 # =============================================================================
 def get_bars_limit(timeframe: str) -> int:
-    limits = {"5m": 120, "15m": 96, "1h": 48, "4h": 24}
+    limits = {"5m": 120, "15m": 96, "1h": 48, "4h": 24, "1d": 30}
     return limits.get(timeframe, 48)
 
 
-def fetch_coinbase_data(pair: str, timeframe: str, limit: int) -> Optional[pd.DataFrame]:
-    tf_seconds = CONFIG.TIMEFRAMES.get(timeframe)
-    if not tf_seconds:
-        return None
+def resample_ohlcv(df: pd.DataFrame, rule: str) -> pd.DataFrame:
+    """Aggregate OHLCV bars (e.g. build 4h candles from 1h — Coinbase has no native 4h feed)."""
+    if df is None or df.empty:
+        return df
+    indexed = df.set_index("time")
+    resampled = indexed.resample(rule).agg(
+        {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}
+    )
+    resampled = resampled.dropna(subset=["open", "close"]).reset_index()
+    return resampled[["time", "open", "high", "low", "close", "volume"]]
 
+
+def _fetch_coinbase_candles_raw(
+    pair: str, granularity_seconds: int, limit: int,
+) -> Optional[pd.DataFrame]:
     url = f"{CONFIG.COINBASE_BASE}/products/{pair}/candles"
-    params = {"granularity": tf_seconds}
+    params = {"granularity": granularity_seconds}
     headers = {"User-Agent": "crypto-tracker/2.0", "Accept": "application/json"}
 
     for attempt in range(3):
@@ -1040,6 +1050,27 @@ def fetch_coinbase_data(pair: str, timeframe: str, limit: int) -> Optional[pd.Da
             time.sleep(0.4 * (attempt + 1))
 
     return None
+
+
+def fetch_coinbase_data(pair: str, timeframe: str, limit: int) -> Optional[pd.DataFrame]:
+    # Coinbase Exchange candles: 60, 300, 900, 3600, 21600, 86400 — NOT 14400 (4h).
+    if timeframe == "4h":
+        hour_limit = min(300, max(limit * 4 + 8, 24))
+        df_1h = _fetch_coinbase_candles_raw(pair, 3600, hour_limit)
+        if df_1h is None or len(df_1h) < 4:
+            return None
+        df = resample_ohlcv(df_1h, "4h")
+        if df is None or df.empty:
+            return None
+        if len(df) > limit:
+            df = df.iloc[-limit:].reset_index(drop=True)
+        return df
+
+    tf_seconds = CONFIG.TIMEFRAMES.get(timeframe)
+    if not tf_seconds:
+        return None
+
+    return _fetch_coinbase_candles_raw(pair, tf_seconds, limit)
 
 
 def fetch_binance_data(pair: str, timeframe: str, limit: int) -> Optional[pd.DataFrame]:
@@ -1107,12 +1138,18 @@ def fetch_data(
         return fetch_coinbase_data(pair, timeframe, limit)
 
 
+# Bump when fetch logic changes (e.g. Coinbase 4h built from 1h candles).
+_FETCH_CACHE_REV = 4
 # =============================================================================
 # CACHING
 # =============================================================================
 @st.cache_data(show_spinner=False, ttl=300)
 def get_cached_data(
-    exchange: str, pair: str, timeframe: str, refresh_sec: int,
+    exchange: str,
+    pair: str,
+    timeframe: str,
+    refresh_sec: int,
+    cache_rev: int,
 ) -> Optional[pd.DataFrame]:
     try:
         limit = get_bars_limit(timeframe)
@@ -1123,7 +1160,9 @@ def get_cached_data(
 
 def fetch_pair_data(exchange: str, pair: str, timeframe: str) -> Optional[pd.DataFrame]:
     refresh_sec = int(st.session_state.get("refresh_sec", 30))
-    return get_cached_data(exchange, pair, timeframe, refresh_sec)
+    return get_cached_data(
+        exchange, pair, timeframe, refresh_sec, _FETCH_CACHE_REV,
+    )
 
 
 def check_alert_strategy(df, mode, min_pct=20.0):
@@ -1749,6 +1788,8 @@ with expander("Mode & Timeframes"):
     if new_tf != st.session_state.get("sort_tf"):
         st.session_state["sort_tf"] = new_tf
         st.session_state["scan_in_progress"] = False
+        st.session_state["immediate_rescan"] = True
+        get_cached_data.clear()
         save_to_url("sort_tf", new_tf)
 
     new_sort_desc = st.toggle(
@@ -2801,6 +2842,20 @@ def scan_results_panel() -> None:
 
                 df = fetch_pair_data(effective_exchange, pair, sort_tf)
                 if df is None or df.empty or len(df) < min_bars:
+                    ws_price = get_ws_price(pair)
+                    price_str = f"${float(ws_price):.6f}" if ws_price else "—"
+                    rows.append({
+                        "Pair": pair,
+                        "Price": price_str,
+                        f"% Change ({sort_tf})": 0.0,
+                        "Signal": "",
+                        "Gates": "— (no candle data)",
+                        "_passed": 0,
+                        "_enabled": 0,
+                        "_green": False,
+                        "_yellow": False,
+                        "_ws_active": ws_price is not None,
+                    })
                     continue
                 if gate_settings.get("use_vol_spike", False):
                     vol_spike_ratio = volume_spike(df, gate_settings.get("vol_window", 20))
@@ -2920,27 +2975,33 @@ def scan_results_panel() -> None:
                     send_webhook_alert(alerts_to_send)
 
             scan_ran = True
+            scanned_count = len(rows)
             if rows:
                 st.session_state["scan_rows"] = rows
                 st.session_state["scan_sort_tf"] = sort_tf
                 display_rows = rows
                 display_tf = sort_tf
-            elif cached_rows:
+            elif cached_rows and cached_tf != sort_tf:
                 st.session_state["scan_rows"] = cached_rows
                 display_rows = cached_rows
                 display_tf = cached_tf
                 scan_warning = (
-                    f"Scan on {sort_tf} returned 0 pairs "
-                    f"({'hard filter hiding non-passers' if hard_filter else 'no data passed gates'}). "
-                    f"Showing previous {cached_tf} results."
+                    f"Scan on {sort_tf} returned 0 rows "
+                    f"({'hard filter ON' if hard_filter else 'check REST/API'}). "
+                    f"Showing previous {cached_tf} results until the next scan succeeds."
                 )
             else:
                 st.session_state["scan_rows"] = rows
                 st.session_state["scan_sort_tf"] = sort_tf
                 display_rows = rows
                 display_tf = sort_tf
+                if total_pairs > 0 and not rows:
+                    scan_warning = (
+                        f"No rows produced for {sort_tf} — try Refresh Now to clear stale cache."
+                    )
 
             st.session_state["last_update"] = int(time.time())
+            st.session_state["last_scan_count"] = scanned_count
         finally:
             st.session_state["scan_in_progress"] = False
     else:
@@ -2949,7 +3010,8 @@ def scan_results_panel() -> None:
 
     with results_ph.container():
         if scan_ran:
-            st.success(f"✅ Processed {len(display_rows)} pairs successfully!")
+            scanned = st.session_state.get("last_scan_count", len(display_rows))
+            st.success(f"✅ Scan complete — {scanned} pairs on {sort_tf}")
             if scan_warning:
                 st.warning(scan_warning)
         elif config_stale and cached_rows:
