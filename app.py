@@ -804,6 +804,50 @@ def build_gate_settings() -> dict:
     }
 
 
+def trigger_immediate_rescan(clear_fetch_cache: bool = False) -> None:
+    """Queue a scan on the next results-panel run; clears stuck scan flags."""
+    st.session_state["immediate_rescan"] = True
+    st.session_state["scan_in_progress"] = False
+    if clear_fetch_cache:
+        get_cached_data.clear()
+
+
+def build_scan_config_fingerprint(
+    pairs: list,
+    sort_tf: str,
+    hard_filter: bool,
+) -> str:
+    """Hash of everything that changes scan results (gates, filters, pair list, TF)."""
+    payload = {
+        "tf": sort_tf,
+        "pairs": tuple(pairs),
+        "hard_filter": hard_filter,
+        "gate_mode": st.session_state.get("gate_mode"),
+        "K_green": st.session_state.get("K_green"),
+        "Y_yellow": st.session_state.get("Y_yellow"),
+        "sort_desc": st.session_state.get("sort_desc"),
+        "preset": st.session_state.get("preset"),
+        "min_bars": st.session_state.get("min_bars"),
+        "mc_filter": st.session_state.get("mc_filter_enabled"),
+        "min_mc": st.session_state.get("min_market_cap_millions"),
+        "gates": build_gate_settings(),
+    }
+    return json.dumps(payload, sort_keys=True, default=str)
+
+
+def apply_scan_config_change(
+    pairs: list,
+    sort_tf: str,
+    hard_filter: bool,
+    clear_fetch_cache: bool = False,
+) -> None:
+    fp = build_scan_config_fingerprint(pairs, sort_tf, hard_filter)
+    prev = st.session_state.get("scan_config_fp")
+    if prev is not None and fp != prev:
+        trigger_immediate_rescan(clear_fetch_cache=clear_fetch_cache)
+    st.session_state["scan_config_fp"] = fp
+
+
 def build_scan_pairs() -> list:
     if st.session_state.get("use_my_pairs", False):
         pairs = [
@@ -1827,9 +1871,7 @@ with expander("Mode & Timeframes"):
     )
     if new_tf != st.session_state.get("sort_tf"):
         st.session_state["sort_tf"] = new_tf
-        st.session_state["scan_in_progress"] = False
-        st.session_state["immediate_rescan"] = True
-        get_cached_data.clear()
+        trigger_immediate_rescan(clear_fetch_cache=True)
         save_to_url("sort_tf", new_tf)
 
     new_sort_desc = st.toggle(
@@ -1866,6 +1908,7 @@ with expander("Gates"):
     if new_preset != st.session_state.get("preset"):
         st.session_state["preset"] = new_preset
         save_to_url("preset", new_preset)
+        trigger_immediate_rescan()
 
         if new_preset == "Spike Hunter":
             st.session_state.update(
@@ -2141,10 +2184,12 @@ with expander("Gates"):
     if new_gm != st.session_state.get("gate_mode"):
         st.session_state["gate_mode"] = new_gm
         save_to_url("gate_mode", new_gm)
-
+        trigger_immediate_rescan()
     new_hf = st.toggle("Hard filter (hide non-passers)", key="hard_filter")
-    if new_hf != load_from_url("hard_filter", False, bool):
+    if new_hf != st.session_state.get("hard_filter"):
+        st.session_state["hard_filter"] = new_hf
         save_to_url("hard_filter", new_hf)
+        trigger_immediate_rescan()
 
     if st.session_state.get("gate_mode") == "Custom (K/Y)":
         st.subheader("Color rules")
@@ -2304,7 +2349,7 @@ WS_RETRY_DELAY_SEC = 2.0
 WS_STAGGER_SEC = 1.0
 WS_START_GRACE_SEC = 300
 WS_ERROR_LOG_INTERVAL = 30.0
-FRAGMENT_POLL_SEC = 5
+FRAGMENT_POLL_SEC = 1
 
 # Streamlit session_state is main-thread only — workers use this shared store.
 _WS_LOCK = threading.Lock()
@@ -2902,6 +2947,13 @@ def scan_results_panel() -> None:
     refresh_interval = int(st.session_state.get("refresh_sec", 30))
     min_bars = int(st.session_state.get("min_bars", 3))
 
+    apply_scan_config_change(pairs, sort_tf, hard_filter)
+
+    progress_ph = st.empty()
+    status_ph = st.empty()
+    remaining_ph = st.empty()
+    results_ph = st.empty()
+
     if st.session_state.get("mc_filter_enabled") and pairs:
         st.caption(
             f"Market cap filter active — scanning {len(pairs)} pairs "
@@ -2951,10 +3003,6 @@ def scan_results_panel() -> None:
         or time_since_update >= refresh_interval
     )
 
-    progress_ph = st.empty()
-    status_ph = st.empty()
-    remaining_ph = st.empty()
-    results_ph = st.empty()
     alerts_to_send = []
 
     cached_rows = list(st.session_state.get("scan_rows") or [])
@@ -3162,6 +3210,7 @@ def scan_results_panel() -> None:
         render_scan_results(display_rows, display_tf, hard_filter, interactive=True)
 
     if scan_ran:
+        # Chain the next scan via immediate_rescan + fragment timer (no st.rerun — crashes fragments on 1.36).
         st.session_state["immediate_rescan"] = True
 
 
