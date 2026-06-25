@@ -821,7 +821,7 @@ def build_scan_config_fingerprint(
     """Hash of everything that changes scan results (gates, filters, pair list, TF)."""
     payload = {
         "tf": sort_tf,
-        "pairs": tuple(pairs),
+        "pairs": tuple(sorted(pairs)),
         "hard_filter": hard_filter,
         "gate_mode": st.session_state.get("gate_mode"),
         "K_green": st.session_state.get("K_green"),
@@ -899,17 +899,6 @@ def build_ws_pairs() -> list:
 
     cap = max(5, min(500, int(st.session_state.get("pairs_to_discover", 400))))
     return pairs[:cap]
-
-
-def get_streamlit_session_id() -> str:
-    try:
-        from streamlit.runtime.scriptrunner import get_script_run_ctx
-        ctx = get_script_run_ctx()
-        if ctx and ctx.session_id:
-            return ctx.session_id
-    except Exception:
-        pass
-    return str(id(st.session_state))
 
 
 def migrate_lr_baselines() -> None:
@@ -2436,10 +2425,6 @@ _WS_THREADS_LOCK = threading.Lock()
 _WS_WORKERS: Dict[int, threading.Thread] = {}
 _WS_ENSURE_LOCK = threading.Lock()
 _WS_PROCESS_PAIRS_KEY: Optional[frozenset] = None
-_SCAN_LOCK = threading.Lock()
-_SCAN_SESSION_ID: Optional[str] = None
-_SCAN_GLOBAL_BUSY = False
-_SCAN_BUSY_SINCE = 0.0
 _WS_SHARED: Dict[str, Any] = {
     "stop": False,
     "prices": {},
@@ -2718,43 +2703,24 @@ def stop_websocket_workers(clear_cache: bool = False) -> None:
 
 
 def clear_stale_scan_lock() -> bool:
-    """Release orphaned global scan lock (dead tab, session reconnect, crash)."""
-    global _SCAN_SESSION_ID, _SCAN_GLOBAL_BUSY, _SCAN_BUSY_SINCE
-    with _SCAN_LOCK:
-        if not _SCAN_GLOBAL_BUSY:
-            return False
-        stale = (
-            not _SCAN_BUSY_SINCE
-            or (time.time() - _SCAN_BUSY_SINCE) > SCAN_STUCK_SEC
-        )
-        if not stale:
-            return False
-        print("[SCAN] clearing stale global scan lock")
-        _SCAN_GLOBAL_BUSY = False
-        _SCAN_SESSION_ID = None
-        _SCAN_BUSY_SINCE = 0.0
-        return True
+    """Release orphaned scan-in-progress flag (crash, closed tab mid-scan)."""
+    started = float(st.session_state.get("scan_started_at", 0))
+    if not st.session_state.get("scan_in_progress"):
+        return False
+    if started and (time.time() - started) <= SCAN_STUCK_SEC:
+        return False
+    print("[SCAN] clearing stale scan_in_progress flag")
+    st.session_state["scan_in_progress"] = False
+    return True
 
 
 def try_begin_scan() -> bool:
-    global _SCAN_SESSION_ID, _SCAN_GLOBAL_BUSY, _SCAN_BUSY_SINCE
     clear_stale_scan_lock()
-    sid = get_streamlit_session_id()
-    with _SCAN_LOCK:
-        if _SCAN_GLOBAL_BUSY:
-            return False
-        _SCAN_GLOBAL_BUSY = True
-        _SCAN_BUSY_SINCE = time.time()
-        _SCAN_SESSION_ID = sid
-        return True
+    return not st.session_state.get("scan_in_progress", False)
 
 
 def end_scan() -> None:
-    global _SCAN_SESSION_ID, _SCAN_GLOBAL_BUSY, _SCAN_BUSY_SINCE
-    with _SCAN_LOCK:
-        _SCAN_GLOBAL_BUSY = False
-        _SCAN_SESSION_ID = None
-        _SCAN_BUSY_SINCE = 0.0
+    st.session_state["scan_in_progress"] = False
 
 
 def ensure_coinbase_websocket(pairs: list, exchange: str) -> None:
@@ -3292,12 +3258,14 @@ def scan_results_panel() -> None:
     scan_warning = None
 
     if need_rescan:
+        print(
+            f"[SCAN] rescan triggered "
+            f"({time_since_update}s since last, interval {refresh_interval}s)"
+        )
         if not try_begin_scan():
             display_rows = cached_rows
             display_tf = cached_tf
-            scan_warning = (
-                "Another browser tab is scanning — use one tab for stable WebSocket feed."
-            )
+            scan_warning = "Scan already in progress in this tab."
         else:
             st.session_state["scan_in_progress"] = True
             st.session_state["scan_started_at"] = time.time()
@@ -3506,6 +3474,33 @@ def scan_results_panel() -> None:
             )
         render_scan_results(display_rows, display_tf, hard_filter, interactive=True)
 
+    # Keep the page alive between scans (st_autorefresh backup if fragment unavailable).
+    if st_autorefresh and not st.session_state.get("scan_in_progress"):
+        st_autorefresh(interval=SCAN_SCHEDULER_MS, key="scan_scheduler")
+
+
+def _scan_scheduler_tick() -> None:
+    """Queue a rescan when the refresh interval has elapsed."""
+    clear_stale_scan_lock()
+    if st.session_state.get("scan_in_progress"):
+        return
+    refresh_interval = int(st.session_state.get("refresh_sec", 30))
+    age = int(time.time()) - st.session_state.get("last_update", 0)
+    if age >= refresh_interval:
+        print(f"[SCAN] scheduler — rescan due ({age}s >= {refresh_interval}s)")
+        trigger_immediate_rescan()
+        st.rerun()
+
+
+if hasattr(st, "fragment"):
+    @st.fragment(run_every=dt.timedelta(milliseconds=SCAN_SCHEDULER_MS))
+    def scan_scheduler_fragment() -> None:
+        _scan_scheduler_tick()
+else:
+    def scan_scheduler_fragment() -> None:
+        pass
+
+
 # =============================================================================
 # MAIN DISPLAY
 # =============================================================================
@@ -3543,18 +3538,12 @@ with col3:
 
 scan_results_panel()
 update_ws_status(ws_status_ph)
+scan_scheduler_fragment()
 
-# Recover from stuck scan flag so autorefresh keeps the scheduler alive.
 if st.session_state.get("scan_in_progress"):
     started = float(st.session_state.get("scan_started_at", 0))
     if not started or (time.time() - started) > SCAN_STUCK_SEC:
         st.session_state["scan_in_progress"] = False
-        end_scan()
-
-if st_autorefresh and not st.session_state.get("scan_in_progress"):
-    st_autorefresh(interval=SCAN_SCHEDULER_MS, key="scan_scheduler")
-elif not st_autorefresh:
-    st.caption("Install streamlit-autorefresh for automatic rescans.")
 
 st.markdown("---")
 st.caption("🚀 Enhanced Crypto Tracker with Progressive Alerts — by hioncrypto")
