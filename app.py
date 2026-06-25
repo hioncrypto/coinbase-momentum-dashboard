@@ -1973,16 +1973,6 @@ with expander("Mode & Timeframes"):
         st.session_state["mode"] = new_mode
         save_to_url("mode", new_mode)
 
-    if st.session_state.get("mode", "").startswith("WebSocket"):
-        st.caption(
-            "WebSocket uses one Coinbase ticker connection for all pairs. "
-            "Candle data still comes from REST."
-        )
-        st.caption(
-            f"Ticker subscriptions: batches of {WS_SUBSCRIBE_BATCH} pairs "
-            f"(automatic — replaces the old chunk-size slider)."
-        )
-
     timeframe_options = ["5m", "15m", "1h", "4h", "1d"]
     current_tf_index = (
         timeframe_options.index(st.session_state.get("sort_tf", "1h"))
