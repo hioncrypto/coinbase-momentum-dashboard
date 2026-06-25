@@ -220,6 +220,18 @@ st.markdown(
     [data-testid="collapsedControl"] {
         width: auto !important;
         max-width: none !important;
+        position: fixed !important;
+        z-index: 999999 !important;
+        pointer-events: auto !important;
+        background: #3b4252 !important;
+        border: 1px solid #6b7280 !important;
+        border-radius: 8px !important;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45) !important;
+    }
+
+    section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] button,
+    [data-testid="collapsedControl"] button {
+        color: #f9fafb !important;
     }
 
     [data-testid="stAppViewContainer"] .main {
@@ -272,6 +284,58 @@ st.markdown(
     </style>
     """,
     unsafe_allow_html=True,
+)
+
+components.html(
+    """
+    <script>
+    (function () {
+        const doc = window.parent.document;
+        const inset = 12;
+        const btnSize = 36;
+
+        function pinSidebarToggles() {
+            const sidebar = doc.querySelector("section[data-testid='stSidebar']");
+            const collapseWrap = doc.querySelector(
+                "[data-testid='stSidebarCollapseButton']"
+            );
+            const expandCtrl = doc.querySelector("[data-testid='collapsedControl']");
+
+            if (collapseWrap && sidebar) {
+                const open = sidebar.getBoundingClientRect().width > 80;
+                if (open) {
+                    const rect = sidebar.getBoundingClientRect();
+                    collapseWrap.style.display = "flex";
+                    collapseWrap.style.alignItems = "center";
+                    collapseWrap.style.justifyContent = "center";
+                    collapseWrap.style.top = inset + "px";
+                    collapseWrap.style.left =
+                        Math.max(inset, rect.right - btnSize - inset) + "px";
+                } else {
+                    collapseWrap.style.display = "none";
+                }
+            }
+
+            if (expandCtrl && sidebar) {
+                const open = sidebar.getBoundingClientRect().width > 80;
+                expandCtrl.style.display = open ? "none" : "flex";
+                expandCtrl.style.alignItems = "center";
+                expandCtrl.style.justifyContent = "center";
+                expandCtrl.style.top = inset + "px";
+                expandCtrl.style.left = inset + "px";
+            }
+        }
+
+        const observer = new MutationObserver(pinSidebarToggles);
+        observer.observe(doc.body, { childList: true, subtree: true });
+        doc.addEventListener("scroll", pinSidebarToggles, true);
+        window.parent.addEventListener("resize", pinSidebarToggles);
+        pinSidebarToggles();
+        setInterval(pinSidebarToggles, 400);
+    })();
+    </script>
+    """,
+    height=0,
 )
 
 # =============================================================================
@@ -1211,8 +1275,8 @@ def pair_passes_alert_strategy(
     pair: str,
     alert_mode: str,
 ) -> bool:
-    """Higher-timeframe alert filter — run after main scan so all pairs render quickly."""
-    if alert_mode == "Off":
+    """Optional Easy Start preset — 4h/1d MACD rules. Skipped when no preset is selected."""
+    if alert_mode in ("Off", "No preset"):
         return True
     df_1d = fetch_pair_data(exchange, pair, "1d")
     df_4h = fetch_pair_data(exchange, pair, "4h")
@@ -1390,18 +1454,25 @@ def dispatch_scan_alerts(alerts_to_send: List[dict], scan_id: float) -> None:
         st.session_state["_alerts_sent_scan_id"] = scan_id
 
 
-def should_send_alert(pair, delta_pct, rel_volume, alerted_pairs, use_vol_spike=False):
-    """Dynamic price-ladder alert logic (delta + optional volume gate)."""
+def should_send_alert(
+    pair: str,
+    delta_pct: float,
+    rel_volume: float,
+    alerted_pairs: dict,
+    gates_passed: int = 0,
+    delta_passed: bool = False,
+) -> Tuple[bool, Optional[str]]:
+    """Alert when min % delta is met and at least one other enabled gate passes."""
     base_delta = float(st.session_state.get("min_pct", 0.0))
-    base_volume = float(st.session_state.get("vol_mult", 1.10))
     delta_step = 5.0
 
-    delta_ok = delta_pct >= base_delta
-    volume_ok = True
-    if use_vol_spike:
-        volume_ok = rel_volume >= base_volume
+    if delta_pct < base_delta:
+        if pair in alerted_pairs:
+            alerted_pairs.pop(pair, None)
+        return False, None
 
-    if not (delta_ok and volume_ok):
+    other_passes = gates_passed - (1 if delta_passed else 0)
+    if other_passes < 1:
         if pair in alerted_pairs:
             alerted_pairs.pop(pair, None)
         return False, None
@@ -1774,13 +1845,24 @@ with st.sidebar:
     avail_count = len(avail_pairs)
 
     st.sidebar.subheader("Discover Settings")
-      # Alert Strategy: Easy Start for Novice Users
-    alert_mode = st.radio(
-        "Easy Start: Pre-Set Alert Logic",
-        ["Aggressive", "Balanced", "Conservative", "Off"],
-        index=3,
+    preset_options = ["Aggressive", "Balanced", "Conservative", "No preset"]
+    if st.session_state.get("alert_mode") == "Off":
+        st.session_state["alert_mode"] = "No preset"
+    _alert_preset = st.session_state.get("alert_mode", "No preset")
+    if _alert_preset == "Off":
+        _alert_preset = "No preset"
+    preset_index = (
+        preset_options.index(_alert_preset) if _alert_preset in preset_options else 3
+    )
+    st.radio(
+        "Easy Start: Pre-Set Logic",
+        preset_options,
+        index=preset_index,
         key="alert_mode",
-        help="Designed for novice users until you learn manual controls."
+        help=(
+            "Optional MACD presets on 4h/1d candles. "
+            "No preset = use your manual gate settings only (email alerts still apply)."
+        ),
     )
 
     ptd = st.sidebar.slider(
@@ -3141,6 +3223,8 @@ def _process_scan_pair(
     pct_change = meta["delta_pct"]
 
     green_candidate = None
+    min_pct_threshold = float(st.session_state.get("min_pct", 0.0))
+    delta_passed = delta_pct >= min_pct_threshold
     if is_green:
         green_candidate = {
             "pair": pair,
@@ -3148,6 +3232,8 @@ def _process_scan_pair(
             "rel_vol": rel_vol,
             "last_price": last_price,
             "pct_change": pct_change,
+            "gates_passed": passed,
+            "delta_passed": delta_passed,
         }
 
     if not is_green and pair in alerted_pairs:
@@ -3348,7 +3434,7 @@ def scan_results_panel() -> None:
                 status_ph.caption("Scan finished.")
                 remaining_ph.caption("")
 
-                if alert_mode != "Off" and green_alert_candidates:
+                if green_alert_candidates:
                     status_ph.caption("Checking alert candidates…")
                     for cand in green_alert_candidates:
                         pair = cand["pair"]
@@ -3361,7 +3447,8 @@ def scan_results_panel() -> None:
                             cand["delta_pct"],
                             cand["rel_vol"],
                             st.session_state["alerted_pairs"],
-                            use_vol_spike=use_vol,
+                            gates_passed=int(cand.get("gates_passed", 0)),
+                            delta_passed=bool(cand.get("delta_passed", False)),
                         )
                         if include:
                             stage = format_alert_stage(pair, alert_type, cand["rel_vol"])
