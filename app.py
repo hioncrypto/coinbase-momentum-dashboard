@@ -3176,6 +3176,39 @@ def scan_rows_missing() -> bool:
     return rows is None or not rows
 
 
+def mount_scan_heartbeat() -> None:
+    """Keep the Streamlit session rerunning between scans."""
+    if st.session_state.get("scan_in_progress"):
+        return
+    if st_autorefresh:
+        st_autorefresh(interval=SCAN_SCHEDULER_MS, key="scan_scheduler")
+    else:
+        wait_ms = max(5000, int(st.session_state.get("refresh_sec", 30)) * 1000)
+        components.html(
+            f"""
+            <script>
+            setTimeout(function () {{
+                window.parent.location.reload();
+            }}, {wait_ms});
+            </script>
+            """,
+            height=0,
+        )
+
+
+def maybe_queue_interval_rescan(refresh_interval: int) -> None:
+    """Queue rescan on each rerun when the refresh interval has elapsed."""
+    if st.session_state.get("scan_in_progress"):
+        return
+    last = int(st.session_state.get("last_update", 0))
+    if last <= 0:
+        return
+    age = int(time.time()) - last
+    if age >= refresh_interval:
+        print(f"[SCAN] interval elapsed ({age}s >= {refresh_interval}s) — queueing rescan")
+        trigger_immediate_rescan()
+
+
 def scan_results_panel() -> None:
     """Scan + results island — reads live session_state so fragment reruns stay current."""
     started = float(st.session_state.get("scan_started_at", 0))
@@ -3187,12 +3220,15 @@ def scan_results_panel() -> None:
             end_scan()
 
     clear_stale_scan_lock()
+    refresh_interval = int(st.session_state.get("refresh_sec", 30))
+    mount_scan_heartbeat()
+    maybe_queue_interval_rescan(refresh_interval)
+
     pairs = build_scan_pairs()
     effective_exchange = get_effective_exchange()
     gate_settings = build_gate_settings()
     sort_tf = st.session_state.get("sort_tf", "1h")
     hard_filter = bool(st.session_state.get("hard_filter", False))
-    refresh_interval = int(st.session_state.get("refresh_sec", 30))
     min_bars = int(st.session_state.get("min_bars", 3))
 
     apply_scan_config_change(pairs, sort_tf, hard_filter)
@@ -3474,32 +3510,6 @@ def scan_results_panel() -> None:
             )
         render_scan_results(display_rows, display_tf, hard_filter, interactive=True)
 
-    # Keep the page alive between scans (st_autorefresh backup if fragment unavailable).
-    if st_autorefresh and not st.session_state.get("scan_in_progress"):
-        st_autorefresh(interval=SCAN_SCHEDULER_MS, key="scan_scheduler")
-
-
-def _scan_scheduler_tick() -> None:
-    """Queue a rescan when the refresh interval has elapsed."""
-    clear_stale_scan_lock()
-    if st.session_state.get("scan_in_progress"):
-        return
-    refresh_interval = int(st.session_state.get("refresh_sec", 30))
-    age = int(time.time()) - st.session_state.get("last_update", 0)
-    if age >= refresh_interval:
-        print(f"[SCAN] scheduler — rescan due ({age}s >= {refresh_interval}s)")
-        trigger_immediate_rescan()
-        st.rerun()
-
-
-if hasattr(st, "fragment"):
-    @st.fragment(run_every=dt.timedelta(milliseconds=SCAN_SCHEDULER_MS))
-    def scan_scheduler_fragment() -> None:
-        _scan_scheduler_tick()
-else:
-    def scan_scheduler_fragment() -> None:
-        pass
-
 
 # =============================================================================
 # MAIN DISPLAY
@@ -3538,7 +3548,6 @@ with col3:
 
 scan_results_panel()
 update_ws_status(ws_status_ph)
-scan_scheduler_fragment()
 
 if st.session_state.get("scan_in_progress"):
     started = float(st.session_state.get("scan_started_at", 0))
