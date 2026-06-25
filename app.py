@@ -1069,6 +1069,12 @@ _LAST_REST_AT = 0.0
 _REST_BACKOFF_UNTIL = 0.0
 
 
+def _record_scan_api_call() -> None:
+    stats = st.session_state.get("scan_live_stats")
+    if stats is not None:
+        stats["api"] = int(stats.get("api", 0)) + 1
+
+
 def _rest_throttle() -> None:
     global _LAST_REST_AT, _REST_BACKOFF_UNTIL
     with _REST_LOCK:
@@ -1121,6 +1127,7 @@ def _fetch_coinbase_candles_raw(
                 data = response.json()
                 if not data:
                     return None
+                _record_scan_api_call()
 
                 df = pd.DataFrame(
                     data, columns=["time", "low", "high", "open", "close", "volume"]
@@ -1194,6 +1201,7 @@ def fetch_binance_data(pair: str, timeframe: str, limit: int) -> Optional[pd.Dat
         if not raw or not isinstance(raw, list):
             return None
 
+        _record_scan_api_call()
         rows = []
         for kline in raw:
             rows.append(
@@ -1260,15 +1268,24 @@ def get_cached_data(
 
 def fetch_pair_data(exchange: str, pair: str, timeframe: str) -> Optional[pd.DataFrame]:
     refresh_sec = int(st.session_state.get("refresh_sec", 30))
+    force_rest = bool(st.session_state.get("_force_rest_scan", False))
     key = (exchange, pair, timeframe)
     now = time.time()
-    with _SESSION_CANDLE_LOCK:
-        cached = _SESSION_CANDLE_CACHE.get(key)
-        if cached and (now - cached[1]) < refresh_sec:
-            return cached[0]
-    df = get_cached_data(
-        exchange, pair, timeframe, refresh_sec, _FETCH_CACHE_REV,
-    )
+    if not force_rest:
+        with _SESSION_CANDLE_LOCK:
+            cached = _SESSION_CANDLE_CACHE.get(key)
+            if cached and (now - cached[1]) < refresh_sec:
+                stats = st.session_state.get("scan_live_stats")
+                if stats is not None:
+                    stats["session_hits"] = int(stats.get("session_hits", 0)) + 1
+                return cached[0]
+    if force_rest:
+        limit = get_bars_limit(timeframe)
+        df = fetch_data(exchange, pair, timeframe, limit)
+    else:
+        df = get_cached_data(
+            exchange, pair, timeframe, refresh_sec, _FETCH_CACHE_REV,
+        )
     if df is not None:
         with _SESSION_CANDLE_LOCK:
             _SESSION_CANDLE_CACHE[key] = (df, now)
@@ -1776,6 +1793,9 @@ def evaluate_gates(df: pd.DataFrame, settings: dict) -> Tuple[dict, int, str, in
 # =============================================================================
 # SIDEBAR CONTROLS
 # =============================================================================
+WS_SUBSCRIBE_BATCH = 50  # pairs per Coinbase ticker subscribe message
+
+
 def expander(title: str):
     expanded = not st.session_state.get("collapse_all", False)
     return st.sidebar.expander(title, expanded=expanded)
@@ -1920,6 +1940,10 @@ with expander("Mode & Timeframes"):
         st.caption(
             "WebSocket uses one Coinbase ticker connection for all pairs. "
             "Candle data still comes from REST."
+        )
+        st.caption(
+            f"Ticker subscriptions: batches of {WS_SUBSCRIBE_BATCH} pairs "
+            f"(automatic — replaces the old chunk-size slider)."
         )
 
     timeframe_options = ["5m", "15m", "1h", "4h", "1d"]
@@ -2413,7 +2437,6 @@ WS_RETRY_DELAY_SEC = 2.0
 WS_STAGGER_SEC = 1.0
 WS_START_GRACE_SEC = 90
 WS_NO_DATA_RESTART_SEC = 60
-WS_SUBSCRIBE_BATCH = 50
 WS_SUBSCRIBE_BATCH_DELAY = 0.12
 WS_ERROR_LOG_INTERVAL = 30.0
 SCAN_SCHEDULER_MS = 2000
@@ -3085,7 +3108,8 @@ def render_scan_results(
 
     st.subheader("🔥 Top 10 Opportunities")
 
-    top_10_filtered = df_results.sort_values(chg_col, ascending=False).head(10).copy()
+    green_df = df_results[df_results["_green"] == True]
+    top_10_filtered = green_df.sort_values(chg_col, ascending=False).head(10).copy()
     top_10_filtered = top_10_filtered.reset_index(drop=True)
     mc_data = get_market_caps()
 
@@ -3096,6 +3120,17 @@ def render_scan_results(
             return f"{int(val/1_000_000)}M"
         return "--"
 
+    def style_signal_rows(row: pd.Series, source_df: pd.DataFrame) -> list:
+        idx = row.name
+        if idx < len(source_df):
+            if bool(source_df.iloc[idx]["_green"]):
+                return [
+                    "background-color: #16a34a; color: white; font-weight: 600"
+                ] * len(row)
+            if bool(source_df.iloc[idx]["_yellow"]):
+                return ["background-color: #eab308; color: black"] * len(row)
+        return [""] * len(row)
+
     top_10_filtered["Market Cap"] = top_10_filtered["Pair"].apply(
         lambda x: format_market_cap(mc_data.get(x.split("-")[0], 0))
     )
@@ -3104,22 +3139,14 @@ def render_scan_results(
     top_10_filtered.insert(0, "Rank", range(1, len(top_10_filtered) + 1))
 
     if not top_10_filtered.empty:
-        def style_top10_rows(row):
-            idx = row.name
-            if idx < len(top_10_filtered):
-                if top_10_filtered.iloc[idx]["_green"]:
-                    return [
-                        "background-color: #16a34a; color: white; font-weight: 600"
-                    ] * len(row)
-                elif top_10_filtered.iloc[idx]["_yellow"]:
-                    return ["background-color: #eab308; color: black"] * len(row)
-            return [""] * len(row)
-
         top10_cols = [c for c in top_10_filtered.columns if not c.startswith("_")]
-        styled_df = top_10_filtered[top10_cols].style.apply(style_top10_rows, axis=1)
+        styled_df = top_10_filtered[top10_cols].style.apply(
+            lambda row: style_signal_rows(row, top_10_filtered),
+            axis=1,
+        )
         st.dataframe(styled_df, use_container_width=True, hide_index=True)
     else:
-        st.info("No top opportunities yet.")
+        st.info("No Strong Buy pairs in this scan — adjust gates or wait for the next scan.")
 
     st.subheader(f"📋 All Pairs ({total_count})")
 
@@ -3144,8 +3171,12 @@ def render_scan_results(
     if not display_df.empty:
         display_cols = [c for c in display_df.columns if not c.startswith("_")]
         final_display = display_df[display_cols].reset_index(drop=True)
+        styled_all = final_display.style.apply(
+            lambda row: style_signal_rows(row, display_df),
+            axis=1,
+        )
         st.dataframe(
-            final_display,
+            styled_all,
             use_container_width=True,
             hide_index=True,
             height=min(800, 28 * len(final_display) + 38),
@@ -3176,28 +3207,8 @@ def scan_rows_missing() -> bool:
     return rows is None or not rows
 
 
-def mount_scan_heartbeat() -> None:
-    """Keep the Streamlit session rerunning between scans."""
-    if st.session_state.get("scan_in_progress"):
-        return
-    if st_autorefresh:
-        st_autorefresh(interval=SCAN_SCHEDULER_MS, key="scan_scheduler")
-    else:
-        wait_ms = max(5000, int(st.session_state.get("refresh_sec", 30)) * 1000)
-        components.html(
-            f"""
-            <script>
-            setTimeout(function () {{
-                window.parent.location.reload();
-            }}, {wait_ms});
-            </script>
-            """,
-            height=0,
-        )
-
-
 def maybe_queue_interval_rescan(refresh_interval: int) -> None:
-    """Queue rescan on each rerun when the refresh interval has elapsed."""
+    """Queue rescan on each fragment tick when the refresh interval has elapsed."""
     if st.session_state.get("scan_in_progress"):
         return
     last = int(st.session_state.get("last_update", 0))
@@ -3206,7 +3217,7 @@ def maybe_queue_interval_rescan(refresh_interval: int) -> None:
     age = int(time.time()) - last
     if age >= refresh_interval:
         print(f"[SCAN] interval elapsed ({age}s >= {refresh_interval}s) — queueing rescan")
-        trigger_immediate_rescan()
+        trigger_immediate_rescan(clear_fetch_cache=False)
 
 
 def scan_results_panel() -> None:
@@ -3221,7 +3232,6 @@ def scan_results_panel() -> None:
 
     clear_stale_scan_lock()
     refresh_interval = int(st.session_state.get("refresh_sec", 30))
-    mount_scan_heartbeat()
     maybe_queue_interval_rescan(refresh_interval)
 
     pairs = build_scan_pairs()
@@ -3307,6 +3317,14 @@ def scan_results_panel() -> None:
             st.session_state["scan_started_at"] = time.time()
             scan_id = time.time()
             st.session_state["_current_scan_id"] = scan_id
+            get_cached_data.clear()
+            clear_session_candle_cache()
+            st.session_state["_force_rest_scan"] = True
+            st.session_state["scan_live_stats"] = {
+                "api": 0,
+                "session_hits": 0,
+                "started": time.time(),
+            }
             rows = []
             green_alert_candidates = []
             use_vol = bool(st.session_state.get("use_vol_spike", False))
@@ -3476,9 +3494,23 @@ def scan_results_panel() -> None:
 
                 st.session_state["last_update"] = int(time.time())
                 st.session_state["last_scan_count"] = scanned_count
-                print(f"[SCAN] Complete — {scanned_count} rows on {sort_tf}")
+                stats = st.session_state.get("scan_live_stats") or {}
+                duration = int(time.time() - float(stats.get("started", time.time())))
+                api_calls = int(stats.get("api", 0))
+                session_hits = int(stats.get("session_hits", 0))
+                st.session_state["last_scan_stats"] = {
+                    "duration_sec": duration,
+                    "api_calls": api_calls,
+                    "session_hits": session_hits,
+                    "at": int(time.time()),
+                }
+                print(
+                    f"[SCAN] Complete — {scanned_count} rows on {sort_tf} "
+                    f"({duration}s, {api_calls} API calls, {session_hits} cache hits)"
+                )
             finally:
                 st.session_state["scan_in_progress"] = False
+                st.session_state["_force_rest_scan"] = False
                 end_scan()
     else:
         display_rows = cached_rows
@@ -3489,11 +3521,21 @@ def scan_results_panel() -> None:
         display_tf = st.session_state.get("scan_sort_tf", sort_tf)
 
     with results_ph.container():
+        last_stats = st.session_state.get("last_scan_stats") or {}
         if scan_ran:
             scanned = st.session_state.get("last_scan_count", len(display_rows))
-            st.success(f"✅ Scan complete — {scanned} pairs on {sort_tf}")
+            dur = last_stats.get("duration_sec", "?")
+            api = last_stats.get("api_calls", "?")
+            st.success(
+                f"✅ Scan complete — {scanned} pairs on {sort_tf} "
+                f"({dur}s, {api} Coinbase REST calls)"
+            )
             if scan_warning:
                 st.warning(scan_warning)
+            if isinstance(api, int) and api < scanned * 0.5:
+                st.caption(
+                    "Low API count means most pairs used cache — click Refresh Now for a full live pull."
+                )
         elif config_stale and cached_rows:
             st.caption(
                 f"Timeframe changed to {sort_tf} — rescan will run shortly. "
@@ -3504,11 +3546,28 @@ def scan_results_panel() -> None:
         else:
             age = int(time.time()) - st.session_state.get("last_update", 0)
             next_scan = max(0, refresh_interval - age)
+            stats_line = ""
+            if last_stats.get("at"):
+                stats_line = (
+                    f" Last scan: {last_stats.get('duration_sec', '?')}s, "
+                    f"{last_stats.get('api_calls', '?')} REST calls."
+                )
             st.caption(
                 f"Showing cached results ({len(display_rows)} pairs, updated {age}s ago). "
-                f"Next scan in {next_scan}s."
+                f"Next scan in {next_scan}s.{stats_line}"
             )
         render_scan_results(display_rows, display_tf, hard_filter, interactive=True)
+
+
+@st_fragment
+def live_scan_results_panel() -> None:
+    """Rerun only this block between scans — header/buttons stay put."""
+    if st_autorefresh and not st.session_state.get("scan_in_progress"):
+        st_autorefresh(interval=SCAN_SCHEDULER_MS, key="scan_fragment_scheduler")
+    scan_results_panel()
+    ph = st.session_state.get("ws_status_ph")
+    if ph is not None:
+        update_ws_status(ph)
 
 
 # =============================================================================
@@ -3543,16 +3602,11 @@ with col2:
         st.rerun()
 
 with col3:
-    ws_status_ph = st.empty()
-    update_ws_status(ws_status_ph)
+    if "ws_status_ph" not in st.session_state:
+        st.session_state.ws_status_ph = st.empty()
+    update_ws_status(st.session_state.ws_status_ph)
 
-scan_results_panel()
-update_ws_status(ws_status_ph)
-
-if st.session_state.get("scan_in_progress"):
-    started = float(st.session_state.get("scan_started_at", 0))
-    if not started or (time.time() - started) > SCAN_STUCK_SEC:
-        st.session_state["scan_in_progress"] = False
+live_scan_results_panel()
 
 st.markdown("---")
 st.caption("🚀 Enhanced Crypto Tracker with Progressive Alerts — by hioncrypto")
