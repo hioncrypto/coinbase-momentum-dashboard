@@ -287,9 +287,9 @@ class Config:
     COINBASE_WS = "wss://ws-feed.exchange.coinbase.com"
     # Exchange feed (matches api.exchange.coinbase.com REST). Advanced Trade uses
     # wss://advanced-trade-ws.coinbase.com with a different message schema.
-    # ticker_batch exhausts quickly on free-tier limits (10 subs/product/channel);
-    # ticker works and updates on each trade.
-    COINBASE_WS_CHANNELS = ("ticker",)
+    # ticker_batch sends price updates every 5s (even without trades) — better for
+    # 400-pair dashboards; ticker only updates on each match.
+    COINBASE_WS_CHANNELS = ("ticker_batch",)
 
     TIMEFRAMES = {"5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "1d": 86400}
     QUOTES = ["USD", "USDC", "USDT", "BTC", "ETH", "EUR"]
@@ -878,6 +878,38 @@ def build_scan_pairs() -> list:
         pairs = [p for p in pairs if mc_data.get(normalize_symbol(p), 0) >= min_mc]
 
     return pairs
+
+
+def build_ws_pairs() -> list:
+    """Pairs for WebSocket — ignores mc_filter so feed stays stable across tabs."""
+    if st.session_state.get("use_my_pairs", False):
+        pairs = [
+            p.strip().upper()
+            for p in st.session_state.get("my_pairs", "").split(",")
+            if p.strip()
+        ]
+    elif st.session_state.get("use_watch", False):
+        pairs = [
+            p.strip().upper()
+            for p in st.session_state.get("watchlist", "").split(",")
+            if p.strip()
+        ]
+    else:
+        pairs = get_products(get_effective_exchange(), st.session_state.get("quote", "USD"))
+
+    cap = max(5, min(500, int(st.session_state.get("pairs_to_discover", 400))))
+    return pairs[:cap]
+
+
+def get_streamlit_session_id() -> str:
+    try:
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+        ctx = get_script_run_ctx()
+        if ctx and ctx.session_id:
+            return ctx.session_id
+    except Exception:
+        pass
+    return str(id(st.session_state))
 
 
 def migrate_lr_baselines() -> None:
@@ -2390,7 +2422,10 @@ WS_RECV_TIMEOUT = 5.0
 WS_MAX_RETRIES = 3
 WS_RETRY_DELAY_SEC = 2.0
 WS_STAGGER_SEC = 1.0
-WS_START_GRACE_SEC = 300
+WS_START_GRACE_SEC = 90
+WS_NO_DATA_RESTART_SEC = 60
+WS_SUBSCRIBE_BATCH = 50
+WS_SUBSCRIBE_BATCH_DELAY = 0.12
 WS_ERROR_LOG_INTERVAL = 30.0
 SCAN_SCHEDULER_MS = 2000
 SCAN_STUCK_SEC = 120
@@ -2399,15 +2434,21 @@ SCAN_STUCK_SEC = 120
 _WS_LOCK = threading.Lock()
 _WS_THREADS_LOCK = threading.Lock()
 _WS_WORKERS: Dict[int, threading.Thread] = {}
+_WS_ENSURE_LOCK = threading.Lock()
+_WS_PROCESS_PAIRS_KEY: Optional[frozenset] = None
+_SCAN_LOCK = threading.Lock()
+_SCAN_SESSION_ID: Optional[str] = None
 _WS_SHARED: Dict[str, Any] = {
     "stop": False,
     "prices": {},
     "last_msg": 0.0,
+    "started_at": 0.0,
     "error": None,
     "chunk_status": {},
     "connected": False,
     "connecting": False,
     "subscribed": 0,
+    "confirmed_subs": 0,
     "connection_count": 0,
     "limit_hit": False,
 }
@@ -2426,8 +2467,10 @@ def _ws_snapshot() -> dict:
             "connected": _WS_SHARED["connected"],
             "connecting": _WS_SHARED["connecting"],
             "subscribed": _WS_SHARED["subscribed"],
+            "confirmed_subs": _WS_SHARED.get("confirmed_subs", 0),
             "connection_count": _WS_SHARED["connection_count"],
             "limit_hit": _WS_SHARED.get("limit_hit", False),
+            "started_at": _WS_SHARED.get("started_at", 0.0),
         }
 
 
@@ -2458,6 +2501,8 @@ def clear_ws_shared() -> None:
         _WS_SHARED["connected"] = False
         _WS_SHARED["connecting"] = False
         _WS_SHARED["limit_hit"] = False
+        _WS_SHARED["confirmed_subs"] = 0
+        _WS_SHARED["started_at"] = 0.0
 
 
 def _ws_runtime() -> dict:
@@ -2526,6 +2571,28 @@ def _ws_maybe_log_error_summary() -> None:
     print(f"[WS] Subscribe issues (summary): {'; '.join(parts)}")
 
 
+def _ws_pairs_key(pairs: list) -> frozenset:
+    return frozenset(p.upper() for p in pairs)
+
+
+def _ws_drain_messages(ws, timeout: float = 4.0) -> None:
+    deadline = time.time() + timeout
+    while time.time() < deadline and not _WS_SHARED.get("stop"):
+        remaining = deadline - time.time()
+        if remaining <= 0:
+            break
+        ws.settimeout(min(WS_RECV_TIMEOUT, remaining))
+        try:
+            message = ws.recv()
+            if not message:
+                continue
+            _ws_handle_coinbase_message(json.loads(message))
+        except websocket.WebSocketTimeoutException:
+            break
+        except Exception:
+            break
+
+
 def _ws_send_coinbase_subscribe(ws, product_ids: list, subscribe: bool = True) -> None:
     msg = {
         "type": "subscribe" if subscribe else "unsubscribe",
@@ -2535,11 +2602,23 @@ def _ws_send_coinbase_subscribe(ws, product_ids: list, subscribe: bool = True) -
     ws.send(json.dumps(msg))
 
 
+def _ws_subscribe_interleaved(ws, product_ids: list, subscribe: bool = True) -> None:
+    """Send subscribe/unsubscribe in batches and read server acks between batches."""
+    for i in range(0, len(product_ids), WS_SUBSCRIBE_BATCH):
+        if _WS_SHARED.get("stop"):
+            return
+        chunk = product_ids[i:i + WS_SUBSCRIBE_BATCH]
+        _ws_send_coinbase_subscribe(ws, chunk, subscribe=subscribe)
+        _ws_drain_messages(ws, timeout=4.0)
+        if i + WS_SUBSCRIBE_BATCH < len(product_ids):
+            time.sleep(WS_SUBSCRIBE_BATCH_DELAY)
+
+
 def _ws_close_coinbase(ws, product_ids: list) -> None:
     if ws is None:
         return
     try:
-        _ws_send_coinbase_subscribe(ws, product_ids, subscribe=False)
+        _ws_subscribe_interleaved(ws, product_ids, subscribe=False)
     except Exception:
         pass
     try:
@@ -2558,10 +2637,33 @@ def _ws_handle_coinbase_message(data: dict) -> None:
 
     if msg_type == "subscriptions":
         _ws_maybe_log_error_summary()
-        ch_names = [c.get("name") for c in data.get("channels", []) if isinstance(c, dict)]
-        print(f"[WS] Subscriptions confirmed: {ch_names} ({len(data.get('channels', []))} channels)")
+        channels = data.get("channels", [])
+        ch_names = [c.get("name") for c in channels if isinstance(c, dict)]
+        ticker_products: list = []
+        for ch in channels:
+            if not isinstance(ch, dict):
+                continue
+            if ch.get("name") in ("ticker", "ticker_batch", "ticker_1000"):
+                ticker_products.extend(ch.get("product_ids", []))
+        has_ticker = any(
+            isinstance(c, dict)
+            and c.get("name") in ("ticker", "ticker_batch", "ticker_1000")
+            for c in channels
+        )
+        print(
+            f"[WS] Subscriptions confirmed: {ch_names} "
+            f"({len(ticker_products)} ticker products)"
+        )
         with _WS_LOCK:
             _WS_SHARED["last_msg"] = time.time()
+            if ticker_products:
+                _WS_SHARED["confirmed_subs"] = len(ticker_products)
+            if has_ticker:
+                _WS_SHARED["connected"] = True
+                _WS_SHARED["connecting"] = False
+                for cid, status in _WS_SHARED["chunk_status"].items():
+                    if status in ("subscribing", "connecting"):
+                        _WS_SHARED["chunk_status"][cid] = "connected"
         return
 
     if msg_type in ("ticker", "ticker_batch", "heartbeat"):
@@ -2588,6 +2690,8 @@ def stop_websocket_workers(clear_cache: bool = False) -> None:
     st.session_state.pop("ws_threads", None)
     st.session_state.pop("ws_thread", None)
     # Keep ws_pairs_key — clearing it forces redundant reconnects on the next ensure() call.
+    global _WS_PROCESS_PAIRS_KEY
+    _WS_PROCESS_PAIRS_KEY = None
     if clear_cache:
         clear_ws_shared()
         st.session_state.pop("ws_pairs_key", None)
@@ -2599,7 +2703,26 @@ def stop_websocket_workers(clear_cache: bool = False) -> None:
         runtime["chunk_status"] = {}
 
 
+def try_begin_scan() -> bool:
+    global _SCAN_SESSION_ID
+    sid = get_streamlit_session_id()
+    with _SCAN_LOCK:
+        if _SCAN_SESSION_ID is None:
+            _SCAN_SESSION_ID = sid
+            return True
+        return _SCAN_SESSION_ID == sid
+
+
+def end_scan() -> None:
+    global _SCAN_SESSION_ID
+    sid = get_streamlit_session_id()
+    with _SCAN_LOCK:
+        if _SCAN_SESSION_ID == sid:
+            _SCAN_SESSION_ID = None
+
+
 def ensure_coinbase_websocket(pairs: list, exchange: str) -> None:
+    global _WS_PROCESS_PAIRS_KEY
     mode = st.session_state.get("mode", "REST only")
     if not mode.startswith("WebSocket") or exchange != "Coinbase" or not WS_AVAILABLE:
         return
@@ -2607,169 +2730,193 @@ def ensure_coinbase_websocket(pairs: list, exchange: str) -> None:
     if not pairs:
         return
 
-    # One connection for all pairs — Coinbase limits subscriptions per product per
-    # channel account-wide; multiple connections + reconnects exhaust the free tier.
-    chunks = [pairs]
-    pairs_key = (tuple(pairs), 0)
-
+    pairs_key = _ws_pairs_key(pairs)
     alive = _ws_count_alive_threads()
-    if pairs_key == st.session_state.get("ws_pairs_key") and alive > 0:
-        return
-
     snap = _ws_snapshot()
     last_msg = float(snap["last_msg"])
     msg_fresh = last_msg > 0 and (time.time() - last_msg) < WS_MSG_STALE_SEC
+    price_count = len(snap["prices"])
+    started_at = float(snap.get("started_at", 0))
+    age_since_start = time.time() - started_at if started_at else 0.0
 
-    if pairs_key == st.session_state.get("ws_pairs_key"):
-        price_count = len(snap["prices"])
-        started_at = float(st.session_state.get("ws_started_at", 0))
-        in_grace = (time.time() - started_at) < WS_START_GRACE_SEC
-        if in_grace:
-            return
-        if msg_fresh and price_count > 0:
-            return
-
-    stop_websocket_workers(clear_cache=False)
-    with _WS_LOCK:
-        _WS_SHARED["stop"] = False
-    st.session_state["ws_stop"] = False
     st.session_state["ws_pairs_key"] = pairs_key
-    st.session_state["ws_started_at"] = time.time()
-    st.session_state.setdefault("ws_prices", {})
 
-    with _WS_LOCK:
-        _WS_SHARED["connecting"] = True
-        _WS_SHARED["connected"] = False
-        _WS_SHARED["error"] = None
-        _WS_SHARED["limit_hit"] = False
-        _WS_SHARED["subscribed"] = len(pairs)
-        _WS_SHARED["connection_count"] = len(chunks)
-        _WS_SHARED["chunk_status"] = {}
+    if snap.get("limit_hit"):
+        return
 
-    runtime = _ws_runtime()
-    runtime["connecting"] = True
-    runtime["connected"] = False
-    runtime["error"] = None
-    runtime["subscribed"] = len(pairs)
-    runtime["connection_count"] = len(chunks)
-    runtime["chunk_status"] = {}
+    with _WS_ENSURE_LOCK:
+        if alive > 0 and _WS_PROCESS_PAIRS_KEY == pairs_key:
+            if msg_fresh and (price_count > 0 or snap.get("confirmed_subs", 0) > 0):
+                return
+            if snap.get("connected") and age_since_start < WS_START_GRACE_SEC:
+                return
+            if last_msg > 0 and age_since_start < WS_NO_DATA_RESTART_SEC:
+                return
+            if age_since_start < WS_START_GRACE_SEC:
+                return
+            print(
+                f"[WS] No ticker data after {int(age_since_start)}s "
+                f"(cache={price_count}) — restarting feed"
+            )
 
-    def ws_worker(chunk_id: int, product_ids: list):
-        time.sleep(chunk_id * WS_STAGGER_SEC)
+        elif alive > 0 and _WS_PROCESS_PAIRS_KEY is not None and _WS_PROCESS_PAIRS_KEY != pairs_key:
+            old_n = len(_WS_PROCESS_PAIRS_KEY)
+            new_n = len(pairs_key)
+            overlap = len(_WS_PROCESS_PAIRS_KEY & pairs_key)
+            if overlap >= min(old_n, new_n) * 0.9:
+                _WS_PROCESS_PAIRS_KEY = pairs_key
+                return
+            print(f"[WS] Pair list changed ({old_n} → {new_n}) — restarting")
+
+        stop_websocket_workers(clear_cache=False)
         with _WS_LOCK:
-            _WS_SHARED["chunk_status"][chunk_id] = "connecting"
+            _WS_SHARED["stop"] = False
+        st.session_state["ws_stop"] = False
+        _WS_PROCESS_PAIRS_KEY = pairs_key
+        st.session_state["ws_started_at"] = time.time()
+        st.session_state.setdefault("ws_prices", {})
 
-        while not _WS_SHARED.get("stop"):
-            ws = None
-            connected_ok = False
+        with _WS_LOCK:
+            _WS_SHARED["connecting"] = True
+            _WS_SHARED["connected"] = False
+            _WS_SHARED["error"] = None
+            _WS_SHARED["limit_hit"] = False
+            _WS_SHARED["subscribed"] = len(pairs)
+            _WS_SHARED["confirmed_subs"] = 0
+            _WS_SHARED["started_at"] = time.time()
+            _WS_SHARED["connection_count"] = 1
+            _WS_SHARED["chunk_status"] = {}
 
-            for attempt in range(1, WS_MAX_RETRIES + 1):
+        runtime = _ws_runtime()
+        runtime["connecting"] = True
+        runtime["connected"] = False
+        runtime["error"] = None
+        runtime["subscribed"] = len(pairs)
+        runtime["connection_count"] = 1
+        runtime["chunk_status"] = {}
+
+        def ws_worker(chunk_id: int, product_ids: list):
+            time.sleep(chunk_id * WS_STAGGER_SEC)
+            with _WS_LOCK:
+                _WS_SHARED["chunk_status"][chunk_id] = "connecting"
+
+            while not _WS_SHARED.get("stop"):
+                if _WS_SHARED.get("limit_hit"):
+                    print("[WS] Subscription limit hit — pausing reconnects")
+                    return
+                ws = None
+                connected_ok = False
+
+                for attempt in range(1, WS_MAX_RETRIES + 1):
+                    if _WS_SHARED.get("stop"):
+                        return
+                    try:
+                        print(
+                            f"[WS #{chunk_id}] Attempt {attempt}/{WS_MAX_RETRIES}: "
+                            f"connecting to {CONFIG.COINBASE_WS} "
+                            f"({len(product_ids)} pairs)"
+                        )
+                        ws = websocket.WebSocket()
+                        ws.connect(CONFIG.COINBASE_WS, timeout=WS_CONNECT_TIMEOUT)
+                        ws.settimeout(WS_RECV_TIMEOUT)
+
+                        _ws_subscribe_interleaved(ws, product_ids, subscribe=True)
+                        with _WS_LOCK:
+                            confirmed = _WS_SHARED.get("confirmed_subs", 0)
+                            cache_n = len(_WS_SHARED["prices"])
+                        print(
+                            f"[WS #{chunk_id}] Subscribe done: "
+                            f"{confirmed}/{len(product_ids)} confirmed, "
+                            f"cache={cache_n}"
+                        )
+
+                        with _WS_LOCK:
+                            _WS_SHARED["chunk_status"][chunk_id] = (
+                                "connected" if _WS_SHARED.get("connected") else "subscribing"
+                            )
+                        connected_ok = True
+
+                        while not _WS_SHARED.get("stop"):
+                            try:
+                                message = ws.recv()
+                                if not message:
+                                    continue
+                                data = json.loads(message)
+                                _ws_handle_coinbase_message(data)
+                            except websocket.WebSocketTimeoutException:
+                                continue
+                            except Exception as recv_err:
+                                print(
+                                    f"[WS #{chunk_id}] Receive error: "
+                                    f"{type(recv_err).__name__}: {recv_err}"
+                                )
+                                break
+
+                        break
+
+                    except Exception as conn_err:
+                        err_msg = f"chunk {chunk_id} attempt {attempt}: {conn_err}"
+                        with _WS_LOCK:
+                            _WS_SHARED["error"] = err_msg
+                            _WS_SHARED["chunk_status"][chunk_id] = f"error ({attempt})"
+                        print(
+                            f"[WS #{chunk_id}] Connection failed (attempt {attempt}): "
+                            f"{type(conn_err).__name__}: {conn_err}"
+                        )
+                        if ws is not None:
+                            _ws_close_coinbase(ws, product_ids)
+                            ws = None
+                        if attempt < WS_MAX_RETRIES:
+                            delay = WS_RETRY_DELAY_SEC * attempt
+                            print(f"[WS #{chunk_id}] Retrying in {delay:.0f}s...")
+                            time.sleep(delay)
+
+                if ws is not None:
+                    _ws_close_coinbase(ws, product_ids)
+
+                with _WS_LOCK:
+                    _WS_SHARED["chunk_status"][chunk_id] = "disconnected"
+                print(f"[WS #{chunk_id}] Connection closed")
+
+                with _WS_THREADS_LOCK:
+                    others_alive = sum(
+                        1 for tid, t in _WS_WORKERS.items()
+                        if tid != chunk_id and t.is_alive()
+                    )
+                if not others_alive:
+                    with _WS_LOCK:
+                        _WS_SHARED["connected"] = False
+                        _WS_SHARED["connecting"] = False
+
                 if _WS_SHARED.get("stop"):
                     return
-                try:
-                    print(
-                        f"[WS #{chunk_id}] Attempt {attempt}/{WS_MAX_RETRIES}: "
-                        f"connecting to {CONFIG.COINBASE_WS} "
-                        f"({len(product_ids)} pairs)"
-                    )
-                    ws = websocket.WebSocket()
-                    ws.connect(CONFIG.COINBASE_WS, timeout=WS_CONNECT_TIMEOUT)
-                    ws.settimeout(WS_RECV_TIMEOUT)
 
-                    _ws_send_coinbase_subscribe(ws, product_ids)
-                    print(
-                        f"[WS #{chunk_id}] Subscribe sent: "
-                        f"{len(product_ids)} products, channels={CONFIG.COINBASE_WS_CHANNELS}"
-                    )
+                if not connected_ok:
+                    print(f"[WS #{chunk_id}] All retries failed; waiting before reconnect...")
+                    time.sleep(WS_RETRY_DELAY_SEC * WS_MAX_RETRIES)
+                else:
+                    print(f"[WS #{chunk_id}] Reconnecting after drop...")
+                    time.sleep(WS_RETRY_DELAY_SEC)
 
-                    with _WS_LOCK:
-                        _WS_SHARED["connected"] = True
-                        _WS_SHARED["connecting"] = False
-                        _WS_SHARED["chunk_status"][chunk_id] = "connected"
-                    connected_ok = True
-
-                    while not _WS_SHARED.get("stop"):
-                        try:
-                            message = ws.recv()
-                            if not message:
-                                continue
-                            data = json.loads(message)
-                            _ws_handle_coinbase_message(data)
-                        except websocket.WebSocketTimeoutException:
-                            continue
-                        except Exception as recv_err:
-                            print(
-                                f"[WS #{chunk_id}] Receive error: "
-                                f"{type(recv_err).__name__}: {recv_err}"
-                            )
-                            break
-
-                    break
-
-                except Exception as conn_err:
-                    err_msg = f"chunk {chunk_id} attempt {attempt}: {conn_err}"
-                    with _WS_LOCK:
-                        _WS_SHARED["error"] = err_msg
-                        _WS_SHARED["chunk_status"][chunk_id] = f"error ({attempt})"
-                    print(
-                        f"[WS #{chunk_id}] Connection failed (attempt {attempt}): "
-                        f"{type(conn_err).__name__}: {conn_err}"
-                    )
-                    if ws is not None:
-                        _ws_close_coinbase(ws, product_ids)
-                        ws = None
-                    if attempt < WS_MAX_RETRIES:
-                        delay = WS_RETRY_DELAY_SEC * attempt
-                        print(f"[WS #{chunk_id}] Retrying in {delay:.0f}s...")
-                        time.sleep(delay)
-
-            if ws is not None:
-                _ws_close_coinbase(ws, product_ids)
-
-            with _WS_LOCK:
-                _WS_SHARED["chunk_status"][chunk_id] = "disconnected"
-            print(f"[WS #{chunk_id}] Connection closed")
-
-            with _WS_THREADS_LOCK:
-                others_alive = sum(
-                    1 for tid, t in _WS_WORKERS.items()
-                    if tid != chunk_id and t.is_alive()
-                )
-            if not others_alive:
-                with _WS_LOCK:
-                    _WS_SHARED["connected"] = False
-                    _WS_SHARED["connecting"] = False
-
-            if _WS_SHARED.get("stop"):
-                return
-
-            if not connected_ok:
-                print(f"[WS #{chunk_id}] All retries failed; waiting before reconnect...")
-                time.sleep(WS_RETRY_DELAY_SEC * WS_MAX_RETRIES)
-            else:
-                print(f"[WS #{chunk_id}] Reconnecting after drop...")
-                time.sleep(WS_RETRY_DELAY_SEC)
-
-    ws_threads = {}
-    for i, chunk in enumerate(chunks):
+        ws_threads = {}
         ws_thread = threading.Thread(
             target=ws_worker,
-            args=(i, chunk),
+            args=(0, pairs),
             daemon=True,
-            name=f"coinbase-ws-{i}",
+            name="coinbase-ws-0",
         )
-        ws_threads[i] = ws_thread
+        ws_threads[0] = ws_thread
         with _WS_THREADS_LOCK:
-            _WS_WORKERS[i] = ws_thread
+            _WS_WORKERS[0] = ws_thread
         ws_thread.start()
 
-    st.session_state["ws_threads"] = ws_threads
-    st.session_state["ws_thread"] = ws_threads.get(0)
-    st.session_state["ws_alive"] = True
-    print(
-        f"[WS] Started 1 connection for {len(pairs)} pairs "
-        f"(channel={CONFIG.COINBASE_WS_CHANNELS[0]}) → {CONFIG.COINBASE_WS}"
-    )
+        st.session_state["ws_threads"] = ws_threads
+        st.session_state["ws_thread"] = ws_thread
+        st.session_state["ws_alive"] = True
+        print(
+            f"[WS] Started 1 connection for {len(pairs)} pairs "
+            f"(channel={CONFIG.COINBASE_WS_CHANNELS[0]}) → {CONFIG.COINBASE_WS}"
+        )
 
 
 def get_websocket_status_label() -> Tuple[str, str]:
@@ -2800,30 +2947,54 @@ def get_websocket_status_label() -> Tuple[str, str]:
     last_msg = float(snap["last_msg"])
     age = time.time() - last_msg if last_msg > 0 else None
 
+    confirmed = int(snap.get("confirmed_subs", 0))
+    started_at = float(snap.get("started_at", 0))
+    warmup_sec = int(time.time() - started_at) if started_at else 0
+
     if snap.get("limit_hit"):
         return (
             "🟡",
-            f"Subscription limit hit — using REST for candles | "
-            f"Cache: {price_count} prices",
+            f"Subscription limit — close extra tabs, wait 1 min, refresh | "
+            f"Cache: {price_count} | REST scan OK",
         )
 
-    if alive_count > 0 and (snap["connecting"] or price_count == 0 or not snap.get("connected")):
+    if alive_count > 0 and snap["connecting"] and not snap.get("connected"):
         return (
             "🟡",
             f"Connecting ticker feed ({subscribed} pairs) | Cache: {price_count}",
         )
 
-    if snap["connecting"] and (alive_count > 0 or price_count > 0):
+    if alive_count > 0 and not snap.get("connected") and warmup_sec < 45:
         return (
             "🟡",
-            f"Connecting {subscribed} pairs on ticker channel | Cache: {price_count}",
+            f"Subscribing ticker ({subscribed} pairs, batching…) | Cache: {price_count}",
         )
+
+    if alive_count > 0 and snap.get("connected") and price_count == 0 and warmup_sec < 45:
+        return (
+            "🟡",
+            f"Connected ({confirmed} subs) — warming cache | Cache: 0",
+        )
+
+    if alive_count > 0 and price_count == 0 and warmup_sec >= 45:
+        if not snap.get("connected"):
+            return (
+                "🟡",
+                f"Subscribe stalled ({confirmed}/{subscribed}) — "
+                f"close extra tabs, wait 1 min, refresh",
+            )
+        if age is None or age >= WS_MSG_STALE_SEC:
+            return (
+                "🟡",
+                f"Feed stale ({confirmed}/{subscribed} subs) — "
+                f"REST prices in scan | Cache: 0",
+            )
 
     is_live = (
         last_msg > 0
         and age is not None
         and age < WS_MSG_STALE_SEC
-        and (connected_chunks > 0 or alive_count > 0 or price_count > 0)
+        and (price_count > 0 or snap.get("connected"))
     )
 
     if is_live:
@@ -2967,7 +3138,7 @@ def ws_status_panel() -> None:
     """WebSocket status — isolated fragment; also nudges WS reconnect if the worker died."""
     mode = st.session_state.get("mode", "REST only")
     if mode.startswith("WebSocket"):
-        ensure_coinbase_websocket(build_scan_pairs(), get_effective_exchange())
+        ensure_coinbase_websocket(build_ws_pairs(), get_effective_exchange())
     sync_ws_to_session()
     sym, lbl = get_websocket_status_label()
     st.caption(f"WebSocket: {sym} | {lbl}")
@@ -3033,7 +3204,7 @@ def scan_results_panel() -> None:
         st.session_state["scan_in_progress"] = False
         scan_busy = False
 
-    ensure_coinbase_websocket(pairs, effective_exchange)
+    ensure_coinbase_websocket(build_ws_pairs(), effective_exchange)
 
     if "alerted_pairs" not in st.session_state:
         st.session_state["alerted_pairs"] = load_alerted_pairs()
@@ -3058,182 +3229,190 @@ def scan_results_panel() -> None:
     scan_warning = None
 
     if need_rescan:
-        st.session_state["scan_in_progress"] = True
-        st.session_state["scan_started_at"] = time.time()
-        scan_id = time.time()
-        st.session_state["_current_scan_id"] = scan_id
-        rows = []
-        green_alert_candidates = []
-        use_vol = bool(st.session_state.get("use_vol_spike", False))
-        try:
-            total_pairs = len(pairs)
-            print(f"[SCAN] Starting {total_pairs} pairs on {sort_tf} ({effective_exchange})")
-            for i, pair in enumerate(pairs):
-                done = i + 1
-                left = total_pairs - done
-                progress_ph.progress(done / total_pairs)
-                status_ph.caption(f"Processing {pair}... ({done}/{total_pairs})")
-                remaining_ph.caption(f"{left} pairs remaining")
-                if done % 25 == 0 or done == total_pairs:
-                    print(f"[SCAN] {done}/{total_pairs} {pair}")
+        if not try_begin_scan():
+            display_rows = cached_rows
+            display_tf = cached_tf
+            scan_warning = (
+                "Another browser tab is scanning — use one tab for stable WebSocket feed."
+            )
+        else:
+            st.session_state["scan_in_progress"] = True
+            st.session_state["scan_started_at"] = time.time()
+            scan_id = time.time()
+            st.session_state["_current_scan_id"] = scan_id
+            rows = []
+            green_alert_candidates = []
+            use_vol = bool(st.session_state.get("use_vol_spike", False))
+            try:
+                total_pairs = len(pairs)
+                print(f"[SCAN] Starting {total_pairs} pairs on {sort_tf} ({effective_exchange})")
+                for i, pair in enumerate(pairs):
+                    done = i + 1
+                    left = total_pairs - done
+                    progress_ph.progress(done / total_pairs)
+                    status_ph.caption(f"Processing {pair}... ({done}/{total_pairs})")
+                    remaining_ph.caption(f"{left} pairs remaining")
+                    if done % 25 == 0 or done == total_pairs:
+                        print(f"[SCAN] {done}/{total_pairs} {pair}")
 
-                df = fetch_pair_data(effective_exchange, pair, sort_tf)
-                if df is None or df.empty or len(df) < min_bars:
+                    df = fetch_pair_data(effective_exchange, pair, sort_tf)
+                    if df is None or df.empty or len(df) < min_bars:
+                        ws_price = get_ws_price(pair)
+                        price_str = f"${float(ws_price):.6f}" if ws_price else "—"
+                        rows.append({
+                            "Pair": pair,
+                            "Price": price_str,
+                            f"% Change ({sort_tf})": 0.0,
+                            "Signal": "",
+                            "Gates": "— (no candle data)",
+                            "_passed": 0,
+                            "_enabled": 0,
+                            "_green": False,
+                            "_yellow": False,
+                            "_ws_active": ws_price is not None,
+                        })
+                        continue
+                    if gate_settings.get("use_vol_spike", False):
+                        vol_spike_ratio = volume_spike(df, gate_settings.get("vol_window", 20))
+                    else:
+                        vol_spike_ratio = 0.0
+
+                    meta, passed, chips, enabled = evaluate_gates(df, gate_settings)
+                    delta_pct = meta.get("delta_pct", 0.0)
+                    rel_vol = vol_spike_ratio
+
+                    is_green = passed >= enabled and enabled > 0
+                    is_yellow = (0 < passed < enabled) and (passed >= enabled - 1) if enabled > 0 else False
+
+                    if mode == "ALL":
+                        is_green = (enabled > 0 and passed == enabled)
+                    elif mode == "ANY":
+                        is_green = (passed >= 1)
+                    elif mode == "BALANCED":
+                        is_green = (passed >= (enabled // 2 + 1)) if enabled > 0 else False
+                    elif mode == "Custom (K/Y)":
+                        is_green = passed >= k_required
+                        is_yellow = (passed >= y_required) and (passed < k_required)
+                    else:
+                        is_green = False
+
                     ws_price = get_ws_price(pair)
-                    price_str = f"${float(ws_price):.6f}" if ws_price else "—"
+                    last_price = float(ws_price) if ws_price else float(df["close"].iloc[-1])
+                    pct_change = meta["delta_pct"]
+
+                    if is_green:
+                        green_alert_candidates.append({
+                            "pair": pair,
+                            "delta_pct": delta_pct,
+                            "rel_vol": rel_vol,
+                            "last_price": last_price,
+                            "pct_change": pct_change,
+                        })
+
+                    if not is_green and pair in alerted_pairs:
+                        alerted_pairs.pop(pair, None)
+
+                    if hard_filter:
+                        if mode in {"ALL", "ANY", "BALANCED"} and not is_green:
+                            continue
+                        if mode == "Custom (K/Y)" and not (is_green or is_yellow):
+                            continue
+
+                    signal = ""
+                    if is_green:
+                        signal = "Strong Buy"
+                    elif is_yellow:
+                        signal = "Watch"
+
                     rows.append({
                         "Pair": pair,
-                        "Price": price_str,
-                        f"% Change ({sort_tf})": 0.0,
-                        "Signal": "",
-                        "Gates": "— (no candle data)",
-                        "_passed": 0,
-                        "_enabled": 0,
-                        "_green": False,
-                        "_yellow": False,
+                        "Price": f"${last_price:.6f}",
+                        f"% Change ({sort_tf})": pct_change,
+                        "Signal": signal,
+                        "Gates": chips,
+                        "_passed": passed,
+                        "_enabled": enabled,
+                        "_green": is_green,
+                        "_yellow": is_yellow,
                         "_ws_active": ws_price is not None,
                     })
-                    continue
-                if gate_settings.get("use_vol_spike", False):
-                    vol_spike_ratio = volume_spike(df, gate_settings.get("vol_window", 20))
-                else:
-                    vol_spike_ratio = 0.0
 
-                meta, passed, chips, enabled = evaluate_gates(df, gate_settings)
-                delta_pct = meta.get("delta_pct", 0.0)
-                rel_vol = vol_spike_ratio
+                status_ph.caption("Scan finished.")
+                remaining_ph.caption("")
 
-                is_green = passed >= enabled and enabled > 0
-                is_yellow = (0 < passed < enabled) and (passed >= enabled - 1) if enabled > 0 else False
+                if alert_mode != "Off" and green_alert_candidates:
+                    status_ph.caption("Checking alert candidates…")
+                    for cand in green_alert_candidates:
+                        pair = cand["pair"]
+                        if not pair_passes_alert_strategy(
+                            effective_exchange, pair, alert_mode,
+                        ):
+                            continue
+                        include, alert_type = should_send_alert(
+                            pair,
+                            cand["delta_pct"],
+                            cand["rel_vol"],
+                            st.session_state["alerted_pairs"],
+                            use_vol_spike=use_vol,
+                        )
+                        if include:
+                            stage = format_alert_stage(pair, alert_type, cand["rel_vol"])
+                            if stage is not None:
+                                alerts_to_send.append({
+                                    "pair": pair,
+                                    "price": cand["last_price"],
+                                    "pct": cand["pct_change"],
+                                    "timeframe": sort_tf,
+                                    "exchange": effective_exchange,
+                                    "signal": "Strong Buy",
+                                    "stage": stage,
+                                })
 
-                if mode == "ALL":
-                    is_green = (enabled > 0 and passed == enabled)
-                elif mode == "ANY":
-                    is_green = (passed >= 1)
-                elif mode == "BALANCED":
-                    is_green = (passed >= (enabled // 2 + 1)) if enabled > 0 else False
-                elif mode == "Custom (K/Y)":
-                    is_green = passed >= k_required
-                    is_yellow = (passed >= y_required) and (passed < k_required)
-                else:
-                    is_green = False
+                if alerts_to_send and rows:
+                    chg_col = f"% Change ({sort_tf})"
+                    temp_df = pd.DataFrame(rows)
+                    temp_df = temp_df.sort_values(chg_col, ascending=False)
+                    top_10_pairs = temp_df[temp_df["_green"] == True].head(10)["Pair"].tolist()
+                    alerts_to_send = [
+                        alert for alert in alerts_to_send if alert["pair"] in top_10_pairs
+                    ]
 
-                ws_price = get_ws_price(pair)
-                last_price = float(ws_price) if ws_price else float(df["close"].iloc[-1])
-                pct_change = meta["delta_pct"]
+                save_alerted_pairs(st.session_state["alerted_pairs"])
 
-                if is_green:
-                    green_alert_candidates.append({
-                        "pair": pair,
-                        "delta_pct": delta_pct,
-                        "rel_vol": rel_vol,
-                        "last_price": last_price,
-                        "pct_change": pct_change,
-                    })
+                dispatch_scan_alerts(alerts_to_send, scan_id)
 
-                if not is_green and pair in alerted_pairs:
-                    alerted_pairs.pop(pair, None)
-
-                if hard_filter:
-                    if mode in {"ALL", "ANY", "BALANCED"} and not is_green:
-                        continue
-                    if mode == "Custom (K/Y)" and not (is_green or is_yellow):
-                        continue
-
-                signal = ""
-                if is_green:
-                    signal = "Strong Buy"
-                elif is_yellow:
-                    signal = "Watch"
-
-                rows.append({
-                    "Pair": pair,
-                    "Price": f"${last_price:.6f}",
-                    f"% Change ({sort_tf})": pct_change,
-                    "Signal": signal,
-                    "Gates": chips,
-                    "_passed": passed,
-                    "_enabled": enabled,
-                    "_green": is_green,
-                    "_yellow": is_yellow,
-                    "_ws_active": ws_price is not None,
-                })
-
-            status_ph.caption("Scan finished.")
-            remaining_ph.caption("")
-
-            if alert_mode != "Off" and green_alert_candidates:
-                status_ph.caption("Checking alert candidates…")
-                for cand in green_alert_candidates:
-                    pair = cand["pair"]
-                    if not pair_passes_alert_strategy(
-                        effective_exchange, pair, alert_mode,
-                    ):
-                        continue
-                    include, alert_type = should_send_alert(
-                        pair,
-                        cand["delta_pct"],
-                        cand["rel_vol"],
-                        st.session_state["alerted_pairs"],
-                        use_vol_spike=use_vol,
-                    )
-                    if include:
-                        stage = format_alert_stage(pair, alert_type, cand["rel_vol"])
-                        if stage is not None:
-                            alerts_to_send.append({
-                                "pair": pair,
-                                "price": cand["last_price"],
-                                "pct": cand["pct_change"],
-                                "timeframe": sort_tf,
-                                "exchange": effective_exchange,
-                                "signal": "Strong Buy",
-                                "stage": stage,
-                            })
-
-            if alerts_to_send and rows:
-                chg_col = f"% Change ({sort_tf})"
-                temp_df = pd.DataFrame(rows)
-                temp_df = temp_df.sort_values(chg_col, ascending=False)
-                top_10_pairs = temp_df[temp_df["_green"] == True].head(10)["Pair"].tolist()
-                alerts_to_send = [
-                    alert for alert in alerts_to_send if alert["pair"] in top_10_pairs
-                ]
-
-            save_alerted_pairs(st.session_state["alerted_pairs"])
-
-            dispatch_scan_alerts(alerts_to_send, scan_id)
-
-            scan_ran = True
-            scanned_count = len(rows)
-            if rows:
-                st.session_state["scan_rows"] = rows
-                st.session_state["scan_sort_tf"] = sort_tf
-                display_rows = rows
-                display_tf = sort_tf
-            elif cached_rows and cached_tf != sort_tf:
-                st.session_state["scan_rows"] = cached_rows
-                display_rows = cached_rows
-                display_tf = cached_tf
-                scan_warning = (
-                    f"Scan on {sort_tf} returned 0 rows "
-                    f"({'hard filter ON' if hard_filter else 'check REST/API'}). "
-                    f"Showing previous {cached_tf} results until the next scan succeeds."
-                )
-            else:
-                st.session_state["scan_rows"] = rows
-                st.session_state["scan_sort_tf"] = sort_tf
-                display_rows = rows
-                display_tf = sort_tf
-                if total_pairs > 0 and not rows:
+                scan_ran = True
+                scanned_count = len(rows)
+                if rows:
+                    st.session_state["scan_rows"] = rows
+                    st.session_state["scan_sort_tf"] = sort_tf
+                    display_rows = rows
+                    display_tf = sort_tf
+                elif cached_rows and cached_tf != sort_tf:
+                    st.session_state["scan_rows"] = cached_rows
+                    display_rows = cached_rows
+                    display_tf = cached_tf
                     scan_warning = (
-                        f"No rows produced for {sort_tf} — try Refresh Now to clear stale cache."
+                        f"Scan on {sort_tf} returned 0 rows "
+                        f"({'hard filter ON' if hard_filter else 'check REST/API'}). "
+                        f"Showing previous {cached_tf} results until the next scan succeeds."
                     )
+                else:
+                    st.session_state["scan_rows"] = rows
+                    st.session_state["scan_sort_tf"] = sort_tf
+                    display_rows = rows
+                    display_tf = sort_tf
+                    if total_pairs > 0 and not rows:
+                        scan_warning = (
+                            f"No rows produced for {sort_tf} — try Refresh Now to clear stale cache."
+                        )
 
-            st.session_state["last_update"] = int(time.time())
-            st.session_state["last_scan_count"] = scanned_count
-            print(f"[SCAN] Complete — {scanned_count} rows on {sort_tf}")
-        finally:
-            st.session_state["scan_in_progress"] = False
+                st.session_state["last_update"] = int(time.time())
+                st.session_state["last_scan_count"] = scanned_count
+                print(f"[SCAN] Complete — {scanned_count} rows on {sort_tf}")
+            finally:
+                st.session_state["scan_in_progress"] = False
+                end_scan()
     else:
         display_rows = cached_rows
         display_tf = cached_tf
@@ -3263,10 +3442,6 @@ def scan_results_panel() -> None:
                 f"Next scan in {next_scan}s."
             )
         render_scan_results(display_rows, display_tf, hard_filter, interactive=True)
-
-    if scan_ran:
-        st.session_state["immediate_rescan"] = True
-
 
 # =============================================================================
 # MAIN DISPLAY
