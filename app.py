@@ -1435,24 +1435,31 @@ def format_alert_stage(pair: str, alert_type: str, rel_vol: float) -> Optional[s
     return alert_type
 
 
+def _load_email_secrets() -> dict:
+    try:
+        return dict(st.secrets.get("email", {}) or {})
+    except Exception:
+        return {}
+
+
 def get_email_config_status() -> dict:
     """Report whether SMTP + recipient are configured for outbound alerts."""
     missing = []
-    secrets_path = APP_DIR / ".streamlit" / "secrets.toml"
-    if not secrets_path.exists():
-        missing.append(".streamlit/secrets.toml (create this file)")
+    email_sec = _load_email_secrets()
 
-    try:
-        email_sec = st.secrets.get("email", {})
-    except Exception:
-        email_sec = {}
-        if ".streamlit/secrets.toml (create this file)" not in missing:
-            missing.append("readable st.secrets email section")
+    sender = (email_sec.get("sender_email") or "").strip()
+    password = (email_sec.get("sender_password") or "").strip()
 
-    if not email_sec.get("sender_email"):
+    if not sender:
         missing.append("sender_email in secrets")
-    if not email_sec.get("sender_password"):
+    if not password:
         missing.append("sender_password (Gmail app password) in secrets")
+
+    if not sender or not password:
+        missing.insert(
+            0,
+            "SMTP credentials not loaded — restart Streamlit after saving secrets",
+        )
 
     recipient = (st.session_state.get("email_to") or "").strip()
     if not recipient:
@@ -2331,9 +2338,7 @@ with expander("Gates"):
             key="Y_yellow",
         )
 with expander("🔔 Notifications"):
-    st.caption(
-        "SMTP: create `.streamlit/secrets.toml` with `[email]` sender_email + sender_password"
-    )
+    st.caption("SMTP sender credentials come from Streamlit secrets (same place you already configured them).")
 
     email_cfg = get_email_config_status()
     if email_cfg["ready"]:
