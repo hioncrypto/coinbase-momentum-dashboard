@@ -3476,7 +3476,7 @@ def scan_results_panel() -> None:
                         cached_rows,
                         cached_tf,
                         hard_filter,
-                        interactive=True,
+                        interactive=False,
                     )
 
             st.session_state["scan_in_progress"] = True
