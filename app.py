@@ -647,8 +647,10 @@ def build_gate_settings() -> dict:
     }
 
 
-def trigger_immediate_rescan(clear_fetch_cache: bool = False) -> None:
+def trigger_immediate_rescan(clear_fetch_cache: bool = False, force: bool = False) -> None:
     """Queue a scan on the next results-panel run; clears stuck scan flags."""
+    if st.session_state.get("scan_in_progress") and not force:
+        return
     st.session_state["immediate_rescan"] = True
     st.session_state["scan_in_progress"] = False
     if clear_fetch_cache:
@@ -685,6 +687,8 @@ def apply_scan_config_change(
     hard_filter: bool,
     clear_fetch_cache: bool = False,
 ) -> None:
+    if st.session_state.get("scan_in_progress"):
+        return
     fp = build_scan_config_fingerprint(pairs, sort_tf, hard_filter)
     prev = st.session_state.get("scan_config_fp")
     if prev is not None and fp != prev:
@@ -1804,7 +1808,7 @@ with expander("Mode & Timeframes"):
     )
     if new_tf != st.session_state.get("sort_tf"):
         st.session_state["sort_tf"] = new_tf
-        trigger_immediate_rescan(clear_fetch_cache=True)
+        trigger_immediate_rescan(clear_fetch_cache=True, force=True)
         save_to_url("sort_tf", new_tf)
 
     new_sort_desc = st.toggle(
@@ -1841,7 +1845,7 @@ with expander("Gates"):
     if new_preset != st.session_state.get("preset"):
         st.session_state["preset"] = new_preset
         save_to_url("preset", new_preset)
-        trigger_immediate_rescan()
+        trigger_immediate_rescan(force=True)
 
         if new_preset == "Spike Hunter":
             st.session_state.update(
@@ -2117,12 +2121,12 @@ with expander("Gates"):
     if new_gm != st.session_state.get("gate_mode"):
         st.session_state["gate_mode"] = new_gm
         save_to_url("gate_mode", new_gm)
-        trigger_immediate_rescan()
+        trigger_immediate_rescan(force=True)
     new_hf = st.toggle("Hard filter (hide non-passers)", key="hard_filter")
     if new_hf != st.session_state.get("hard_filter"):
         st.session_state["hard_filter"] = new_hf
         save_to_url("hard_filter", new_hf)
-        trigger_immediate_rescan()
+        trigger_immediate_rescan(force=True)
 
     if st.session_state.get("gate_mode") == "Custom (K/Y)":
         st.subheader("Color rules")
@@ -2284,7 +2288,6 @@ WS_SUBSCRIBE_BATCH_DELAY = 0.12
 WS_ERROR_LOG_INTERVAL = 30.0
 SCAN_SCHEDULER_MS = 2000
 SCAN_FRAGMENT_POLL_SEC = SCAN_SCHEDULER_MS / 1000
-SCAN_PAIRS_PER_TICK = 30
 SCAN_STUCK_SEC = 120
 
 # Streamlit session_state is main-thread only — workers use this shared store.
@@ -2579,7 +2582,6 @@ def clear_stale_scan_lock() -> bool:
         return False
     print("[SCAN] clearing stale scan_in_progress flag")
     st.session_state["scan_in_progress"] = False
-    _clear_scan_batch_state()
     return True
 
 
@@ -3053,42 +3055,6 @@ def scan_rows_missing() -> bool:
     return rows is None or not rows
 
 
-def _clear_scan_batch_state() -> None:
-    for key in (
-        "scan_batch_pairs",
-        "scan_batch_idx",
-        "scan_batch_rows",
-        "scan_batch_green_alerts",
-    ):
-        st.session_state.pop(key, None)
-
-
-def _is_scan_batch_active() -> bool:
-    pairs = st.session_state.get("scan_batch_pairs")
-    if not pairs:
-        return False
-    idx = int(st.session_state.get("scan_batch_idx", 0))
-    return idx < len(pairs)
-
-
-def _begin_new_scan_state(pairs: list) -> None:
-    st.session_state["scan_in_progress"] = True
-    st.session_state["scan_started_at"] = time.time()
-    st.session_state["_current_scan_id"] = time.time()
-    get_cached_data.clear()
-    clear_session_candle_cache()
-    st.session_state["_force_rest_scan"] = True
-    st.session_state["scan_live_stats"] = {
-        "api": 0,
-        "session_hits": 0,
-        "started": time.time(),
-    }
-    st.session_state["scan_batch_pairs"] = list(pairs)
-    st.session_state["scan_batch_idx"] = 0
-    st.session_state["scan_batch_rows"] = []
-    st.session_state["scan_batch_green_alerts"] = []
-
-
 def _process_scan_pair(
     pair: str,
     effective_exchange: str,
@@ -3189,12 +3155,12 @@ def _process_scan_pair(
 
 def maybe_queue_interval_rescan(refresh_interval: int) -> None:
     """Queue rescan on each fragment tick when the refresh interval has elapsed."""
-    if st.session_state.get("scan_in_progress") and _is_scan_batch_active():
-        return
     if st.session_state.get("scan_in_progress"):
         return
     last = int(st.session_state.get("last_update", 0))
-    age = int(time.time()) - last if last > 0 else refresh_interval
+    if last <= 0:
+        return
+    age = int(time.time()) - last
     if age >= refresh_interval:
         print(f"[SCAN] interval elapsed ({age}s >= {refresh_interval}s) — queueing rescan")
         trigger_immediate_rescan(clear_fetch_cache=False)
@@ -3208,7 +3174,6 @@ def scan_results_panel() -> None:
             print("[SCAN] clearing stuck scan flag (timed out)")
             st.session_state["scan_in_progress"] = False
             st.session_state["immediate_rescan"] = True
-            _clear_scan_batch_state()
             end_scan()
 
     clear_stale_scan_lock()
@@ -3253,11 +3218,10 @@ def scan_results_panel() -> None:
         scan_rows_missing()
         or config_stale
         or st.session_state.get("immediate_rescan", False)
-        or time_since_update >= refresh_interval
-        or _is_scan_batch_active()
+        or (not scan_busy and time_since_update >= refresh_interval)
     )
     # Clear orphan scan flag before WS ensure so WebSocket still starts when recovering.
-    if will_rescan and scan_busy and not _is_scan_batch_active():
+    if will_rescan and scan_busy:
         st.session_state["scan_in_progress"] = False
         scan_busy = False
 
@@ -3272,19 +3236,11 @@ def scan_results_panel() -> None:
     y_required = st.session_state.get("Y_yellow", 2)
     alert_mode = st.session_state.get("alert_mode", "Off")
 
-    continuing_scan = _is_scan_batch_active()
-    if continuing_scan and (config_stale or st.session_state.get("scan_sort_tf") != sort_tf):
-        _clear_scan_batch_state()
-        st.session_state["scan_in_progress"] = False
-        trigger_immediate_rescan(clear_fetch_cache=True)
-        continuing_scan = False
-
     need_rescan = (
-        scan_rows_missing()
+        (scan_rows_missing() and not scan_busy)
         or config_stale
         or st.session_state.pop("immediate_rescan", False)
-        or time_since_update >= refresh_interval
-        or continuing_scan
+        or (not scan_busy and time_since_update >= refresh_interval)
     )
 
     alerts_to_send = []
@@ -3292,42 +3248,36 @@ def scan_results_panel() -> None:
     cached_rows = list(st.session_state.get("scan_rows") or [])
     scan_ran = False
     scan_warning = None
-    scan_complete = False
 
     if need_rescan:
         print(
             f"[SCAN] rescan triggered "
             f"({time_since_update}s since last, interval {refresh_interval}s)"
         )
-        if continuing_scan:
-            pairs = list(st.session_state["scan_batch_pairs"])
-            rows = list(st.session_state.get("scan_batch_rows", []))
-            green_alert_candidates = list(st.session_state.get("scan_batch_green_alerts", []))
-            scan_id = st.session_state.get("_current_scan_id", time.time())
-            start_idx = int(st.session_state.get("scan_batch_idx", 0))
-        elif not try_begin_scan():
+        if not try_begin_scan():
             display_rows = cached_rows
             display_tf = cached_tf
             scan_warning = "Scan already in progress in this tab."
-            need_rescan = False
         else:
-            _begin_new_scan_state(pairs)
+            st.session_state["scan_in_progress"] = True
+            st.session_state["scan_started_at"] = time.time()
+            scan_id = time.time()
+            st.session_state["_current_scan_id"] = scan_id
+            get_cached_data.clear()
+            clear_session_candle_cache()
+            st.session_state["_force_rest_scan"] = True
+            st.session_state["scan_live_stats"] = {
+                "api": 0,
+                "session_hits": 0,
+                "started": time.time(),
+            }
             rows = []
             green_alert_candidates = []
-            scan_id = st.session_state["_current_scan_id"]
-            start_idx = 0
-
-        if need_rescan:
             use_vol = bool(st.session_state.get("use_vol_spike", False))
-            total_pairs = len(pairs)
-            end_idx = min(start_idx + SCAN_PAIRS_PER_TICK, total_pairs)
             try:
-                if start_idx == 0:
-                    print(
-                        f"[SCAN] Starting {total_pairs} pairs on {sort_tf} ({effective_exchange})"
-                    )
-                for i in range(start_idx, end_idx):
-                    pair = pairs[i]
+                total_pairs = len(pairs)
+                print(f"[SCAN] Starting {total_pairs} pairs on {sort_tf} ({effective_exchange})")
+                for i, pair in enumerate(pairs):
                     done = i + 1
                     left = total_pairs - done
                     progress_ph.progress(done / total_pairs)
@@ -3353,107 +3303,95 @@ def scan_results_panel() -> None:
                     if row is not None:
                         rows.append(row)
 
-                st.session_state["scan_batch_idx"] = end_idx
-                st.session_state["scan_batch_rows"] = rows
-                st.session_state["scan_batch_green_alerts"] = green_alert_candidates
+                status_ph.caption("Scan finished.")
+                remaining_ph.caption("")
 
-                if end_idx < total_pairs:
-                    st.session_state["scan_in_progress"] = True
-                    display_rows = rows if rows else cached_rows
-                    display_tf = sort_tf
-                else:
-                    scan_complete = True
-                    status_ph.caption("Scan finished.")
-                    remaining_ph.caption("")
-
-                    if alert_mode != "Off" and green_alert_candidates:
-                        status_ph.caption("Checking alert candidates…")
-                        for cand in green_alert_candidates:
-                            pair = cand["pair"]
-                            if not pair_passes_alert_strategy(
-                                effective_exchange, pair, alert_mode,
-                            ):
-                                continue
-                            include, alert_type = should_send_alert(
-                                pair,
-                                cand["delta_pct"],
-                                cand["rel_vol"],
-                                st.session_state["alerted_pairs"],
-                                use_vol_spike=use_vol,
-                            )
-                            if include:
-                                stage = format_alert_stage(pair, alert_type, cand["rel_vol"])
-                                if stage is not None:
-                                    alerts_to_send.append({
-                                        "pair": pair,
-                                        "price": cand["last_price"],
-                                        "pct": cand["pct_change"],
-                                        "timeframe": sort_tf,
-                                        "exchange": effective_exchange,
-                                        "signal": "Strong Buy",
-                                        "stage": stage,
-                                    })
-
-                    if alerts_to_send and rows:
-                        chg_col = f"% Change ({sort_tf})"
-                        temp_df = pd.DataFrame(rows)
-                        temp_df = temp_df.sort_values(chg_col, ascending=False)
-                        top_10_pairs = temp_df[temp_df["_green"] == True].head(10)["Pair"].tolist()
-                        alerts_to_send = [
-                            alert for alert in alerts_to_send if alert["pair"] in top_10_pairs
-                        ]
-
-                    save_alerted_pairs(st.session_state["alerted_pairs"])
-                    dispatch_scan_alerts(alerts_to_send, scan_id)
-
-                    scan_ran = True
-                    scanned_count = len(rows)
-                    if rows:
-                        st.session_state["scan_rows"] = rows
-                        st.session_state["scan_sort_tf"] = sort_tf
-                        display_rows = rows
-                        display_tf = sort_tf
-                    elif cached_rows and cached_tf != sort_tf:
-                        st.session_state["scan_rows"] = cached_rows
-                        display_rows = cached_rows
-                        display_tf = cached_tf
-                        scan_warning = (
-                            f"Scan on {sort_tf} returned 0 rows "
-                            f"({'hard filter ON' if hard_filter else 'check REST/API'}). "
-                            f"Showing previous {cached_tf} results until the next scan succeeds."
+                if alert_mode != "Off" and green_alert_candidates:
+                    status_ph.caption("Checking alert candidates…")
+                    for cand in green_alert_candidates:
+                        pair = cand["pair"]
+                        if not pair_passes_alert_strategy(
+                            effective_exchange, pair, alert_mode,
+                        ):
+                            continue
+                        include, alert_type = should_send_alert(
+                            pair,
+                            cand["delta_pct"],
+                            cand["rel_vol"],
+                            st.session_state["alerted_pairs"],
+                            use_vol_spike=use_vol,
                         )
-                    else:
-                        st.session_state["scan_rows"] = rows
-                        st.session_state["scan_sort_tf"] = sort_tf
-                        display_rows = rows
-                        display_tf = sort_tf
-                        if total_pairs > 0 and not rows:
-                            scan_warning = (
-                                f"No rows produced for {sort_tf} — try Refresh Now to clear stale cache."
-                            )
+                        if include:
+                            stage = format_alert_stage(pair, alert_type, cand["rel_vol"])
+                            if stage is not None:
+                                alerts_to_send.append({
+                                    "pair": pair,
+                                    "price": cand["last_price"],
+                                    "pct": cand["pct_change"],
+                                    "timeframe": sort_tf,
+                                    "exchange": effective_exchange,
+                                    "signal": "Strong Buy",
+                                    "stage": stage,
+                                })
 
-                    st.session_state["last_update"] = int(time.time())
-                    st.session_state["last_scan_count"] = scanned_count
-                    stats = st.session_state.get("scan_live_stats") or {}
-                    duration = int(time.time() - float(stats.get("started", time.time())))
-                    api_calls = int(stats.get("api", 0))
-                    session_hits = int(stats.get("session_hits", 0))
-                    st.session_state["last_scan_stats"] = {
-                        "duration_sec": duration,
-                        "api_calls": api_calls,
-                        "session_hits": session_hits,
-                        "at": int(time.time()),
-                    }
-                    print(
-                        f"[SCAN] Complete — {scanned_count} rows on {sort_tf} "
-                        f"({duration}s, {api_calls} API calls, {session_hits} cache hits)"
+                if alerts_to_send and rows:
+                    chg_col = f"% Change ({sort_tf})"
+                    temp_df = pd.DataFrame(rows)
+                    temp_df = temp_df.sort_values(chg_col, ascending=False)
+                    top_10_pairs = temp_df[temp_df["_green"] == True].head(10)["Pair"].tolist()
+                    alerts_to_send = [
+                        alert for alert in alerts_to_send if alert["pair"] in top_10_pairs
+                    ]
+
+                save_alerted_pairs(st.session_state["alerted_pairs"])
+                dispatch_scan_alerts(alerts_to_send, scan_id)
+
+                scan_ran = True
+                scanned_count = len(rows)
+                if rows:
+                    st.session_state["scan_rows"] = rows
+                    st.session_state["scan_sort_tf"] = sort_tf
+                    display_rows = rows
+                    display_tf = sort_tf
+                elif cached_rows and cached_tf != sort_tf:
+                    st.session_state["scan_rows"] = cached_rows
+                    display_rows = cached_rows
+                    display_tf = cached_tf
+                    scan_warning = (
+                        f"Scan on {sort_tf} returned 0 rows "
+                        f"({'hard filter ON' if hard_filter else 'check REST/API'}). "
+                        f"Showing previous {cached_tf} results until the next scan succeeds."
                     )
-                    _clear_scan_batch_state()
+                else:
+                    st.session_state["scan_rows"] = rows
+                    st.session_state["scan_sort_tf"] = sort_tf
+                    display_rows = rows
+                    display_tf = sort_tf
+                    if total_pairs > 0 and not rows:
+                        scan_warning = (
+                            f"No rows produced for {sort_tf} — try Refresh Now to clear stale cache."
+                        )
+
+                st.session_state["last_update"] = int(time.time())
+                st.session_state["last_scan_count"] = scanned_count
+                stats = st.session_state.get("scan_live_stats") or {}
+                duration = int(time.time() - float(stats.get("started", time.time())))
+                api_calls = int(stats.get("api", 0))
+                session_hits = int(stats.get("session_hits", 0))
+                st.session_state["last_scan_stats"] = {
+                    "duration_sec": duration,
+                    "api_calls": api_calls,
+                    "session_hits": session_hits,
+                    "at": int(time.time()),
+                }
+                print(
+                    f"[SCAN] Complete — {scanned_count} rows on {sort_tf} "
+                    f"({duration}s, {api_calls} API calls, {session_hits} cache hits)"
+                )
             finally:
-                if scan_complete:
-                    st.session_state["scan_in_progress"] = False
-                    st.session_state["_force_rest_scan"] = False
-                    end_scan()
+                st.session_state["scan_in_progress"] = False
+                st.session_state["_force_rest_scan"] = False
+                end_scan()
     else:
         display_rows = cached_rows
         display_tf = cached_tf
@@ -3483,12 +3421,8 @@ def scan_results_panel() -> None:
                 f"Timeframe changed to {sort_tf} — rescan will run shortly. "
                 f"Showing previous {cached_tf} results ({len(cached_rows)} pairs)."
             )
-        elif _is_scan_batch_active() or (scan_busy and scan_started):
-            batch_idx = int(st.session_state.get("scan_batch_idx", 0))
-            batch_total = len(st.session_state.get("scan_batch_pairs", []))
-            st.caption(
-                f"Scan in progress ({batch_idx}/{batch_total} pairs, {int(scan_elapsed)}s)…"
-            )
+        elif scan_busy and scan_started:
+            st.caption(f"Scan in progress ({int(scan_elapsed)}s)…")
         else:
             age = int(time.time()) - st.session_state.get("last_update", 0)
             next_scan = max(0, refresh_interval - age)
@@ -3529,7 +3463,6 @@ with col1:
         stop_websocket_workers(clear_cache=True)
         st.session_state["last_update"] = 0
         st.session_state["scan_in_progress"] = False
-        _clear_scan_batch_state()
         st.session_state.pop("scan_rows", None)
         st.rerun()
 
