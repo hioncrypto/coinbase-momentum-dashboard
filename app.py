@@ -2438,6 +2438,7 @@ _WS_ENSURE_LOCK = threading.Lock()
 _WS_PROCESS_PAIRS_KEY: Optional[frozenset] = None
 _SCAN_LOCK = threading.Lock()
 _SCAN_SESSION_ID: Optional[str] = None
+_SCAN_GLOBAL_BUSY = False
 _WS_SHARED: Dict[str, Any] = {
     "stop": False,
     "prices": {},
@@ -2575,6 +2576,17 @@ def _ws_pairs_key(pairs: list) -> frozenset:
     return frozenset(p.upper() for p in pairs)
 
 
+def _ws_is_healthy(snap: dict) -> bool:
+    if len(snap["prices"]) > 0:
+        return True
+    if snap.get("connected") and snap.get("confirmed_subs", 0) > 0:
+        return True
+    started = float(snap.get("started_at", 0))
+    if started and (time.time() - started) < WS_START_GRACE_SEC:
+        return True
+    return False
+
+
 def _ws_drain_messages(ws, timeout: float = 4.0) -> None:
     deadline = time.time() + timeout
     while time.time() < deadline and not _WS_SHARED.get("stop"):
@@ -2672,6 +2684,8 @@ def _ws_handle_coinbase_message(data: dict) -> None:
         with _WS_LOCK:
             if product_id and price:
                 _WS_SHARED["prices"][product_id] = float(price)
+                _WS_SHARED["connected"] = True
+                _WS_SHARED["connecting"] = False
             _WS_SHARED["last_msg"] = time.time()
 
 
@@ -2689,10 +2703,9 @@ def stop_websocket_workers(clear_cache: bool = False) -> None:
     st.session_state["ws_alive"] = False
     st.session_state.pop("ws_threads", None)
     st.session_state.pop("ws_thread", None)
-    # Keep ws_pairs_key — clearing it forces redundant reconnects on the next ensure() call.
     global _WS_PROCESS_PAIRS_KEY
-    _WS_PROCESS_PAIRS_KEY = None
     if clear_cache:
+        _WS_PROCESS_PAIRS_KEY = None
         clear_ws_shared()
         st.session_state.pop("ws_pairs_key", None)
         st.session_state.pop("ws_started_at", None)
@@ -2704,20 +2717,22 @@ def stop_websocket_workers(clear_cache: bool = False) -> None:
 
 
 def try_begin_scan() -> bool:
-    global _SCAN_SESSION_ID
+    global _SCAN_SESSION_ID, _SCAN_GLOBAL_BUSY
     sid = get_streamlit_session_id()
     with _SCAN_LOCK:
-        if _SCAN_SESSION_ID is None:
-            _SCAN_SESSION_ID = sid
-            return True
-        return _SCAN_SESSION_ID == sid
+        if _SCAN_GLOBAL_BUSY:
+            return False
+        _SCAN_GLOBAL_BUSY = True
+        _SCAN_SESSION_ID = sid
+        return True
 
 
 def end_scan() -> None:
-    global _SCAN_SESSION_ID
+    global _SCAN_SESSION_ID, _SCAN_GLOBAL_BUSY
     sid = get_streamlit_session_id()
     with _SCAN_LOCK:
-        if _SCAN_SESSION_ID == sid:
+        if _SCAN_SESSION_ID == sid or _SCAN_SESSION_ID is None:
+            _SCAN_GLOBAL_BUSY = False
             _SCAN_SESSION_ID = None
 
 
@@ -2744,13 +2759,24 @@ def ensure_coinbase_websocket(pairs: list, exchange: str) -> None:
     if snap.get("limit_hit"):
         return
 
+    # Fast path — never kill a worker that already has prices or is still warming up.
+    if alive > 0 and _WS_PROCESS_PAIRS_KEY == pairs_key and _ws_is_healthy(snap):
+        return
+
     with _WS_ENSURE_LOCK:
+        alive = _ws_count_alive_threads()
+        snap = _ws_snapshot()
+        price_count = len(snap["prices"])
+        last_msg = float(snap["last_msg"])
+        msg_fresh = last_msg > 0 and (time.time() - last_msg) < WS_MSG_STALE_SEC
+        started_at = float(snap.get("started_at", 0))
+        age_since_start = time.time() - started_at if started_at else 0.0
+
+        if alive > 0 and _WS_PROCESS_PAIRS_KEY == pairs_key and _ws_is_healthy(snap):
+            return
+
         if alive > 0 and _WS_PROCESS_PAIRS_KEY == pairs_key:
-            if msg_fresh and (price_count > 0 or snap.get("confirmed_subs", 0) > 0):
-                return
-            if snap.get("connected") and age_since_start < WS_START_GRACE_SEC:
-                return
-            if last_msg > 0 and age_since_start < WS_NO_DATA_RESTART_SEC:
+            if msg_fresh and price_count > 0:
                 return
             if age_since_start < WS_START_GRACE_SEC:
                 return
@@ -2951,6 +2977,13 @@ def get_websocket_status_label() -> Tuple[str, str]:
     started_at = float(snap.get("started_at", 0))
     warmup_sec = int(time.time() - started_at) if started_at else 0
 
+    if price_count > 0 and last_msg > 0 and age is not None and age < WS_MSG_STALE_SEC:
+        return (
+            "🟢",
+            f"Live ticker ({subscribed} pairs) | "
+            f"{price_count} in cache | Last msg {int(age)}s ago",
+        )
+
     if snap.get("limit_hit"):
         return (
             "🟡",
@@ -3134,14 +3167,21 @@ def render_scan_results(
         st.info("No pairs match filters.")
 
 
-def ws_status_panel() -> None:
-    """WebSocket status — isolated fragment; also nudges WS reconnect if the worker died."""
+def update_ws_status(placeholder: Optional[Any] = None) -> Tuple[str, str]:
+    """Start/verify WebSocket and return (icon, label). Updates placeholder if given."""
     mode = st.session_state.get("mode", "REST only")
     if mode.startswith("WebSocket"):
         ensure_coinbase_websocket(build_ws_pairs(), get_effective_exchange())
     sync_ws_to_session()
     sym, lbl = get_websocket_status_label()
-    st.caption(f"WebSocket: {sym} | {lbl}")
+    text = f"WebSocket: {sym} | {lbl}"
+    if placeholder is not None:
+        placeholder.caption(text)
+    return sym, lbl
+
+
+def ws_status_panel() -> None:
+    update_ws_status()
 
 
 def scan_rows_missing() -> bool:
@@ -3475,9 +3515,11 @@ with col2:
         st.rerun()
 
 with col3:
-    ws_status_panel()
+    ws_status_ph = st.empty()
+    update_ws_status(ws_status_ph)
 
 scan_results_panel()
+update_ws_status(ws_status_ph)
 
 if st_autorefresh and not st.session_state.get("scan_in_progress"):
     st_autorefresh(interval=SCAN_SCHEDULER_MS, key="scan_scheduler")
