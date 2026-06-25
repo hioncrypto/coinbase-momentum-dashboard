@@ -605,7 +605,7 @@ def init_session_state():
     defaults = {
         "exchange": "Coinbase",
         "quote": "USD",
-        "pairs_to_discover": 300,
+        "pairs_to_discover": 400,
         "mode": "WebSocket + REST",
         "ws_chunk": 100,
         "sort_tf": "1h",
@@ -801,7 +801,7 @@ def build_scan_pairs() -> list:
     else:
         pairs = get_products(get_effective_exchange(), st.session_state.get("quote", "USD"))
 
-    cap = max(5, min(500, int(st.session_state.get("pairs_to_discover", 300))))
+    cap = max(5, min(500, int(st.session_state.get("pairs_to_discover", 400))))
     pairs = pairs[:cap]
 
     if st.session_state.get("mc_filter_enabled"):
@@ -833,7 +833,7 @@ def build_ws_pairs() -> list:
     else:
         pairs = get_products(get_effective_exchange(), st.session_state.get("quote", "USD"))
 
-    cap = max(5, min(500, int(st.session_state.get("pairs_to_discover", 300))))
+    cap = max(5, min(500, int(st.session_state.get("pairs_to_discover", 400))))
     return pairs[:cap]
 
 
@@ -1820,6 +1820,9 @@ def evaluate_gates(df: pd.DataFrame, settings: dict) -> Tuple[dict, int, str, in
 # SIDEBAR CONTROLS
 # =============================================================================
 WS_SUBSCRIBE_BATCH = 50  # pairs per Coinbase ticker subscribe message
+WS_PAIRS_PER_CONNECTION = 100  # split tickers across multiple WebSocket connections
+
+_ws_thread_chunk = threading.local()
 
 
 def expander(title: str):
@@ -1953,7 +1956,7 @@ with st.sidebar:
         min_value=5,
         max_value=500,
         step=5,
-        value=st.session_state.get("pairs_to_discover", 300),
+        value=st.session_state.get("pairs_to_discover", 400),
         key="ui_pairs_to_discover",
         help="Number of pairs to scan",
     )
@@ -2497,6 +2500,7 @@ _WS_SHARED: Dict[str, Any] = {
     "confirmed_subs": 0,
     "connection_count": 0,
     "limit_hit": False,
+    "chunk_limits": set(),
 }
 _WS_ERROR_LOG: Dict[str, float] = {}
 _WS_ERROR_COUNTS: Dict[str, int] = {}
@@ -2516,6 +2520,7 @@ def _ws_snapshot() -> dict:
             "confirmed_subs": _WS_SHARED.get("confirmed_subs", 0),
             "connection_count": _WS_SHARED["connection_count"],
             "limit_hit": _WS_SHARED.get("limit_hit", False),
+            "chunk_limits": set(_WS_SHARED.get("chunk_limits", set())),
             "started_at": _WS_SHARED.get("started_at", 0.0),
         }
 
@@ -2547,6 +2552,7 @@ def clear_ws_shared() -> None:
         _WS_SHARED["connected"] = False
         _WS_SHARED["connecting"] = False
         _WS_SHARED["limit_hit"] = False
+        _WS_SHARED["chunk_limits"] = set()
         _WS_SHARED["confirmed_subs"] = 0
         _WS_SHARED["started_at"] = 0.0
 
@@ -2570,7 +2576,7 @@ def _ws_count_alive_threads() -> int:
         return sum(1 for t in _WS_WORKERS.values() if t.is_alive())
 
 
-def _ws_log_server_error(data: dict) -> None:
+def _ws_log_server_error(data: dict, chunk_id: Optional[int] = None) -> None:
     err = data.get("message", str(data))
     reason = data.get("reason", "")
     detail = f"{err}" + (f" — {reason}" if reason else "")
@@ -2580,7 +2586,12 @@ def _ws_log_server_error(data: dict) -> None:
         _WS_SHARED["error"] = detail
         _WS_ERROR_COUNTS[reason_key] = _WS_ERROR_COUNTS.get(reason_key, 0) + 1
         if "subscription limit" in reason_key.lower():
-            _WS_SHARED["limit_hit"] = True
+            if chunk_id is not None:
+                limits = _WS_SHARED.setdefault("chunk_limits", set())
+                limits.add(chunk_id)
+                _WS_SHARED["chunk_status"][chunk_id] = "limit"
+            else:
+                _WS_SHARED["limit_hit"] = True
 
     # Per-product failures are expected; log a summary instead of flooding the terminal.
     if reason_key.startswith("subscription limit"):
@@ -2619,6 +2630,11 @@ def _ws_maybe_log_error_summary() -> None:
 
 def _ws_pairs_key(pairs: list) -> frozenset:
     return frozenset(p.upper() for p in pairs)
+
+
+def _ws_split_pair_chunks(pairs: list, chunk_size: int) -> List[list]:
+    size = max(1, int(chunk_size))
+    return [pairs[i:i + size] for i in range(0, len(pairs), size)]
 
 
 def _ws_is_healthy(snap: dict) -> bool:
@@ -2688,7 +2704,8 @@ def _ws_handle_coinbase_message(data: dict) -> None:
     msg_type = data.get("type")
 
     if msg_type == "error":
-        _ws_log_server_error(data)
+        chunk_id = getattr(_ws_thread_chunk, "id", None)
+        _ws_log_server_error(data, chunk_id=chunk_id)
         _ws_maybe_log_error_summary()
         return
 
@@ -2802,7 +2819,9 @@ def ensure_coinbase_websocket(pairs: list, exchange: str) -> None:
 
     st.session_state["ws_pairs_key"] = pairs_key
 
-    if snap.get("limit_hit"):
+    chunk_limits = snap.get("chunk_limits") or set()
+    conn_count = int(snap.get("connection_count", 0))
+    if snap.get("limit_hit") or (conn_count > 0 and len(chunk_limits) >= conn_count):
         return
 
     # Fast path — never kill a worker that already has prices or is still warming up.
@@ -2853,10 +2872,14 @@ def ensure_coinbase_websocket(pairs: list, exchange: str) -> None:
             _WS_SHARED["connected"] = False
             _WS_SHARED["error"] = None
             _WS_SHARED["limit_hit"] = False
+            _WS_SHARED["chunk_limits"] = set()
             _WS_SHARED["subscribed"] = len(pairs)
             _WS_SHARED["confirmed_subs"] = 0
             _WS_SHARED["started_at"] = time.time()
-            _WS_SHARED["connection_count"] = 1
+
+        pair_chunks = _ws_split_pair_chunks(pairs, WS_PAIRS_PER_CONNECTION)
+        with _WS_LOCK:
+            _WS_SHARED["connection_count"] = len(pair_chunks)
             _WS_SHARED["chunk_status"] = {}
 
         runtime = _ws_runtime()
@@ -2864,15 +2887,20 @@ def ensure_coinbase_websocket(pairs: list, exchange: str) -> None:
         runtime["connected"] = False
         runtime["error"] = None
         runtime["subscribed"] = len(pairs)
-        runtime["connection_count"] = 1
+        runtime["connection_count"] = len(pair_chunks)
         runtime["chunk_status"] = {}
 
         def ws_worker(chunk_id: int, product_ids: list):
+            _ws_thread_chunk.id = chunk_id
             time.sleep(chunk_id * WS_STAGGER_SEC)
             with _WS_LOCK:
                 _WS_SHARED["chunk_status"][chunk_id] = "connecting"
 
             while not _WS_SHARED.get("stop"):
+                with _WS_LOCK:
+                    if chunk_id in _WS_SHARED.get("chunk_limits", set()):
+                        print(f"[WS #{chunk_id}] Subscription limit — pausing this connection")
+                        return
                 if _WS_SHARED.get("limit_hit"):
                     print("[WS] Subscription limit hit — pausing reconnects")
                     return
@@ -2971,23 +2999,25 @@ def ensure_coinbase_websocket(pairs: list, exchange: str) -> None:
                     time.sleep(WS_RETRY_DELAY_SEC)
 
         ws_threads = {}
-        ws_thread = threading.Thread(
-            target=ws_worker,
-            args=(0, pairs),
-            daemon=True,
-            name="coinbase-ws-0",
-        )
-        ws_threads[0] = ws_thread
-        with _WS_THREADS_LOCK:
-            _WS_WORKERS[0] = ws_thread
-        ws_thread.start()
+        for chunk_id, chunk_pairs in enumerate(pair_chunks):
+            ws_thread = threading.Thread(
+                target=ws_worker,
+                args=(chunk_id, chunk_pairs),
+                daemon=True,
+                name=f"coinbase-ws-{chunk_id}",
+            )
+            ws_threads[chunk_id] = ws_thread
+            with _WS_THREADS_LOCK:
+                _WS_WORKERS[chunk_id] = ws_thread
+            ws_thread.start()
 
         st.session_state["ws_threads"] = ws_threads
-        st.session_state["ws_thread"] = ws_thread
+        st.session_state["ws_thread"] = ws_threads.get(0)
         st.session_state["ws_alive"] = True
         print(
-            f"[WS] Started 1 connection for {len(pairs)} pairs "
-            f"(channel={CONFIG.COINBASE_WS_CHANNELS[0]}) → {CONFIG.COINBASE_WS}"
+            f"[WS] Started {len(pair_chunks)} connection(s) for {len(pairs)} pairs "
+            f"({WS_PAIRS_PER_CONNECTION}/conn, channel={CONFIG.COINBASE_WS_CHANNELS[0]}) "
+            f"→ {CONFIG.COINBASE_WS}"
         )
 
 
@@ -3024,13 +3054,15 @@ def get_websocket_status_label() -> Tuple[str, str]:
     warmup_sec = int(time.time() - started_at) if started_at else 0
 
     if price_count > 0 and last_msg > 0 and age is not None and age < WS_MSG_STALE_SEC:
+        conn_note = f"{conn_count} conn | " if conn_count > 1 else ""
         return (
             "🟢",
-            f"Live ticker ({subscribed} pairs) | "
+            f"{conn_note}Live ticker ({subscribed} pairs) | "
             f"{price_count} in cache | Last msg {int(age)}s ago",
         )
 
-    if snap.get("limit_hit"):
+    chunk_limits = snap.get("chunk_limits") or set()
+    if snap.get("limit_hit") or (conn_count > 0 and len(chunk_limits) >= conn_count):
         return (
             "🟡",
             f"Subscription limit — close extra tabs, wait 1 min, refresh | "
