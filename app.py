@@ -1435,23 +1435,93 @@ def format_alert_stage(pair: str, alert_type: str, rel_vol: float) -> Optional[s
     return alert_type
 
 
-def dispatch_scan_alerts(alerts_to_send: List[dict], scan_id: float) -> None:
+def get_email_config_status() -> dict:
+    """Report whether SMTP + recipient are configured for outbound alerts."""
+    missing = []
+    secrets_path = APP_DIR / ".streamlit" / "secrets.toml"
+    if not secrets_path.exists():
+        missing.append(".streamlit/secrets.toml (create this file)")
+
+    try:
+        email_sec = st.secrets.get("email", {})
+    except Exception:
+        email_sec = {}
+        if ".streamlit/secrets.toml (create this file)" not in missing:
+            missing.append("readable st.secrets email section")
+
+    if not email_sec.get("sender_email"):
+        missing.append("sender_email in secrets")
+    if not email_sec.get("sender_password"):
+        missing.append("sender_password (Gmail app password) in secrets")
+
+    recipient = (st.session_state.get("email_to") or "").strip()
+    if not recipient:
+        missing.append("Email recipient in Notifications")
+
+    return {"ready": len(missing) == 0, "missing": missing, "recipient": recipient}
+
+
+def send_test_email() -> Tuple[bool, str]:
+    """Send a single test message to verify SMTP + recipient."""
+    status = get_email_config_status()
+    if not status["ready"]:
+        return False, "Not configured: " + "; ".join(status["missing"])
+
+    sample = [{
+        "pair": "TEST-USD",
+        "stage": "test_email",
+        "price": 1.0,
+        "pct": 0.0,
+        "timeframe": st.session_state.get("sort_tf", "1h"),
+        "exchange": get_effective_exchange(),
+        "signal": "Test",
+    }]
+    ok, err = send_email_alert(
+        sample,
+        subject_override="[TEST] hioncrypto alert check",
+    )
+    if ok:
+        return True, f"Test email sent to {status['recipient']}"
+    return False, err or "Send failed"
+
+
+def dispatch_scan_alerts(alerts_to_send: List[dict], scan_id: float) -> dict:
     """One email + one webhook per scan cycle (no duplicate sends on fragment reruns)."""
+    result = {
+        "attempted": len(alerts_to_send),
+        "email_ok": False,
+        "email_msg": "",
+        "webhook_ok": False,
+        "webhook_msg": "",
+    }
     if not alerts_to_send:
-        return
+        return result
     if st.session_state.get("_alerts_sent_scan_id") == scan_id:
-        return
+        result["email_msg"] = "Already dispatched for this scan"
+        return result
 
-    sent = False
-    if st.session_state.get("email_to"):
-        ok, _ = send_email_alert(alerts_to_send)
-        sent = sent or ok
-    if st.session_state.get("webhook_url"):
-        ok, _ = send_webhook_alert(alerts_to_send)
-        sent = sent or ok
+    recipient = (st.session_state.get("email_to") or "").strip()
+    if recipient:
+        ok, err = send_email_alert(alerts_to_send)
+        result["email_ok"] = ok
+        result["email_msg"] = "Sent" if ok else (err or "Send failed")
+        if ok:
+            print(f"[ALERT] Email sent to {recipient} ({len(alerts_to_send)} pairs)")
+        else:
+            print(f"[ALERT] Email failed: {err}")
+    else:
+        result["email_msg"] = "No email recipient — add one under Notifications"
 
-    if sent or alerts_to_send:
+    webhook = (st.session_state.get("webhook_url") or "").strip()
+    if webhook:
+        ok, err = send_webhook_alert(alerts_to_send)
+        result["webhook_ok"] = ok
+        result["webhook_msg"] = "Sent" if ok else (err or "Webhook failed")
+
+    if result["email_ok"] or result["webhook_ok"]:
         st.session_state["_alerts_sent_scan_id"] = scan_id
+
+    return result
 
 
 def should_send_alert(
@@ -1493,18 +1563,24 @@ def should_send_alert(
 # =============================================================================
 # ALERT SENDING (batch only — one email/webhook per scan)
 # =============================================================================
-def send_email_alert(pairs_data: List[dict]) -> Tuple[bool, str]:
+def send_email_alert(
+    pairs_data: List[dict],
+    subject_override: Optional[str] = None,
+) -> Tuple[bool, str]:
     try:
         smtp_host = st.secrets.get("email", {}).get("smtp_host", "smtp.gmail.com")
         smtp_port = int(st.secrets.get("email", {}).get("smtp_port", 587))
         sender_email = st.secrets.get("email", {}).get("sender_email")
         sender_password = st.secrets.get("email", {}).get("sender_password")
-        recipient = st.session_state.get("email_to", "")
+        recipient = (st.session_state.get("email_to") or "").strip()
 
         if not all([sender_email, sender_password, recipient]):
-            return False, "Email not configured"
+            cfg = get_email_config_status()
+            return False, "Not configured: " + "; ".join(cfg["missing"])
 
-        subject = f"🚀 {len(pairs_data)} Alert{'s' if len(pairs_data) > 1 else ''}"
+        subject = subject_override or (
+            f"🚀 {len(pairs_data)} Alert{'s' if len(pairs_data) > 1 else ''}"
+        )
 
         body_parts = []
         for data in pairs_data:
@@ -2255,7 +2331,15 @@ with expander("Gates"):
             key="Y_yellow",
         )
 with expander("🔔 Notifications"):
-    st.caption("Email requires SMTP in st.secrets.toml")
+    st.caption(
+        "SMTP: create `.streamlit/secrets.toml` with `[email]` sender_email + sender_password"
+    )
+
+    email_cfg = get_email_config_status()
+    if email_cfg["ready"]:
+        st.caption(f"SMTP ready → {email_cfg['recipient']}")
+    else:
+        st.warning("Email setup incomplete: " + "; ".join(email_cfg["missing"]))
 
     clear_notification_save_msgs_if_edited()
 
@@ -2274,6 +2358,14 @@ with expander("🔔 Notifications"):
         help="Press Enter or click away to save (non-empty only)",
     )
     _render_notification_save_msg("webhook_save_msg", "webhook_save_msg_until")
+
+    # TEMP: remove after email alert testing
+    if st.button("Send test email", key="test_email_btn", type="secondary"):
+        ok, msg = send_test_email()
+        if ok:
+            st.success(msg)
+        else:
+            st.error(msg)
 
     _schedule_notification_msg_dismiss()
 
