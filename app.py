@@ -2392,7 +2392,8 @@ WS_RETRY_DELAY_SEC = 2.0
 WS_STAGGER_SEC = 1.0
 WS_START_GRACE_SEC = 300
 WS_ERROR_LOG_INTERVAL = 30.0
-FRAGMENT_POLL_SEC = 1  # legacy; scans run on full page rerun (no fragment timer)
+SCAN_SCHEDULER_MS = 2000
+SCAN_STUCK_SEC = 120
 
 # Streamlit session_state is main-thread only — workers use this shared store.
 _WS_LOCK = threading.Lock()
@@ -2891,51 +2892,6 @@ def render_scan_results(
     with col4:
         st.metric("Max % Change", f"{max_pct:.2f}%")
 
-    st.subheader(f"📋 All Pairs ({total_count})")
-
-    if interactive:
-        sort_option = st.selectbox(
-            "Sort all pairs by",
-            ["% Change", "Signal", "Pair"],
-            index=0,
-            key="all_pairs_sort",
-        )
-    else:
-        sort_option = "% Change"
-
-    display_df = df_results.copy()
-    if sort_option == "Signal":
-        display_df = display_df.sort_values(["_green", "_yellow"], ascending=[False, False])
-    elif sort_option == "Pair":
-        display_df = display_df.sort_values("Pair")
-    else:
-        display_df = display_df.sort_values(chg_col, ascending=ascending)
-
-    if not display_df.empty:
-        display_cols = [c for c in display_df.columns if not c.startswith("_")]
-        final_display = display_df[display_cols].reset_index(drop=True)
-
-        def style_all_rows(row):
-            if row.name < len(display_df):
-                original_idx = display_df.index[row.name]
-                if display_df.loc[original_idx, "_green"]:
-                    return [
-                        "background-color: #16a34a; color: white; font-weight: 600"
-                    ] * len(row)
-                elif display_df.loc[original_idx, "_yellow"]:
-                    return ["background-color: #eab308; color: black"] * len(row)
-            return [""] * len(row)
-
-        styled_all = final_display.style.apply(style_all_rows, axis=1)
-        st.dataframe(
-            styled_all,
-            use_container_width=True,
-            hide_index=True,
-            height=min(800, 28 * len(final_display) + 38),
-        )
-    else:
-        st.info("No pairs match filters.")
-
     st.subheader("🔥 Top 10 Opportunities")
 
     top_10_filtered = df_results.sort_values(chg_col, ascending=False).head(10).copy()
@@ -2968,11 +2924,43 @@ def render_scan_results(
                     return ["background-color: #eab308; color: black"] * len(row)
             return [""] * len(row)
 
-        display_cols = [c for c in top_10_filtered.columns if not c.startswith("_")]
-        styled_df = top_10_filtered[display_cols].style.apply(style_top10_rows, axis=1)
+        top10_cols = [c for c in top_10_filtered.columns if not c.startswith("_")]
+        styled_df = top_10_filtered[top10_cols].style.apply(style_top10_rows, axis=1)
         st.dataframe(styled_df, use_container_width=True, hide_index=True)
     else:
         st.info("No top opportunities yet.")
+
+    st.subheader(f"📋 All Pairs ({total_count})")
+
+    if interactive:
+        sort_option = st.selectbox(
+            "Sort all pairs by",
+            ["% Change", "Signal", "Pair"],
+            index=0,
+            key="all_pairs_sort",
+        )
+    else:
+        sort_option = "% Change"
+
+    display_df = df_results.copy()
+    if sort_option == "Signal":
+        display_df = display_df.sort_values(["_green", "_yellow"], ascending=[False, False])
+    elif sort_option == "Pair":
+        display_df = display_df.sort_values("Pair")
+    else:
+        display_df = display_df.sort_values(chg_col, ascending=ascending)
+
+    if not display_df.empty:
+        display_cols = [c for c in display_df.columns if not c.startswith("_")]
+        final_display = display_df[display_cols].reset_index(drop=True)
+        st.dataframe(
+            final_display,
+            use_container_width=True,
+            hide_index=True,
+            height=min(800, 28 * len(final_display) + 38),
+        )
+    else:
+        st.info("No pairs match filters.")
 
 
 def ws_status_panel() -> None:
@@ -2985,8 +2973,20 @@ def ws_status_panel() -> None:
     st.caption(f"WebSocket: {sym} | {lbl}")
 
 
+def scan_rows_missing() -> bool:
+    rows = st.session_state.get("scan_rows")
+    return rows is None or not rows
+
+
 def scan_results_panel() -> None:
     """Scan + results island — reads live session_state so fragment reruns stay current."""
+    started = float(st.session_state.get("scan_started_at", 0))
+    if st.session_state.get("scan_in_progress") and started:
+        if time.time() - started > SCAN_STUCK_SEC:
+            print("[SCAN] clearing stuck scan flag (timed out)")
+            st.session_state["scan_in_progress"] = False
+            st.session_state["immediate_rescan"] = True
+
     pairs = build_scan_pairs()
     effective_exchange = get_effective_exchange()
     gate_settings = build_gate_settings()
@@ -3023,7 +3023,7 @@ def scan_results_panel() -> None:
     cached_tf = st.session_state.get("scan_sort_tf", sort_tf)
     config_stale = cached_tf != sort_tf
     will_rescan = (
-        st.session_state.get("scan_rows") is None
+        scan_rows_missing()
         or config_stale
         or st.session_state.get("immediate_rescan", False)
         or time_since_update >= refresh_interval
@@ -3045,7 +3045,7 @@ def scan_results_panel() -> None:
     alert_mode = st.session_state.get("alert_mode", "Off")
 
     need_rescan = (
-        st.session_state.get("scan_rows") is None
+        scan_rows_missing()
         or config_stale
         or st.session_state.pop("immediate_rescan", False)
         or time_since_update >= refresh_interval
@@ -3067,12 +3067,15 @@ def scan_results_panel() -> None:
         use_vol = bool(st.session_state.get("use_vol_spike", False))
         try:
             total_pairs = len(pairs)
+            print(f"[SCAN] Starting {total_pairs} pairs on {sort_tf} ({effective_exchange})")
             for i, pair in enumerate(pairs):
                 done = i + 1
                 left = total_pairs - done
                 progress_ph.progress(done / total_pairs)
                 status_ph.caption(f"Processing {pair}... ({done}/{total_pairs})")
                 remaining_ph.caption(f"{left} pairs remaining")
+                if done % 25 == 0 or done == total_pairs:
+                    print(f"[SCAN] {done}/{total_pairs} {pair}")
 
                 df = fetch_pair_data(effective_exchange, pair, sort_tf)
                 if df is None or df.empty or len(df) < min_bars:
@@ -3228,11 +3231,16 @@ def scan_results_panel() -> None:
 
             st.session_state["last_update"] = int(time.time())
             st.session_state["last_scan_count"] = scanned_count
+            print(f"[SCAN] Complete — {scanned_count} rows on {sort_tf}")
         finally:
             st.session_state["scan_in_progress"] = False
     else:
         display_rows = cached_rows
         display_tf = cached_tf
+
+    if not display_rows:
+        display_rows = list(st.session_state.get("scan_rows") or [])
+        display_tf = st.session_state.get("scan_sort_tf", sort_tf)
 
     with results_ph.container():
         if scan_ran:
@@ -3258,7 +3266,6 @@ def scan_results_panel() -> None:
 
     if scan_ran:
         st.session_state["immediate_rescan"] = True
-        st.rerun()
 
 
 # =============================================================================
@@ -3296,6 +3303,9 @@ with col3:
     ws_status_panel()
 
 scan_results_panel()
+
+if st_autorefresh and not st.session_state.get("scan_in_progress"):
+    st_autorefresh(interval=SCAN_SCHEDULER_MS, key="scan_scheduler")
 
 st.markdown("---")
 st.caption("🚀 Enhanced Crypto Tracker with Progressive Alerts — by hioncrypto")
