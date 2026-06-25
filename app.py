@@ -2338,14 +2338,6 @@ with expander("Gates"):
             key="Y_yellow",
         )
 with expander("🔔 Notifications"):
-    st.caption("SMTP sender credentials come from Streamlit secrets (same place you already configured them).")
-
-    email_cfg = get_email_config_status()
-    if email_cfg["ready"]:
-        st.caption(f"SMTP ready → {email_cfg['recipient']}")
-    else:
-        st.warning("Email setup incomplete: " + "; ".join(email_cfg["missing"]))
-
     clear_notification_save_msgs_if_edited()
 
     st.text_input(
@@ -2364,7 +2356,7 @@ with expander("🔔 Notifications"):
     )
     _render_notification_save_msg("webhook_save_msg", "webhook_save_msg_until")
 
-    # TEMP: remove after email alert testing
+    # Test SMTP setup (secrets + recipient) — not a pair alert
     if st.button("Send test email", key="test_email_btn", type="secondary"):
         ok, msg = send_test_email()
         if ok:
@@ -3533,6 +3525,10 @@ def scan_results_panel() -> None:
 
                 if green_alert_candidates:
                     status_ph.caption("Checking alert candidates…")
+                    alerted_before = {
+                        k: dict(v)
+                        for k, v in st.session_state["alerted_pairs"].items()
+                    }
                     for cand in green_alert_candidates:
                         pair = cand["pair"]
                         if not pair_passes_alert_strategy(
@@ -3569,8 +3565,17 @@ def scan_results_panel() -> None:
                         alert for alert in alerts_to_send if alert["pair"] in top_10_pairs
                     ]
 
-                save_alerted_pairs(st.session_state["alerted_pairs"])
-                dispatch_scan_alerts(alerts_to_send, scan_id)
+                dispatch_result = dispatch_scan_alerts(alerts_to_send, scan_id)
+                if dispatch_result.get("email_ok"):
+                    save_alerted_pairs(st.session_state["alerted_pairs"])
+                else:
+                    st.session_state["alerted_pairs"] = alerted_before
+                st.session_state["last_alert_dispatch"] = {
+                    **dispatch_result,
+                    "pairs": [a["pair"] for a in alerts_to_send],
+                    "green_candidates": len(green_alert_candidates),
+                    "at": int(time.time()),
+                }
 
                 scan_ran = True
                 scanned_count = len(rows)
