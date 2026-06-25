@@ -40,82 +40,6 @@ st.markdown(
         pointer-events: none !important;
     }
 
-    /* Native Streamlit toggles — hidden; custom buttons trigger them via JS */
-    [data-testid="collapsedControl"] {
-        display: none !important;
-        visibility: hidden !important;
-        pointer-events: none !important;
-    }
-
-    section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"],
-    section[data-testid="stSidebar"] [data-testid="stSidebarHeader"] {
-        display: none !important;
-        visibility: hidden !important;
-        height: 0 !important;
-        min-height: 0 !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        overflow: hidden !important;
-    }
-
-    /* Custom collapse button — fixed inside sidebar edge (not clipped by overflow) */
-    #hion-collapse-sidebar-btn {
-        position: fixed !important;
-        top: 12px !important;
-        z-index: 999999 !important;
-        display: none !important;
-        align-items: center !important;
-        justify-content: center !important;
-        width: 36px !important;
-        min-width: 36px !important;
-        height: 36px !important;
-        min-height: 36px !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        background: #3b4252 !important;
-        border: 1px solid #9ca3af !important;
-        border-radius: 8px !important;
-        color: #f9fafb !important;
-        font-size: 20px !important;
-        line-height: 1 !important;
-        cursor: pointer !important;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45) !important;
-        pointer-events: auto !important;
-    }
-
-    #hion-collapse-sidebar-btn:hover {
-        background: #4b5563 !important;
-    }
-
-    /* Custom expand button when sidebar is collapsed */
-    #hion-expand-sidebar-btn {
-        position: fixed !important;
-        top: 12px !important;
-        left: 12px !important;
-        z-index: 999999 !important;
-        display: none !important;
-        align-items: center !important;
-        justify-content: center !important;
-        width: 36px !important;
-        min-width: 36px !important;
-        height: 36px !important;
-        min-height: 36px !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        background: #3b4252 !important;
-        border: 1px solid #9ca3af !important;
-        border-radius: 8px !important;
-        color: #f9fafb !important;
-        font-size: 20px !important;
-        line-height: 1 !important;
-        cursor: pointer !important;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45) !important;
-    }
-
-    #hion-expand-sidebar-btn:hover {
-        background: #4b5563 !important;
-    }
-
     /* Global mobile-friendly tweaks */
     @media (max-width: 768px) {
         .stDataFrame { font-size: 11px; }
@@ -126,99 +50,6 @@ st.markdown(
     </style>
     """,
     unsafe_allow_html=True,
-)
-
-components.html(
-    """
-    <script>
-    (function () {
-        const doc = window.parent.document;
-
-        function clickNativeCollapse() {
-            const wrap = doc.querySelector("[data-testid='stSidebarCollapseButton']");
-            const btn = wrap && wrap.querySelector("button");
-            if (btn) {
-                btn.click();
-                return true;
-            }
-            return false;
-        }
-
-        function clickNativeExpand() {
-            const ctrl = doc.querySelector("[data-testid='collapsedControl']");
-            const btn = ctrl && ctrl.querySelector("button");
-            if (btn) {
-                btn.click();
-                return true;
-            }
-            return false;
-        }
-
-        function isSidebarOpen() {
-            const sidebar = doc.querySelector("section[data-testid='stSidebar']");
-            if (!sidebar) return false;
-            return sidebar.getBoundingClientRect().width > 80;
-        }
-
-        function setupSidebarToggles() {
-            const sidebar = doc.querySelector("section[data-testid='stSidebar']");
-
-            const oldBar = doc.getElementById("hion-sidebar-collapse-bar");
-            if (oldBar) {
-                oldBar.remove();
-            }
-
-            let expandBtn = doc.getElementById("hion-expand-sidebar-btn");
-            if (!expandBtn) {
-                expandBtn = doc.createElement("button");
-                expandBtn.id = "hion-expand-sidebar-btn";
-                expandBtn.type = "button";
-                expandBtn.title = "Expand sidebar";
-                expandBtn.setAttribute("aria-label", "Expand sidebar");
-                expandBtn.innerHTML = "&#x203A;";
-                expandBtn.addEventListener("click", function () {
-                    clickNativeExpand();
-                });
-                doc.body.appendChild(expandBtn);
-            }
-
-            let collapseBtn = doc.getElementById("hion-collapse-sidebar-btn");
-            if (!collapseBtn) {
-                collapseBtn = doc.createElement("button");
-                collapseBtn.id = "hion-collapse-sidebar-btn";
-                collapseBtn.type = "button";
-                collapseBtn.title = "Collapse sidebar";
-                collapseBtn.setAttribute("aria-label", "Collapse sidebar");
-                collapseBtn.innerHTML = "&#x2039;";
-                collapseBtn.addEventListener("click", function () {
-                    clickNativeCollapse();
-                });
-                doc.body.appendChild(collapseBtn);
-            }
-
-            const open = isSidebarOpen();
-            if (sidebar && open) {
-                const rect = sidebar.getBoundingClientRect();
-                const inset = 12;
-                const btnSize = 36;
-                collapseBtn.style.display = "flex";
-                collapseBtn.style.top = inset + "px";
-                collapseBtn.style.left = Math.max(inset, rect.right - btnSize - inset) + "px";
-            } else {
-                collapseBtn.style.display = "none";
-            }
-
-            expandBtn.style.display = open ? "none" : "flex";
-        }
-
-        const observer = new MutationObserver(setupSidebarToggles);
-        observer.observe(doc.body, { childList: true, subtree: true });
-        setupSidebarToggles();
-        setInterval(setupSidebarToggles, 800);
-    })();
-    </script>
-    """,
-    height=0,
 )
 
 # ============================================================================
@@ -330,8 +161,22 @@ st.markdown(
         background: #262730 !important;
     }
 
-    section[data-testid="stSidebar"] * {
+    section[data-testid="stSidebar"] *:not([data-testid="stExpanderToggleIcon"]):not([data-testid="stExpander"] svg) {
         max-width: 100% !important;
+    }
+
+    section[data-testid="stSidebar"] [data-testid="stExpander"] summary {
+        display: flex !important;
+        align-items: center !important;
+    }
+
+    section[data-testid="stSidebar"] [data-testid="stExpanderToggleIcon"],
+    section[data-testid="stSidebar"] [data-testid="stExpander"] svg {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        max-width: none !important;
+        flex-shrink: 0 !important;
     }
 
     section[data-testid="stSidebar"] .stButton,
@@ -346,10 +191,8 @@ st.markdown(
         width: 100% !important;
     }
 
-    /* Don't stretch custom sidebar toggle buttons */
     section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"],
-    #hion-collapse-sidebar-btn,
-    #hion-expand-sidebar-btn {
+    [data-testid="collapsedControl"] {
         width: auto !important;
         max-width: none !important;
     }
@@ -2440,6 +2283,8 @@ WS_NO_DATA_RESTART_SEC = 60
 WS_SUBSCRIBE_BATCH_DELAY = 0.12
 WS_ERROR_LOG_INTERVAL = 30.0
 SCAN_SCHEDULER_MS = 2000
+SCAN_FRAGMENT_POLL_SEC = SCAN_SCHEDULER_MS / 1000
+SCAN_PAIRS_PER_TICK = 30
 SCAN_STUCK_SEC = 120
 
 # Streamlit session_state is main-thread only — workers use this shared store.
@@ -2734,6 +2579,7 @@ def clear_stale_scan_lock() -> bool:
         return False
     print("[SCAN] clearing stale scan_in_progress flag")
     st.session_state["scan_in_progress"] = False
+    _clear_scan_batch_state()
     return True
 
 
@@ -3207,14 +3053,148 @@ def scan_rows_missing() -> bool:
     return rows is None or not rows
 
 
+def _clear_scan_batch_state() -> None:
+    for key in (
+        "scan_batch_pairs",
+        "scan_batch_idx",
+        "scan_batch_rows",
+        "scan_batch_green_alerts",
+    ):
+        st.session_state.pop(key, None)
+
+
+def _is_scan_batch_active() -> bool:
+    pairs = st.session_state.get("scan_batch_pairs")
+    if not pairs:
+        return False
+    idx = int(st.session_state.get("scan_batch_idx", 0))
+    return idx < len(pairs)
+
+
+def _begin_new_scan_state(pairs: list) -> None:
+    st.session_state["scan_in_progress"] = True
+    st.session_state["scan_started_at"] = time.time()
+    st.session_state["_current_scan_id"] = time.time()
+    get_cached_data.clear()
+    clear_session_candle_cache()
+    st.session_state["_force_rest_scan"] = True
+    st.session_state["scan_live_stats"] = {
+        "api": 0,
+        "session_hits": 0,
+        "started": time.time(),
+    }
+    st.session_state["scan_batch_pairs"] = list(pairs)
+    st.session_state["scan_batch_idx"] = 0
+    st.session_state["scan_batch_rows"] = []
+    st.session_state["scan_batch_green_alerts"] = []
+
+
+def _process_scan_pair(
+    pair: str,
+    effective_exchange: str,
+    sort_tf: str,
+    min_bars: int,
+    gate_settings: dict,
+    mode: str,
+    k_required: int,
+    y_required: int,
+    hard_filter: bool,
+    alerted_pairs: dict,
+) -> Tuple[Optional[dict], Optional[dict]]:
+    """Return (table row, green alert candidate). Row omitted when hard-filter skips."""
+    df = fetch_pair_data(effective_exchange, pair, sort_tf)
+    if df is None or df.empty or len(df) < min_bars:
+        ws_price = get_ws_price(pair)
+        price_str = f"${float(ws_price):.6f}" if ws_price else "—"
+        return {
+            "Pair": pair,
+            "Price": price_str,
+            f"% Change ({sort_tf})": 0.0,
+            "Signal": "",
+            "Gates": "— (no candle data)",
+            "_passed": 0,
+            "_enabled": 0,
+            "_green": False,
+            "_yellow": False,
+            "_ws_active": ws_price is not None,
+        }, None
+
+    if gate_settings.get("use_vol_spike", False):
+        vol_spike_ratio = volume_spike(df, gate_settings.get("vol_window", 20))
+    else:
+        vol_spike_ratio = 0.0
+
+    meta, passed, chips, enabled = evaluate_gates(df, gate_settings)
+    delta_pct = meta.get("delta_pct", 0.0)
+    rel_vol = vol_spike_ratio
+
+    is_green = passed >= enabled and enabled > 0
+    is_yellow = (0 < passed < enabled) and (passed >= enabled - 1) if enabled > 0 else False
+
+    if mode == "ALL":
+        is_green = enabled > 0 and passed == enabled
+    elif mode == "ANY":
+        is_green = passed >= 1
+    elif mode == "BALANCED":
+        is_green = (passed >= (enabled // 2 + 1)) if enabled > 0 else False
+    elif mode == "Custom (K/Y)":
+        is_green = passed >= k_required
+        is_yellow = (passed >= y_required) and (passed < k_required)
+    else:
+        is_green = False
+
+    ws_price = get_ws_price(pair)
+    last_price = float(ws_price) if ws_price else float(df["close"].iloc[-1])
+    pct_change = meta["delta_pct"]
+
+    green_candidate = None
+    if is_green:
+        green_candidate = {
+            "pair": pair,
+            "delta_pct": delta_pct,
+            "rel_vol": rel_vol,
+            "last_price": last_price,
+            "pct_change": pct_change,
+        }
+
+    if not is_green and pair in alerted_pairs:
+        alerted_pairs.pop(pair, None)
+
+    if hard_filter:
+        if mode in {"ALL", "ANY", "BALANCED"} and not is_green:
+            return None, green_candidate
+        if mode == "Custom (K/Y)" and not (is_green or is_yellow):
+            return None, green_candidate
+
+    signal = ""
+    if is_green:
+        signal = "Strong Buy"
+    elif is_yellow:
+        signal = "Watch"
+
+    row = {
+        "Pair": pair,
+        "Price": f"${last_price:.6f}",
+        f"% Change ({sort_tf})": pct_change,
+        "Signal": signal,
+        "Gates": chips,
+        "_passed": passed,
+        "_enabled": enabled,
+        "_green": is_green,
+        "_yellow": is_yellow,
+        "_ws_active": ws_price is not None,
+    }
+    return row, green_candidate
+
+
 def maybe_queue_interval_rescan(refresh_interval: int) -> None:
     """Queue rescan on each fragment tick when the refresh interval has elapsed."""
+    if st.session_state.get("scan_in_progress") and _is_scan_batch_active():
+        return
     if st.session_state.get("scan_in_progress"):
         return
     last = int(st.session_state.get("last_update", 0))
-    if last <= 0:
-        return
-    age = int(time.time()) - last
+    age = int(time.time()) - last if last > 0 else refresh_interval
     if age >= refresh_interval:
         print(f"[SCAN] interval elapsed ({age}s >= {refresh_interval}s) — queueing rescan")
         trigger_immediate_rescan(clear_fetch_cache=False)
@@ -3228,6 +3208,7 @@ def scan_results_panel() -> None:
             print("[SCAN] clearing stuck scan flag (timed out)")
             st.session_state["scan_in_progress"] = False
             st.session_state["immediate_rescan"] = True
+            _clear_scan_batch_state()
             end_scan()
 
     clear_stale_scan_lock()
@@ -3273,9 +3254,10 @@ def scan_results_panel() -> None:
         or config_stale
         or st.session_state.get("immediate_rescan", False)
         or time_since_update >= refresh_interval
+        or _is_scan_batch_active()
     )
     # Clear orphan scan flag before WS ensure so WebSocket still starts when recovering.
-    if will_rescan and scan_busy:
+    if will_rescan and scan_busy and not _is_scan_batch_active():
         st.session_state["scan_in_progress"] = False
         scan_busy = False
 
@@ -3290,11 +3272,19 @@ def scan_results_panel() -> None:
     y_required = st.session_state.get("Y_yellow", 2)
     alert_mode = st.session_state.get("alert_mode", "Off")
 
+    continuing_scan = _is_scan_batch_active()
+    if continuing_scan and (config_stale or st.session_state.get("scan_sort_tf") != sort_tf):
+        _clear_scan_batch_state()
+        st.session_state["scan_in_progress"] = False
+        trigger_immediate_rescan(clear_fetch_cache=True)
+        continuing_scan = False
+
     need_rescan = (
         scan_rows_missing()
         or config_stale
         or st.session_state.pop("immediate_rescan", False)
         or time_since_update >= refresh_interval
+        or continuing_scan
     )
 
     alerts_to_send = []
@@ -3302,36 +3292,42 @@ def scan_results_panel() -> None:
     cached_rows = list(st.session_state.get("scan_rows") or [])
     scan_ran = False
     scan_warning = None
+    scan_complete = False
 
     if need_rescan:
         print(
             f"[SCAN] rescan triggered "
             f"({time_since_update}s since last, interval {refresh_interval}s)"
         )
-        if not try_begin_scan():
+        if continuing_scan:
+            pairs = list(st.session_state["scan_batch_pairs"])
+            rows = list(st.session_state.get("scan_batch_rows", []))
+            green_alert_candidates = list(st.session_state.get("scan_batch_green_alerts", []))
+            scan_id = st.session_state.get("_current_scan_id", time.time())
+            start_idx = int(st.session_state.get("scan_batch_idx", 0))
+        elif not try_begin_scan():
             display_rows = cached_rows
             display_tf = cached_tf
             scan_warning = "Scan already in progress in this tab."
+            need_rescan = False
         else:
-            st.session_state["scan_in_progress"] = True
-            st.session_state["scan_started_at"] = time.time()
-            scan_id = time.time()
-            st.session_state["_current_scan_id"] = scan_id
-            get_cached_data.clear()
-            clear_session_candle_cache()
-            st.session_state["_force_rest_scan"] = True
-            st.session_state["scan_live_stats"] = {
-                "api": 0,
-                "session_hits": 0,
-                "started": time.time(),
-            }
+            _begin_new_scan_state(pairs)
             rows = []
             green_alert_candidates = []
+            scan_id = st.session_state["_current_scan_id"]
+            start_idx = 0
+
+        if need_rescan:
             use_vol = bool(st.session_state.get("use_vol_spike", False))
+            total_pairs = len(pairs)
+            end_idx = min(start_idx + SCAN_PAIRS_PER_TICK, total_pairs)
             try:
-                total_pairs = len(pairs)
-                print(f"[SCAN] Starting {total_pairs} pairs on {sort_tf} ({effective_exchange})")
-                for i, pair in enumerate(pairs):
+                if start_idx == 0:
+                    print(
+                        f"[SCAN] Starting {total_pairs} pairs on {sort_tf} ({effective_exchange})"
+                    )
+                for i in range(start_idx, end_idx):
+                    pair = pairs[i]
                     done = i + 1
                     left = total_pairs - done
                     progress_ph.progress(done / total_pairs)
@@ -3340,178 +3336,124 @@ def scan_results_panel() -> None:
                     if done % 25 == 0 or done == total_pairs:
                         print(f"[SCAN] {done}/{total_pairs} {pair}")
 
-                    df = fetch_pair_data(effective_exchange, pair, sort_tf)
-                    if df is None or df.empty or len(df) < min_bars:
-                        ws_price = get_ws_price(pair)
-                        price_str = f"${float(ws_price):.6f}" if ws_price else "—"
-                        rows.append({
-                            "Pair": pair,
-                            "Price": price_str,
-                            f"% Change ({sort_tf})": 0.0,
-                            "Signal": "",
-                            "Gates": "— (no candle data)",
-                            "_passed": 0,
-                            "_enabled": 0,
-                            "_green": False,
-                            "_yellow": False,
-                            "_ws_active": ws_price is not None,
-                        })
-                        continue
-                    if gate_settings.get("use_vol_spike", False):
-                        vol_spike_ratio = volume_spike(df, gate_settings.get("vol_window", 20))
-                    else:
-                        vol_spike_ratio = 0.0
-
-                    meta, passed, chips, enabled = evaluate_gates(df, gate_settings)
-                    delta_pct = meta.get("delta_pct", 0.0)
-                    rel_vol = vol_spike_ratio
-
-                    is_green = passed >= enabled and enabled > 0
-                    is_yellow = (0 < passed < enabled) and (passed >= enabled - 1) if enabled > 0 else False
-
-                    if mode == "ALL":
-                        is_green = (enabled > 0 and passed == enabled)
-                    elif mode == "ANY":
-                        is_green = (passed >= 1)
-                    elif mode == "BALANCED":
-                        is_green = (passed >= (enabled // 2 + 1)) if enabled > 0 else False
-                    elif mode == "Custom (K/Y)":
-                        is_green = passed >= k_required
-                        is_yellow = (passed >= y_required) and (passed < k_required)
-                    else:
-                        is_green = False
-
-                    ws_price = get_ws_price(pair)
-                    last_price = float(ws_price) if ws_price else float(df["close"].iloc[-1])
-                    pct_change = meta["delta_pct"]
-
-                    if is_green:
-                        green_alert_candidates.append({
-                            "pair": pair,
-                            "delta_pct": delta_pct,
-                            "rel_vol": rel_vol,
-                            "last_price": last_price,
-                            "pct_change": pct_change,
-                        })
-
-                    if not is_green and pair in alerted_pairs:
-                        alerted_pairs.pop(pair, None)
-
-                    if hard_filter:
-                        if mode in {"ALL", "ANY", "BALANCED"} and not is_green:
-                            continue
-                        if mode == "Custom (K/Y)" and not (is_green or is_yellow):
-                            continue
-
-                    signal = ""
-                    if is_green:
-                        signal = "Strong Buy"
-                    elif is_yellow:
-                        signal = "Watch"
-
-                    rows.append({
-                        "Pair": pair,
-                        "Price": f"${last_price:.6f}",
-                        f"% Change ({sort_tf})": pct_change,
-                        "Signal": signal,
-                        "Gates": chips,
-                        "_passed": passed,
-                        "_enabled": enabled,
-                        "_green": is_green,
-                        "_yellow": is_yellow,
-                        "_ws_active": ws_price is not None,
-                    })
-
-                status_ph.caption("Scan finished.")
-                remaining_ph.caption("")
-
-                if alert_mode != "Off" and green_alert_candidates:
-                    status_ph.caption("Checking alert candidates…")
-                    for cand in green_alert_candidates:
-                        pair = cand["pair"]
-                        if not pair_passes_alert_strategy(
-                            effective_exchange, pair, alert_mode,
-                        ):
-                            continue
-                        include, alert_type = should_send_alert(
-                            pair,
-                            cand["delta_pct"],
-                            cand["rel_vol"],
-                            st.session_state["alerted_pairs"],
-                            use_vol_spike=use_vol,
-                        )
-                        if include:
-                            stage = format_alert_stage(pair, alert_type, cand["rel_vol"])
-                            if stage is not None:
-                                alerts_to_send.append({
-                                    "pair": pair,
-                                    "price": cand["last_price"],
-                                    "pct": cand["pct_change"],
-                                    "timeframe": sort_tf,
-                                    "exchange": effective_exchange,
-                                    "signal": "Strong Buy",
-                                    "stage": stage,
-                                })
-
-                if alerts_to_send and rows:
-                    chg_col = f"% Change ({sort_tf})"
-                    temp_df = pd.DataFrame(rows)
-                    temp_df = temp_df.sort_values(chg_col, ascending=False)
-                    top_10_pairs = temp_df[temp_df["_green"] == True].head(10)["Pair"].tolist()
-                    alerts_to_send = [
-                        alert for alert in alerts_to_send if alert["pair"] in top_10_pairs
-                    ]
-
-                save_alerted_pairs(st.session_state["alerted_pairs"])
-
-                dispatch_scan_alerts(alerts_to_send, scan_id)
-
-                scan_ran = True
-                scanned_count = len(rows)
-                if rows:
-                    st.session_state["scan_rows"] = rows
-                    st.session_state["scan_sort_tf"] = sort_tf
-                    display_rows = rows
-                    display_tf = sort_tf
-                elif cached_rows and cached_tf != sort_tf:
-                    st.session_state["scan_rows"] = cached_rows
-                    display_rows = cached_rows
-                    display_tf = cached_tf
-                    scan_warning = (
-                        f"Scan on {sort_tf} returned 0 rows "
-                        f"({'hard filter ON' if hard_filter else 'check REST/API'}). "
-                        f"Showing previous {cached_tf} results until the next scan succeeds."
+                    row, green_candidate = _process_scan_pair(
+                        pair,
+                        effective_exchange,
+                        sort_tf,
+                        min_bars,
+                        gate_settings,
+                        mode,
+                        k_required,
+                        y_required,
+                        hard_filter,
+                        alerted_pairs,
                     )
-                else:
-                    st.session_state["scan_rows"] = rows
-                    st.session_state["scan_sort_tf"] = sort_tf
-                    display_rows = rows
-                    display_tf = sort_tf
-                    if total_pairs > 0 and not rows:
-                        scan_warning = (
-                            f"No rows produced for {sort_tf} — try Refresh Now to clear stale cache."
-                        )
+                    if green_candidate:
+                        green_alert_candidates.append(green_candidate)
+                    if row is not None:
+                        rows.append(row)
 
-                st.session_state["last_update"] = int(time.time())
-                st.session_state["last_scan_count"] = scanned_count
-                stats = st.session_state.get("scan_live_stats") or {}
-                duration = int(time.time() - float(stats.get("started", time.time())))
-                api_calls = int(stats.get("api", 0))
-                session_hits = int(stats.get("session_hits", 0))
-                st.session_state["last_scan_stats"] = {
-                    "duration_sec": duration,
-                    "api_calls": api_calls,
-                    "session_hits": session_hits,
-                    "at": int(time.time()),
-                }
-                print(
-                    f"[SCAN] Complete — {scanned_count} rows on {sort_tf} "
-                    f"({duration}s, {api_calls} API calls, {session_hits} cache hits)"
-                )
+                st.session_state["scan_batch_idx"] = end_idx
+                st.session_state["scan_batch_rows"] = rows
+                st.session_state["scan_batch_green_alerts"] = green_alert_candidates
+
+                if end_idx < total_pairs:
+                    st.session_state["scan_in_progress"] = True
+                    display_rows = rows if rows else cached_rows
+                    display_tf = sort_tf
+                else:
+                    scan_complete = True
+                    status_ph.caption("Scan finished.")
+                    remaining_ph.caption("")
+
+                    if alert_mode != "Off" and green_alert_candidates:
+                        status_ph.caption("Checking alert candidates…")
+                        for cand in green_alert_candidates:
+                            pair = cand["pair"]
+                            if not pair_passes_alert_strategy(
+                                effective_exchange, pair, alert_mode,
+                            ):
+                                continue
+                            include, alert_type = should_send_alert(
+                                pair,
+                                cand["delta_pct"],
+                                cand["rel_vol"],
+                                st.session_state["alerted_pairs"],
+                                use_vol_spike=use_vol,
+                            )
+                            if include:
+                                stage = format_alert_stage(pair, alert_type, cand["rel_vol"])
+                                if stage is not None:
+                                    alerts_to_send.append({
+                                        "pair": pair,
+                                        "price": cand["last_price"],
+                                        "pct": cand["pct_change"],
+                                        "timeframe": sort_tf,
+                                        "exchange": effective_exchange,
+                                        "signal": "Strong Buy",
+                                        "stage": stage,
+                                    })
+
+                    if alerts_to_send and rows:
+                        chg_col = f"% Change ({sort_tf})"
+                        temp_df = pd.DataFrame(rows)
+                        temp_df = temp_df.sort_values(chg_col, ascending=False)
+                        top_10_pairs = temp_df[temp_df["_green"] == True].head(10)["Pair"].tolist()
+                        alerts_to_send = [
+                            alert for alert in alerts_to_send if alert["pair"] in top_10_pairs
+                        ]
+
+                    save_alerted_pairs(st.session_state["alerted_pairs"])
+                    dispatch_scan_alerts(alerts_to_send, scan_id)
+
+                    scan_ran = True
+                    scanned_count = len(rows)
+                    if rows:
+                        st.session_state["scan_rows"] = rows
+                        st.session_state["scan_sort_tf"] = sort_tf
+                        display_rows = rows
+                        display_tf = sort_tf
+                    elif cached_rows and cached_tf != sort_tf:
+                        st.session_state["scan_rows"] = cached_rows
+                        display_rows = cached_rows
+                        display_tf = cached_tf
+                        scan_warning = (
+                            f"Scan on {sort_tf} returned 0 rows "
+                            f"({'hard filter ON' if hard_filter else 'check REST/API'}). "
+                            f"Showing previous {cached_tf} results until the next scan succeeds."
+                        )
+                    else:
+                        st.session_state["scan_rows"] = rows
+                        st.session_state["scan_sort_tf"] = sort_tf
+                        display_rows = rows
+                        display_tf = sort_tf
+                        if total_pairs > 0 and not rows:
+                            scan_warning = (
+                                f"No rows produced for {sort_tf} — try Refresh Now to clear stale cache."
+                            )
+
+                    st.session_state["last_update"] = int(time.time())
+                    st.session_state["last_scan_count"] = scanned_count
+                    stats = st.session_state.get("scan_live_stats") or {}
+                    duration = int(time.time() - float(stats.get("started", time.time())))
+                    api_calls = int(stats.get("api", 0))
+                    session_hits = int(stats.get("session_hits", 0))
+                    st.session_state["last_scan_stats"] = {
+                        "duration_sec": duration,
+                        "api_calls": api_calls,
+                        "session_hits": session_hits,
+                        "at": int(time.time()),
+                    }
+                    print(
+                        f"[SCAN] Complete — {scanned_count} rows on {sort_tf} "
+                        f"({duration}s, {api_calls} API calls, {session_hits} cache hits)"
+                    )
+                    _clear_scan_batch_state()
             finally:
-                st.session_state["scan_in_progress"] = False
-                st.session_state["_force_rest_scan"] = False
-                end_scan()
+                if scan_complete:
+                    st.session_state["scan_in_progress"] = False
+                    st.session_state["_force_rest_scan"] = False
+                    end_scan()
     else:
         display_rows = cached_rows
         display_tf = cached_tf
@@ -3541,8 +3483,12 @@ def scan_results_panel() -> None:
                 f"Timeframe changed to {sort_tf} — rescan will run shortly. "
                 f"Showing previous {cached_tf} results ({len(cached_rows)} pairs)."
             )
-        elif scan_busy and scan_started:
-            st.caption(f"Scan in progress ({int(scan_elapsed)}s)…")
+        elif _is_scan_batch_active() or (scan_busy and scan_started):
+            batch_idx = int(st.session_state.get("scan_batch_idx", 0))
+            batch_total = len(st.session_state.get("scan_batch_pairs", []))
+            st.caption(
+                f"Scan in progress ({batch_idx}/{batch_total} pairs, {int(scan_elapsed)}s)…"
+            )
         else:
             age = int(time.time()) - st.session_state.get("last_update", 0)
             next_scan = max(0, refresh_interval - age)
@@ -3559,11 +3505,9 @@ def scan_results_panel() -> None:
         render_scan_results(display_rows, display_tf, hard_filter, interactive=True)
 
 
-@st_fragment
+@st_fragment(run_every=SCAN_FRAGMENT_POLL_SEC)
 def live_scan_results_panel() -> None:
     """Rerun only this block between scans — header/buttons stay put."""
-    if st_autorefresh and not st.session_state.get("scan_in_progress"):
-        st_autorefresh(interval=SCAN_SCHEDULER_MS, key="scan_fragment_scheduler")
     scan_results_panel()
     ph = st.session_state.get("ws_status_ph")
     if ph is not None:
@@ -3585,6 +3529,7 @@ with col1:
         stop_websocket_workers(clear_cache=True)
         st.session_state["last_update"] = 0
         st.session_state["scan_in_progress"] = False
+        _clear_scan_batch_state()
         st.session_state.pop("scan_rows", None)
         st.rerun()
 
