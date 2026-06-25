@@ -2439,6 +2439,7 @@ _WS_PROCESS_PAIRS_KEY: Optional[frozenset] = None
 _SCAN_LOCK = threading.Lock()
 _SCAN_SESSION_ID: Optional[str] = None
 _SCAN_GLOBAL_BUSY = False
+_SCAN_BUSY_SINCE = 0.0
 _WS_SHARED: Dict[str, Any] = {
     "stop": False,
     "prices": {},
@@ -2716,24 +2717,44 @@ def stop_websocket_workers(clear_cache: bool = False) -> None:
         runtime["chunk_status"] = {}
 
 
+def clear_stale_scan_lock() -> bool:
+    """Release orphaned global scan lock (dead tab, session reconnect, crash)."""
+    global _SCAN_SESSION_ID, _SCAN_GLOBAL_BUSY, _SCAN_BUSY_SINCE
+    with _SCAN_LOCK:
+        if not _SCAN_GLOBAL_BUSY:
+            return False
+        stale = (
+            not _SCAN_BUSY_SINCE
+            or (time.time() - _SCAN_BUSY_SINCE) > SCAN_STUCK_SEC
+        )
+        if not stale:
+            return False
+        print("[SCAN] clearing stale global scan lock")
+        _SCAN_GLOBAL_BUSY = False
+        _SCAN_SESSION_ID = None
+        _SCAN_BUSY_SINCE = 0.0
+        return True
+
+
 def try_begin_scan() -> bool:
-    global _SCAN_SESSION_ID, _SCAN_GLOBAL_BUSY
+    global _SCAN_SESSION_ID, _SCAN_GLOBAL_BUSY, _SCAN_BUSY_SINCE
+    clear_stale_scan_lock()
     sid = get_streamlit_session_id()
     with _SCAN_LOCK:
         if _SCAN_GLOBAL_BUSY:
             return False
         _SCAN_GLOBAL_BUSY = True
+        _SCAN_BUSY_SINCE = time.time()
         _SCAN_SESSION_ID = sid
         return True
 
 
 def end_scan() -> None:
-    global _SCAN_SESSION_ID, _SCAN_GLOBAL_BUSY
-    sid = get_streamlit_session_id()
+    global _SCAN_SESSION_ID, _SCAN_GLOBAL_BUSY, _SCAN_BUSY_SINCE
     with _SCAN_LOCK:
-        if _SCAN_SESSION_ID == sid or _SCAN_SESSION_ID is None:
-            _SCAN_GLOBAL_BUSY = False
-            _SCAN_SESSION_ID = None
+        _SCAN_GLOBAL_BUSY = False
+        _SCAN_SESSION_ID = None
+        _SCAN_BUSY_SINCE = 0.0
 
 
 def ensure_coinbase_websocket(pairs: list, exchange: str) -> None:
@@ -3197,7 +3218,9 @@ def scan_results_panel() -> None:
             print("[SCAN] clearing stuck scan flag (timed out)")
             st.session_state["scan_in_progress"] = False
             st.session_state["immediate_rescan"] = True
+            end_scan()
 
+    clear_stale_scan_lock()
     pairs = build_scan_pairs()
     effective_exchange = get_effective_exchange()
     gate_settings = build_gate_settings()
@@ -3521,8 +3544,17 @@ with col3:
 scan_results_panel()
 update_ws_status(ws_status_ph)
 
+# Recover from stuck scan flag so autorefresh keeps the scheduler alive.
+if st.session_state.get("scan_in_progress"):
+    started = float(st.session_state.get("scan_started_at", 0))
+    if not started or (time.time() - started) > SCAN_STUCK_SEC:
+        st.session_state["scan_in_progress"] = False
+        end_scan()
+
 if st_autorefresh and not st.session_state.get("scan_in_progress"):
     st_autorefresh(interval=SCAN_SCHEDULER_MS, key="scan_scheduler")
+elif not st_autorefresh:
+    st.caption("Install streamlit-autorefresh for automatic rescans.")
 
 st.markdown("---")
 st.caption("🚀 Enhanced Crypto Tracker with Progressive Alerts — by hioncrypto")
