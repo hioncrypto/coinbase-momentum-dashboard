@@ -605,7 +605,7 @@ def init_session_state():
     defaults = {
         "exchange": "Coinbase",
         "quote": "USD",
-        "pairs_to_discover": 400,
+        "pairs_to_discover": 300,
         "mode": "WebSocket + REST",
         "ws_chunk": 100,
         "sort_tf": "1h",
@@ -801,7 +801,7 @@ def build_scan_pairs() -> list:
     else:
         pairs = get_products(get_effective_exchange(), st.session_state.get("quote", "USD"))
 
-    cap = max(5, min(500, int(st.session_state.get("pairs_to_discover", 400))))
+    cap = max(5, min(500, int(st.session_state.get("pairs_to_discover", 300))))
     pairs = pairs[:cap]
 
     if st.session_state.get("mc_filter_enabled"):
@@ -833,7 +833,7 @@ def build_ws_pairs() -> list:
     else:
         pairs = get_products(get_effective_exchange(), st.session_state.get("quote", "USD"))
 
-    cap = max(5, min(500, int(st.session_state.get("pairs_to_discover", 400))))
+    cap = max(5, min(500, int(st.session_state.get("pairs_to_discover", 300))))
     return pairs[:cap]
 
 
@@ -1953,7 +1953,7 @@ with st.sidebar:
         min_value=5,
         max_value=500,
         step=5,
-        value=st.session_state.get("pairs_to_discover", 400),
+        value=st.session_state.get("pairs_to_discover", 300),
         key="ui_pairs_to_discover",
         help="Number of pairs to scan",
     )
