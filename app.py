@@ -161,8 +161,28 @@ st.markdown(
         background: #262730 !important;
     }
 
-    section[data-testid="stSidebar"] *:not([data-testid="stExpanderToggleIcon"]):not([data-testid="stExpander"] svg) {
+    /* Keep toggle / checkbox labels horizontal — don't crush column widgets */
+    section[data-testid="stSidebar"] .stCheckbox,
+    section[data-testid="stSidebar"] [data-testid="stCheckbox"] {
+        width: auto !important;
         max-width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    section[data-testid="stSidebar"] label[data-testid="stWidgetLabel"],
+    section[data-testid="stSidebar"] .stCheckbox label,
+    section[data-testid="stSidebar"] .stCheckbox label p,
+    section[data-testid="stSidebar"] [data-testid="stCheckbox"] label p {
+        max-width: none !important;
+        width: auto !important;
+        white-space: normal !important;
+        word-break: normal !important;
+        overflow-wrap: normal !important;
+        line-height: 1.35 !important;
+    }
+
+    section[data-testid="stSidebar"] [data-testid="column"] {
+        min-width: 0 !important;
     }
 
     section[data-testid="stSidebar"] [data-testid="stExpander"] summary {
@@ -189,6 +209,11 @@ st.markdown(
     section[data-testid="stSidebar"] .stRadio,
     section[data-testid="stSidebar"] .stCheckbox {
         width: 100% !important;
+    }
+
+    section[data-testid="stSidebar"] [data-testid="column"] .stCheckbox,
+    section[data-testid="stSidebar"] [data-testid="column"] [data-testid="stCheckbox"] {
+        width: auto !important;
     }
 
     section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"],
@@ -517,7 +542,7 @@ def init_session_state():
         "exchange": "Coinbase",
         "quote": "USD",
         "pairs_to_discover": 400,
-        "mode": "REST only",
+        "mode": "WebSocket + REST",
         "ws_chunk": 100,
         "sort_tf": "1h",
         "sort_desc": True,
@@ -1775,7 +1800,7 @@ with expander("Mode & Timeframes"):
     new_mode = st.radio(
         "Data Source",
         ["REST only", "WebSocket + REST"],
-        index=0 if st.session_state["mode"] == "REST only" else 1,
+        index=0 if st.session_state.get("mode") == "REST only" else 1,
         key="mode_widget",
         help="REST = API polling, WebSocket = real-time",
     )
@@ -2062,45 +2087,47 @@ with expander("Gates"):
                 save_to_url("min_roc", new_mro)
 
     st.markdown("**MACD Cross (early entry)**")
-    c7, c8, c9, c10 = st.columns(4)
-    with c7:
-        new_umc = st.toggle("Enable", key="use_macd_cross", help="MACD cross detection")
+    mc_row1, mc_row2 = st.columns(2)
+    with mc_row1:
+        new_umc = st.toggle(
+            "Enable MACD cross",
+            key="use_macd_cross",
+            help="MACD cross detection",
+        )
         if new_umc != load_from_url("use_macd_cross", False, bool):
             save_to_url("use_macd_cross", new_umc)
-    with c8:
-        if st.session_state.get("use_macd_cross"):
+    with mc_row2:
+        st.toggle(
+            "✚Vol. + MACD Cross",
+            key="macd_cross_sync",
+            help="Alert only when MACD Cross + Volume Spike align on 4h/Daily",
+        )
+    if st.session_state.get("use_macd_cross"):
+        mc_row3, mc_row4 = st.columns(2)
+        with mc_row3:
             st.slider(
-                "Cross within",
+                "Cross within (bars)",
                 1,
                 10,
                 value=int(st.session_state.get("macd_cross_bars", 5)),
                 step=1,
                 key="macd_cross_bars",
             )
-    with c9:
-        if st.session_state.get("use_macd_cross"):
             st.toggle("Bullish only", key="macd_cross_only_bull")
-    with c10:
-        if st.session_state.get("use_macd_cross"):
+        with mc_row4:
             st.toggle(
                 "Below zero",
                 key="macd_cross_below_zero",
                 help="Cross must be below zero line",
             )
-        st.toggle(
-            "✚Vol. + MACD Cross",
-            key="macd_cross_sync",
-            help="Alert only when MACD Cross + Volume Spike align on 4h/Daily",
+            st.slider(
+                "Histogram > 0 within",
+                0,
+                10,
+                value=int(st.session_state.get("macd_hist_confirm_bars", 3)),
+                step=1,
+                key="macd_hist_confirm_bars",
             )
-    if st.session_state.get("use_macd_cross"):
-        st.slider(
-            "Histogram > 0 within",
-            0,
-            10,
-            value=int(st.session_state.get("macd_hist_confirm_bars", 3)),
-            step=1,
-            key="macd_hist_confirm_bars",
-        )
 
     st.markdown("---")
 
@@ -3248,6 +3275,8 @@ def scan_results_panel() -> None:
     cached_rows = list(st.session_state.get("scan_rows") or [])
     scan_ran = False
     scan_warning = None
+    display_rows = cached_rows
+    display_tf = cached_tf
 
     if need_rescan:
         print(
@@ -3259,6 +3288,19 @@ def scan_results_panel() -> None:
             display_tf = cached_tf
             scan_warning = "Scan already in progress in this tab."
         else:
+            if cached_rows:
+                with results_ph.container():
+                    st.caption(
+                        f"Rescanning {len(pairs)} pairs on {sort_tf}… "
+                        f"keeping previous {len(cached_rows)} results until complete."
+                    )
+                    render_scan_results(
+                        cached_rows,
+                        cached_tf,
+                        hard_filter,
+                        interactive=True,
+                    )
+
             st.session_state["scan_in_progress"] = True
             st.session_state["scan_started_at"] = time.time()
             scan_id = time.time()
@@ -3388,6 +3430,9 @@ def scan_results_panel() -> None:
                     f"[SCAN] Complete — {scanned_count} rows on {sort_tf} "
                     f"({duration}s, {api_calls} API calls, {session_hits} cache hits)"
                 )
+                if not display_rows and cached_rows:
+                    display_rows = cached_rows
+                    display_tf = cached_tf
             finally:
                 st.session_state["scan_in_progress"] = False
                 st.session_state["_force_rest_scan"] = False
@@ -3422,7 +3467,10 @@ def scan_results_panel() -> None:
                 f"Showing previous {cached_tf} results ({len(cached_rows)} pairs)."
             )
         elif scan_busy and scan_started:
-            st.caption(f"Scan in progress ({int(scan_elapsed)}s)…")
+            st.caption(
+                f"Scan in progress ({int(scan_elapsed)}s)… "
+                f"Previous results below until the scan finishes."
+            )
         else:
             age = int(time.time()) - st.session_state.get("last_update", 0)
             next_scan = max(0, refresh_interval - age)
