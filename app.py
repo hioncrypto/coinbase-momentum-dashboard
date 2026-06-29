@@ -561,7 +561,6 @@ def on_email_saved():
     st.session_state.pop("email_save_msg_until", None)
     if not email:
         return
-    save_to_url("email_to", email)
     save_user_settings()
     _set_notification_save_msg(
         "email_save_msg",
@@ -578,7 +577,6 @@ def on_webhook_saved():
     st.session_state.pop("webhook_save_msg_until", None)
     if not webhook:
         return
-    save_to_url("webhook_url", webhook)
     save_user_settings()
     _set_notification_save_msg(
         "webhook_save_msg",
