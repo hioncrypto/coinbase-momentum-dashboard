@@ -125,8 +125,10 @@ class Config:
     COINBASE_WS_CHANNELS = ("ticker_batch",)
 
     TIMEFRAMES = {"5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "1d": 86400}
-    QUOTES = ["USD", "USDC", "USDT", "BTC", "ETH", "EUR"]
+    COINBASE_QUOTES = ["USD", "USDC", "USDT", "BTC", "ETH", "EUR"]
     BINANCE_QUOTES = ["USDT", "USD", "BTC", "ETH", "USDC"]
+    KRAKEN_QUOTES = ["USD", "EUR", "USDT", "BTC", "ETH"]
+    KUCOIN_QUOTES = ["USDT", "BTC", "ETH", "USDC", "USD"]
     EXCHANGES = [
         "Coinbase",
         "Binance",
@@ -711,11 +713,21 @@ def get_effective_exchange() -> str:
 def quotes_for_exchange(exchange: str) -> List[str]:
     if exchange == "Binance":
         return list(CONFIG.BINANCE_QUOTES)
-    return list(CONFIG.QUOTES)
+    if exchange == "Coinbase":
+        return list(CONFIG.COINBASE_QUOTES)
+    if "kraken" in exchange.lower():
+        return list(CONFIG.KRAKEN_QUOTES)
+    if "kucoin" in exchange.lower():
+        return list(CONFIG.KUCOIN_QUOTES)
+    return list(CONFIG.COINBASE_QUOTES)
 
 
 def default_quote_for_exchange(exchange: str) -> str:
     if exchange == "Binance":
+        return "USDT"
+    if "kraken" in exchange.lower():
+        return "USD"
+    if "kucoin" in exchange.lower():
         return "USDT"
     return "USD"
 
@@ -1941,14 +1953,8 @@ with st.sidebar:
         if new_exch != st.session_state.get("exchange"):
             st.session_state["exchange"] = new_exch
             save_to_url("exchange", new_exch)
-            if new_exch == "Binance":
-                st.session_state["quote"] = "USDT"
-                save_to_url("quote", "USDT")
-            elif "coming soon" not in new_exch.lower():
-                quote_opts = quotes_for_exchange(new_exch)
-                if st.session_state.get("quote") not in quote_opts:
-                    st.session_state["quote"] = default_quote_for_exchange(new_exch)
-                    save_to_url("quote", st.session_state["quote"])
+            st.session_state["quote"] = default_quote_for_exchange(new_exch)
+            save_to_url("quote", st.session_state["quote"])
             clear_binance_api_base()
             get_products.clear()
             get_cached_data.clear()
@@ -1958,21 +1964,15 @@ with st.sidebar:
         if "coming soon" in st.session_state.get("exchange", "").lower():
             st.warning(
                 f"{st.session_state['exchange']} is not connected yet — "
-                "scans use Coinbase data until Kraken/KuCoin APIs are added."
+                "scans use Coinbase data until that API is added."
             )
 
         if st.session_state.get("exchange") == "Binance":
             binance_base = get_binance_api_base()
             if "binance.us" in binance_base:
-                st.caption(
-                    "Binance US API. Default quote USDT — change below for USD, BTC, ETH, USDC. "
-                    "REST scans only (no Binance WebSocket)."
-                )
+                st.caption("Binance US API. REST scans only (no Binance WebSocket).")
             else:
-                st.caption(
-                    "Binance API. Default quote USDT — other quotes below. "
-                    "REST only (WebSocket is Coinbase)."
-                )
+                st.caption("Binance API. REST scans only (WebSocket is Coinbase).")
 
         quote_options = quotes_for_exchange(st.session_state.get("exchange", "Coinbase"))
         current_quote = st.session_state.get("quote", "USD")
@@ -1988,7 +1988,7 @@ with st.sidebar:
             quote_options,
             index=quote_options.index(current_quote),
             key="quote_widget",
-            help="Quote asset for pair list (e.g. USDT → BTC-USDT)",
+            help=f"Quotes available on {st.session_state.get('exchange', 'Coinbase')}",
         )
         if new_quote != st.session_state.get("quote"):
             st.session_state["quote"] = new_quote
