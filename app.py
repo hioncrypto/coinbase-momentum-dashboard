@@ -126,6 +126,7 @@ class Config:
 
     TIMEFRAMES = {"5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "1d": 86400}
     QUOTES = ["USD", "USDC", "USDT", "BTC", "ETH", "EUR"]
+    BINANCE_QUOTES = ["USDT", "USD", "BTC", "ETH", "USDC"]
     EXCHANGES = [
         "Coinbase",
         "Binance",
@@ -705,6 +706,18 @@ init_session_state()
 def get_effective_exchange() -> str:
     exchange = st.session_state.get("exchange", "Coinbase")
     return "Coinbase" if "coming soon" in exchange.lower() else exchange
+
+
+def quotes_for_exchange(exchange: str) -> List[str]:
+    if exchange == "Binance":
+        return list(CONFIG.BINANCE_QUOTES)
+    return list(CONFIG.QUOTES)
+
+
+def default_quote_for_exchange(exchange: str) -> str:
+    if exchange == "Binance":
+        return "USDT"
+    return "USD"
 
 
 def _probe_binance_api_base() -> Optional[str]:
@@ -1928,34 +1941,62 @@ with st.sidebar:
         if new_exch != st.session_state.get("exchange"):
             st.session_state["exchange"] = new_exch
             save_to_url("exchange", new_exch)
+            if new_exch == "Binance":
+                st.session_state["quote"] = "USDT"
+                save_to_url("quote", "USDT")
+            elif "coming soon" not in new_exch.lower():
+                quote_opts = quotes_for_exchange(new_exch)
+                if st.session_state.get("quote") not in quote_opts:
+                    st.session_state["quote"] = default_quote_for_exchange(new_exch)
+                    save_to_url("quote", st.session_state["quote"])
             clear_binance_api_base()
             get_products.clear()
             get_cached_data.clear()
             clear_session_candle_cache()
             trigger_immediate_rescan(clear_fetch_cache=True, force=True)
 
+        if "coming soon" in st.session_state.get("exchange", "").lower():
+            st.warning(
+                f"{st.session_state['exchange']} is not connected yet — "
+                "scans use Coinbase data until Kraken/KuCoin APIs are added."
+            )
+
         if st.session_state.get("exchange") == "Binance":
             binance_base = get_binance_api_base()
             if "binance.us" in binance_base:
                 st.caption(
-                    "Binance US API (Binance.com is blocked in this region). "
-                    "Use USDT quote for more pairs. Scans use REST — no Binance WebSocket."
+                    "Binance US API. Default quote USDT — change below for USD, BTC, ETH, USDC. "
+                    "REST scans only (no Binance WebSocket)."
                 )
             else:
-                st.caption("Binance scans use REST candles — WebSocket is Coinbase-only.")
+                st.caption(
+                    "Binance API. Default quote USDT — other quotes below. "
+                    "REST only (WebSocket is Coinbase)."
+                )
+
+        quote_options = quotes_for_exchange(st.session_state.get("exchange", "Coinbase"))
+        current_quote = st.session_state.get("quote", "USD")
+        if current_quote not in quote_options:
+            current_quote = default_quote_for_exchange(
+                st.session_state.get("exchange", "Coinbase")
+            )
+            st.session_state["quote"] = current_quote
+            save_to_url("quote", current_quote)
 
         new_quote = st.selectbox(
             "Quote Currency",
-            CONFIG.QUOTES,
-            index=CONFIG.QUOTES.index(st.session_state["quote"])
-            if st.session_state["quote"] in CONFIG.QUOTES
-            else 0,
+            quote_options,
+            index=quote_options.index(current_quote),
             key="quote_widget",
-            help="Base currency for trading pairs",
+            help="Quote asset for pair list (e.g. USDT → BTC-USDT)",
         )
         if new_quote != st.session_state.get("quote"):
             st.session_state["quote"] = new_quote
             save_to_url("quote", new_quote)
+            get_products.clear()
+            get_cached_data.clear()
+            clear_session_candle_cache()
+            trigger_immediate_rescan(clear_fetch_cache=True, force=True)
 
         new_use_watch = st.checkbox(
             "Use watchlist only",
@@ -3618,12 +3659,12 @@ def scan_results_panel() -> None:
                 status_ph.caption("Scan finished.")
                 remaining_ph.caption("")
 
+                alerted_before = {
+                    k: dict(v)
+                    for k, v in st.session_state["alerted_pairs"].items()
+                }
                 if green_alert_candidates:
                     status_ph.caption("Checking alert candidates…")
-                    alerted_before = {
-                        k: dict(v)
-                        for k, v in st.session_state["alerted_pairs"].items()
-                    }
                     for cand in green_alert_candidates:
                         pair = cand["pair"]
                         if not pair_passes_alert_strategy(
@@ -3663,7 +3704,7 @@ def scan_results_panel() -> None:
                 dispatch_result = dispatch_scan_alerts(alerts_to_send, scan_id)
                 if dispatch_result.get("email_ok"):
                     save_alerted_pairs(st.session_state["alerted_pairs"])
-                else:
+                elif alerts_to_send:
                     st.session_state["alerted_pairs"] = alerted_before
                 st.session_state["last_alert_dispatch"] = {
                     **dispatch_result,
