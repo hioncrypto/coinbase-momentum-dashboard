@@ -115,6 +115,8 @@ class Config:
     COINBASE_BASE = "https://api.exchange.coinbase.com"
     COINBASE_V2 = "https://api.coinbase.com/v2"
     BINANCE_BASE = "https://api.binance.com"
+    BINANCE_US_BASE = "https://api.binance.us"
+    BINANCE_API_BASES = (BINANCE_BASE, BINANCE_US_BASE)
     COINBASE_WS = "wss://ws-feed.exchange.coinbase.com"
     # Exchange feed (matches api.exchange.coinbase.com REST). Advanced Trade uses
     # wss://advanced-trade-ws.coinbase.com with a different message schema.
@@ -705,6 +707,41 @@ def get_effective_exchange() -> str:
     return "Coinbase" if "coming soon" in exchange.lower() else exchange
 
 
+def _probe_binance_api_base() -> Optional[str]:
+    """Pick a reachable Binance REST host (global .com vs US .us)."""
+    for base in CONFIG.BINANCE_API_BASES:
+        try:
+            response = requests.get(f"{base}/api/v3/ping", timeout=12)
+            if response.status_code == 200:
+                return base
+        except Exception:
+            continue
+    return CONFIG.BINANCE_US_BASE
+
+
+def get_binance_api_base(force_probe: bool = False) -> str:
+    if not force_probe:
+        cached = st.session_state.get("binance_api_base")
+        if cached:
+            return cached
+    try:
+        override = (st.secrets.get("binance", {}) or {}).get("api_base")
+        if override:
+            base = str(override).strip().rstrip("/")
+            if base:
+                st.session_state["binance_api_base"] = base
+                return base
+    except Exception:
+        pass
+    base = _probe_binance_api_base()
+    st.session_state["binance_api_base"] = base
+    return base
+
+
+def clear_binance_api_base() -> None:
+    st.session_state.pop("binance_api_base", None)
+
+
 def build_gate_settings() -> dict:
     return {
         "lookback_candles": int(st.session_state.get("lookback_candles", 3)),
@@ -1112,10 +1149,8 @@ def fetch_coinbase_data(pair: str, timeframe: str, limit: int) -> Optional[pd.Da
 
 
 def fetch_binance_data(pair: str, timeframe: str, limit: int) -> Optional[pd.DataFrame]:
-    url = f"{CONFIG.BINANCE_BASE}/api/v3/klines"
-
     try:
-        base, quote = pair.split("-")
+        base, quote = pair.split("-", 1)
         symbol = f"{base}{quote}"
     except ValueError:
         return None
@@ -1124,43 +1159,58 @@ def fetch_binance_data(pair: str, timeframe: str, limit: int) -> Optional[pd.Dat
     interval = interval_map.get(timeframe, "1h")
     params = {"symbol": symbol, "interval": interval, "limit": max(50, limit)}
 
-    try:
-        _rest_throttle()
-        response = requests.get(url, params=params, timeout=20)
+    bases = [get_binance_api_base()]
+    for alt in CONFIG.BINANCE_API_BASES:
+        if alt not in bases:
+            bases.append(alt)
 
-        if response.status_code != 200:
-            if response.status_code == 429:
-                _rest_backoff(2.0)
-            return None
+    for api_base in bases:
+        url = f"{api_base}/api/v3/klines"
+        try:
+            _rest_throttle()
+            response = requests.get(url, params=params, timeout=20)
 
-        raw = response.json()
-        if not raw or not isinstance(raw, list):
-            return None
+            if response.status_code == 451:
+                print(f"[BINANCE] {api_base} blocked in this region — trying alternate host")
+                continue
 
-        _record_scan_api_call()
-        rows = []
-        for kline in raw:
-            rows.append(
-                {
-                    "time": pd.to_datetime(kline[0], unit="ms", utc=True),
-                    "open": float(kline[1]),
-                    "high": float(kline[2]),
-                    "low": float(kline[3]),
-                    "close": float(kline[4]),
-                    "volume": float(kline[5]),
-                }
-            )
+            if response.status_code != 200:
+                if response.status_code == 429:
+                    _rest_backoff(2.0)
+                continue
 
-        df = pd.DataFrame(rows).sort_values("time").reset_index(drop=True)
-        df = df[["time", "open", "high", "low", "close", "volume"]]
+            raw = response.json()
+            if not raw or not isinstance(raw, list):
+                continue
 
-        if len(df) > limit:
-            df = df.iloc[-limit:].reset_index(drop=True)
+            _record_scan_api_call()
+            rows = []
+            for kline in raw:
+                rows.append(
+                    {
+                        "time": pd.to_datetime(kline[0], unit="ms", utc=True),
+                        "open": float(kline[1]),
+                        "high": float(kline[2]),
+                        "low": float(kline[3]),
+                        "close": float(kline[4]),
+                        "volume": float(kline[5]),
+                    }
+                )
 
-        return df if not df.empty else None
+            df = pd.DataFrame(rows).sort_values("time").reset_index(drop=True)
+            df = df[["time", "open", "high", "low", "close", "volume"]]
 
-    except Exception:
-        return None
+            if len(df) > limit:
+                df = df.iloc[-limit:].reset_index(drop=True)
+
+            if not df.empty:
+                st.session_state["binance_api_base"] = api_base
+                return df
+
+        except Exception:
+            continue
+
+    return None
 
 
 def fetch_data(
@@ -1181,7 +1231,7 @@ def fetch_data(
 
 
 # Bump when fetch logic changes (e.g. Coinbase 4h built from 1h candles).
-_FETCH_CACHE_REV = 5
+_FETCH_CACHE_REV = 6
 _SESSION_CANDLE_CACHE: Dict[tuple, tuple] = {}
 _SESSION_CANDLE_LOCK = threading.Lock()
 # =============================================================================
@@ -1322,32 +1372,40 @@ def get_coinbase_products(quote: str) -> List[str]:
 
 
 def get_binance_products(quote: str) -> List[str]:
-    url = f"{CONFIG.BINANCE_BASE}/api/v3/exchangeInfo"
     quote_upper = quote.upper()
+    bases = [get_binance_api_base()]
+    for alt in CONFIG.BINANCE_API_BASES:
+        if alt not in bases:
+            bases.append(alt)
 
-    try:
-        response = requests.get(url, timeout=25)
+    for api_base in bases:
+        url = f"{api_base}/api/v3/exchangeInfo"
+        try:
+            response = requests.get(url, timeout=25)
+            if response.status_code == 451:
+                print(f"[BINANCE] {api_base} product list blocked — trying alternate host")
+                continue
+            if response.status_code != 200:
+                continue
 
-        if response.status_code != 200:
-            return []
+            data = response.json()
+            symbols = data.get("symbols", []) if data else []
+            if not symbols:
+                continue
 
-        data = response.json()
-        if not data:
-            return []
+            products = []
+            for symbol in symbols:
+                if symbol.get("status") == "TRADING" and symbol.get("quoteAsset") == quote_upper:
+                    pair = f"{symbol['baseAsset']}-{quote_upper}"
+                    products.append(pair)
 
-        all_symbols = data.get("symbols", [])
-        if not all_symbols:
-            return []
+            if products:
+                st.session_state["binance_api_base"] = api_base
+                return sorted(products)
+        except Exception:
+            continue
 
-        products = []
-        for symbol in all_symbols:
-            if symbol.get("status") == "TRADING" and symbol.get("quoteAsset") == quote_upper:
-                pair = f"{symbol['baseAsset']}-{quote_upper}"
-                products.append(pair)
-
-        return sorted(products)
-    except Exception:
-        return []
+    return []
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -1870,6 +1928,21 @@ with st.sidebar:
         if new_exch != st.session_state.get("exchange"):
             st.session_state["exchange"] = new_exch
             save_to_url("exchange", new_exch)
+            clear_binance_api_base()
+            get_products.clear()
+            get_cached_data.clear()
+            clear_session_candle_cache()
+            trigger_immediate_rescan(clear_fetch_cache=True, force=True)
+
+        if st.session_state.get("exchange") == "Binance":
+            binance_base = get_binance_api_base()
+            if "binance.us" in binance_base:
+                st.caption(
+                    "Binance US API (Binance.com is blocked in this region). "
+                    "Use USDT quote for more pairs. Scans use REST — no Binance WebSocket."
+                )
+            else:
+                st.caption("Binance scans use REST candles — WebSocket is Coinbase-only.")
 
         new_quote = st.selectbox(
             "Quote Currency",
