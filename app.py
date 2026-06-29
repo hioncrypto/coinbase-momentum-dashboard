@@ -606,6 +606,28 @@ def clear_notification_save_msgs_if_edited():
 # =============================================================================
 # STATE MANAGEMENT
 # =============================================================================
+def _normalize_exchange_name(exchange: str) -> str:
+    if not exchange:
+        return "Coinbase"
+    cleaned = exchange.strip()
+    if "coming soon" in cleaned.lower():
+        bare = cleaned.split("(")[0].strip()
+        if bare:
+            cleaned = bare
+    aliases = {
+        "kucoin": "KuCoin",
+        "kraken": "Kraken",
+        "binance": "Binance",
+        "coinbase": "Coinbase",
+    }
+    key = cleaned.lower().replace(" ", "")
+    if key in aliases:
+        return aliases[key]
+    if cleaned in CONFIG.EXCHANGES:
+        return cleaned
+    return cleaned
+
+
 def init_session_state():
     if "_initialized" not in st.session_state:
         st.session_state["_initialized"] = True
@@ -706,6 +728,9 @@ def init_session_state():
         st.session_state["exchange"] = "Kraken"
     if st.session_state.get("exchange") == "KuCoin (coming soon)":
         st.session_state["exchange"] = "KuCoin"
+    st.session_state["exchange"] = _normalize_exchange_name(
+        st.session_state.get("exchange", "Coinbase")
+    )
 
 
 init_session_state()
@@ -715,8 +740,8 @@ init_session_state()
 # SCAN / EXCHANGE HELPERS (read live session_state — safe inside fragments)
 # =============================================================================
 def get_effective_exchange() -> str:
-    exchange = st.session_state.get("exchange", "Coinbase")
-    return "Coinbase" if "coming soon" in exchange.lower() else exchange
+    exchange = _normalize_exchange_name(st.session_state.get("exchange", "Coinbase"))
+    return exchange if exchange in CONFIG.EXCHANGES else "Coinbase"
 
 
 QUOTE_DISPLAY_ORDER = ("USDT", "USD", "USDC", "BTC", "ETH", "EUR")
