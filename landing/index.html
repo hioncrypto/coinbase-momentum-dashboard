@@ -4,15 +4,36 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>hioncrypto — Crypto Momentum Scanner</title>
+  <meta name="description" content="Scan 400+ crypto pairs across Coinbase, Binance, Kraken, and KuCoin. Custom gates, live market data, and email alerts." />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <div class="ticker-bar" aria-hidden="true">
+    <div class="ticker-track">
+      <span>BTC-USD <strong class="up">+2.4%</strong></span>
+      <span>ETH-USD <strong class="up">+1.8%</strong></span>
+      <span>SOL-USD <strong class="up">+5.2%</strong></span>
+      <span>AVAX-USD <strong class="down">-0.6%</strong></span>
+      <span>LINK-USD <strong class="up">+3.1%</strong></span>
+      <span>DOGE-USD <strong class="up">+1.2%</strong></span>
+      <span>BTC-USD <strong class="up">+2.4%</strong></span>
+      <span>ETH-USD <strong class="up">+1.8%</strong></span>
+      <span>SOL-USD <strong class="up">+5.2%</strong></span>
+      <span>AVAX-USD <strong class="down">-0.6%</strong></span>
+      <span>LINK-USD <strong class="up">+3.1%</strong></span>
+      <span>DOGE-USD <strong class="up">+1.2%</strong></span>
+    </div>
+  </div>
+
   <header class="site-header">
     <div class="container header-inner">
-      <a class="logo" href="/">hioncrypto</a>
+      <a class="logo" href="index.html">
+        <span class="logo-mark">◆</span> hioncrypto
+      </a>
       <nav>
+        <a href="#markets">Markets</a>
         <a href="#features">Features</a>
-        <a href="#how-it-works">How it works</a>
+        <a href="#proof">Product</a>
         <a href="#pricing">Pricing</a>
         <a href="#faq">FAQ</a>
       </nav>
@@ -22,66 +43,259 @@
 
   <main>
     <section class="hero">
-      <div class="container hero-inner">
-        <p class="eyebrow">Multi-exchange momentum scanner</p>
-        <h1>Scan 400+ crypto pairs for momentum — automatically.</h1>
-        <p class="lead">
-          hioncrypto Scanner monitors Coinbase, Binance, Kraken, and KuCoin with your custom gates
-          and email alerts when setups qualify.
-        </p>
-        <div class="hero-actions">
-          <a class="btn btn-primary" href="#pricing">Get access — $24/month</a>
-          <a class="btn btn-secondary" href="#how-it-works">See how it works</a>
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <p class="eyebrow">Multi-exchange momentum scanner</p>
+          <h1>Scan 400+ crypto pairs for momentum — automatically.</h1>
+          <p class="lead">
+            Monitor live markets across Coinbase, Binance, Kraken, and KuCoin.
+            Set your gates, watch the charts, and get email alerts when setups qualify.
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#pricing">Get access — $24/month</a>
+            <a class="btn btn-secondary" href="#proof">View product</a>
+          </div>
+          <p class="trust">Cancel anytime. Educational tool — not financial advice.</p>
+          <ul class="hero-stats">
+            <li><strong>400+</strong><span>Pairs scanned</span></li>
+            <li><strong>4</strong><span>Major exchanges</span></li>
+            <li><strong>24/7</strong><span>Market monitoring</span></li>
+          </ul>
         </div>
-        <p class="trust">Cancel anytime. Educational tool — not financial advice.</p>
+        <div class="hero-visual">
+          <div class="image-frame hero-frame">
+            <img
+              src="images/hero-dashboard.png"
+              alt="hioncrypto scanner dashboard showing live crypto market charts and scan results"
+              width="1200"
+              height="675"
+              loading="eager"
+            />
+          </div>
+          <div class="floating-badge">
+            <span class="badge-dot"></span>
+            Live scan active
+          </div>
+        </div>
       </div>
     </section>
 
-    <section id="features" class="section">
+    <section class="exchange-strip">
       <div class="container">
-        <h2>What you get</h2>
+        <p class="strip-label">Markets covered</p>
+        <div class="exchange-logos">
+          <span class="exchange-pill">Coinbase</span>
+          <span class="exchange-pill">Binance</span>
+          <span class="exchange-pill">Kraken</span>
+          <span class="exchange-pill">KuCoin</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="markets" class="section">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">Live market coverage</p>
+          <h2>Every major market, one dashboard.</h2>
+          <p class="section-lead">
+            Track momentum across top crypto pairs with candlestick charts, volume,
+            and multi-timeframe signals — without jumping between exchange tabs.
+          </p>
+        </div>
+        <div class="markets-showcase">
+          <div class="image-frame markets-frame">
+            <img
+              src="images/markets-grid.png"
+              alt="Grid of crypto market charts including Bitcoin, Ethereum, and Solana"
+              width="1200"
+              height="900"
+              loading="lazy"
+            />
+          </div>
+          <div class="market-cards">
+            <article class="market-card">
+              <div class="market-card-top">
+                <span class="pair">BTC-USD</span>
+                <span class="change up">+2.4%</span>
+              </div>
+              <p class="market-meta">Coinbase · 1h · RSI 58</p>
+              <div class="sparkline up" aria-hidden="true"></div>
+            </article>
+            <article class="market-card">
+              <div class="market-card-top">
+                <span class="pair">ETH-USD</span>
+                <span class="change up">+1.8%</span>
+              </div>
+              <p class="market-meta">Binance · 15m · MACD bull</p>
+              <div class="sparkline up" aria-hidden="true"></div>
+            </article>
+            <article class="market-card">
+              <div class="market-card-top">
+                <span class="pair">SOL-USD</span>
+                <span class="change up">+5.2%</span>
+              </div>
+              <p class="market-meta">Kraken · 5m · Strong Buy</p>
+              <div class="sparkline up" aria-hidden="true"></div>
+            </article>
+            <article class="market-card">
+              <div class="market-card-top">
+                <span class="pair">LINK-USD</span>
+                <span class="change up">+3.1%</span>
+              </div>
+              <p class="market-meta">KuCoin · 1d · Volume spike</p>
+              <div class="sparkline up" aria-hidden="true"></div>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="features" class="section section-alt">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">Built for active traders</p>
+          <h2>What you get</h2>
+        </div>
         <ul class="feature-grid">
-          <li>All available pairs scanned — no manual pair list</li>
-          <li>4 major exchanges, multiple timeframes (5m–1d)</li>
-          <li>Custom gates: % change, volume, RSI, MACD, ATR, and more</li>
-          <li>Email alerts on Strong Buy signals (top setups per scan)</li>
-          <li>Listing Radar — detect new exchange listings</li>
-          <li>Runs in your browser — nothing to install</li>
+          <li>
+            <span class="feature-icon">📊</span>
+            <strong>All pairs scanned</strong>
+            <span>No manual pair list — every available market on your exchange.</span>
+          </li>
+          <li>
+            <span class="feature-icon">⚡</span>
+            <strong>Multi-timeframe gates</strong>
+            <span>5m through 1d — % change, volume, RSI, MACD, ATR, and more.</span>
+          </li>
+          <li>
+            <span class="feature-icon">🔔</span>
+            <strong>Email alerts</strong>
+            <span>Strong Buy signals delivered when your top setups qualify.</span>
+          </li>
+          <li>
+            <span class="feature-icon">📡</span>
+            <strong>Listing Radar</strong>
+            <span>Detect new exchange listings before the crowd notices.</span>
+          </li>
+          <li>
+            <span class="feature-icon">🌐</span>
+            <strong>4 exchanges</strong>
+            <span>Coinbase, Binance (US/global auto), Kraken, and KuCoin.</span>
+          </li>
+          <li>
+            <span class="feature-icon">💻</span>
+            <strong>Browser-based</strong>
+            <span>Nothing to install. Works on desktop and mobile.</span>
+          </li>
         </ul>
+      </div>
+    </section>
+
+    <section id="proof" class="section">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">See it in action</p>
+          <h2>Professional market intelligence, delivered.</h2>
+          <p class="section-lead">
+            From live scan dashboards to instant alert emails — everything you need
+            to spot momentum without staring at charts all day.
+          </p>
+        </div>
+        <div class="proof-grid">
+          <figure class="proof-item proof-item-wide">
+            <div class="image-frame">
+              <img
+                src="images/hero-dashboard.png"
+                alt="Scanner dashboard with multi-exchange market data"
+                width="1200"
+                height="675"
+                loading="lazy"
+              />
+            </div>
+            <figcaption>Full scanner dashboard with live market charts and ranked scan results.</figcaption>
+          </figure>
+          <figure class="proof-item">
+            <div class="image-frame">
+              <img
+                src="images/markets-grid.png"
+                alt="Multi-market chart overview"
+                width="1200"
+                height="900"
+                loading="lazy"
+              />
+            </div>
+            <figcaption>Multi-market chart view across top crypto pairs.</figcaption>
+          </figure>
+          <figure class="proof-item">
+            <div class="image-frame">
+              <img
+                src="images/alert-preview.png"
+                alt="Strong Buy email alert for SOL-USD"
+                width="1200"
+                height="675"
+                loading="lazy"
+              />
+            </div>
+            <figcaption>Email alerts when Strong Buy setups hit your gates.</figcaption>
+          </figure>
+        </div>
       </div>
     </section>
 
     <section id="how-it-works" class="section section-alt">
       <div class="container">
-        <h2>How it works</h2>
+        <div class="section-head">
+          <h2>How it works</h2>
+        </div>
         <ol class="steps">
           <li>
-            <strong>Subscribe</strong>
-            <span>Secure checkout via Stripe</span>
+            <span class="step-num">1</span>
+            <div>
+              <strong>Subscribe</strong>
+              <span>Secure checkout via Stripe</span>
+            </div>
           </li>
           <li>
-            <strong>Configure</strong>
-            <span>Pick exchange, quote, and your gate rules</span>
+            <span class="step-num">2</span>
+            <div>
+              <strong>Configure</strong>
+              <span>Pick exchange, quote, and your gate rules</span>
+            </div>
           </li>
           <li>
-            <strong>Scan</strong>
-            <span>Continuous rescans; get email when movers hit your criteria</span>
+            <span class="step-num">3</span>
+            <div>
+              <strong>Scan</strong>
+              <span>Continuous rescans; get email when movers hit your criteria</span>
+            </div>
           </li>
         </ol>
       </div>
     </section>
 
     <section id="pricing" class="section">
-      <div class="container">
-        <h2>Pricing</h2>
+      <div class="container pricing-layout">
+        <div class="pricing-copy">
+          <p class="eyebrow">Simple pricing</p>
+          <h2>One plan. Full access.</h2>
+          <p class="section-lead">
+            Every exchange, every gate, and every alert — no tiers, no upsells.
+          </p>
+        </div>
         <div class="pricing-card">
           <p class="plan-name">Pro</p>
           <p class="price"><span>$24</span>/month</p>
           <p class="plan-desc">
             Full scanner access, all exchanges, email alerts, and updates.
           </p>
+          <ul class="plan-features">
+            <li>400+ pairs across 4 exchanges</li>
+            <li>Custom gate presets</li>
+            <li>Strong Buy email alerts</li>
+            <li>Listing Radar</li>
+          </ul>
           <a class="btn btn-primary btn-block" href="#">Subscribe</a>
-          <p class="plan-note">Optional later: Annual — $199/year (save ~30%)</p>
+          <p class="plan-note">Annual — $199/year (save ~30%) coming soon</p>
         </div>
       </div>
     </section>
@@ -121,12 +335,15 @@
 
   <footer class="site-footer">
     <div class="container footer-inner">
+      <div class="footer-top">
+        <a class="logo" href="index.html"><span class="logo-mark">◆</span> hioncrypto</a>
+        <nav class="footer-links">
+          <a href="terms.html">Terms of Service</a>
+          <a href="privacy.html">Privacy Policy</a>
+          <a href="mailto:support@hioncrypto.com">Contact</a>
+        </nav>
+      </div>
       <p class="footer-brand">© 2026 hioncrypto. All rights reserved.</p>
-      <nav class="footer-links">
-        <a href="terms.html">Terms of Service</a>
-        <a href="privacy.html">Privacy Policy</a>
-        <a href="mailto:support@hioncrypto.com">Contact</a>
-      </nav>
       <p class="disclaimer">
         Trading cryptocurrencies involves substantial risk. Past performance does not guarantee future results.
       </p>
