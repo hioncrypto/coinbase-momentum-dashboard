@@ -118,6 +118,7 @@ class Config:
     BINANCE_US_BASE = "https://api.binance.us"
     BINANCE_API_BASES = (BINANCE_BASE, BINANCE_US_BASE)
     KRAKEN_BASE = "https://api.kraken.com"
+    KUCOIN_BASE = "https://api.kucoin.com"
     COINBASE_WS = "wss://ws-feed.exchange.coinbase.com"
     # Exchange feed (matches api.exchange.coinbase.com REST). Advanced Trade uses
     # wss://advanced-trade-ws.coinbase.com with a different message schema.
@@ -134,7 +135,7 @@ class Config:
         "Coinbase",
         "Binance",
         "Kraken",
-        "KuCoin (coming soon)",
+        "KuCoin",
     ]
 
     ALERT_FILE = APP_DIR / "alerted_pairs.json"
@@ -400,6 +401,7 @@ URL_PARAM_MAP = {
     "lr_watch_coinbase": "lrwc",
     "lr_watch_binance": "lrwb",
     "lr_watch_kraken": "lrwk",
+    "lr_watch_kucoin": "lrku",
     "lr_watch_quotes": "lrwq",
     "lr_poll_sec": "lrps",
     "lr_upcoming_window_h": "lruwh",
@@ -684,6 +686,7 @@ def init_session_state():
         "lr_watch_coinbase": True,
         "lr_watch_binance": True,
         "lr_watch_kraken": True,
+        "lr_watch_kucoin": True,
         "lr_watch_quotes": "USD, USDT, USDC",
         "lr_poll_sec": 30,
         "lr_upcoming_window_h": 48,
@@ -701,6 +704,8 @@ def init_session_state():
 
     if st.session_state.get("exchange") == "Kraken (coming soon)":
         st.session_state["exchange"] = "Kraken"
+    if st.session_state.get("exchange") == "KuCoin (coming soon)":
+        st.session_state["exchange"] = "KuCoin"
 
 
 init_session_state()
@@ -829,6 +834,60 @@ def get_kraken_quote_currencies() -> List[str]:
     return _sort_quotes(list(CONFIG.KRAKEN_QUOTES))
 
 
+KUCOIN_INTERVALS = {
+    "5m": "5min",
+    "15m": "15min",
+    "1h": "1hour",
+    "4h": "4hour",
+    "1d": "1day",
+}
+KUCOIN_INTERVAL_SECONDS = {
+    "5m": 300,
+    "15m": 900,
+    "1h": 3600,
+    "4h": 14400,
+    "1d": 86400,
+}
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _load_kucoin_catalog() -> Dict[str, Any]:
+    products_by_quote: Dict[str, List[str]] = {}
+
+    try:
+        response = requests.get(f"{CONFIG.KUCOIN_BASE}/api/v1/symbols", timeout=30)
+        if response.status_code != 200:
+            return {"products_by_quote": products_by_quote}
+        payload = response.json()
+        if payload.get("code") != "200000":
+            return {"products_by_quote": products_by_quote}
+
+        for sym in payload.get("data", []) or []:
+            if not sym.get("enableTrading"):
+                continue
+            quote = str(sym.get("quoteCurrency", "")).upper()
+            pair = str(sym.get("symbol", "")).upper()
+            if not quote or "-" not in pair:
+                continue
+            products_by_quote.setdefault(quote, []).append(pair)
+
+        for quote in products_by_quote:
+            products_by_quote[quote] = sorted(set(products_by_quote[quote]))
+    except Exception:
+        pass
+
+    return {"products_by_quote": products_by_quote}
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def get_kucoin_quote_currencies() -> List[str]:
+    catalog = _load_kucoin_catalog()
+    quotes = list(catalog.get("products_by_quote", {}).keys())
+    if quotes:
+        return _sort_quotes(quotes)
+    return _sort_quotes(list(CONFIG.KUCOIN_QUOTES))
+
+
 def quotes_for_exchange(exchange: str) -> List[str]:
     if exchange == "Binance":
         return get_binance_quote_currencies(get_binance_api_base())
@@ -837,7 +896,7 @@ def quotes_for_exchange(exchange: str) -> List[str]:
     if "kraken" in exchange.lower():
         return get_kraken_quote_currencies()
     if "kucoin" in exchange.lower():
-        return _sort_quotes(list(CONFIG.KUCOIN_QUOTES))
+        return get_kucoin_quote_currencies()
     return get_coinbase_quote_currencies()
 
 
@@ -1033,7 +1092,7 @@ def run_listing_radar_poll(force: bool = False) -> None:
         if q.strip()
     ]
 
-    for exchange_name in ["Coinbase", "Binance", "Kraken"]:
+    for exchange_name in ["Coinbase", "Binance", "Kraken", "KuCoin"]:
         watch_key = f"lr_watch_{exchange_name.lower()}"
         if not st.session_state.get(watch_key, True):
             continue
@@ -1412,6 +1471,72 @@ def fetch_kraken_data(pair: str, timeframe: str, limit: int) -> Optional[pd.Data
     return None
 
 
+def fetch_kucoin_data(pair: str, timeframe: str, limit: int) -> Optional[pd.DataFrame]:
+    ktype = KUCOIN_INTERVALS.get(timeframe)
+    if not ktype:
+        return None
+
+    interval_sec = KUCOIN_INTERVAL_SECONDS.get(timeframe, 3600)
+    end_at = int(time.time())
+    start_at = end_at - (limit * interval_sec)
+    url = f"{CONFIG.KUCOIN_BASE}/api/v1/market/candles"
+    params = {
+        "symbol": pair,
+        "type": ktype,
+        "startAt": start_at,
+        "endAt": end_at,
+    }
+
+    for attempt in range(3):
+        try:
+            _rest_throttle()
+            response = requests.get(url, params=params, timeout=20)
+            if response.status_code == 429:
+                _rest_backoff(2.0)
+                time.sleep(0.6 * (attempt + 1))
+                continue
+            if response.status_code != 200:
+                return None
+
+            payload = response.json()
+            if payload.get("code") != "200000":
+                return None
+
+            candles = payload.get("data") or []
+            if not candles:
+                return None
+
+            _record_scan_api_call()
+            rows = []
+            for candle in reversed(candles):
+                if len(candle) < 6:
+                    continue
+                rows.append(
+                    {
+                        "time": pd.to_datetime(int(candle[0]), unit="s", utc=True),
+                        "open": float(candle[1]),
+                        "high": float(candle[3]),
+                        "low": float(candle[4]),
+                        "close": float(candle[2]),
+                        "volume": float(candle[5]),
+                    }
+                )
+
+            if not rows:
+                return None
+
+            df = pd.DataFrame(rows).sort_values("time").reset_index(drop=True)
+            df = df[["time", "open", "high", "low", "close", "volume"]]
+            if len(df) > limit:
+                df = df.iloc[-limit:].reset_index(drop=True)
+            return df if not df.empty else None
+
+        except Exception:
+            time.sleep(0.4 * (attempt + 1))
+
+    return None
+
+
 def fetch_data(
     exchange: str, pair: str, timeframe: str, limit: Optional[int] = None
 ) -> Optional[pd.DataFrame]:
@@ -1427,12 +1552,14 @@ def fetch_data(
         return fetch_binance_data(pair, timeframe, limit)
     elif exchange_lower.startswith("kraken"):
         return fetch_kraken_data(pair, timeframe, limit)
+    elif exchange_lower.startswith("kucoin"):
+        return fetch_kucoin_data(pair, timeframe, limit)
     else:
         return fetch_coinbase_data(pair, timeframe, limit)
 
 
 # Bump when fetch logic changes (e.g. Coinbase 4h built from 1h candles).
-_FETCH_CACHE_REV = 7
+_FETCH_CACHE_REV = 8
 _SESSION_CANDLE_CACHE: Dict[tuple, tuple] = {}
 _SESSION_CANDLE_LOCK = threading.Lock()
 # =============================================================================
@@ -1614,6 +1741,11 @@ def get_kraken_products(quote: str) -> List[str]:
     return list(catalog.get("products_by_quote", {}).get(quote.upper(), []))
 
 
+def get_kucoin_products(quote: str) -> List[str]:
+    catalog = _load_kucoin_catalog()
+    return list(catalog.get("products_by_quote", {}).get(quote.upper(), []))
+
+
 @st.cache_data(ttl=300, show_spinner=False)
 def get_products(exchange: str, quote: str) -> List[str]:
     exchange_lower = exchange.lower()
@@ -1624,6 +1756,8 @@ def get_products(exchange: str, quote: str) -> List[str]:
         return get_binance_products(quote)
     elif exchange_lower.startswith("kraken"):
         return get_kraken_products(quote)
+    elif exchange_lower.startswith("kucoin"):
+        return get_kucoin_products(quote)
     else:
         return get_coinbase_products(quote)
 
@@ -2144,6 +2278,8 @@ with st.sidebar:
             get_binance_quote_currencies.clear()
             get_kraken_quote_currencies.clear()
             _load_kraken_catalog.clear()
+            get_kucoin_quote_currencies.clear()
+            _load_kucoin_catalog.clear()
             get_cached_data.clear()
             clear_session_candle_cache()
             trigger_immediate_rescan(clear_fetch_cache=True, force=True)
@@ -2163,6 +2299,9 @@ with st.sidebar:
 
         if st.session_state.get("exchange") == "Kraken":
             st.caption("Kraken API. REST scans only (WebSocket is Coinbase).")
+
+        if st.session_state.get("exchange") == "KuCoin":
+            st.caption("KuCoin API. REST scans only (WebSocket is Coinbase).")
 
         quote_options = quotes_for_exchange(st.session_state.get("exchange", "Coinbase"))
         current_quote = st.session_state.get("quote", "USD")
@@ -2188,6 +2327,8 @@ with st.sidebar:
             get_binance_quote_currencies.clear()
             get_kraken_quote_currencies.clear()
             _load_kraken_catalog.clear()
+            get_kucoin_quote_currencies.clear()
+            _load_kucoin_catalog.clear()
             get_cached_data.clear()
             clear_session_candle_cache()
             trigger_immediate_rescan(clear_fetch_cache=True, force=True)
@@ -2692,7 +2833,7 @@ with expander("Listing Radar"):
             run_listing_radar_poll(force=True)
 
     if st.session_state.get("lr_enabled", False):
-        c1, c2, c3 = st.columns(3)
+        c1, c2, c3, c4 = st.columns(4)
         with c1:
             st.toggle(
                 "Watch Coinbase",
@@ -2710,6 +2851,12 @@ with expander("Listing Radar"):
                 "Watch Kraken",
                 key="lr_watch_kraken",
                 value=st.session_state.get("lr_watch_kraken", True),
+            )
+        with c4:
+            st.toggle(
+                "Watch KuCoin",
+                key="lr_watch_kucoin",
+                value=st.session_state.get("lr_watch_kucoin", True),
             )
 
         st.text_input(
