@@ -117,6 +117,7 @@ class Config:
     BINANCE_BASE = "https://api.binance.com"
     BINANCE_US_BASE = "https://api.binance.us"
     BINANCE_API_BASES = (BINANCE_BASE, BINANCE_US_BASE)
+    KRAKEN_BASE = "https://api.kraken.com"
     COINBASE_WS = "wss://ws-feed.exchange.coinbase.com"
     # Exchange feed (matches api.exchange.coinbase.com REST). Advanced Trade uses
     # wss://advanced-trade-ws.coinbase.com with a different message schema.
@@ -132,7 +133,7 @@ class Config:
     EXCHANGES = [
         "Coinbase",
         "Binance",
-        "Kraken (coming soon)",
+        "Kraken",
         "KuCoin (coming soon)",
     ]
 
@@ -398,6 +399,7 @@ URL_PARAM_MAP = {
     "lr_enabled": "lre",
     "lr_watch_coinbase": "lrwc",
     "lr_watch_binance": "lrwb",
+    "lr_watch_kraken": "lrwk",
     "lr_watch_quotes": "lrwq",
     "lr_poll_sec": "lrps",
     "lr_upcoming_window_h": "lruwh",
@@ -681,6 +683,7 @@ def init_session_state():
         "lr_feed_hashes": {},
         "lr_watch_coinbase": True,
         "lr_watch_binance": True,
+        "lr_watch_kraken": True,
         "lr_watch_quotes": "USD, USDT, USDC",
         "lr_poll_sec": 30,
         "lr_upcoming_window_h": 48,
@@ -695,6 +698,9 @@ def init_session_state():
             if key in NOTIFICATION_SETTING_KEYS and saved_settings.get(key):
                 initial = saved_settings[key]
             st.session_state[key] = load_from_url(key, initial, type(initial))
+
+    if st.session_state.get("exchange") == "Kraken (coming soon)":
+        st.session_state["exchange"] = "Kraken"
 
 
 init_session_state()
@@ -754,13 +760,82 @@ def get_binance_quote_currencies(api_base: str) -> List[str]:
     return _sort_quotes(list(CONFIG.BINANCE_QUOTES))
 
 
+KRAKEN_SYMBOL_ALIASES = {"XBT": "BTC"}
+KRAKEN_INTERVALS = {"5m": 5, "15m": 15, "1h": 60, "4h": 240, "1d": 1440}
+
+
+def _kraken_display_symbol(asset_code: str, assets_map: Dict[str, str]) -> str:
+    alt = assets_map.get(asset_code, asset_code)
+    upper = str(alt).upper()
+    return KRAKEN_SYMBOL_ALIASES.get(upper, upper)
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _load_kraken_catalog() -> Dict[str, Any]:
+    """Asset pairs + OHLC keys keyed by normalized pair (e.g. BTC-USD)."""
+    products_by_quote: Dict[str, List[str]] = {}
+    ohlc_keys: Dict[str, str] = {}
+
+    try:
+        assets_resp = requests.get(
+            f"{CONFIG.KRAKEN_BASE}/0/public/Assets", timeout=25
+        )
+        assets_resp.raise_for_status()
+        assets_raw = assets_resp.json().get("result", {}) or {}
+        assets_map = {
+            code: info.get("altname", code)
+            for code, info in assets_raw.items()
+            if isinstance(info, dict)
+        }
+
+        pairs_resp = requests.get(
+            f"{CONFIG.KRAKEN_BASE}/0/public/AssetPairs", timeout=30
+        )
+        pairs_resp.raise_for_status()
+        pairs_raw = pairs_resp.json().get("result", {}) or {}
+
+        for info in pairs_raw.values():
+            if not isinstance(info, dict) or info.get("status") != "online":
+                continue
+            base_code = info.get("base")
+            quote_code = info.get("quote")
+            if not base_code or not quote_code:
+                continue
+
+            base = _kraken_display_symbol(base_code, assets_map)
+            quote = _kraken_display_symbol(quote_code, assets_map)
+            pair = f"{base}-{quote}"
+            ohlc_key = info.get("altname") or info.get("wsname", "").replace("/", "")
+            if not ohlc_key:
+                continue
+
+            products_by_quote.setdefault(quote, []).append(pair)
+            ohlc_keys[pair] = ohlc_key
+
+        for quote in products_by_quote:
+            products_by_quote[quote] = sorted(set(products_by_quote[quote]))
+    except Exception:
+        pass
+
+    return {"products_by_quote": products_by_quote, "ohlc_keys": ohlc_keys}
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def get_kraken_quote_currencies() -> List[str]:
+    catalog = _load_kraken_catalog()
+    quotes = list(catalog.get("products_by_quote", {}).keys())
+    if quotes:
+        return _sort_quotes(quotes)
+    return _sort_quotes(list(CONFIG.KRAKEN_QUOTES))
+
+
 def quotes_for_exchange(exchange: str) -> List[str]:
     if exchange == "Binance":
         return get_binance_quote_currencies(get_binance_api_base())
     if exchange == "Coinbase":
         return get_coinbase_quote_currencies()
     if "kraken" in exchange.lower():
-        return _sort_quotes(list(CONFIG.KRAKEN_QUOTES))
+        return get_kraken_quote_currencies()
     if "kucoin" in exchange.lower():
         return _sort_quotes(list(CONFIG.KUCOIN_QUOTES))
     return get_coinbase_quote_currencies()
@@ -958,7 +1033,7 @@ def run_listing_radar_poll(force: bool = False) -> None:
         if q.strip()
     ]
 
-    for exchange_name in ["Coinbase", "Binance"]:
+    for exchange_name in ["Coinbase", "Binance", "Kraken"]:
         watch_key = f"lr_watch_{exchange_name.lower()}"
         if not st.session_state.get(watch_key, True):
             continue
@@ -1269,6 +1344,74 @@ def fetch_binance_data(pair: str, timeframe: str, limit: int) -> Optional[pd.Dat
     return None
 
 
+def fetch_kraken_data(pair: str, timeframe: str, limit: int) -> Optional[pd.DataFrame]:
+    interval = KRAKEN_INTERVALS.get(timeframe)
+    if not interval:
+        return None
+
+    catalog = _load_kraken_catalog()
+    ohlc_pair = catalog.get("ohlc_keys", {}).get(pair)
+    if not ohlc_pair:
+        return None
+
+    url = f"{CONFIG.KRAKEN_BASE}/0/public/OHLC"
+    params = {"pair": ohlc_pair, "interval": interval}
+
+    for attempt in range(3):
+        try:
+            _rest_throttle()
+            response = requests.get(url, params=params, timeout=20)
+            if response.status_code == 429:
+                _rest_backoff(2.0)
+                time.sleep(0.6 * (attempt + 1))
+                continue
+            if response.status_code != 200:
+                return None
+
+            payload = response.json()
+            if payload.get("error"):
+                return None
+
+            result = payload.get("result", {}) or {}
+            candles = None
+            for key, value in result.items():
+                if key != "last" and isinstance(value, list):
+                    candles = value
+                    break
+            if not candles:
+                return None
+
+            _record_scan_api_call()
+            rows = []
+            for candle in candles:
+                if len(candle) < 7:
+                    continue
+                rows.append(
+                    {
+                        "time": pd.to_datetime(candle[0], unit="s", utc=True),
+                        "open": float(candle[1]),
+                        "high": float(candle[2]),
+                        "low": float(candle[3]),
+                        "close": float(candle[4]),
+                        "volume": float(candle[6]),
+                    }
+                )
+
+            if not rows:
+                return None
+
+            df = pd.DataFrame(rows).sort_values("time").reset_index(drop=True)
+            df = df[["time", "open", "high", "low", "close", "volume"]]
+            if len(df) > limit:
+                df = df.iloc[-limit:].reset_index(drop=True)
+            return df if not df.empty else None
+
+        except Exception:
+            time.sleep(0.4 * (attempt + 1))
+
+    return None
+
+
 def fetch_data(
     exchange: str, pair: str, timeframe: str, limit: Optional[int] = None
 ) -> Optional[pd.DataFrame]:
@@ -1282,12 +1425,14 @@ def fetch_data(
         return fetch_coinbase_data(pair, timeframe, limit)
     elif exchange_lower.startswith("binance"):
         return fetch_binance_data(pair, timeframe, limit)
+    elif exchange_lower.startswith("kraken"):
+        return fetch_kraken_data(pair, timeframe, limit)
     else:
         return fetch_coinbase_data(pair, timeframe, limit)
 
 
 # Bump when fetch logic changes (e.g. Coinbase 4h built from 1h candles).
-_FETCH_CACHE_REV = 6
+_FETCH_CACHE_REV = 7
 _SESSION_CANDLE_CACHE: Dict[tuple, tuple] = {}
 _SESSION_CANDLE_LOCK = threading.Lock()
 # =============================================================================
@@ -1464,6 +1609,11 @@ def get_binance_products(quote: str) -> List[str]:
     return []
 
 
+def get_kraken_products(quote: str) -> List[str]:
+    catalog = _load_kraken_catalog()
+    return list(catalog.get("products_by_quote", {}).get(quote.upper(), []))
+
+
 @st.cache_data(ttl=300, show_spinner=False)
 def get_products(exchange: str, quote: str) -> List[str]:
     exchange_lower = exchange.lower()
@@ -1472,6 +1622,8 @@ def get_products(exchange: str, quote: str) -> List[str]:
         return get_coinbase_products(quote)
     elif exchange_lower.startswith("binance"):
         return get_binance_products(quote)
+    elif exchange_lower.startswith("kraken"):
+        return get_kraken_products(quote)
     else:
         return get_coinbase_products(quote)
 
@@ -1990,6 +2142,8 @@ with st.sidebar:
             get_products.clear()
             get_coinbase_quote_currencies.clear()
             get_binance_quote_currencies.clear()
+            get_kraken_quote_currencies.clear()
+            _load_kraken_catalog.clear()
             get_cached_data.clear()
             clear_session_candle_cache()
             trigger_immediate_rescan(clear_fetch_cache=True, force=True)
@@ -2006,6 +2160,9 @@ with st.sidebar:
                 st.caption("Binance US API. REST scans only (no Binance WebSocket).")
             else:
                 st.caption("Binance API. REST scans only (WebSocket is Coinbase).")
+
+        if st.session_state.get("exchange") == "Kraken":
+            st.caption("Kraken API. REST scans only (WebSocket is Coinbase).")
 
         quote_options = quotes_for_exchange(st.session_state.get("exchange", "Coinbase"))
         current_quote = st.session_state.get("quote", "USD")
@@ -2029,6 +2186,8 @@ with st.sidebar:
             get_products.clear()
             get_coinbase_quote_currencies.clear()
             get_binance_quote_currencies.clear()
+            get_kraken_quote_currencies.clear()
+            _load_kraken_catalog.clear()
             get_cached_data.clear()
             clear_session_candle_cache()
             trigger_immediate_rescan(clear_fetch_cache=True, force=True)
@@ -2533,7 +2692,7 @@ with expander("Listing Radar"):
             run_listing_radar_poll(force=True)
 
     if st.session_state.get("lr_enabled", False):
-        c1, c2 = st.columns(2)
+        c1, c2, c3 = st.columns(3)
         with c1:
             st.toggle(
                 "Watch Coinbase",
@@ -2545,6 +2704,12 @@ with expander("Listing Radar"):
                 "Watch Binance",
                 key="lr_watch_binance",
                 value=st.session_state.get("lr_watch_binance", True),
+            )
+        with c3:
+            st.toggle(
+                "Watch Kraken",
+                key="lr_watch_kraken",
+                value=st.session_state.get("lr_watch_kraken", True),
             )
 
         st.text_input(
