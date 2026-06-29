@@ -1100,6 +1100,93 @@ def migrate_lr_baselines() -> None:
             )
 
 
+LR_MAX_EVENTS = 500
+LR_EXCHANGES = ("Coinbase", "Binance", "Kraken", "KuCoin")
+
+
+def _lr_baseline_key(exchange: str, quote: str) -> str:
+    return f"{exchange}:{quote.upper()}"
+
+
+def _lr_fetch_products(exchange_name: str, quote: str) -> List[str]:
+    """Fresh product list for Listing Radar (bypasses cached get_products)."""
+    exchange_lower = exchange_name.lower()
+    if exchange_lower.startswith("coinbase"):
+        return get_coinbase_products(quote)
+    if exchange_lower.startswith("binance"):
+        return get_binance_products(quote)
+    if exchange_lower.startswith("kraken"):
+        return get_kraken_products(quote)
+    if exchange_lower.startswith("kucoin"):
+        return get_kucoin_products(quote)
+    return get_coinbase_products(quote)
+
+
+def _lr_parse_event_time(raw: str) -> Optional[dt.datetime]:
+    try:
+        parsed = dt.datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=dt.timezone.utc)
+        return parsed.astimezone(dt.timezone.utc)
+    except Exception:
+        return None
+
+
+def _lr_trim_events(events: List[dict]) -> List[dict]:
+    if len(events) <= LR_MAX_EVENTS:
+        return events
+    return events[-LR_MAX_EVENTS:]
+
+
+def _lr_append_event(event: dict) -> bool:
+    events = st.session_state.setdefault("lr_events", [])
+    dedupe_key = (
+        event.get("type"),
+        event.get("exchange"),
+        event.get("quote"),
+        event.get("pair"),
+    )
+    for existing in reversed(events[-50:]):
+        if (
+            existing.get("type"),
+            existing.get("exchange"),
+            existing.get("quote"),
+            existing.get("pair"),
+        ) == dedupe_key:
+            return False
+    events.append(event)
+    st.session_state["lr_events"] = _lr_trim_events(events)
+    st.session_state["lr_unacked"] = int(st.session_state.get("lr_unacked", 0)) + 1
+    return True
+
+
+def _lr_get_known_products(exchange_name: str, quote: str) -> Optional[set]:
+    baselines = st.session_state.get("lr_baselines", {})
+    key = _lr_baseline_key(exchange_name, quote)
+    known = baselines.get(key)
+    if known is not None:
+        return set(known) if not isinstance(known, set) else known
+    legacy = baselines.get(exchange_name)
+    if legacy is not None:
+        return set(legacy) if not isinstance(legacy, set) else legacy
+    return None
+
+
+def _lr_set_known_products(exchange_name: str, quote: str, products: List[str]) -> None:
+    baselines = st.session_state.setdefault("lr_baselines", {})
+    baselines[_lr_baseline_key(exchange_name, quote)] = set(products)
+
+
+def _lr_recent_events(window_hours: int) -> List[dict]:
+    cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=window_hours)
+    recent = []
+    for event in st.session_state.get("lr_events", []):
+        when = _lr_parse_event_time(event.get("detected_at", ""))
+        if when and when >= cutoff:
+            recent.append(event)
+    return recent
+
+
 def run_listing_radar_poll(force: bool = False) -> None:
     if not st.session_state.get("lr_enabled", False):
         return
@@ -1116,33 +1203,34 @@ def run_listing_radar_poll(force: bool = False) -> None:
         for q in st.session_state.get("lr_watch_quotes", "USD,USDT,USDC").split(",")
         if q.strip()
     ]
+    if not lr_quotes:
+        return
 
-    for exchange_name in ["Coinbase", "Binance", "Kraken", "KuCoin"]:
+    for exchange_name in LR_EXCHANGES:
         watch_key = f"lr_watch_{exchange_name.lower()}"
         if not st.session_state.get(watch_key, True):
             continue
         for quote in lr_quotes:
             try:
-                current_products = get_products(exchange_name, quote)
-                known = st.session_state["lr_baselines"].get(exchange_name, set())
-                if not known:
-                    st.session_state["lr_baselines"][exchange_name] = set(current_products)
+                current_products = _lr_fetch_products(exchange_name, quote)
+                known = _lr_get_known_products(exchange_name, quote)
+                if known is None:
+                    _lr_set_known_products(exchange_name, quote, current_products)
                     continue
 
                 new_listings = [p for p in current_products if p not in known]
-                if new_listings:
-                    if "lr_events" not in st.session_state:
-                        st.session_state["lr_events"] = []
-                    for pair in new_listings:
-                        st.session_state["lr_events"].append({
+                for pair in new_listings:
+                    _lr_append_event(
+                        {
                             "pair": pair,
                             "exchange": exchange_name,
                             "quote": quote,
                             "detected_at": dt.datetime.now(dt.timezone.utc).isoformat(),
                             "type": "listing",
-                        })
+                        }
+                    )
 
-                st.session_state["lr_baselines"][exchange_name] = set(current_products)
+                _lr_set_known_products(exchange_name, quote, current_products)
             except Exception:
                 pass
 
@@ -1154,22 +1242,24 @@ def run_listing_radar_poll(force: bool = False) -> None:
             if not url:
                 continue
             try:
-                resp = requests.get(url, timeout=12, headers={"User-Agent": "crypto-tracker/2.0"})
+                resp = requests.get(
+                    url, timeout=12, headers={"User-Agent": "crypto-tracker/2.0"}
+                )
                 if resp.status_code != 200:
                     continue
                 snippet = resp.text[:8000]
                 content_hash = str(hash(snippet))
                 prev = feed_hashes.get(url)
                 if prev is not None and prev != content_hash:
-                    if "lr_events" not in st.session_state:
-                        st.session_state["lr_events"] = []
-                    st.session_state["lr_events"].append({
-                        "pair": url,
-                        "exchange": "Feed",
-                        "quote": "",
-                        "detected_at": dt.datetime.now(dt.timezone.utc).isoformat(),
-                        "type": "feed",
-                    })
+                    _lr_append_event(
+                        {
+                            "pair": url,
+                            "exchange": "Feed",
+                            "quote": "",
+                            "detected_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+                            "type": "feed",
+                        }
+                    )
                 feed_hashes[url] = content_hash
             except Exception:
                 pass
@@ -2841,21 +2931,15 @@ with expander("Display"):
         save_to_url("refresh_sec", new_rs)
 
 with expander("Listing Radar"):
-    st.caption("Detect new listings")
+    st.caption("Detect new listings across exchanges")
 
-    current_lr_enabled = st.session_state.get(
-        "lr_enabled", load_from_url("lr_enabled", False, bool)
-    )
-    new_lre = st.toggle(
-        "Enable Listing Radar",
-        value=current_lr_enabled,
-        key="lr_enabled_widget",
-    )
-    if new_lre != current_lr_enabled:
-        st.session_state["lr_enabled"] = new_lre
-        save_to_url("lr_enabled", new_lre)
-        if new_lre:
-            run_listing_radar_poll(force=True)
+    prev_lr_enabled = bool(st.session_state.get("lr_enabled", False))
+    st.toggle("Enable Listing Radar", key="lr_enabled")
+    if st.session_state.get("lr_enabled") and not prev_lr_enabled:
+        save_to_url("lr_enabled", True)
+        run_listing_radar_poll(force=True)
+    elif not st.session_state.get("lr_enabled") and prev_lr_enabled:
+        save_to_url("lr_enabled", False)
 
     if st.session_state.get("lr_enabled", False):
         c1, c2, c3, c4 = st.columns(4)
@@ -2888,6 +2972,7 @@ with expander("Listing Radar"):
             "Watch quotes",
             st.session_state.get("lr_watch_quotes", "USD, USDT, USDC"),
             key="lr_watch_quotes",
+            help="Comma-separated quote currencies to monitor",
         )
 
         st.slider(
@@ -2900,36 +2985,62 @@ with expander("Listing Radar"):
         )
 
         st.slider(
-            "Upcoming window (hours)",
+            "Listing window (hours)",
             1,
             168,
             st.session_state.get("lr_upcoming_window_h", 48),
             1,
             key="lr_upcoming_window_h",
+            help="How long detected listings stay visible",
         )
 
         st.text_area(
             "News feeds (URLs)",
             st.session_state.get("lr_feeds", ""),
             key="lr_feeds",
+            help="One URL per line; content changes create feed events",
         )
+
+        if st.button("Reset listing baselines", key="lr_reset_baselines"):
+            st.session_state["lr_baselines"] = {}
+            st.session_state["lr_feed_hashes"] = {}
+            run_listing_radar_poll(force=True)
+            st.success("Baselines re-seeded — no false alerts until the next real listing.")
 
 run_listing_radar_poll()
 
 lr_window = int(st.session_state.get("lr_upcoming_window_h", 48))
-if st.session_state.get("lr_events"):
-    with st.sidebar.expander("🆕 Listing Radar"):
-        cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=lr_window)
-        recent = [e for e in st.session_state.lr_events 
-                  if dt.datetime.fromisoformat(e["detected_at"]) > cutoff]
-        
+if st.session_state.get("lr_enabled", False):
+    unacked = int(st.session_state.get("lr_unacked", 0))
+    recent = _lr_recent_events(lr_window)
+    expander_label = "🆕 Listing Radar"
+    if unacked > 0:
+        expander_label = f"🆕 Listing Radar ({unacked} new)"
+    with st.sidebar.expander(expander_label):
+        last_poll = float(st.session_state.get("lr_last_poll", 0.0))
+        if last_poll > 0:
+            ago = max(0, int(time.time() - last_poll))
+            st.caption(f"Last poll: {ago}s ago · window: {lr_window}h")
+        else:
+            st.caption(f"Window: {lr_window}h")
+
         if recent:
-            st.write(f"**New listings (last {lr_window}h):**")
+            st.write(f"**New listings ({len(recent)}):**")
             for event in recent[-20:]:
                 icon = "📰" if event.get("type") == "feed" else "🆕"
-                st.write(f"{icon} {event['pair']} ({event['exchange']})")
+                quote = event.get("quote")
+                quote_note = f" {quote}" if quote else ""
+                label = event.get("pair", "")
+                if event.get("type") == "feed":
+                    label = event.get("pair", "Feed update")
+                st.write(f"{icon} {label} ({event.get('exchange', '')}{quote_note})")
         else:
-            st.write("No new listings in window")
+            st.write("No new listings in the current window.")
+
+        if st.button("Clear listing events", key="lr_clear_events"):
+            st.session_state["lr_events"] = []
+            st.session_state["lr_unacked"] = 0
+            st.rerun()
 
 # =============================================================================
 # WEBSOCKET HELPERS
