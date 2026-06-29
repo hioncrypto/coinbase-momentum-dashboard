@@ -60,6 +60,7 @@ import time
 import datetime as dt
 import threading
 import os
+import hashlib
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -387,9 +388,7 @@ URL_PARAM_MAP = {
     "K_green": "kg",
     "Y_yellow": "yy",
     "preset": "pr",
-    
-    "email_to": "et",
-    "webhook_url": "wu",
+
     "font_scale": "fs",
     "refresh_sec": "rs",
     "do_ath": "da",
@@ -1248,7 +1247,7 @@ def run_listing_radar_poll(force: bool = False) -> None:
                 if resp.status_code != 200:
                     continue
                 snippet = resp.text[:8000]
-                content_hash = str(hash(snippet))
+                content_hash = hashlib.sha256(snippet.encode("utf-8", errors="ignore")).hexdigest()
                 prev = feed_hashes.get(url)
                 if prev is not None and prev != content_hash:
                     _lr_append_event(
@@ -2082,6 +2081,51 @@ def should_send_alert(
     return False, None
 
 
+def render_last_alert_dispatch_status() -> None:
+    """Show result of the most recent scan alert batch (email + webhook)."""
+    dispatch = st.session_state.get("last_alert_dispatch")
+    if not dispatch:
+        return
+
+    pairs = dispatch.get("pairs") or []
+    attempted = int(dispatch.get("attempted", 0))
+    green_n = int(dispatch.get("green_candidates", 0))
+    at_ts = dispatch.get("at")
+    when = ""
+    if at_ts:
+        when = dt.datetime.fromtimestamp(int(at_ts), tz=dt.timezone.utc).strftime(
+            "%Y-%m-%d %H:%M UTC"
+        )
+
+    st.caption("Last alert batch" + (f" · {when}" if when else ""))
+    if attempted == 0:
+        if green_n:
+            st.caption(f"{green_n} green candidate(s); none passed alert filters.")
+        else:
+            st.caption("No alert candidates on the last scan.")
+        return
+
+    parts = []
+    if dispatch.get("email_ok"):
+        parts.append("Email sent")
+    elif dispatch.get("email_msg"):
+        parts.append(f"Email: {dispatch['email_msg']}")
+
+    if dispatch.get("webhook_ok"):
+        parts.append("Webhook sent")
+    elif dispatch.get("webhook_msg"):
+        parts.append(f"Webhook: {dispatch['webhook_msg']}")
+
+    summary = " · ".join(parts) if parts else "Dispatch attempted"
+    if pairs:
+        preview = ", ".join(pairs[:5])
+        if len(pairs) > 5:
+            preview += f" (+{len(pairs) - 5} more)"
+        st.caption(f"{summary} — {preview}")
+    else:
+        st.caption(summary)
+
+
 # =============================================================================
 # ALERT SENDING (batch only — one email/webhook per scan)
 # =============================================================================
@@ -2901,6 +2945,8 @@ with expander("🔔 Notifications"):
             st.success(msg)
         else:
             st.error(msg)
+
+    render_last_alert_dispatch_status()
 
     _schedule_notification_msg_dismiss()
 
@@ -4166,7 +4212,8 @@ def scan_results_panel() -> None:
                     ]
 
                 dispatch_result = dispatch_scan_alerts(alerts_to_send, scan_id)
-                if dispatch_result.get("email_ok"):
+                sent_ok = dispatch_result.get("email_ok") or dispatch_result.get("webhook_ok")
+                if sent_ok:
                     save_alerted_pairs(st.session_state["alerted_pairs"])
                 elif alerts_to_send:
                     st.session_state["alerted_pairs"] = alerted_before
@@ -4242,7 +4289,7 @@ def scan_results_panel() -> None:
             api = last_stats.get("api_calls", "?")
             st.success(
                 f"✅ Scan complete — {scanned} pairs on {sort_tf} "
-                f"({dur}s, {api} Coinbase REST calls)"
+                f"({dur}s, {api} {effective_exchange} REST calls)"
             )
             if scan_warning:
                 st.warning(scan_warning)
@@ -4288,6 +4335,10 @@ def live_scan_results_panel() -> None:
 # =============================================================================
 # MAIN DISPLAY
 # =============================================================================
+from saas_gate import enforce_saas_gate
+
+enforce_saas_gate()
+
 st.title("🚀 hioncrypto's: Crypto Tracker")
 
 col1, col2, col3 = st.columns([1, 1, 2])
