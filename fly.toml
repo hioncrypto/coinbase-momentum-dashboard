@@ -1,0 +1,25 @@
+# Fly.io deploy — see DEPLOY.md
+# fly launch && fly deploy
+
+app = "hioncrypto-scanner"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 8501
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    grace_period = "60s"
+    interval = "30s"
+    method = "GET"
+    path = "/_stcore/health"
+    timeout = "10s"
+
+[env]
+  SAAS_GATE_ENABLED = "false"

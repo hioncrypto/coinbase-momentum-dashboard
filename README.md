@@ -22,7 +22,7 @@ Email alerts (optional): copy `.streamlit/secrets_template.toml` to `.streamlit/
 
 ## Deploy (production / SaaS)
 
-See **[DEPLOY.md](DEPLOY.md)** for Docker + Railway hosting.
+See **[DEPLOY.md](DEPLOY.md)** for Docker + **Railway** or **Fly.io** hosting.
 
 - `SAAS_GATE_ENABLED=false` (default) — open access, current behavior
 - `SAAS_GATE_ENABLED=true` — subscribe placeholder until Stripe is wired (`saas_gate.py`)

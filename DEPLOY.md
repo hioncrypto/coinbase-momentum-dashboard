@@ -62,7 +62,14 @@ Set `SAAS_GATE_ENABLED=true` on the host to show a subscribe placeholder instead
 
 ---
 
-## Checklist before ads
+## Fly.io
+
+1. Install [flyctl](https://fly.io/docs/flyctl/install/)
+2. `fly launch` (use existing `fly.toml`)
+3. Set secrets: `fly secrets set SAAS_GATE_ENABLED=false`
+4. `fly deploy`
+
+---
 
 - [ ] `SAAS_GATE_ENABLED=true` + Checkout works
 - [ ] Pay → access without manual email

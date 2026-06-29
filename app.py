@@ -1939,9 +1939,9 @@ def check_progressive_stages(df: pd.DataFrame, settings: dict) -> Dict[str, Any]
 def format_alert_stage(pair: str, alert_type: str, rel_vol: float) -> Optional[str]:
     """Apply MACD cross-sync filter; return None to suppress delivery."""
     if st.session_state.get("macd_cross_sync") and "MACD" in str(alert_type):
-        tf = st.session_state.get("sort_tf", "1h")
-        vol_req = float(st.session_state.get("spike_multiple", 3.5))
-        if tf not in ("4h", "1d", "1D", "Daily") or rel_vol < vol_req:
+        tf = str(st.session_state.get("sort_tf", "1h")).lower()
+        vol_req = float(st.session_state.get("vol_mult", 3.5))
+        if tf not in ("4h", "1d") or rel_vol < vol_req:
             return None
         return f"{pair} | {tf}"
     return alert_type
@@ -2747,6 +2747,18 @@ with expander("Gates"):
             )
             if new_vm != st.session_state.get("vol_mult"):
                 save_to_url("vol_mult", new_vm)
+            new_vw = st.slider(
+                "Volume lookback (bars)",
+                5,
+                100,
+                value=int(st.session_state.get("vol_window", 20)),
+                step=1,
+                key="vol_window",
+                help="Bars used to compute average volume for spike detection",
+            )
+            if new_vw != st.session_state.get("vol_window"):
+                st.session_state["vol_window"] = new_vw
+                save_to_url("vol_window", new_vw)
     with c2:
         new_use_rsi = st.toggle("RSI", key="use_rsi", help="Momentum indicator")
         if new_use_rsi != load_from_url("use_rsi", False, bool):
@@ -2919,6 +2931,11 @@ with expander("Gates"):
         )
 with expander("🔔 Notifications"):
     clear_notification_save_msgs_if_edited()
+
+    st.caption(
+        "Alerts: Δ gate + at least one other enabled gate. "
+        "Email/webhook sends top 10 Strong Buy pairs per scan; +5% Δ steps re-alert."
+    )
 
     st.text_input(
         "Email recipient",
@@ -3405,11 +3422,20 @@ def clear_stale_scan_lock() -> bool:
     started = float(st.session_state.get("scan_started_at", 0))
     if not st.session_state.get("scan_in_progress"):
         return False
-    if started and (time.time() - started) <= SCAN_STUCK_SEC:
+    if started and (time.time() - started) <= scan_stuck_timeout_sec():
         return False
     print("[SCAN] clearing stale scan_in_progress flag")
     st.session_state["scan_in_progress"] = False
     return True
+
+
+def scan_stuck_timeout_sec() -> int:
+    """Scale stuck-scan timeout with pair count (REST scans can run several minutes)."""
+    try:
+        pair_count = len(build_scan_pairs())
+    except Exception:
+        pair_count = 400
+    return int(max(120, min(600, 90 + pair_count * 0.15)))
 
 
 def try_begin_scan() -> bool:
@@ -4016,7 +4042,7 @@ def scan_results_panel() -> None:
     """Scan + results island — reads live session_state so fragment reruns stay current."""
     started = float(st.session_state.get("scan_started_at", 0))
     if st.session_state.get("scan_in_progress") and started:
-        if time.time() - started > SCAN_STUCK_SEC:
+        if time.time() - started > scan_stuck_timeout_sec():
             print("[SCAN] clearing stuck scan flag (timed out)")
             st.session_state["scan_in_progress"] = False
             st.session_state["immediate_rescan"] = True
@@ -4060,16 +4086,17 @@ def scan_results_panel() -> None:
     time_since_update = current_time - st.session_state["last_update"]
     cached_tf = st.session_state.get("scan_sort_tf", sort_tf)
     config_stale = cached_tf != sort_tf
-    will_rescan = (
+    wants_rescan = (
         scan_rows_missing()
         or config_stale
         or st.session_state.get("immediate_rescan", False)
-        or (not scan_busy and time_since_update >= refresh_interval)
+        or time_since_update >= refresh_interval
     )
-    # Clear orphan scan flag before WS ensure so WebSocket still starts when recovering.
-    if will_rescan and scan_busy:
-        st.session_state["scan_in_progress"] = False
-        scan_busy = False
+    if wants_rescan and scan_busy:
+        st.session_state["immediate_rescan"] = True
+        need_rescan = False
+    else:
+        need_rescan = wants_rescan and not scan_busy
 
     ensure_coinbase_websocket(build_ws_pairs(), effective_exchange)
 
@@ -4082,12 +4109,8 @@ def scan_results_panel() -> None:
     y_required = st.session_state.get("Y_yellow", 2)
     alert_mode = st.session_state.get("alert_mode", "Off")
 
-    need_rescan = (
-        (scan_rows_missing() and not scan_busy)
-        or config_stale
-        or st.session_state.pop("immediate_rescan", False)
-        or (not scan_busy and time_since_update >= refresh_interval)
-    )
+    if need_rescan:
+        st.session_state.pop("immediate_rescan", None)
 
     alerts_to_send = []
 
