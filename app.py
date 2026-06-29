@@ -126,7 +126,7 @@ class Config:
 
     TIMEFRAMES = {"5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "1d": 86400}
     COINBASE_QUOTES = ["USD", "USDC", "USDT", "BTC", "ETH", "EUR"]
-    BINANCE_QUOTES = ["USDT", "USD", "BTC", "ETH", "USDC"]
+    BINANCE_QUOTES = ["USDT", "USD", "BTC", "USDC"]
     KRAKEN_QUOTES = ["USD", "EUR", "USDT", "BTC", "ETH"]
     KUCOIN_QUOTES = ["USDT", "BTC", "ETH", "USDC", "USD"]
     EXCHANGES = [
@@ -349,7 +349,6 @@ components.html(
 URL_PARAM_MAP = {
     "exchange": "ex",
     "quote": "q",
-    "pairs_to_discover": "ptd",
     "mode": "md",
     "ws_chunk": "wsc",
     "sort_tf": "tf",
@@ -610,7 +609,6 @@ def init_session_state():
     defaults = {
         "exchange": "Coinbase",
         "quote": "USD",
-        "pairs_to_discover": 400,
         "mode": "WebSocket + REST",
         "ws_chunk": 100,
         "sort_tf": "1h",
@@ -710,16 +708,62 @@ def get_effective_exchange() -> str:
     return "Coinbase" if "coming soon" in exchange.lower() else exchange
 
 
+QUOTE_DISPLAY_ORDER = ("USDT", "USD", "USDC", "BTC", "ETH", "EUR")
+
+
+def _sort_quotes(quotes: List[str]) -> List[str]:
+    rank = {q: i for i, q in enumerate(QUOTE_DISPLAY_ORDER)}
+    return sorted(quotes, key=lambda q: rank.get(q, 99))
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def get_coinbase_quote_currencies() -> List[str]:
+    try:
+        response = requests.get(f"{CONFIG.COINBASE_BASE}/products", timeout=25)
+        response.raise_for_status()
+        quotes = set()
+        for product in response.json():
+            if (
+                product.get("status") == "online"
+                and not product.get("trading_disabled", False)
+                and not product.get("cancel_only", False)
+                and product.get("quote_currency")
+            ):
+                quotes.add(product["quote_currency"].upper())
+        if quotes:
+            return _sort_quotes(list(quotes))
+    except Exception:
+        pass
+    return _sort_quotes(list(CONFIG.COINBASE_QUOTES))
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def get_binance_quote_currencies(api_base: str) -> List[str]:
+    """Quotes from the same Binance host used for scans (e.g. binance.us in US)."""
+    try:
+        response = requests.get(f"{api_base}/api/v3/exchangeInfo", timeout=25)
+        if response.status_code == 200:
+            quotes = set()
+            for symbol in response.json().get("symbols", []) or []:
+                if symbol.get("status") == "TRADING" and symbol.get("quoteAsset"):
+                    quotes.add(symbol["quoteAsset"].upper())
+            if quotes:
+                return _sort_quotes(list(quotes))
+    except Exception:
+        pass
+    return _sort_quotes(list(CONFIG.BINANCE_QUOTES))
+
+
 def quotes_for_exchange(exchange: str) -> List[str]:
     if exchange == "Binance":
-        return list(CONFIG.BINANCE_QUOTES)
+        return get_binance_quote_currencies(get_binance_api_base())
     if exchange == "Coinbase":
-        return list(CONFIG.COINBASE_QUOTES)
+        return get_coinbase_quote_currencies()
     if "kraken" in exchange.lower():
-        return list(CONFIG.KRAKEN_QUOTES)
+        return _sort_quotes(list(CONFIG.KRAKEN_QUOTES))
     if "kucoin" in exchange.lower():
-        return list(CONFIG.KUCOIN_QUOTES)
-    return list(CONFIG.COINBASE_QUOTES)
+        return _sort_quotes(list(CONFIG.KUCOIN_QUOTES))
+    return get_coinbase_quote_currencies()
 
 
 def default_quote_for_exchange(exchange: str) -> str:
@@ -847,56 +891,43 @@ def apply_scan_config_change(
     st.session_state["scan_config_fp"] = fp
 
 
-def build_scan_pairs() -> list:
+def _base_scan_pair_list() -> list:
     if st.session_state.get("use_my_pairs", False):
-        pairs = [
+        return [
             p.strip().upper()
             for p in st.session_state.get("my_pairs", "").split(",")
             if p.strip()
         ]
-    elif st.session_state.get("use_watch", False):
-        pairs = [
+    if st.session_state.get("use_watch", False):
+        return [
             p.strip().upper()
             for p in st.session_state.get("watchlist", "").split(",")
             if p.strip()
         ]
-    else:
-        pairs = get_products(get_effective_exchange(), st.session_state.get("quote", "USD"))
+    return get_products(
+        get_effective_exchange(), st.session_state.get("quote", "USD")
+    )
 
-    cap = max(5, min(500, int(st.session_state.get("pairs_to_discover", 400))))
-    pairs = pairs[:cap]
 
-    if st.session_state.get("mc_filter_enabled"):
-        mc_data = get_market_caps()
-        min_mc = st.session_state.get("min_market_cap_millions", 10) * 1_000_000
+def _apply_mc_filter(pairs: list) -> list:
+    if not st.session_state.get("mc_filter_enabled"):
+        return pairs
+    mc_data = get_market_caps()
+    min_mc = st.session_state.get("min_market_cap_millions", 10) * 1_000_000
 
-        def normalize_symbol(pair: str) -> str:
-            return pair.split("-")[0].upper()
+    def normalize_symbol(pair: str) -> str:
+        return pair.split("-")[0].upper()
 
-        pairs = [p for p in pairs if mc_data.get(normalize_symbol(p), 0) >= min_mc]
+    return [p for p in pairs if mc_data.get(normalize_symbol(p), 0) >= min_mc]
 
-    return pairs
+
+def build_scan_pairs() -> list:
+    return _apply_mc_filter(_base_scan_pair_list())
 
 
 def build_ws_pairs() -> list:
     """Pairs for WebSocket — ignores mc_filter so feed stays stable across tabs."""
-    if st.session_state.get("use_my_pairs", False):
-        pairs = [
-            p.strip().upper()
-            for p in st.session_state.get("my_pairs", "").split(",")
-            if p.strip()
-        ]
-    elif st.session_state.get("use_watch", False):
-        pairs = [
-            p.strip().upper()
-            for p in st.session_state.get("watchlist", "").split(",")
-            if p.strip()
-        ]
-    else:
-        pairs = get_products(get_effective_exchange(), st.session_state.get("quote", "USD"))
-
-    cap = max(5, min(500, int(st.session_state.get("pairs_to_discover", 400))))
-    return pairs[:cap]
+    return _base_scan_pair_list()
 
 
 def migrate_lr_baselines() -> None:
@@ -1957,6 +1988,8 @@ with st.sidebar:
             save_to_url("quote", st.session_state["quote"])
             clear_binance_api_base()
             get_products.clear()
+            get_coinbase_quote_currencies.clear()
+            get_binance_quote_currencies.clear()
             get_cached_data.clear()
             clear_session_candle_cache()
             trigger_immediate_rescan(clear_fetch_cache=True, force=True)
@@ -1994,6 +2027,8 @@ with st.sidebar:
             st.session_state["quote"] = new_quote
             save_to_url("quote", new_quote)
             get_products.clear()
+            get_coinbase_quote_currencies.clear()
+            get_binance_quote_currencies.clear()
             get_cached_data.clear()
             clear_session_candle_cache()
             trigger_immediate_rescan(clear_fetch_cache=True, force=True)
@@ -2027,22 +2062,8 @@ with st.sidebar:
             st.success("Updated!")
             st.rerun()
 
-    if st.session_state.get("use_my_pairs", False):
-        avail_pairs = [
-            p.strip().upper()
-            for p in st.session_state.get("my_pairs", "").split(",")
-            if p.strip()
-        ]
-    elif st.session_state.get("use_watch", False):
-        avail_pairs = [
-            p.strip().upper()
-            for p in st.session_state.get("watchlist", "").split(",")
-            if p.strip()
-        ]
-    else:
-        avail_pairs = get_products(get_effective_exchange(), st.session_state["quote"])
-
-    avail_count = len(avail_pairs)
+    avail_pairs = _base_scan_pair_list()
+    scan_pair_count = len(_apply_mc_filter(avail_pairs))
 
     st.sidebar.subheader("Discover Settings")
     preset_options = ["Aggressive", "Balanced", "Conservative", "No preset"]
@@ -2065,18 +2086,13 @@ with st.sidebar:
         ),
     )
 
-    ptd = st.sidebar.slider(
-        f"Pairs to discover{f' (Available: {avail_count})' if avail_count else ''}",
-        min_value=5,
-        max_value=500,
-        step=5,
-        value=st.session_state.get("pairs_to_discover", 400),
-        key="ui_pairs_to_discover",
-        help="Number of pairs to scan",
-    )
-    if ptd != st.session_state.get("pairs_to_discover"):
-        st.session_state["pairs_to_discover"] = int(ptd)
-        save_to_url("pairs_to_discover", ptd)
+    if st.session_state.get("mc_filter_enabled") and scan_pair_count != len(avail_pairs):
+        st.sidebar.caption(
+            f"Scanning {scan_pair_count} pairs "
+            f"({len(avail_pairs)} available, market-cap filter on)"
+        )
+    else:
+        st.sidebar.caption(f"Scanning {scan_pair_count} pairs (all available)")
 
 with expander("Mode & Timeframes"):
     new_mode = st.radio(
