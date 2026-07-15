@@ -398,61 +398,62 @@
     <section class="panel" id="panel-chug">
       <h2>Muted string chugging + pick motion</h2>
       <p class="note">
-        The intro’s grit is <strong style="color:var(--bright)">palm-muted chugs</strong> on the low strings —
-        edge of the picking hand rests on the bridge so notes go <em>chuck / chug</em>, not open ring.
-        Alternate <strong style="color:var(--bright)">↓ down</strong> and <strong style="color:var(--bright)">↑ up</strong> strokes keep the pulse locked.
+        Correction from the <a href="https://youtu.be/cFwTbsKkqxE" target="_blank" rel="noopener" style="color:var(--gold)">SRV · Live from Austin</a> performance:
+        the scratchy intro mute is <strong style="color:var(--bright)">fretting-hand muting on the neck</strong>
+        (fingers resting on the strings without fretting), <em>not</em> a metal-style palm mute at the bridge.
+        The picking hand strums through those deadened strings while the wah talks.
       </p>
 
-      <!-- WHERE hands sit -->
+      <!-- WHERE hands sit — CORRECTED -->
       <div class="place-grid">
         <div class="place-card">
-          <h3>Fretting hand · neck location</h3>
-          <svg class="neck-svg" viewBox="0 0 280 200" aria-label="Neck frets 0 to 3 for intro">
-            <!-- nut / headstock side -->
-            <rect x="20" y="30" width="14" height="140" fill="#e8d2a0"/>
-            <text x="27" y="22" text-anchor="middle" fill="#9aa3b2" font-size="10">NUT</text>
-            <!-- frets -->
-            <line x1="70" y1="30" x2="70" y2="170" stroke="#9aa3b2" stroke-width="2"/>
-            <line x1="120" y1="30" x2="120" y2="170" stroke="#9aa3b2" stroke-width="2"/>
-            <line x1="170" y1="30" x2="170" y2="170" stroke="#9aa3b2" stroke-width="2"/>
-            <line x1="220" y1="30" x2="220" y2="170" stroke="#9aa3b2" stroke-width="1.5"/>
-            <text x="45" y="188" text-anchor="middle" fill="#f3e4bc" font-size="11" font-weight="700">0</text>
-            <text x="95" y="188" text-anchor="middle" fill="#f3e4bc" font-size="11" font-weight="700">1</text>
-            <text x="145" y="188" text-anchor="middle" fill="#f3e4bc" font-size="11" font-weight="700">2</text>
-            <text x="195" y="188" text-anchor="middle" fill="#f3e4bc" font-size="11" font-weight="700">3</text>
-            <!-- strings -->
-            <g stroke="#c9a24a" stroke-width="1.2">
-              <line x1="20" y1="42" x2="260" y2="42"/>
-              <line x1="20" y1="62" x2="260" y2="62"/>
-              <line x1="20" y1="82" x2="260" y2="82"/>
-              <line x1="20" y1="102" x2="260" y2="102"/>
-              <line x1="20" y1="122" x2="260" y2="122"/>
-              <line x1="20" y1="142" x2="260" y2="142"/>
+          <h3>Muting hand · on the NECK (what the video shows)</h3>
+          <svg class="neck-svg" viewBox="0 0 280 200" aria-label="Fretting hand mute around 7th fret">
+            <rect x="8" y="30" width="12" height="140" fill="#e8d2a0"/>
+            <text x="14" y="22" text-anchor="middle" fill="#9aa3b2" font-size="9">NUT</text>
+            <!-- frets 1-12 marks -->
+            <g stroke="#9aa3b2" stroke-width="1.5">
+              <line x1="40" y1="30" x2="40" y2="170"/>
+              <line x1="70" y1="30" x2="70" y2="170"/>
+              <line x1="100" y1="30" x2="100" y2="170"/>
+              <line x1="130" y1="30" x2="130" y2="170"/>
+              <line x1="160" y1="30" x2="160" y2="170"/>
+              <line x1="190" y1="30" x2="190" y2="170"/>
+              <line x1="220" y1="30" x2="220" y2="170"/>
+              <line x1="250" y1="30" x2="250" y2="170"/>
             </g>
-            <!-- zone highlight: open + frets 0-3 -->
-            <rect x="22" y="32" width="200" height="136" fill="rgba(196,120,74,0.18)" stroke="#c4784a" stroke-width="2" stroke-dasharray="5 4"/>
-            <text x="120" y="100" text-anchor="middle" fill="#f3e4bc" font-size="13" font-weight="700">INTRO ZONE</text>
-            <text x="120" y="116" text-anchor="middle" fill="#e8d2a0" font-size="10">open → fret 3</text>
-            <!-- finger dots -->
-            <circle cx="45" cy="142" r="7" fill="#c4784a"/>
-            <text x="45" y="146" text-anchor="middle" fill="#0e1218" font-size="9" font-weight="700">E</text>
-            <circle cx="145" cy="102" r="7" fill="#c4784a"/>
-            <text x="145" y="106" text-anchor="middle" fill="#0e1218" font-size="9" font-weight="700">2</text>
-            <circle cx="145" cy="82" r="7" fill="#7faf9a"/>
-            <text x="145" y="86" text-anchor="middle" fill="#0e1218" font-size="9" font-weight="700">2</text>
+            <text x="25" y="188" fill="#9aa3b2" font-size="9">0</text>
+            <text x="145" y="188" fill="#f3e4bc" font-size="10" font-weight="700">7</text>
+            <text x="235" y="188" fill="#9aa3b2" font-size="9">12</text>
+            <g stroke="#c9a24a" stroke-width="1.2">
+              <line x1="8" y1="42" x2="270" y2="42"/>
+              <line x1="8" y1="62" x2="270" y2="62"/>
+              <line x1="8" y1="82" x2="270" y2="82"/>
+              <line x1="8" y1="102" x2="270" y2="102"/>
+              <line x1="8" y1="122" x2="270" y2="122"/>
+              <line x1="8" y1="142" x2="270" y2="142"/>
+            </g>
+            <!-- mute zone ~ fret 7 -->
+            <rect x="115" y="34" width="70" height="132" rx="6" fill="rgba(196,120,74,0.4)" stroke="#c4784a" stroke-width="2"/>
+            <text x="150" y="90" text-anchor="middle" fill="#0e1218" font-size="12" font-weight="700">MUTE</text>
+            <text x="150" y="108" text-anchor="middle" fill="#0e1218" font-size="12" font-weight="700">ZONE</text>
+            <text x="150" y="126" text-anchor="middle" fill="#1a1208" font-size="10">~ fret 7</text>
+            <!-- hand fingers -->
+            <ellipse cx="150" cy="70" rx="28" ry="10" fill="rgba(243,228,188,0.55)" stroke="#1a1208" stroke-width="1"/>
+            <ellipse cx="150" cy="95" rx="28" ry="10" fill="rgba(243,228,188,0.55)" stroke="#1a1208" stroke-width="1"/>
+            <ellipse cx="150" cy="120" rx="28" ry="10" fill="rgba(243,228,188,0.55)" stroke="#1a1208" stroke-width="1"/>
           </svg>
           <p>
-            Stay at the <strong style="color:var(--bright)">nut end</strong> of the neck (frets <strong style="color:var(--bright)">0–3</strong>).
-            Chugs = open low E. Lick uses 2nd fret on D/G. Bend toward fret 3 on low E. Do <em>not</em> mute with the fretting hand for the chug — that’s the other hand.
+            In the Austin clip, the <strong style="color:var(--bright)">fretting hand</strong> lays across the strings
+            around the <strong style="color:var(--bright)">mid-neck (~7th fret)</strong>. Fingers touch the strings but
+            <em>do not press them to the frets</em> — that kills pitch and makes the wah “chk-chk” scrapes (<code style="color:var(--bright)">xxxxxx</code>).
           </p>
         </div>
 
         <div class="place-card">
-          <h3>Muting hand · where it sits</h3>
-          <svg class="bridge-svg" viewBox="0 0 280 200" aria-label="Palm mute at bridge not on neck">
-            <!-- body hint -->
+          <h3>Picking hand · strums; not the main mute</h3>
+          <svg class="bridge-svg" viewBox="0 0 280 200" aria-label="Picking hand strums while fret hand mutes">
             <rect x="20" y="40" width="240" height="120" rx="10" fill="#1a222e" stroke="#e8d2a0" stroke-width="1.5"/>
-            <!-- strings -->
             <g stroke="#c9a24a" stroke-width="1.3">
               <line x1="30" y1="60" x2="200" y2="60"/>
               <line x1="30" y1="80" x2="200" y2="80"/>
@@ -460,33 +461,41 @@
               <line x1="30" y1="120" x2="200" y2="120"/>
               <line x1="30" y1="140" x2="200" y2="140"/>
             </g>
-            <text x="40" y="32" fill="#9aa3b2" font-size="10">← toward neck / frets</text>
-            <!-- bridge -->
-            <rect x="200" y="52" width="22" height="96" rx="3" fill="#e8d2a0"/>
-            <text x="211" y="175" text-anchor="middle" fill="#f3e4bc" font-size="10" font-weight="700">BRIDGE</text>
-            <!-- palm mute zone -->
-            <rect x="155" y="100" width="55" height="55" rx="10" fill="rgba(196,120,74,0.55)" stroke="#c4784a" stroke-width="2"/>
-            <text x="182" y="125" text-anchor="middle" fill="#0e1218" font-size="11" font-weight="700">PALM</text>
-            <text x="182" y="140" text-anchor="middle" fill="#0e1218" font-size="11" font-weight="700">HERE</text>
-            <!-- wrong zone -->
-            <rect x="40" y="70" width="50" height="40" rx="6" fill="none" stroke="#9aa3b2" stroke-width="1.5" stroke-dasharray="4 3"/>
-            <text x="65" y="95" text-anchor="middle" fill="#9aa3b2" font-size="9">not here</text>
-            <text x="65" y="55" text-anchor="middle" fill="#9aa3b2" font-size="9">(neck)</text>
+            <text x="40" y="32" fill="#9aa3b2" font-size="10">← neck (mute is HERE, not at bridge)</text>
+            <rect x="40" y="55" width="90" height="90" rx="8" fill="rgba(196,120,74,0.35)" stroke="#c4784a" stroke-width="2"/>
+            <text x="85" y="95" text-anchor="middle" fill="#f3e4bc" font-size="11" font-weight="700">FRET</text>
+            <text x="85" y="112" text-anchor="middle" fill="#f3e4bc" font-size="11" font-weight="700">HAND</text>
+            <text x="85" y="128" text-anchor="middle" fill="#e8d2a0" font-size="9">mutes</text>
+            <rect x="200" y="52" width="22" height="96" rx="3" fill="#6a6050"/>
+            <text x="211" y="175" text-anchor="middle" fill="#9aa3b2" font-size="9">bridge</text>
+            <polygon points="175,100 195,115 175,130 155,115" fill="#c9a24a" stroke="#1a1208" stroke-width="1.5"/>
+            <text x="175" y="150" text-anchor="middle" fill="#f3e4bc" font-size="10" font-weight="700">PICK ↓↑</text>
           </svg>
           <p>
-            Place the <strong style="color:var(--bright)">side / heel of the picking hand</strong> lightly on the
-            <strong style="color:var(--bright)">low strings right next to the bridge saddles</strong> — not up on the fretboard.
-            Cover mostly low E (and A if scratching). Keep pressure light: dead “chuck,” not choked silence.
+            The picking hand mainly <strong style="color:var(--bright)">strums / picks</strong> through the already-deadened strings.
+            A light bridge touch can happen in blues, but for this intro’s signature scrapes the mute you <em>see</em>
+            in the video is on the <strong style="color:var(--bright)">fretboard</strong>.
           </p>
         </div>
       </div>
 
-      <!-- WHEN mute goes on -->
+      <div class="timing-wrap" style="border-color:rgba(196,120,74,0.45)">
+        <h3>What that Austin video shows (plain language)</h3>
+        <p class="note" style="margin:0">
+          1. Fretting fingers rest <strong style="color:var(--bright)">on top of the strings on the neck</strong> (often near ~7th fret for SRV’s muted chatter).<br/>
+          2. He is <strong style="color:var(--bright)">not squeezing the strings down to the wood</strong> — no clear fretted pitch, only a dead scrape.<br/>
+          3. Picking hand keeps a rhythmic ↓↑ / strum pulse while the wah rocks — the “voice” is filter + dead strings.<br/>
+          4. When the real notes start (hammer-ons around frets 5–9, then the low-E riff), the fretting hand <strong style="color:var(--bright)">presses normally</strong> and the mute lifts off those scrapes.<br/>
+          My earlier “palm mute at the bridge” diagram was the wrong primary location for this part.
+        </p>
+      </div>
+
+      <!-- WHEN mute goes on — CORRECTED -->
       <div class="timing-wrap">
-        <h3>Note timing · when the mute hand is on the strings</h3>
-        <p class="note" style="margin-top:0">~96 BPM · each column ≈ one eighth note (~312 ms). <span class="mute-badge">ON</span> = palm resting on strings at the bridge. <span style="display:inline-block;background:rgba(127,175,154,0.25);color:#7faf9a;font-weight:700;font-size:0.75rem;padding:0.15rem 0.45rem;border-radius:6px">OFF</span> = lift mute so notes can ring / wah.</p>
+        <h3>Note timing · fretting-hand mute ON / OFF</h3>
+        <p class="note" style="margin-top:0">~96 BPM · eighths. <span class="mute-badge">ON</span> = fretting fingers resting on neck strings (no fret pressure). <span style="display:inline-block;background:rgba(127,175,154,0.25);color:#7faf9a;font-weight:700;font-size:0.75rem;padding:0.15rem 0.45rem;border-radius:6px">OFF</span> = press / play real notes.</p>
         <div class="timing-scroll">
-          <table class="timing-table" aria-label="Mute timing grid">
+          <table class="timing-table" aria-label="Fret-hand mute timing grid">
             <thead>
               <tr>
                 <th scope="col">Beat</th>
@@ -498,35 +507,30 @@
             <tbody>
               <tr class="beat-row">
                 <td>bar</td>
-                <td colspan="8" style="color:#c4784a">Bar 1 — chug only</td>
-                <td colspan="4" style="color:#7faf9a">Bar 2 — into lick</td>
+                <td colspan="8" style="color:#c4784a">Wah scrapes (dead)</td>
+                <td colspan="4" style="color:#7faf9a">Pitched lick starts</td>
               </tr>
               <tr>
                 <td>Pick</td>
                 <td>↓</td><td>↑</td><td>↓</td><td>↑</td><td>↓</td><td>↑</td><td>↓</td><td>↑</td>
-                <td>↓</td><td>↑</td><td>↓</td><td>·</td>
+                <td>↓</td><td>·</td><td>↓</td><td>·</td>
               </tr>
               <tr>
-                <td>Note</td>
-                <td class="note-cell">0</td><td class="note-cell">0</td><td class="note-cell">0</td><td class="note-cell">0</td>
-                <td class="note-cell">0</td><td class="note-cell">0</td><td class="note-cell">0</td><td class="note-cell">0</td>
-                <td class="note-cell">0</td><td class="note-cell">0</td><td class="note-cell">2</td><td class="note-cell">0h2</td>
+                <td>Hear</td>
+                <td class="note-cell">x</td><td class="note-cell">x</td><td class="note-cell">x</td><td class="note-cell">x</td>
+                <td class="note-cell">x</td><td class="note-cell">x</td><td class="note-cell">x</td><td class="note-cell">x</td>
+                <td class="note-cell">9</td><td class="note-cell">~</td><td class="note-cell">7</td><td class="note-cell">h9</td>
               </tr>
               <tr>
-                <td>String</td>
-                <td>E</td><td>E</td><td>E</td><td>E</td><td>E</td><td>E</td><td>E</td><td>E</td>
-                <td>E</td><td>E</td><td>D</td><td>G</td>
+                <td>Neck spot</td>
+                <td>~7</td><td>~7</td><td>~7</td><td>~7</td><td>~7</td><td>~7</td><td>~7</td><td>~7</td>
+                <td>7–9</td><td>7–9</td><td>5–9</td><td>5–9</td>
               </tr>
               <tr>
-                <td>Neck fret</td>
-                <td>open</td><td>open</td><td>open</td><td>open</td><td>open</td><td>open</td><td>open</td><td>open</td>
-                <td>open</td><td>open</td><td>2</td><td>0→2</td>
-              </tr>
-              <tr>
-                <td>Mute hand</td>
+                <td>Fret hand</td>
                 <td class="on">ON</td><td class="on">ON</td><td class="on">ON</td><td class="on">ON</td>
                 <td class="on">ON</td><td class="on">ON</td><td class="on">ON</td><td class="on">ON</td>
-                <td class="on">ON</td><td class="on">ON</td><td class="off">OFF</td><td class="off">OFF</td>
+                <td class="off">PRESS</td><td class="off">PRESS</td><td class="off">PRESS</td><td class="off">PRESS</td>
               </tr>
               <tr>
                 <td>~time</td>
@@ -537,13 +541,13 @@
           </table>
         </div>
         <div class="timing-legend">
-          <span class="on-lab"><b>ON</b> palm on low strings at bridge — from beat 1 of the chug through the last muted 0</span>
-          <span class="off-lab"><b>OFF</b> lift palm ~on the &amp; of 1 / beat 2 when fretting hand hits fret 2 (D string) and the 0h2p0 sings</span>
+          <span class="on-lab"><b>ON</b> fretting hand rests on strings at ~7th fret — no pitch, wah scrapes</span>
+          <span class="off-lab"><b>PRESS</b> same hand frets for real — mute lifts as notes speak</span>
         </div>
         <p class="note" style="margin:0.75rem 0 0">
-          <strong style="color:var(--bright)">Rule of thumb:</strong> mute hand stays ON for all open-E chugs.
-          Lift OFF about <strong style="color:var(--bright)">one eighth-note before</strong> the first fretted lick note (D-string fret 2),
-          so the wah phrase isn’t choked. Put mute back ON between phrases if you want more chucks.
+          <strong style="color:var(--bright)">Rule:</strong> for the intro chatter, mute with the
+          <strong style="color:var(--bright)">neck hand</strong>. Place it before the first scrape;
+          keep it ON through the <code style="color:var(--bright)">x</code> hits; press frets when the pitched phrase begins.
         </p>
       </div>
 
@@ -580,70 +584,58 @@
       </div>
 
       <div class="chug-legend">
-        <span><span class="mute-badge">PM</span> = palm mute (hand on bridge)</span>
-        <span><code>x</code> = muted scratch (no pitch)</span>
+        <span><span class="mute-badge">LH MUTE</span> = fretting hand rests on neck strings (no fret pressure)</span>
+        <span><code>x</code> = dead scrape (what you hear)</span>
         <span><code>↓</code> = downstroke · <code>↑</code> = upstroke</span>
       </div>
 
       <div class="tab-wrap">
         <div class="tab-meta">
-          <span><strong>Intro chug cell</strong> — before / under the wah talk</span>
-          <span><strong>~96 BPM</strong> eighth-note pulse</span>
+          <span><strong>Intro scrapes</strong> — as in SRV Austin / Hendrix wah chatter</span>
+          <span><strong>~96 BPM</strong> · mute on neck ~fret 7</span>
         </div>
-<pre class="tab">Palm-muted low-E chugs (shapes in E · tune to E♭)
+<pre class="tab">Fretting-hand mute on the NECK (not bridge palm)
 
-PM————————————|PM————————————|PM——————
-↓   ↑   ↓   ↑   ↓   ↑   ↓   ↑   ↓   ↑   ↓
-e|---------------------------------------|
-B|---------------------------------------|
-G|---------------------------------------|
-D|---------------------------------------|
-A|---------------------------------------|
-E|--0---0---0---0---0---0---0---0---0----|
-    chuck chuck chuck … (dead, percussive)
+LH MUTE ON @ ~7th fret (fingers on strings, no press)
+↓   ↑   ↓   ↑   ↓   ↑   ↓   ↑
+e|--x---x---x---x---x---x---x---x--|
+B|--x---x---x---x---x---x---x---x--|
+G|--x---x---x---x---x---x---x---x--|
+D|--x---x---x---x---x---x---x---x--|
+A|--x---x---x---x---x---x---x---x--|
+E|--x---x---x---x---x---x---x---x--|
+   “chk” scrapes + wah rock
 
-Muted string scratches (wah often parked ~⅔)
-     ↓     ↑     ↓     ↑
-e|--------------------------------|
-B|--------------------------------|
-G|--------------------------------|
-D|--x-----x-----x-----x-----------|
-A|--x-----x-----x-----x-----------|
-E|--x-----x-----x-----x-----------|
-   “chk”  “chk” — scrape muted strings
+Then PRESS frets for pitched SRV-style cell (mute OFF)
+e|-------------------------------------|
+B|--------------------------------xxxxx|
+G|---9~------7----------9~--7---9~-xxxxx|
+D|------7h9----5b-5b-7p5------9----xxxxx|
+A|---------------------------------xxxxx|
+E|-------------------------------------|
+   ↑ fretting hand now frets 5–9
+     mute scrapes return on the xxxxx
 
-Chug → open into the lick (release mute on the rise)
-PM——————|  free———————————————
-↓   ↑   ↓    ↓    ↓         ↓
-e|-------------------------------|
-B|-------------------------------|
-G|----------0h2p0----0h2p0-------|
-D|--------2--------2-------------|
-A|-------------------------------|
-E|--0---0------------------------|
-   mute     ↑ release PM · pick DOWN on accents
-
-How to hold the mute
-1. Side of picking hand rests lightly on the bridge / low strings.
-2. Dig the pick DOWN through low E — short “chuck,” not a sustained note.
-3. Come UP through the same string for the reply stroke.
-4. Keep the wrist loose; motion is mostly forearm + wrist, pick tip pointing slightly in.
-5. When the melodic 0h2p0 starts, lift the palm slightly so the notes can ring/wah.</pre>
+How to mute (matching the video)
+1. Lay fretting fingers across the strings around ~fret 7.
+2. Touch only — do not push strings to the fretboard.
+3. Strum / pick ↓↑ through those dead strings + rock the wah.
+4. When real notes start, press normally; lift the “resting mute.”
+5. Bridge palm mute is optional extras — it is NOT the main mute you see here.</pre>
 
         <div class="wah-track">
-          <strong>Pick motion rules for this intro</strong><br/>
-          <strong>↓ Down</strong> on the beat / accent chugs and on the start of each lick cell.<br/>
-          <strong>↑ Up</strong> on the off-beats — fills the eighth-note groove between downs.<br/>
-          Don’t “pick from the elbow” on every note — small stroke, big attitude.<br/>
-          Fuzz stays on: the mute + pick attack creates the chug; the wah shapes the vowel.
+          <strong>Pick motion</strong><br/>
+          <strong>↓ Down</strong> on accents through the muted strings.<br/>
+          <strong>↑ Up</strong> on the off-beats — keeps the scratch groove alive.<br/>
+          The dead sound comes from the <strong>neck hand</strong>; the pick only attacks.
         </div>
       </div>
 
       <div class="wah-steps" style="margin-top:1rem">
-        <div class="wah-step"><b>↓ Downstroke</b>Pick moves toward the floor through the string. Accents + chugs.</div>
-        <div class="wah-step"><b>↑ Upstroke</b>Pick moves toward the ceiling. Off-beat replies.</div>
-        <div class="wah-step"><b>PM chug</b>Palm kills sustain — you hear attack, not ring.</div>
-        <div class="wah-step"><b>Release</b>Lift palm when the wah lick sings so notes can open.</div>
+        <div class="wah-step"><b>Neck mute</b>Fretting hand rests on strings ~fret 7 — primary mute in the video.</div>
+        <div class="wah-step"><b>↓ / ↑</b>Picking hand attacks; does not do the main muting job.</div>
+        <div class="wah-step"><b>No press</b>If you fret hard, you get pitch — scrapes need light touch only.</div>
+        <div class="wah-step"><b>Then press</b>When the lick sings, same hand frets 5–9 normally.</div>
       </div>
     </section>
 
