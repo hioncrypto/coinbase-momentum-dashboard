@@ -347,6 +347,7 @@
       <option value="the_trooper">The Trooper — Iron Maiden</option>
       <option value="aces_high">Aces High — Iron Maiden</option>
       <option value="surfing_with_the_alien">Surfing with the Alien — Satriani</option>
+      <option value="voodoo_child">Voodoo Child — Hendrix</option>
       <option value="mozart_k581">Clarinet Quintet K.581 — Mozart</option>
     </select>
   </div>
@@ -430,12 +431,13 @@
       the_trooper: { drive: 75, pre: 0.26, master: 0.14, midHz: 1100, midGain: 3.5, presence: 4, lowpass: 5000, attack: 0.006, sustain: 0.4, release: 0.7, voicing: "power", detune: 1.004, osc: "sawtooth", twin: true },
       aces_high: { drive: 80, pre: 0.25, master: 0.14, midHz: 1050, midGain: 3, presence: 4.5, lowpass: 5200, attack: 0.005, sustain: 0.35, release: 0.65, voicing: "power", detune: 1.004, osc: "sawtooth", twin: true, staccato: true },
       surfing_with_the_alien: { drive: 45, pre: 0.22, master: 0.13, midHz: 950, midGain: 5, presence: 3, lowpass: 4500, attack: 0.018, sustain: 0.62, release: 1.05, voicing: "triad", detune: 1.003, osc: "sawtooth", organ: true },
+      voodoo_child: { drive: 85, pre: 0.26, master: 0.14, midHz: 800, midGain: 6, presence: 3, lowpass: 4800, attack: 0.008, sustain: 0.5, release: 0.9, voicing: "power", detune: 1.004, osc: "sawtooth" },
       mozart_k581: { drive: 0, pre: 0.2, master: 0.11, midHz: 1200, midGain: 1, presence: -2, lowpass: 2800, attack: 0.06, sustain: 0.7, release: 1.4, voicing: "triad", detune: 1.0008, osc: "triangle", clean: true },
     };
 
     const SONG_TONIC = {
       over_the_mountain: "G#m", diary_of_a_madman: "G#m", mr_crowley: "Dm",
-      the_trooper: "Em", aces_high: "Em", surfing_with_the_alien: "G", mozart_k581: "A",
+      the_trooper: "Em", aces_high: "Em", surfing_with_the_alien: "G", voodoo_child: "Em", mozart_k581: "A",
     };
 
     let audioCtx = null;
@@ -519,6 +521,7 @@
           the_trooper: "Maiden Marshall gallop",
           aces_high: "Maiden scramble / anthem",
           surfing_with_the_alien: "Satriani singing mid-gain",
+          voodoo_child: "Hendrix wah + fuzz Marshall",
           mozart_k581: "clarinet chamber clean",
         };
         label.textContent = "Tone: " + (names[activeTone] || names.default);

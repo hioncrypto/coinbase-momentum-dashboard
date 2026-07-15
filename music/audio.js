@@ -52,6 +52,13 @@ window.MusicAudio = (function () {
       attack: 0.018, sustain: 0.62, release: 1.05,
       voicing: "triad", detune: 1.003, osc: "sawtooth", organ: true,
     },
+    voodoo_child: {
+      name: "Hendrix wah + fuzz Marshall",
+      drive: 85, pre: 0.26, master: 0.14,
+      midHz: 800, midGain: 6, presence: 3, lowpass: 4800,
+      attack: 0.008, sustain: 0.5, release: 0.9,
+      voicing: "power", detune: 1.004, osc: "sawtooth",
+    },
     mozart_k581: {
       name: "Clarinet chamber clean",
       drive: 0, pre: 0.35, master: 0.12,

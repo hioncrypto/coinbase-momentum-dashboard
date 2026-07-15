@@ -7,6 +7,7 @@ Interactive teacher for song analysis:
 - **Interactive Circle of Fifths** — tap any key, hear it, see relative / V / IV, play diatonic chords (`interactive_circle.html`)
 - **Teach** — guided how-each-song-uses-the-circle lessons (`teach.html`)
 - **Pedalboard** — Surfing with the Alien studio / bedroom signal-chain schematic (`pedalboard.html`)
+- **Voodoo Child** — effects settings, intro tablature, animated wah rocking (`voodoo_child.html`)
 - **Song Lab** — twelve analysis lenses (pitch, melody, rhythm, articulation, form, texture, dynamics, timbre, technique, lyrics, style, effect)
 - **Circle of Fifths** — section-by-section harmonic map
 - **Lessons** — Aeolian cadence, modes, articulation storytelling, and more
@@ -22,6 +23,7 @@ Interactive teacher for song analysis:
 | The Trooper (Iron Maiden) | Gallop · twin leads |
 | Aces High (Iron Maiden) | Staccato → legato articulation |
 | Surfing with the Alien (Satriani) | G major I↔IV · modal solo ladder · Tube Driver tone |
+| Voodoo Child (Slight Return) (Hendrix) | Em blues · wah rock · Fuzz Face · Marshall |
 | Clarinet Quintet K.581 (Mozart) | Ionian / parallel Aeolian |
 
 ## How to open

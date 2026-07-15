@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Voodoo Child · Effects, Tab & Wah Rock · Music Teacher</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700&family=IBM+Plex+Sans:wght@400;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0e1218; --panel: #161c26; --gold: #e8d2a0; --bright: #f3e4bc;
+      --ember: #c4784a; --mint: #7faf9a; --text: #e8e2d6; --muted: #9aa3b2;
+      --line: rgba(232,210,160,0.2);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background:
+        radial-gradient(ellipse 70% 45% at 50% -8%, rgba(196,120,74,0.2), transparent 55%),
+        #0e1218;
+      color: var(--text); font-family: "IBM Plex Sans", sans-serif;
+      padding: 0 0 2.5rem;
+    }
+    header {
+      padding: 1.1rem clamp(1rem, 3vw, 2rem) 0.9rem;
+      border-bottom: 1px solid var(--line);
+    }
+    .eyebrow {
+      margin: 0 0 0.25rem; font-size: 0.72rem; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--ember); font-weight: 600;
+    }
+    .eyebrow a { color: inherit; text-decoration: none; }
+    h1 {
+      margin: 0; font-family: Fraunces, Georgia, serif;
+      font-size: clamp(1.4rem, 3.5vw, 2rem); color: var(--bright);
+    }
+    .sub { margin: 0.4rem 0 0; color: var(--muted); max-width: 40rem; font-size: 0.92rem; line-height: 1.45; }
+    .yt { margin: 0.55rem 0 0; font-size: 0.85rem; }
+    .yt a { color: var(--gold); }
+
+    .tabs {
+      display: flex; flex-wrap: wrap; gap: 0.4rem;
+      padding: 0.75rem clamp(1rem, 3vw, 2rem);
+      border-bottom: 1px solid var(--line);
+      background: rgba(10,13,18,0.9);
+      position: sticky; top: 0; z-index: 30;
+    }
+    .tabs button {
+      appearance: none; border: 1px solid var(--line); background: var(--panel);
+      color: var(--muted); border-radius: 999px; padding: 0.45rem 0.9rem;
+      font: 600 0.82rem "IBM Plex Sans", sans-serif; cursor: pointer;
+    }
+    .tabs button.active {
+      background: rgba(196,120,74,0.28); color: var(--bright);
+      border-color: rgba(232,210,160,0.45);
+    }
+    main { padding: 1.15rem clamp(1rem, 3vw, 2rem); }
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    h2 {
+      margin: 0 0 0.75rem;
+      font-family: Fraunces, Georgia, serif;
+      font-size: 1.2rem; color: var(--gold);
+    }
+    .note { color: var(--muted); font-size: 0.88rem; line-height: 1.45; margin: 0 0 1rem; }
+
+    /* —— Pedals —— */
+    .pedal {
+      max-width: 440px; margin: 0 auto 0.85rem;
+      border-radius: 14px; padding: 0.95rem 1rem 1.05rem;
+      border: 3px solid var(--gold); box-shadow: 0 8px 0 #0a0d12;
+    }
+    .pedal.guitar { background: #2a1c14; border-color: var(--ember); }
+    .pedal.wah { background: #c9a24a; color: #1a1208; border-color: #f3e4bc; }
+    .pedal.fuzz { background: #3a2418; border-color: #c4784a; }
+    .pedal.amp { background: #1c1412; border-color: #c4784a; }
+    .pedal .tag {
+      margin: 0; font-size: 0.68rem; letter-spacing: 0.14em;
+      text-transform: uppercase; font-weight: 700; opacity: 0.85;
+    }
+    .pedal .title {
+      margin: 0.15rem 0 0.65rem;
+      font-family: Fraunces, Georgia, serif; font-size: 1.25rem; font-weight: 700;
+    }
+    .pedal.wah .title { color: #1a1208; }
+    .row {
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 0.6rem; padding: 0.4rem 0.5rem; margin: 0.28rem 0;
+      background: rgba(0,0,0,0.35); border-radius: 8px;
+    }
+    .pedal.wah .row { background: rgba(0,0,0,0.16); }
+    .row .label { font-weight: 600; font-size: 0.95rem; }
+    .row .num {
+      font-family: "JetBrains Mono", monospace; font-size: 1.45rem; font-weight: 700;
+      background: var(--ember); color: #0e1218;
+      padding: 0.12rem 0.5rem; border-radius: 8px; min-width: 2.8rem; text-align: center;
+    }
+    .pedal.wah .row .num { background: #1a1208; color: #f3e4bc; }
+    .arrow { text-align: center; color: var(--ember); font-size: 1.35rem; font-weight: 700; margin: 0.1rem 0 0.7rem; }
+    .tip { margin: 0.55rem 0 0; font-size: 0.82rem; opacity: 0.9; }
+
+    /* —— Wah rock animation —— */
+    .wah-stage {
+      background: var(--panel); border: 1px solid var(--line);
+      border-radius: 14px; padding: 1rem 0.75rem 1.15rem;
+      max-width: 520px; margin: 0 auto 1.25rem;
+    }
+    .wah-svg { width: 100%; max-width: 420px; display: block; margin: 0 auto; }
+    .wah-labels {
+      display: flex; justify-content: space-between;
+      max-width: 420px; margin: 0.35rem auto 0.75rem;
+      font-size: 0.78rem; font-weight: 600; color: var(--muted);
+    }
+    .wah-labels span strong { color: var(--bright); display: block; font-size: 0.9rem; }
+    .wah-meter {
+      height: 14px; border-radius: 999px; background: #0a0d12;
+      border: 1px solid var(--line); overflow: hidden; max-width: 420px; margin: 0 auto;
+      position: relative;
+    }
+    .wah-meter-fill {
+      height: 100%; width: 35%;
+      background: linear-gradient(90deg, #5a3a20, var(--ember), var(--bright));
+      border-radius: 999px;
+      transition: width 0.08s linear;
+    }
+    .wah-readout {
+      text-align: center; margin: 0.55rem 0 0;
+      font-family: "JetBrains Mono", monospace; font-size: 1.05rem; color: var(--bright);
+    }
+    .wah-controls {
+      display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center;
+      margin-top: 0.85rem;
+    }
+    .wah-controls button {
+      appearance: none; border: 1px solid var(--line); background: #1c2430;
+      color: var(--bright); border-radius: 10px; padding: 0.55rem 0.95rem;
+      font: 600 0.88rem "IBM Plex Sans", sans-serif; cursor: pointer;
+    }
+    .wah-controls button.primary {
+      background: rgba(196,120,74,0.35); border-color: rgba(232,210,160,0.5);
+    }
+
+    /* —— Tab —— */
+    .tab-wrap {
+      background: #121821; border: 1px solid var(--line);
+      border-radius: 14px; padding: 1rem 0.75rem;
+      overflow-x: auto; -webkit-overflow-scrolling: touch;
+    }
+    .tab-meta {
+      display: flex; flex-wrap: wrap; gap: 0.45rem 1rem;
+      margin: 0 0 0.75rem; font-size: 0.82rem; color: var(--muted);
+    }
+    .tab-meta strong { color: var(--gold); }
+    pre.tab {
+      margin: 0; font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: clamp(0.72rem, 2.6vw, 0.92rem);
+      line-height: 1.35; color: var(--bright); white-space: pre;
+    }
+    .wah-track {
+      margin-top: 0.85rem; padding: 0.75rem;
+      background: rgba(196,120,74,0.12); border: 1px dashed rgba(232,210,160,0.35);
+      border-radius: 10px; font-size: 0.86rem; line-height: 1.45; color: var(--muted);
+    }
+    .wah-track strong { color: var(--bright); }
+    .wah-steps {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.5rem; margin-top: 0.75rem;
+    }
+    .wah-step {
+      background: #1c2430; border: 1px solid var(--line); border-radius: 10px;
+      padding: 0.55rem 0.65rem; font-size: 0.8rem;
+    }
+    .wah-step b {
+      display: block; font-family: Fraunces, Georgia, serif;
+      color: var(--gold); font-size: 0.95rem; margin-bottom: 0.2rem;
+    }
+
+    footer {
+      padding: 1rem clamp(1rem, 3vw, 2rem);
+      border-top: 1px solid var(--line); color: var(--muted); font-size: 0.78rem;
+      text-align: center;
+    }
+    footer a { color: var(--gold); }
+  </style>
+</head>
+<body>
+  <header>
+    <p class="eyebrow"><a href="index.html">Music Teacher</a> · Tone + tab</p>
+    <h1>Voodoo Child (Slight Return)</h1>
+    <p class="sub">Jimi Hendrix Experience · Electric Ladyland (1968). Effects to get the sound, intro tablature, and how to rock the wah.</p>
+    <p class="yt"><a href="https://youtu.be/L7UMubmfbH0" target="_blank" rel="noopener">Watch on YouTube →</a></p>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button type="button" class="active" data-panel="effects">1 · Effects pedals</button>
+    <button type="button" data-panel="wah">2 · Wah rocking</button>
+    <button type="button" data-panel="tab">3 · Tablature</button>
+  </div>
+
+  <main>
+    <!-- EFFECTS -->
+    <section class="panel active" id="panel-effects">
+      <h2>Signal chain + settings on each pedal</h2>
+      <p class="note">Classic studio/live recipe: Strat (E♭) → Wah → Fuzz Face → Marshall Plexi. Numbers are starting points — trim by ear.</p>
+
+      <div class="pedal guitar">
+        <p class="tag">1 · Guitar</p>
+        <p class="title">Fender Stratocaster</p>
+        <div class="row"><span class="label">Tuning</span><span class="num">E♭</span></div>
+        <div class="row"><span class="label">Pickup</span><span class="num">BRG</span></div>
+        <div class="row"><span class="label">Volume</span><span class="num">10</span></div>
+        <div class="row"><span class="label">Tone</span><span class="num">10</span></div>
+        <p class="tip">Bridge or bridge+middle · all strings down ½ step</p>
+      </div>
+      <div class="arrow">▼</div>
+
+      <div class="pedal wah">
+        <p class="tag">2 · Effects pedal (the voice)</p>
+        <p class="title">Vox / Cry Baby Wah</p>
+        <div class="row"><span class="label">Engage</span><span class="num">ON</span></div>
+        <div class="row"><span class="label">Intro park</span><span class="num">~⅔</span></div>
+        <div class="row"><span class="label">Motion</span><span class="num">ROCK</span></div>
+        <p class="tip">⅔ open = nasal “vowel” for the opening. Then rock heel↔toe with the riff (see Wah tab).</p>
+      </div>
+      <div class="arrow">▼</div>
+
+      <div class="pedal fuzz">
+        <p class="tag">3 · Effects pedal</p>
+        <p class="title">Fuzz Face (germanium)</p>
+        <div class="row"><span class="label">Fuzz</span><span class="num">8–10</span></div>
+        <div class="row"><span class="label">Volume</span><span class="num">7–8</span></div>
+        <div class="row"><span class="label">Guitar vol</span><span class="num">roll</span></div>
+        <p class="tip">Keep fuzz hot; clean up by rolling guitar volume back with your fingers — classic Hendrix dynamics.</p>
+      </div>
+      <div class="arrow">▼</div>
+
+      <div class="pedal amp">
+        <p class="tag">4 · Amp</p>
+        <p class="title">Marshall 1959 Super Lead</p>
+        <div class="row"><span class="label">Presence</span><span class="num">6</span></div>
+        <div class="row"><span class="label">Bass</span><span class="num">5</span></div>
+        <div class="row"><span class="label">Middle</span><span class="num">7</span></div>
+        <div class="row"><span class="label">Treble</span><span class="num">6</span></div>
+        <div class="row"><span class="label">Volume I</span><span class="num">7</span></div>
+        <div class="row"><span class="label">Volume II</span><span class="num">3</span></div>
+        <p class="tip">Cranked Plexi platform · jumper channels if you have them · 4×12 cab</p>
+      </div>
+
+      <p class="note" style="margin-top:1.1rem;max-width:440px;margin-left:auto;margin-right:auto">
+        Optional lead spice: <strong style="color:var(--bright)">Octavia</strong> after fuzz for octave-up solo screams.
+        Uni-Vibe is Hendrix-era but not the main Voodoo Child studio voice — wah + fuzz + Marshall is the core.
+      </p>
+    </section>
+
+    <!-- WAH ROCK -->
+    <section class="panel" id="panel-wah">
+      <h2>Wah rocking motion</h2>
+      <p class="note">Heel = darker / more closed filter. Toe = brighter / more open. The intro often starts parked about ⅔ toward toe (nasal), then rocks with each lick.</p>
+
+      <div class="wah-stage">
+        <svg class="wah-svg" viewBox="0 0 420 220" aria-label="Wah pedal side view rocking">
+          <!-- floor -->
+          <rect x="40" y="175" width="340" height="10" rx="2" fill="#0a0d12"/>
+          <!-- base -->
+          <rect x="90" y="150" width="240" height="28" rx="6" fill="#2a2118" stroke="#e8d2a0" stroke-width="2"/>
+          <!-- rocker (animated via JS transform) -->
+          <g id="rocker" transform="rotate(-12 210 150)">
+            <rect x="105" y="118" width="210" height="36" rx="8" fill="#c9a24a" stroke="#1a1208" stroke-width="2"/>
+            <circle cx="210" cy="150" r="8" fill="#1a1208"/>
+            <text x="125" y="141" font-size="11" font-family="IBM Plex Sans,sans-serif" font-weight="700" fill="#1a1208">HEEL</text>
+            <text x="275" y="141" font-size="11" font-family="IBM Plex Sans,sans-serif" font-weight="700" fill="#1a1208">TOE</text>
+          </g>
+          <!-- foot hint -->
+          <path id="footHint" d="M150 95 Q210 70 270 95" fill="none" stroke="#c4784a" stroke-width="2" stroke-dasharray="6 5" opacity="0.7"/>
+        </svg>
+        <div class="wah-labels">
+          <span><strong>HEEL</strong>closed · dark</span>
+          <span style="text-align:right"><strong>TOE</strong>open · bright</span>
+        </div>
+        <div class="wah-meter" aria-hidden="true"><div class="wah-meter-fill" id="wahFill"></div></div>
+        <p class="wah-readout" id="wahReadout">OPEN ~35% · toward heel</p>
+        <div class="wah-controls">
+          <button type="button" class="primary" id="btnRock">▶ Rock with the riff</button>
+          <button type="button" id="btnPark">Park at ⅔ (intro)</button>
+          <button type="button" id="btnStop">Stop</button>
+        </div>
+      </div>
+
+      <div class="wah-steps">
+        <div class="wah-step"><b>1 · Park</b>Start ~⅔ open for the nasal intro growl.</div>
+        <div class="wah-step"><b>2 · Rock out</b>As the lick rises, push toe (brighter).</div>
+        <div class="wah-step"><b>3 · Rock back</b>As the lick falls / chord hits, heel (darker).</div>
+        <div class="wah-step"><b>4 · Chord stabs</b>Often more open on E7♯9 hits — “wah!” accent.</div>
+      </div>
+    </section>
+
+    <!-- TAB -->
+    <section class="panel" id="panel-tab">
+      <h2>Intro / main riff tablature</h2>
+      <p class="note">Written in <strong style="color:var(--bright)">E shapes</strong> — tune down ½ step to E♭ so it matches the record. Educational approximation of the classic wah riff (not a licensed transcription).</p>
+
+      <div class="tab-wrap">
+        <div class="tab-meta">
+          <span><strong>Tuning</strong> E♭ A♭ D♭ G♭ B♭ E♭</span>
+          <span><strong>Feel</strong> ~96 BPM · blues-rock</span>
+          <span><strong>Key feel</strong> E minor pentatonic / E7♯9</span>
+        </div>
+<pre class="tab" id="tabBlock">Wah intro riff (shapes as in E · sound ½ step lower)
+
+     heel← →toe     heel← →toe     heel← →toe
+e|-----------------------------------------------|
+B|-----------------------------------------------|
+G|------0h2p0----0h2p0----0h2p0------------------|
+D|----2--------2--------2--------2p0-------------|
+A|-----------------------------------2p0---------|
+E|---------------------------------------0--3b0--|
+      ↑ rock open     ↑ rock         ↑ rock back
+        on the rise     mid phrase     into low E
+
+E7♯9 “Hendrix chord” stabs (wah more open / toe)
+e|--0--------0--------0--------------------------|
+B|--0--------0--------0--------------------------|
+G|--1--------1--------1--------------------------|
+D|--0--------0--------0--------------------------|
+A|--2--------2--------2--------------------------|
+E|--0--------0--------0--------------------------|
+   wah!     wah!     wah!
+
+Minor lick again (same shapes · keep rocking)
+e|-----------------------------------------------|
+B|-----------------------------------------------|
+G|------0h2p0----0h2p0----0h2--------------------|
+D|----2--------2--------2----2p0-----------------|
+A|-------------------------------2p0-------------|
+E|-----------------------------------0-----------|</pre>
+
+        <div class="wah-track">
+          <strong>How the rock lines up with the tab</strong><br/>
+          On each <code style="color:var(--bright)">0h2p0</code> rise → push <strong>toe</strong> (open).<br/>
+          On the <code style="color:var(--bright)">2p0</code> / low-E fall → pull <strong>heel</strong> (closed).<br/>
+          On each E7♯9 stab → quick <strong>toe accent</strong> (“wah!”), then settle.<br/>
+          Tip: learn the fretting clean first, <em>then</em> add the rock — don’t start both at once.
+        </div>
+      </div>
+
+      <p class="note" style="margin-top:1rem">
+        Solo vocabulary: E minor pentatonic + blues notes, wide bends, double-stops, controlled feedback.
+        Optional Octavia later in leads for the octave scream.
+      </p>
+    </section>
+  </main>
+
+  <footer>
+    <a href="teach.html?song=voodoo_child">Teach on the circle</a> ·
+    <a href="pedalboard.html">Surfing pedalboard</a> ·
+    <a href="index.html">Hub</a>
+  </footer>
+
+  <script>
+    /* Tabs */
+    const panels = {
+      effects: document.getElementById("panel-effects"),
+      wah: document.getElementById("panel-wah"),
+      tab: document.getElementById("panel-tab"),
+    };
+    document.querySelectorAll(".tabs button").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("active", b === btn));
+        Object.keys(panels).forEach((k) => panels[k].classList.toggle("active", k === btn.dataset.panel));
+        if (btn.dataset.panel === "wah") startRock();
+      });
+    });
+
+    /* Wah rocker: openAmount 0 = heel/closed, 1 = toe/open */
+    const rocker = document.getElementById("rocker");
+    const wahFill = document.getElementById("wahFill");
+    const wahReadout = document.getElementById("wahReadout");
+    let animId = null;
+    let t0 = 0;
+
+    function setWah(open01) {
+      const o = Math.max(0, Math.min(1, open01));
+      /* rocker angle: heel down = negative, toe down = positive */
+      const angle = -18 + o * 36;
+      rocker.setAttribute("transform", `rotate(${angle} 210 150)`);
+      wahFill.style.width = `${Math.round(o * 100)}%`;
+      const pct = Math.round(o * 100);
+      let where = "mid";
+      if (pct < 35) where = "toward heel (dark)";
+      else if (pct > 65) where = "toward toe (bright)";
+      wahReadout.textContent = `OPEN ~${pct}% · ${where}`;
+    }
+
+    function stopRock() {
+      if (animId) cancelAnimationFrame(animId);
+      animId = null;
+    }
+
+    function parkIntro() {
+      stopRock();
+      setWah(0.66);
+    }
+
+    function startRock() {
+      stopRock();
+      t0 = performance.now();
+      const beat = 625; /* ~96 BPM eighth ≈ 312ms; phrase cycle ~2.5s */
+      function frame(now) {
+        const t = (now - t0) / 1000;
+        /* Phrase: rise open, fall closed — synced to riff feel */
+        const phase = (t % 2.5) / 2.5;
+        let open;
+        if (phase < 0.35) open = 0.35 + phase * 1.5;      /* rock to toe */
+        else if (phase < 0.55) open = 0.88;               /* hold bright */
+        else if (phase < 0.85) open = 0.88 - (phase - 0.55) * 1.8; /* heel */
+        else open = 0.35 + (phase - 0.85) * 0.5;          /* settle */
+        setWah(open);
+        animId = requestAnimationFrame(frame);
+      }
+      animId = requestAnimationFrame(frame);
+    }
+
+    document.getElementById("btnRock").addEventListener("click", startRock);
+    document.getElementById("btnPark").addEventListener("click", parkIntro);
+    document.getElementById("btnStop").addEventListener("click", () => { stopRock(); setWah(0.5); });
+
+    parkIntro();
+  </script>
+</body>
+</html>

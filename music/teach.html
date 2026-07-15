@@ -222,6 +222,7 @@
       <option value="the_trooper">The Trooper — Iron Maiden</option>
       <option value="aces_high">Aces High — Iron Maiden</option>
       <option value="surfing_with_the_alien">Surfing with the Alien — Satriani</option>
+      <option value="voodoo_child">Voodoo Child — Hendrix</option>
       <option value="mozart_k581">Clarinet Quintet K.581 — Mozart</option>
     </select>
   </div>
@@ -331,6 +332,7 @@
       the_trooper: { drive:75, pre:0.26, master:0.14, midHz:1100, midGain:3.5, presence:4, lowpass:5000, attack:0.006, sustain:0.4, release:0.7, voicing:"power", detune:1.004, osc:"sawtooth", twin:true },
       aces_high: { drive:80, pre:0.25, master:0.14, midHz:1050, midGain:3, presence:4.5, lowpass:5200, attack:0.005, sustain:0.35, release:0.65, voicing:"power", detune:1.004, osc:"sawtooth", twin:true, staccato:true },
       surfing_with_the_alien: { drive:45, pre:0.22, master:0.13, midHz:950, midGain:5, presence:3, lowpass:4500, attack:0.018, sustain:0.62, release:1.05, voicing:"triad", detune:1.003, osc:"sawtooth", organ:true },
+      voodoo_child: { drive:85, pre:0.26, master:0.14, midHz:800, midGain:6, presence:3, lowpass:4800, attack:0.008, sustain:0.5, release:0.9, voicing:"power", detune:1.004, osc:"sawtooth" },
       mozart_k581: { drive:0, pre:0.2, master:0.11, midHz:1200, midGain:1, presence:-2, lowpass:2800, attack:0.06, sustain:0.7, release:1.4, voicing:"triad", detune:1.0008, osc:"triangle", clean:true },
     };
 
@@ -521,6 +523,18 @@
           { title: "What it takes advantage of", keys: ["G","C","F"], teach: "Takeaway: simple I–IV for the tune; modal ladder for the solo thrill. Return feels inevitable." },
         ],
       },
+      voodoo_child: {
+        title: "Voodoo Child (Slight Return)",
+        artist: "Jimi Hendrix · 1968",
+        tonic: "Em",
+        blurb: "Wah + fuzz Marshall blues — harmony stays near Em so the wah can talk.",
+        steps: [
+          { title: "Home: E minor blues", keys: ["Em"], teach: "Find Em. Voodoo Child keeps the circle simple — filter and fuzz carry the drama." },
+          { title: "E7♯9 punches", keys: ["E","Em"], teach: "Hendrix chord on the tonic letter while lines stay minor-pentatonic — tension without remote keys." },
+          { title: "Neighbors only", keys: ["Em","G","A"], teach: "Verse colors stay local (G, A). Short hops; long wah phrases." },
+          { title: "What it takes advantage of", keys: ["Em","E"], teach: "Takeaway: simplest tonic map + talking wah. Fretting first, then rock heel↔toe with each rise and fall." },
+        ],
+      },
       mozart_k581: {
         title: "Clarinet Quintet K.581",
         artist: "W. A. Mozart",
@@ -613,10 +627,56 @@
         the_trooper: "Maiden Marshall gallop",
         aces_high: "Maiden scramble / anthem",
         surfing_with_the_alien: "Satriani singing mid-gain",
+        voodoo_child: "Hendrix wah + fuzz Marshall",
         mozart_k581: "clarinet chamber clean",
       })[songId] || "song tone";
       document.getElementById("songBlurb").innerHTML=`<strong>${song.title}</strong>${song.artist}<br/>${song.blurb}<br/><em style="color:var(--ember)">Tone: ${toneName}</em>`;
-      document.getElementById("pedalPanel").classList.toggle("show", songId === "surfing_with_the_alien");
+      const pedal=document.getElementById("pedalPanel");
+      if(songId==="surfing_with_the_alien"){
+        pedal.classList.add("show");
+        pedal.innerHTML=`<h3>Effects pedal settings</h3>
+        <div class="fx-pedal wah"><p class="fx-name">Cry Baby Wah</p>
+          <div class="fx-row"><span>Engage</span><span class="fx-num">ON</span></div>
+          <div class="fx-row"><span>Rock position</span><span class="fx-num">MID</span></div>
+          <div class="fx-row"><span>Use</span><span class="fx-num">PARK</span></div></div>
+        <div class="fx-arrow">▼</div>
+        <div class="fx-pedal drive"><p class="fx-name">Chandler Tube Driver</p>
+          <div class="fx-row"><span>Out Level</span><span class="fx-num">7</span></div>
+          <div class="fx-row"><span>Hi</span><span class="fx-num">8</span></div>
+          <div class="fx-row"><span>Lo</span><span class="fx-num">4</span></div>
+          <div class="fx-row"><span>Tube Drive</span><span class="fx-num">6</span></div></div>
+        <div class="fx-arrow">▼</div>
+        <div class="fx-pedal amp"><p class="fx-name">Marshall 1959</p>
+          <div class="fx-row"><span>Presence</span><span class="fx-num">6</span></div>
+          <div class="fx-row"><span>Bass</span><span class="fx-num">3</span></div>
+          <div class="fx-row"><span>Middle</span><span class="fx-num">8</span></div>
+          <div class="fx-row"><span>Treble</span><span class="fx-num">6</span></div>
+          <div class="fx-row"><span>Volume I</span><span class="fx-num">7</span></div>
+          <div class="fx-row"><span>Volume II</span><span class="fx-num">0</span></div></div>
+        <a class="more" href="pedalboard.html">Full Surfing pedalboard →</a>`;
+      } else if(songId==="voodoo_child"){
+        pedal.classList.add("show");
+        pedal.innerHTML=`<h3>Effects pedal settings</h3>
+        <div class="fx-pedal wah"><p class="fx-name">Vox / Cry Baby Wah</p>
+          <div class="fx-row"><span>Engage</span><span class="fx-num">ON</span></div>
+          <div class="fx-row"><span>Intro park</span><span class="fx-num">~⅔</span></div>
+          <div class="fx-row"><span>Motion</span><span class="fx-num">ROCK</span></div></div>
+        <div class="fx-arrow">▼</div>
+        <div class="fx-pedal drive"><p class="fx-name">Fuzz Face</p>
+          <div class="fx-row"><span>Fuzz</span><span class="fx-num">9</span></div>
+          <div class="fx-row"><span>Volume</span><span class="fx-num">7</span></div></div>
+        <div class="fx-arrow">▼</div>
+        <div class="fx-pedal amp"><p class="fx-name">Marshall Plexi</p>
+          <div class="fx-row"><span>Presence</span><span class="fx-num">6</span></div>
+          <div class="fx-row"><span>Bass</span><span class="fx-num">5</span></div>
+          <div class="fx-row"><span>Middle</span><span class="fx-num">7</span></div>
+          <div class="fx-row"><span>Treble</span><span class="fx-num">6</span></div>
+          <div class="fx-row"><span>Volume I</span><span class="fx-num">7</span></div>
+          <div class="fx-row"><span>Volume II</span><span class="fx-num">3</span></div></div>
+        <a class="more" href="voodoo_child.html">Tab + wah rock animation →</a>`;
+      } else {
+        pedal.classList.remove("show");
+      }
       document.getElementById("stepNum").textContent=`Step ${step+1} of ${song.steps.length}`;
       document.getElementById("stepTitle").textContent=s.title;
       document.getElementById("stepTeach").textContent=s.teach;
