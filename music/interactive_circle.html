@@ -31,7 +31,7 @@
       color: var(--text);
       font-family: "IBM Plex Sans", system-ui, sans-serif;
     }
-    body { display: grid; grid-template-rows: auto auto 1fr auto; min-height: 100vh; }
+    body { display: grid; grid-template-rows: auto auto auto 1fr auto; min-height: 100vh; }
     header {
       padding: 1.15rem clamp(1rem, 3vw, 2.25rem) 0.85rem;
       border-bottom: 1px solid var(--line);
@@ -863,6 +863,15 @@
     const key = params.get("key");
     if (key && (MAJORS.includes(key) || MINORS.includes(key))) selectKey(key, true);
     else render();
+
+    // Song dropdown → guided Teach lesson for that song
+    const songSel = document.getElementById("songSelect");
+    if (songSel) {
+      songSel.addEventListener("change", () => {
+        const id = songSel.value;
+        if (id) location.href = "teach.html?song=" + encodeURIComponent(id);
+      });
+    }
   </script>
 </body>
 </html>
