@@ -22,7 +22,7 @@
       color: var(--text);
       font-family: "IBM Plex Sans", system-ui, sans-serif;
     }
-    body { display: grid; grid-template-rows: auto auto 1fr auto; min-height: 100vh; }
+    body { display: grid; grid-template-rows: auto auto auto 1fr auto; min-height: 100vh; }
     header {
       padding: 1.1rem clamp(1rem, 3vw, 2.25rem) 0.8rem;
       border-bottom: 1px solid var(--line);
@@ -60,12 +60,31 @@
       display: block; font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase;
       color: var(--muted); margin: 0 0 0.4rem; font-weight: 600;
     }
+    .song-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.65rem 1rem;
+      padding: 0.75rem clamp(1rem, 3vw, 2.25rem);
+      border-bottom: 1px solid var(--line);
+      background: rgba(10, 13, 18, 0.94);
+      position: sticky;
+      top: 0;
+      z-index: 30;
+    }
+    .song-bar .field { margin: 0; white-space: nowrap; }
     select {
-      width: 100%; appearance: none;
+      appearance: none;
       background: var(--panel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%239aa3b2' d='M1 1l5 5 5-5'/%3E%3C/svg%3E") right 0.9rem center / 12px no-repeat;
-      color: var(--text); border: 1px solid var(--line); border-radius: 8px;
-      padding: 0.7rem 2.2rem 0.7rem 0.9rem; font: 500 0.95rem "IBM Plex Sans", sans-serif;
-      margin-bottom: 0.85rem; cursor: pointer;
+      color: var(--text); border: 1px solid rgba(232,210,160,0.4); border-radius: 8px;
+      padding: 0.75rem 2.4rem 0.75rem 0.95rem; font: 600 1rem "IBM Plex Sans", sans-serif;
+      cursor: pointer;
+    }
+    .song-bar select {
+      flex: 1;
+      min-width: min(100%, 240px);
+      max-width: 480px;
+      margin: 0;
     }
     .song-blurb {
       margin: 0 0 1rem; padding: 0.75rem 0.85rem; background: var(--panel);
@@ -153,10 +172,20 @@
 
   <div class="sound-banner show" id="soundBanner">Tap here once to enable sound</div>
 
+  <div class="song-bar">
+    <label class="field" for="songSelect">Choose a song</label>
+    <select id="songSelect" aria-label="Choose a song to learn on the circle">
+      <option value="over_the_mountain">Over the Mountain — Ozzy</option>
+      <option value="diary_of_a_madman">Diary of a Madman — Ozzy</option>
+      <option value="mr_crowley">Mr. Crowley — Ozzy</option>
+      <option value="the_trooper">The Trooper — Iron Maiden</option>
+      <option value="aces_high">Aces High — Iron Maiden</option>
+      <option value="mozart_k581">Clarinet Quintet K.581 — Mozart</option>
+    </select>
+  </div>
+
   <main>
     <aside class="sidebar">
-      <label class="field" for="songSelect">Song</label>
-      <select id="songSelect"></select>
       <div class="song-blurb" id="songBlurb"></div>
 
       <div class="step-card">
@@ -416,8 +445,13 @@
     function hear(){ unlock().then(()=>playKeys(SONGS[songId].steps[step].keys)); }
 
     const sel=document.getElementById("songSelect");
-    sel.innerHTML=Object.entries(SONGS).map(([id,s])=>`<option value="${id}">${s.title}</option>`).join("");
-    sel.addEventListener("change",()=>{ songId=sel.value; step=0; render(); hear(); });
+    // Options are in the HTML dropdown — keep them, just wire change + deep link
+    sel.addEventListener("change",()=>{
+      songId=sel.value; step=0; render(); hear();
+      const url=new URL(location.href);
+      url.searchParams.set("song", songId);
+      history.replaceState(null,"",url);
+    });
     document.getElementById("prevBtn").addEventListener("click",()=>{ if(step>0){ step--; render(); hear(); }});
     document.getElementById("nextBtn").addEventListener("click",()=>{
       if(step<SONGS[songId].steps.length-1){ step++; render(); hear(); }
