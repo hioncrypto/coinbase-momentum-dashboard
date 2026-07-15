@@ -346,6 +346,7 @@
       <option value="mr_crowley">Mr. Crowley — Ozzy</option>
       <option value="the_trooper">The Trooper — Iron Maiden</option>
       <option value="aces_high">Aces High — Iron Maiden</option>
+      <option value="surfing_with_the_alien">Surfing with the Alien — Satriani</option>
       <option value="mozart_k581">Clarinet Quintet K.581 — Mozart</option>
     </select>
   </div>
@@ -428,12 +429,13 @@
       mr_crowley: { drive: 55, pre: 0.22, master: 0.14, midHz: 850, midGain: 5, presence: 1.5, lowpass: 3800, attack: 0.025, sustain: 0.6, release: 1.0, voicing: "triad", detune: 1.002, osc: "sawtooth", organ: true },
       the_trooper: { drive: 75, pre: 0.26, master: 0.14, midHz: 1100, midGain: 3.5, presence: 4, lowpass: 5000, attack: 0.006, sustain: 0.4, release: 0.7, voicing: "power", detune: 1.004, osc: "sawtooth", twin: true },
       aces_high: { drive: 80, pre: 0.25, master: 0.14, midHz: 1050, midGain: 3, presence: 4.5, lowpass: 5200, attack: 0.005, sustain: 0.35, release: 0.65, voicing: "power", detune: 1.004, osc: "sawtooth", twin: true, staccato: true },
+      surfing_with_the_alien: { drive: 45, pre: 0.22, master: 0.13, midHz: 950, midGain: 5, presence: 3, lowpass: 4500, attack: 0.018, sustain: 0.62, release: 1.05, voicing: "triad", detune: 1.003, osc: "sawtooth", organ: true },
       mozart_k581: { drive: 0, pre: 0.2, master: 0.11, midHz: 1200, midGain: 1, presence: -2, lowpass: 2800, attack: 0.06, sustain: 0.7, release: 1.4, voicing: "triad", detune: 1.0008, osc: "triangle", clean: true },
     };
 
     const SONG_TONIC = {
       over_the_mountain: "G#m", diary_of_a_madman: "G#m", mr_crowley: "Dm",
-      the_trooper: "Em", aces_high: "Em", mozart_k581: "A",
+      the_trooper: "Em", aces_high: "Em", surfing_with_the_alien: "G", mozart_k581: "A",
     };
 
     let audioCtx = null;
@@ -516,6 +518,7 @@
           mr_crowley: "classical metal + organ",
           the_trooper: "Maiden Marshall gallop",
           aces_high: "Maiden scramble / anthem",
+          surfing_with_the_alien: "Satriani singing mid-gain",
           mozart_k581: "clarinet chamber clean",
         };
         label.textContent = "Tone: " + (names[activeTone] || names.default);
@@ -935,12 +938,20 @@
     if (key && (MAJORS.includes(key) || MINORS.includes(key))) selectKey(key, true);
     else render();
 
-    // Song dropdown → guided Teach lesson for that song
+    // Song dropdown → apply that song's tone + jump to its tonic
     const songSel = document.getElementById("songSelect");
     if (songSel) {
       songSel.addEventListener("change", () => {
-        const id = songSel.value;
-        if (id) location.href = "teach.html?song=" + encodeURIComponent(id);
+        const id = songSel.value || "default";
+        applySongTone(id);
+        const teach = document.getElementById("teachLink");
+        if (teach) {
+          teach.href = id && id !== "default" ? ("teach.html?song=" + encodeURIComponent(id)) : "teach.html";
+        }
+        const tonic = SONG_TONIC[id];
+        if (tonic) {
+          unlockAudio().then(() => selectKey(tonic));
+        }
       });
     }
   </script>

@@ -177,6 +177,7 @@
       <option value="mr_crowley">Mr. Crowley — Ozzy</option>
       <option value="the_trooper">The Trooper — Iron Maiden</option>
       <option value="aces_high">Aces High — Iron Maiden</option>
+      <option value="surfing_with_the_alien">Surfing with the Alien — Satriani</option>
       <option value="mozart_k581">Clarinet Quintet K.581 — Mozart</option>
     </select>
   </div>
@@ -248,6 +249,7 @@
       mr_crowley: { drive:55, pre:0.22, master:0.14, midHz:850, midGain:5, presence:1.5, lowpass:3800, attack:0.025, sustain:0.6, release:1.0, voicing:"triad", detune:1.002, osc:"sawtooth", organ:true },
       the_trooper: { drive:75, pre:0.26, master:0.14, midHz:1100, midGain:3.5, presence:4, lowpass:5000, attack:0.006, sustain:0.4, release:0.7, voicing:"power", detune:1.004, osc:"sawtooth", twin:true },
       aces_high: { drive:80, pre:0.25, master:0.14, midHz:1050, midGain:3, presence:4.5, lowpass:5200, attack:0.005, sustain:0.35, release:0.65, voicing:"power", detune:1.004, osc:"sawtooth", twin:true, staccato:true },
+      surfing_with_the_alien: { drive:45, pre:0.22, master:0.13, midHz:950, midGain:5, presence:3, lowpass:4500, attack:0.018, sustain:0.62, release:1.05, voicing:"triad", detune:1.003, osc:"sawtooth", organ:true },
       mozart_k581: { drive:0, pre:0.2, master:0.11, midHz:1200, midGain:1, presence:-2, lowpass:2800, attack:0.06, sustain:0.7, release:1.4, voicing:"triad", detune:1.0008, osc:"triangle", clean:true },
     };
 
@@ -425,6 +427,19 @@
           { title: "What it takes advantage of", keys: ["Em","C","D","Am","Bm"], teach: "Takeaway: the circle is a runway. Short hops for the body; iv→v for solo drama; articulation tells the story on top." },
         ],
       },
+      surfing_with_the_alien: {
+        title: "Surfing with the Alien",
+        artist: "Joe Satriani · 1987",
+        tonic: "G",
+        blurb: "G↔C hook surf, then a modal solo ladder back to G.",
+        steps: [
+          { title: "Home: G major", keys: ["G"], teach: "Find G on the outer ring. Bright major home — different from the Aeolian metal triangles." },
+          { title: "The I↔IV surf", keys: ["G","C"], teach: "Body shuttles G↔C. C is IV — one step left. Tiny hop = the hook you hum." },
+          { title: "Solo leaves the beach", keys: ["C#m","G"], teach: "Solo jumps to C♯ modal color — alien geography against familiar G." },
+          { title: "Climb back: E♭ then F", keys: ["Ebm","F","G"], teach: "E♭ (♭VI) then F (♭VII) are rungs toward home. Intensity up as circle distance shrinks." },
+          { title: "What it takes advantage of", keys: ["G","C","F"], teach: "Takeaway: simple I–IV for the tune; modal ladder for the solo thrill. Return feels inevitable." },
+        ],
+      },
       mozart_k581: {
         title: "Clarinet Quintet K.581",
         artist: "W. A. Mozart",
@@ -516,6 +531,7 @@
         mr_crowley: "classical metal + organ",
         the_trooper: "Maiden Marshall gallop",
         aces_high: "Maiden scramble / anthem",
+        surfing_with_the_alien: "Satriani singing mid-gain",
         mozart_k581: "clarinet chamber clean",
       })[songId] || "song tone";
       document.getElementById("songBlurb").innerHTML=`<strong>${song.title}</strong>${song.artist}<br/>${song.blurb}<br/><em style="color:var(--ember)">Tone: ${toneName}</em>`;

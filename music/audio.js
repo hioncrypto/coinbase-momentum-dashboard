@@ -38,12 +38,19 @@ window.MusicAudio = (function () {
       attack: 0.006, sustain: 0.4, release: 0.7,
       voicing: "power", detune: 1.004, osc: "sawtooth", twin: true,
     },
-    aces_high: {
+      aces_high: {
       name: "Maiden scramble / anthem",
       drive: 80, pre: 0.25, master: 0.15,
       midHz: 1050, midGain: 3, presence: 4.5, lowpass: 5200,
       attack: 0.005, sustain: 0.35, release: 0.65,
       voicing: "power", detune: 1.004, osc: "sawtooth", twin: true, staccato: true,
+    },
+    surfing_with_the_alien: {
+      name: "Satriani singing mid-gain",
+      drive: 45, pre: 0.22, master: 0.13,
+      midHz: 950, midGain: 5, presence: 3, lowpass: 4500,
+      attack: 0.018, sustain: 0.62, release: 1.05,
+      voicing: "triad", detune: 1.003, osc: "sawtooth", organ: true,
     },
     mozart_k581: {
       name: "Clarinet chamber clean",
