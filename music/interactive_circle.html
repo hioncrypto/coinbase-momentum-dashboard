@@ -363,14 +363,15 @@
   </footer>
 
   <script>
-    /* —— Fully inlined audio (no external JS — required for phone htmlpreview) —— */
-    const FREQ = {
-      C: 261.63, "C#": 277.18, Db: 277.18, D: 293.66, "D#": 311.13, Eb: 311.13,
-      E: 329.63, F: 349.23, "F#": 369.99, Gb: 369.99, G: 392.0, "G#": 415.3, Ab: 415.3,
-      A: 440.0, "A#": 466.16, Bb: 466.16, B: 493.88,
+    /* —— Heavy distorted guitar (inlined for phone htmlpreview) —— */
+    const GUITAR_ROOT = {
+      C: 65.41, "C#": 69.3, Db: 69.3, D: 73.42, "D#": 77.78, Eb: 77.78,
+      E: 82.41, F: 87.31, "F#": 92.5, Gb: 92.5, G: 98.0, "G#": 103.83, Ab: 103.83,
+      A: 110.0, "A#": 116.54, Bb: 116.54, B: 123.47,
     };
 
     let audioCtx = null;
+    let bus = null;
     let lastKey = null;
     let lastAt = 0;
     let soundReady = false;
@@ -384,13 +385,46 @@
     }
     function freqOf(key) {
       const root = rootOf(key);
-      let f = FREQ[root];
+      let f = GUITAR_ROOT[root];
       if (f == null) {
         const alt = { "D#": "Eb", "G#": "Ab", "A#": "Bb", "C#": "Db", Gb: "F#" };
-        f = FREQ[alt[root]];
+        f = GUITAR_ROOT[alt[root]];
       }
-      if (f == null) return null;
-      return isMinor(key) ? f * 0.5 : f;
+      return f || null;
+    }
+
+    function makeDistortionCurve(amount) {
+      const n = 2048;
+      const curve = new Float32Array(n);
+      const k = amount;
+      for (let i = 0; i < n; i++) {
+        const x = (i * 2) / n - 1;
+        curve[i] = Math.tanh(((1 + k) * x) / (1 + k * Math.abs(x)) * 2.2);
+      }
+      return curve;
+    }
+
+    function ensureAmp() {
+      if (!audioCtx || bus) return;
+      const pre = audioCtx.createGain();
+      pre.gain.value = 0.55;
+      const dist = audioCtx.createWaveShaper();
+      dist.curve = makeDistortionCurve(280);
+      dist.oversample = "4x";
+      const mid = audioCtx.createBiquadFilter();
+      mid.type = "peaking"; mid.frequency.value = 800; mid.Q.value = 1.1; mid.gain.value = 6;
+      const presence = audioCtx.createBiquadFilter();
+      presence.type = "highshelf"; presence.frequency.value = 2500; presence.gain.value = 3.5;
+      const lowcut = audioCtx.createBiquadFilter();
+      lowcut.type = "highpass"; lowcut.frequency.value = 70;
+      const lowpass = audioCtx.createBiquadFilter();
+      lowpass.type = "lowpass"; lowpass.frequency.value = 5500; lowpass.Q.value = 0.7;
+      const master = audioCtx.createGain();
+      master.gain.value = 0.38;
+      pre.connect(dist); dist.connect(lowcut); lowcut.connect(mid);
+      mid.connect(presence); presence.connect(lowpass); lowpass.connect(master);
+      master.connect(audioCtx.destination);
+      bus = { pre };
     }
 
     async function unlockAudio() {
@@ -398,8 +432,8 @@
         const AC = window.AudioContext || window.webkitAudioContext;
         if (!AC) return false;
         if (!audioCtx) audioCtx = new AC();
+        ensureAmp();
         if (audioCtx.state === "suspended") await audioCtx.resume();
-        // iOS sometimes needs a silent buffer kick
         const buf = audioCtx.createBuffer(1, 1, 22050);
         const src = audioCtx.createBufferSource();
         src.buffer = buf;
@@ -422,62 +456,68 @@
       return !el || el.checked;
     }
 
-    function playTone(freq, dur, gain) {
-      if (!soundOn() || freq == null || !audioCtx) return;
+    function stringHit(freq, when, dur, gain) {
+      if (!audioCtx || !bus || freq == null) return;
       const osc = audioCtx.createOscillator();
+      const osc2 = audioCtx.createOscillator();
       const g = audioCtx.createGain();
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-      const now = audioCtx.currentTime;
-      const d = dur || 0.5;
-      const vol = gain == null ? 0.28 : gain;
-      g.gain.setValueAtTime(0.0001, now);
-      g.gain.exponentialRampToValueAtTime(vol, now + 0.025);
-      g.gain.exponentialRampToValueAtTime(0.0001, now + d);
-      osc.connect(g);
-      g.connect(audioCtx.destination);
-      osc.start(now);
-      osc.stop(now + d + 0.05);
+      const filter = audioCtx.createBiquadFilter();
+      osc.type = "sawtooth";
+      osc2.type = "sawtooth";
+      osc.frequency.setValueAtTime(freq, when);
+      osc2.frequency.setValueAtTime(freq * 1.003, when);
+      filter.type = "lowpass";
+      filter.frequency.setValueAtTime(4200, when);
+      filter.frequency.exponentialRampToValueAtTime(1600, when + Math.min(0.35, dur * 0.4));
+      filter.Q.value = 1.2;
+      const peak = gain == null ? 0.45 : gain;
+      const d = dur || 0.9;
+      g.gain.setValueAtTime(0.0001, when);
+      g.gain.exponentialRampToValueAtTime(peak, when + 0.008);
+      g.gain.exponentialRampToValueAtTime(peak * 0.7, when + 0.12);
+      g.gain.exponentialRampToValueAtTime(peak * 0.25, when + d * 0.55);
+      g.gain.exponentialRampToValueAtTime(0.0001, when + d);
+      osc.connect(filter); osc2.connect(filter); filter.connect(g); g.connect(bus.pre);
+      osc.start(when); osc2.start(when);
+      osc.stop(when + d + 0.05); osc2.stop(when + d + 0.05);
     }
 
     async function playKey(key, opts) {
       opts = opts || {};
       if (!soundOn()) return false;
       await unlockAudio();
-      const f = freqOf(key);
-      if (f == null) {
-        console.warn("no freq for", key);
-        return false;
-      }
+      let root = freqOf(key);
+      if (root == null) return false;
       const t = performance.now();
-      if (opts.scrub && lastKey === key && t - lastAt < 70) return false;
+      if (opts.scrub && lastKey === key && t - lastAt < 95) return false;
       lastKey = key;
       lastAt = t;
-      playTone(f, opts.dur || 0.45, opts.gain);
+      while (root > 180) root *= 0.5;
+      while (root < 55) root *= 2;
+      const now = audioCtx.currentTime + 0.01;
+      const scrub = !!opts.scrub;
+      const dur = opts.dur || (scrub ? 0.55 : 1.05);
+      const gScale = opts.gainScale || 1;
+      // Power chord: root + fifth + octave
+      stringHit(root, now, dur, 0.5 * gScale);
+      stringHit(root * Math.pow(2, 7 / 12), now + 0.012, dur, 0.42 * gScale);
+      stringHit(root * 2, now + 0.02, dur * 0.95, 0.28 * gScale);
+      const thirdSemis = isMinor(key) ? 3 : 4;
+      stringHit(root * Math.pow(2, thirdSemis / 12), now + 0.03, dur * 0.85, 0.12 * gScale);
       return true;
     }
 
     function playKeys(keys, gap) {
       const list = keys.slice();
-      const g = gap == null ? 150 : gap;
+      const g = gap == null ? 300 : gap;
       list.forEach((k, i) => {
-        setTimeout(() => { playKey(k, { dur: 0.32 }); }, i * g);
+        setTimeout(() => { playKey(k, { dur: 0.85 }); }, i * g);
       });
     }
 
     function playChord(root, quality) {
-      const base = freqOf(root);
-      if (base == null) return;
-      unlockAudio().then(() => {
-        const third =
-          quality === "maj" ? base * Math.pow(2, 4 / 12)
-          : base * Math.pow(2, 3 / 12);
-        const fifth =
-          quality === "dim" ? base * Math.pow(2, 6 / 12) : base * Math.pow(2, 7 / 12);
-        [base * 0.5, third * 0.5, fifth * 0.5].forEach((f, i) => {
-          setTimeout(() => playTone(f, 0.7, 0.16), i * 20);
-        });
-      });
+      const key = (quality === "min" || quality === "dim") ? rootOf(root) + "m" : rootOf(root);
+      unlockAudio().then(() => playKey(key, { dur: 1.15, gainScale: 1.05 }));
     }
 
     /* —— Circle data / UI —— */

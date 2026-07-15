@@ -231,36 +231,82 @@
       return ALIASES[s]||s;
     }
 
-    const FREQ = {
-      C:261.63,"C#":277.18,Db:277.18,D:293.66,"D#":311.13,Eb:311.13,
-      E:329.63,F:349.23,"F#":369.99,Gb:369.99,G:392,"G#":415.3,Ab:415.3,
-      A:440,"A#":466.16,Bb:466.16,B:493.88
+    const GUITAR_ROOT = {
+      C:65.41,"C#":69.3,Db:69.3,D:73.42,"D#":77.78,Eb:77.78,
+      E:82.41,F:87.31,"F#":92.5,Gb:92.5,G:98,"G#":103.83,Ab:103.83,
+      A:110,"A#":116.54,Bb:116.54,B:123.47
     };
-    let ctx=null;
+    let ctx=null, bus=null, lastKey=null, lastAt=0;
+
+    function makeDistortionCurve(amount){
+      const n=2048, curve=new Float32Array(n), k=amount;
+      for(let i=0;i<n;i++){
+        const x=(i*2)/n-1;
+        curve[i]=Math.tanh(((1+k)*x)/(1+k*Math.abs(x))*2.2);
+      }
+      return curve;
+    }
+    function ensureAmp(){
+      if(!ctx||bus) return;
+      const pre=ctx.createGain(); pre.gain.value=0.55;
+      const dist=ctx.createWaveShaper(); dist.curve=makeDistortionCurve(280); dist.oversample="4x";
+      const mid=ctx.createBiquadFilter(); mid.type="peaking"; mid.frequency.value=800; mid.Q.value=1.1; mid.gain.value=6;
+      const presence=ctx.createBiquadFilter(); presence.type="highshelf"; presence.frequency.value=2500; presence.gain.value=3.5;
+      const lowcut=ctx.createBiquadFilter(); lowcut.type="highpass"; lowcut.frequency.value=70;
+      const lowpass=ctx.createBiquadFilter(); lowpass.type="lowpass"; lowpass.frequency.value=5500;
+      const master=ctx.createGain(); master.gain.value=0.38;
+      pre.connect(dist); dist.connect(lowcut); lowcut.connect(mid);
+      mid.connect(presence); presence.connect(lowpass); lowpass.connect(master); master.connect(ctx.destination);
+      bus={pre};
+    }
     async function unlock(){
       const AC=window.AudioContext||window.webkitAudioContext;
       if(!AC) return;
       if(!ctx) ctx=new AC();
+      ensureAmp();
       if(ctx.state==="suspended") await ctx.resume();
       document.getElementById("soundBanner").classList.remove("show");
     }
+    function stringHit(freq, when, dur, gain){
+      if(!ctx||!bus||freq==null) return;
+      const osc=ctx.createOscillator(), osc2=ctx.createOscillator();
+      const g=ctx.createGain(), filter=ctx.createBiquadFilter();
+      osc.type="sawtooth"; osc2.type="sawtooth";
+      osc.frequency.setValueAtTime(freq, when);
+      osc2.frequency.setValueAtTime(freq*1.003, when);
+      filter.type="lowpass";
+      filter.frequency.setValueAtTime(4200, when);
+      filter.frequency.exponentialRampToValueAtTime(1600, when+Math.min(0.35,dur*0.4));
+      filter.Q.value=1.2;
+      const peak=gain==null?0.45:gain, d=dur||0.9;
+      g.gain.setValueAtTime(0.0001, when);
+      g.gain.exponentialRampToValueAtTime(peak, when+0.008);
+      g.gain.exponentialRampToValueAtTime(peak*0.7, when+0.12);
+      g.gain.exponentialRampToValueAtTime(peak*0.25, when+d*0.55);
+      g.gain.exponentialRampToValueAtTime(0.0001, when+d);
+      osc.connect(filter); osc2.connect(filter); filter.connect(g); g.connect(bus.pre);
+      osc.start(when); osc2.start(when);
+      osc.stop(when+d+0.05); osc2.stop(when+d+0.05);
+    }
     function playKey(key){
       if(!ctx) return;
-      const root=String(key).endsWith("m")?key.slice(0,-1):key;
-      let f=FREQ[root]||FREQ[ALIASES[root]]||FREQ[toWheel(root)];
-      if(!f) return;
-      if(String(key).endsWith("m")) f*=0.5;
-      const osc=ctx.createOscillator(), g=ctx.createGain();
-      osc.type="sine"; osc.frequency.value=f;
-      const now=ctx.currentTime;
-      g.gain.setValueAtTime(0.0001,now);
-      g.gain.exponentialRampToValueAtTime(0.26,now+0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001,now+0.4);
-      osc.connect(g); g.connect(ctx.destination);
-      osc.start(now); osc.stop(now+0.45);
+      const rootName=String(key).endsWith("m")?key.slice(0,-1):key;
+      let root=GUITAR_ROOT[rootName]||GUITAR_ROOT[ALIASES[rootName]]||GUITAR_ROOT[toWheel(rootName)];
+      if(!root) return;
+      const t=performance.now();
+      if(lastKey===key && t-lastAt<95) return;
+      lastKey=key; lastAt=t;
+      while(root>180) root*=0.5;
+      while(root<55) root*=2;
+      const now=ctx.currentTime+0.01, dur=1.0;
+      const minor=String(key).endsWith("m");
+      stringHit(root, now, dur, 0.5);
+      stringHit(root*Math.pow(2,7/12), now+0.012, dur, 0.42);
+      stringHit(root*2, now+0.02, dur*0.95, 0.28);
+      stringHit(root*Math.pow(2,(minor?3:4)/12), now+0.03, dur*0.85, 0.12);
     }
     function playKeys(keys){
-      keys.forEach((k,i)=> setTimeout(()=>playKey(toWheel(k)), i*220));
+      keys.forEach((k,i)=> setTimeout(()=>playKey(toWheel(k)), i*300));
     }
 
     /** Teaching data for songs already analyzed */
