@@ -274,6 +274,55 @@
     .timing-legend .on-lab b { background: rgba(196,120,74,0.45); color: #0e1218; }
     .timing-legend .off-lab b { background: rgba(127,175,154,0.25); color: var(--mint); }
 
+    /* —— Synced trainer: neck + rhythm + wah —— */
+    .sync-stage {
+      max-width: 560px; margin: 0 auto 1.25rem;
+      background: var(--panel); border: 2px solid rgba(196,120,74,0.45);
+      border-radius: 16px; padding: 1rem 0.75rem 1.15rem;
+    }
+    .sync-stage h2 {
+      margin: 0 0 0.35rem; font-size: 1.15rem;
+    }
+    .sync-svg { width: 100%; display: block; margin: 0 auto; }
+    .rhythm-lane {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 0.35rem;
+      margin: 0.85rem 0 0.5rem;
+    }
+    .rhythm-cell {
+      background: #0a0d12; border: 1px solid var(--line);
+      border-radius: 10px; padding: 0.45rem 0.2rem;
+      text-align: center; transition: background 0.08s, border-color 0.08s, transform 0.08s;
+    }
+    .rhythm-cell .beat {
+      display: block; font-size: 0.68rem; color: var(--muted); font-weight: 600;
+    }
+    .rhythm-cell .hit {
+      display: block; font-family: "JetBrains Mono", monospace;
+      font-size: 1.15rem; font-weight: 700; color: var(--bright); margin: 0.15rem 0;
+    }
+    .rhythm-cell .pick-m {
+      display: block; font-size: 0.85rem; color: var(--ember); font-weight: 700;
+    }
+    .rhythm-cell .wah-m {
+      display: block; font-size: 0.65rem; color: var(--mint); margin-top: 0.15rem; font-weight: 600;
+    }
+    .rhythm-cell.active {
+      background: rgba(196,120,74,0.4); border-color: var(--bright);
+      transform: translateY(-2px);
+    }
+    .rhythm-cell.active .hit { color: #0e1218; }
+    .sync-readout {
+      text-align: center; margin: 0.65rem 0 0;
+      font-family: "JetBrains Mono", monospace; font-size: 0.95rem; color: var(--bright);
+      line-height: 1.45;
+    }
+    .sync-readout span {
+      display: inline-block; background: rgba(0,0,0,0.35);
+      border-radius: 8px; padding: 0.15rem 0.45rem; margin: 0.15rem;
+    }
+
     footer {
       padding: 1rem clamp(1rem, 3vw, 2rem);
       border-top: 1px solid var(--line); color: var(--muted); font-size: 0.78rem;
@@ -291,10 +340,11 @@
   </header>
 
   <div class="tabs" role="tablist">
-    <button type="button" class="active" data-panel="effects">1 · Effects</button>
-    <button type="button" data-panel="wah">2 · Wah rock</button>
-    <button type="button" data-panel="chug">3 · Mute chug + pick</button>
-    <button type="button" data-panel="tab">4 · Full tab</button>
+    <button type="button" data-panel="effects">1 · Effects</button>
+    <button type="button" class="active" data-panel="sync">2 · Mute + rhythm + wah</button>
+    <button type="button" data-panel="wah">3 · Wah alone</button>
+    <button type="button" data-panel="chug">4 · Detail</button>
+    <button type="button" data-panel="tab">5 · Full tab</button>
   </div>
 
   <main>
@@ -350,6 +400,122 @@
         Optional lead spice: <strong style="color:var(--bright)">Octavia</strong> after fuzz for octave-up solo screams.
         Uni-Vibe is Hendrix-era but not the main Voodoo Child studio voice — wah + fuzz + Marshall is the core.
       </p>
+    </section>
+
+    <!-- SYNC: neck mute + chug rhythm + wah -->
+    <section class="panel" id="panel-sync">
+      <div class="sync-stage">
+        <h2>Neck mute · chug rhythm · wah rock</h2>
+        <p class="note" style="margin:0 0 0.75rem">
+          One clock for all three. Mute sits on the neck at <strong style="color:var(--bright)">~fret 7</strong>.
+          Each box is an eighth-note chug. Wah rocks with the same hits.
+        </p>
+
+        <svg class="sync-svg" viewBox="0 0 420 280" aria-label="Neck mute zone and wah synced">
+          <!-- NECK -->
+          <text x="12" y="18" fill="#c4784a" font-size="11" font-weight="700" font-family="IBM Plex Sans,sans-serif" letter-spacing="0.12em">NECK · MUTE LOCATION</text>
+          <rect x="20" y="28" width="14" height="110" fill="#e8d2a0"/>
+          <text x="27" y="152" text-anchor="middle" fill="#9aa3b2" font-size="9">NUT</text>
+          <g stroke="#9aa3b2" stroke-width="1.4">
+            <line x1="55" y1="28" x2="55" y2="138"/>
+            <line x1="90" y1="28" x2="90" y2="138"/>
+            <line x1="125" y1="28" x2="125" y2="138"/>
+            <line x1="160" y1="28" x2="160" y2="138"/>
+            <line x1="195" y1="28" x2="195" y2="138"/>
+            <line x1="230" y1="28" x2="230" y2="138"/>
+            <line x1="265" y1="28" x2="265" y2="138"/>
+            <line x1="300" y1="28" x2="300" y2="138"/>
+            <line x1="335" y1="28" x2="335" y2="138"/>
+            <line x1="370" y1="28" x2="370" y2="138"/>
+          </g>
+          <g stroke="#c9a24a" stroke-width="1.15">
+            <line x1="20" y1="40" x2="400" y2="40"/>
+            <line x1="20" y1="55" x2="400" y2="55"/>
+            <line x1="20" y1="70" x2="400" y2="70"/>
+            <line x1="20" y1="85" x2="400" y2="85"/>
+            <line x1="20" y1="100" x2="400" y2="100"/>
+            <line x1="20" y1="115" x2="400" y2="115"/>
+          </g>
+          <text x="38" y="152" fill="#9aa3b2" font-size="9">3</text>
+          <text x="108" y="152" fill="#9aa3b2" font-size="9">5</text>
+          <text x="178" y="152" fill="#f3e4bc" font-size="11" font-weight="700">7</text>
+          <text x="248" y="152" fill="#9aa3b2" font-size="9">9</text>
+          <text x="318" y="152" fill="#9aa3b2" font-size="9">12</text>
+
+          <!-- mute zone (~fret 7 = between 160-230 roughly: fret 5=125-160, 6=160-195, 7=195-230) -->
+          <rect id="muteZone" x="175" y="32" width="70" height="100" rx="8"
+            fill="rgba(196,120,74,0.35)" stroke="#c4784a" stroke-width="2.5"/>
+          <g id="muteFingers">
+            <ellipse cx="210" cy="48" rx="26" ry="8" fill="rgba(243,228,188,0.7)" stroke="#1a1208"/>
+            <ellipse cx="210" cy="68" rx="26" ry="8" fill="rgba(243,228,188,0.7)" stroke="#1a1208"/>
+            <ellipse cx="210" cy="88" rx="26" ry="8" fill="rgba(243,228,188,0.7)" stroke="#1a1208"/>
+            <ellipse cx="210" cy="108" rx="26" ry="8" fill="rgba(243,228,188,0.7)" stroke="#1a1208"/>
+          </g>
+          <text id="muteLabel" x="210" y="128" text-anchor="middle" fill="#0e1218" font-size="11" font-weight="700">MUTE ~7</text>
+
+          <!-- WAH mini -->
+          <text x="12" y="178" fill="#c4784a" font-size="11" font-weight="700" font-family="IBM Plex Sans,sans-serif" letter-spacing="0.12em">WAH · SAME BEATS</text>
+          <rect x="80" y="220" width="260" height="24" rx="5" fill="#2a2118" stroke="#e8d2a0" stroke-width="1.5"/>
+          <g id="syncRocker" transform="rotate(-8 210 220)">
+            <rect x="95" y="198" width="230" height="28" rx="7" fill="#c9a24a" stroke="#1a1208" stroke-width="2"/>
+            <text x="115" y="217" fill="#1a1208" font-size="11" font-weight="700">HEEL</text>
+            <text x="270" y="217" fill="#1a1208" font-size="11" font-weight="700">TOE</text>
+          </g>
+          <text x="70" y="255" fill="#9aa3b2" font-size="10">dark / closed</text>
+          <text x="300" y="255" fill="#9aa3b2" font-size="10">bright / open</text>
+          <text id="syncWahText" x="210" y="272" text-anchor="middle" fill="#f3e4bc" font-size="12" font-weight="700">wah → toe on accents</text>
+        </svg>
+
+        <div class="rhythm-lane" id="rhythmLane" aria-label="Chug rhythm eighth notes">
+          <div class="rhythm-cell" data-i="0"><span class="beat">1</span><span class="hit">x</span><span class="pick-m">↓</span><span class="wah-m">TOE</span></div>
+          <div class="rhythm-cell" data-i="1"><span class="beat">&amp;</span><span class="hit">x</span><span class="pick-m">↑</span><span class="wah-m">heel</span></div>
+          <div class="rhythm-cell" data-i="2"><span class="beat">2</span><span class="hit">x</span><span class="pick-m">↓</span><span class="wah-m">TOE</span></div>
+          <div class="rhythm-cell" data-i="3"><span class="beat">&amp;</span><span class="hit">x</span><span class="pick-m">↑</span><span class="wah-m">heel</span></div>
+          <div class="rhythm-cell" data-i="4"><span class="beat">3</span><span class="hit">x</span><span class="pick-m">↓</span><span class="wah-m">TOE</span></div>
+          <div class="rhythm-cell" data-i="5"><span class="beat">&amp;</span><span class="hit">x</span><span class="pick-m">↑</span><span class="wah-m">heel</span></div>
+          <div class="rhythm-cell" data-i="6"><span class="beat">4</span><span class="hit">x</span><span class="pick-m">↓</span><span class="wah-m">TOE</span></div>
+          <div class="rhythm-cell" data-i="7"><span class="beat">&amp;</span><span class="hit">x</span><span class="pick-m">↑</span><span class="wah-m">heel</span></div>
+        </div>
+
+        <p class="sync-readout" id="syncReadout">
+          <span id="syncBeat">Beat 1</span>
+          <span id="syncNeck">Neck mute @ fret 7</span>
+          <span id="syncPick">Pick ↓</span>
+          <span id="syncWah">Wah TOE</span>
+        </p>
+
+        <div class="wah-controls">
+          <button type="button" class="primary" id="btnSync">▶ Play synced chugs + wah</button>
+          <button type="button" id="btnSyncStop">Stop</button>
+        </div>
+      </div>
+
+      <div class="wah-steps">
+        <div class="wah-step"><b>Neck</b>Fretting hand rests on strings around <strong>fret 7</strong> — no press. That is the mute.</div>
+        <div class="wah-step"><b>Rhythm</b>Eighth-note <code>x</code> chugs: 1 &amp; 2 &amp; 3 &amp; 4 &amp;</div>
+        <div class="wah-step"><b>Pick</b>↓ on the beat · ↑ on the &amp;</div>
+        <div class="wah-step"><b>Wah</b>Rock <strong>toe</strong> (open) on ↓ accents · <strong>heel</strong> (dark) on ↑</div>
+      </div>
+
+      <div class="tab-wrap" style="margin-top:1rem">
+        <div class="tab-meta">
+          <span><strong>Same bar in tab</strong></span>
+          <span>mute @ fret 7 · E♭ tuning</span>
+        </div>
+<pre class="tab">Neck mute ~7 | pick | wah
+Beat:  1    &amp;    2    &amp;    3    &amp;    4    &amp;
+Pick:  ↓    ↑    ↓    ↑    ↓    ↑    ↓    ↑
+Wah:  TOE  heel TOE  heel TOE  heel TOE  heel
+Mute:  ON   ON   ON   ON   ON   ON   ON   ON   ← fingers on neck @ ~7
+
+e|--x----x----x----x----x----x----x----x--|
+B|--x----x----x----x----x----x----x----x--|
+G|--x----x----x----x----x----x----x----x--|
+D|--x----x----x----x----x----x----x----x--|
+A|--x----x----x----x----x----x----x----x--|
+E|--x----x----x----x----x----x----x----x--|
+       ↑ all dead scrapes — fretting hand never leaves the ~7 zone</pre>
+      </div>
     </section>
 
     <!-- WAH ROCK -->
@@ -576,7 +742,7 @@
           <!-- stroke path hint -->
           <path d="M190 85 L190 175" stroke="#c4784a" stroke-width="2" stroke-dasharray="4 6" opacity="0.5"/>
         </svg>
-        <p class="pick-readout" id="pickReadout"><span class="dir" id="pickDir">↓ DOWN</span> stroke · palm mute ON</p>
+        <p class="pick-readout" id="pickReadout"><span class="dir" id="pickDir">↓ DOWN</span> stroke · fret-hand mute ON (~7)</p>
         <div class="wah-controls">
           <button type="button" class="primary" id="btnPick">▶ Animate pick up / down</button>
           <button type="button" id="btnPickStop">Stop</button>
@@ -650,64 +816,51 @@ How to mute (matching the video)
           <span><strong>Feel</strong> ~96 BPM · blues-rock</span>
           <span><strong>Key feel</strong> E minor pentatonic / E7♯9</span>
         </div>
-<pre class="tab" id="tabBlock">A) Muted chug lead-in
-   MUTE HAND: ON at BRIDGE (low E) for whole bar
-   FRET HAND: open low E · neck at NUT (fret 0)
-PM————————————————
+<pre class="tab" id="tabBlock">A) Wah scrapes — FRET-HAND MUTE on neck ~fret 7
+   MUTE: fretting fingers rest on strings (no press)
+   PICK: ↓↑ through dead strings + rock wah
+LH MUTE————————————————
 ↓   ↑   ↓   ↑   ↓   ↑   ↓   ↑
-e|--------------------------------|
-B|--------------------------------|
-G|--------------------------------|
-D|--------------------------------|
-A|--------------------------------|
-E|--0---0---0---0---0---0---0---0-|
-   ↑ place palm HERE before beat 1
-     (side of hand on strings by bridge)
+e|--x---x---x---x---x---x---x---x--|
+B|--x---x---x---x---x---x---x---x--|
+G|--x---x---x---x---x---x---x---x--|
+D|--x---x---x---x---x---x---x---x--|
+A|--x---x---x---x---x---x---x---x--|
+E|--x---x---x---x---x---x---x---x--|
+   ↑ mute HERE on the neck (~7), not at the bridge
 
-B) Wah intro riff
-   MUTE: ON on first 0 · OFF when fretting hand
-         moves to fret 2 (D string) ~ beat 2
-   NECK: frets 0–3 only (nut end)
-     heel← →toe     heel← →toe
-   ↓      ↓        ↓      ↓
+B) Pitched cell (SRV Austin style) — PRESS frets 5–9
+   MUTE scrapes OFF while notes ring; can return on xxxxx
+e|-------------------------------------|
+B|--------------------------------xxxxx|
+G|---9~------7----------9~--7---9~-xxxxx|
+D|------7h9----5b-5b-7p5------9----xxxxx|
+A|---------------------------------xxxxx|
+E|-------------------------------------|
+
+C) Low riff / E7♯9 area (open-position shapes · E♭ tuning)
+   MUTE: usually OFF for sung notes; neck frets 0–3
+   ↓      ↓        ↓
 e|-----------------------------------------------|
 B|-----------------------------------------------|
 G|------0h2p0----0h2p0----0h2p0------------------|
 D|----2--------2--------2--------2p0-------------|
 A|-----------------------------------2p0---------|
 E|--0------------------------------------0--3b0--|
-   PM↑ free (lift mute) …………………   ↑ rock back
-   |         |
-   |         └ fretting hand at fret 2 (D/G)
-   └ mute still ON for this open E chug
 
-C) E7♯9 stabs (wah more open / toe)
-   MUTE: usually OFF (let chord ring) · neck fret 0–1
+D) E7♯9 stabs
    ↓        ↓        ↓
 e|--0--------0--------0--------------------------|
 B|--0--------0--------0--------------------------|
 G|--1--------1--------1--------------------------|
 D|--0--------0--------0--------------------------|
 A|--2--------2--------2--------------------------|
-E|--0--------0--------0--------------------------|
-   wah!     wah!     wah!   (mostly DOWN strokes)
-
-D) Minor lick again
-   MUTE: OFF while lick sings · optional ON between cells
-   NECK: frets 0–2
-   ↓      ↓        ↓
-e|-----------------------------------------------|
-B|-----------------------------------------------|
-G|------0h2p0----0h2p0----0h2--------------------|
-D|----2--------2--------2----2p0-----------------|
-A|-------------------------------2p0-------------|
-E|--0--------------------------------0-----------|</pre>
+E|--0--------0--------0--------------------------|</pre>
 
         <div class="wah-track">
-          <strong>Stack the parts</strong><br/>
-          1) Palm-mute chugs with ↓↑ eighths → 2) release mute into wah lick → 3) rock wah heel↔toe → 4) E7♯9 DOWN stabs.<br/>
-          On each <code style="color:var(--bright)">0h2p0</code> rise → <strong>toe</strong> + mostly <strong>↓</strong> accents.<br/>
-          On the fall / low E → <strong>heel</strong>; optional light PM again between phrases.
+          <strong>Stack the parts (corrected)</strong><br/>
+          1) Fret-hand mute on neck ~7 + ↓↑ scrapes + wah → 2) press frets for pitched licks → 3) optional scrapes again → 4) low riff / E7♯9.<br/>
+          Primary mute location = <strong>fretting hand on the neck</strong> (as in the Austin video), not palm at the bridge.
         </div>
       </div>
 
@@ -728,6 +881,7 @@ E|--0--------------------------------0-----------|</pre>
     /* Tabs */
     const panels = {
       effects: document.getElementById("panel-effects"),
+      sync: document.getElementById("panel-sync"),
       wah: document.getElementById("panel-wah"),
       chug: document.getElementById("panel-chug"),
       tab: document.getElementById("panel-tab"),
@@ -738,10 +892,11 @@ E|--0--------------------------------0-----------|</pre>
         Object.keys(panels).forEach((k) => panels[k].classList.toggle("active", k === btn.dataset.panel));
         if (btn.dataset.panel === "wah") startRock();
         if (btn.dataset.panel === "chug") startPick();
+        if (btn.dataset.panel === "sync") startSync();
       });
     });
 
-    /* Wah rocker: openAmount 0 = heel/closed, 1 = toe/open */
+    /* Wah rocker (standalone panel) */
     const rocker = document.getElementById("rocker");
     const wahFill = document.getElementById("wahFill");
     const wahReadout = document.getElementById("wahReadout");
@@ -751,13 +906,13 @@ E|--0--------------------------------0-----------|</pre>
     function setWah(open01) {
       const o = Math.max(0, Math.min(1, open01));
       const angle = -18 + o * 36;
-      rocker.setAttribute("transform", `rotate(${angle} 210 150)`);
-      wahFill.style.width = `${Math.round(o * 100)}%`;
+      if (rocker) rocker.setAttribute("transform", `rotate(${angle} 210 150)`);
+      if (wahFill) wahFill.style.width = `${Math.round(o * 100)}%`;
       const pct = Math.round(o * 100);
       let where = "mid";
       if (pct < 35) where = "toward heel (dark)";
       else if (pct > 65) where = "toward toe (bright)";
-      wahReadout.textContent = `OPEN ~${pct}% · ${where}`;
+      if (wahReadout) wahReadout.textContent = `OPEN ~${pct}% · ${where}`;
     }
 
     function stopRock() {
@@ -773,6 +928,7 @@ E|--0--------------------------------0-----------|</pre>
     function startRock() {
       stopRock();
       stopPick();
+      stopSync();
       t0 = performance.now();
       function frame(now) {
         const t = (now - t0) / 1000;
@@ -792,7 +948,7 @@ E|--0--------------------------------0-----------|</pre>
     document.getElementById("btnPark").addEventListener("click", parkIntro);
     document.getElementById("btnStop").addEventListener("click", () => { stopRock(); setWah(0.5); });
 
-    /* Pick up/down animation */
+    /* Pick up/down (detail panel) */
     const pickHand = document.getElementById("pickHand");
     const pickArrow = document.getElementById("pickArrow");
     const pickDir = document.getElementById("pickDir");
@@ -800,11 +956,10 @@ E|--0--------------------------------0-----------|</pre>
     let pickT0 = 0;
 
     function setPick(down) {
-      /* down = toward floor (higher y), up = toward ceiling (lower y) */
       const y = down ? 18 : -18;
-      pickHand.setAttribute("transform", `translate(0 ${y})`);
-      pickArrow.textContent = down ? "↓" : "↑";
-      pickDir.textContent = down ? "↓ DOWN" : "↑ UP";
+      if (pickHand) pickHand.setAttribute("transform", `translate(0 ${y})`);
+      if (pickArrow) pickArrow.textContent = down ? "↓" : "↑";
+      if (pickDir) pickDir.textContent = down ? "↓ DOWN" : "↑ UP";
     }
 
     function stopPick() {
@@ -815,10 +970,10 @@ E|--0--------------------------------0-----------|</pre>
     function startPick() {
       stopPick();
       stopRock();
+      stopSync();
       pickT0 = performance.now();
       function frame(now) {
         const t = (now - pickT0) / 1000;
-        /* eighth notes at ~96 BPM → 312ms per stroke */
         const stroke = Math.floor(t / 0.312) % 2 === 0;
         setPick(stroke);
         pickAnim = requestAnimationFrame(frame);
@@ -832,8 +987,77 @@ E|--0--------------------------------0-----------|</pre>
       setPick(true);
     });
 
+    /* ===== SYNCED: neck mute pulse + rhythm cells + wah ===== */
+    const syncRocker = document.getElementById("syncRocker");
+    const syncWahText = document.getElementById("syncWahText");
+    const muteZone = document.getElementById("muteZone");
+    const muteFingers = document.getElementById("muteFingers");
+    const rhythmCells = [...document.querySelectorAll("#rhythmLane .rhythm-cell")];
+    const beats = ["1", "&", "2", "&", "3", "&", "4", "&"];
+    let syncAnim = null;
+    let syncT0 = 0;
+    const EIGHTH = 0.312; /* ~96 BPM */
+
+    function setSyncWah(open01) {
+      const o = Math.max(0, Math.min(1, open01));
+      const angle = -16 + o * 32;
+      syncRocker.setAttribute("transform", `rotate(${angle} 210 220)`);
+    }
+
+    function setSyncStep(i) {
+      const down = i % 2 === 0;
+      const open = down ? 0.82 : 0.28; /* toe on accents, heel on & */
+      setSyncWah(open);
+      setWah(open);
+
+      rhythmCells.forEach((c, idx) => c.classList.toggle("active", idx === i));
+
+      /* pulse mute zone on every hit */
+      muteZone.setAttribute("fill", "rgba(196,120,74,0.7)");
+      muteFingers.setAttribute("opacity", "1");
+      clearTimeout(setSyncStep._t);
+      setSyncStep._t = setTimeout(() => {
+        muteZone.setAttribute("fill", "rgba(196,120,74,0.35)");
+      }, 120);
+
+      document.getElementById("syncBeat").textContent = `Beat ${beats[i]}`;
+      document.getElementById("syncNeck").textContent = "Neck mute @ fret 7 · ON";
+      document.getElementById("syncPick").textContent = down ? "Pick ↓" : "Pick ↑";
+      document.getElementById("syncWah").textContent = down ? "Wah TOE" : "Wah heel";
+      syncWahText.textContent = down ? "wah → TOE (open / accent)" : "wah → heel (dark / & )";
+      setPick(down);
+    }
+
+    function stopSync() {
+      if (syncAnim) cancelAnimationFrame(syncAnim);
+      syncAnim = null;
+      rhythmCells.forEach((c) => c.classList.remove("active"));
+    }
+
+    function startSync() {
+      stopSync();
+      stopRock();
+      stopPick();
+      syncT0 = performance.now();
+      function frame(now) {
+        const t = (now - syncT0) / 1000;
+        const i = Math.floor(t / EIGHTH) % 8;
+        setSyncStep(i);
+        syncAnim = requestAnimationFrame(frame);
+      }
+      syncAnim = requestAnimationFrame(frame);
+    }
+
+    document.getElementById("btnSync").addEventListener("click", startSync);
+    document.getElementById("btnSyncStop").addEventListener("click", () => {
+      stopSync();
+      setSyncStep(0);
+      rhythmCells[0].classList.add("active");
+    });
+
     parkIntro();
     setPick(true);
+    setSyncStep(0);
   </script>
 </body>
 </html>
