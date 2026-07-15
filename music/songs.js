@@ -229,7 +229,7 @@ MusicTeacher.SONGS = {
       form: "Riff intro → main theme → development/variations → modal solo suite → theme return → close. Instrumental verse–chorus logic without words.",
       texture: "Layered Satriani guitars (rhythm + lead), bass, drums/percussion/programming. Lead sits on top like a singer; rhythm stays lean so modes read clearly.",
       dynamics: "Muted chop → melodic soar → solo intensity climb (each modal stop louder/wilder) → splashdown on G.",
-      timbre: "Signature Satch: mid-gain singing distortion, chorus/modulation shimmer, delay trails, Sustainer/feedback colors — liquid, not thrash-heavy.",
+      timbre: "Signature Satch: mid-gain singing distortion, chorus/modulation shimmer, delay trails, Sustainer/feedback colors — liquid, not thrash-heavy. Studio board: Kramer Pacer → Cry Baby wah → Chandler Tube Driver → Marshall half-stack (+ Eventide H949 slight detune). See music/pedalboard.html.",
       technique: "Alternate picking + palm mute, legato hammer/pulls, two-hand tapping, whammy bar, harmonics, wide vibrato — technique as melody, not just fireworks.",
       lyrics: "Instrumental — story is surf/alien motion: choppy waves (mute) → ride the face (melody) → wipeout/flight (solo modes) → beach (G).",
       style: "1987 instrumental rock / shred with pop-hook discipline. Satriani’s breakthrough single — virtuosity serving a tune you can hum.",

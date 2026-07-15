@@ -12,6 +12,9 @@ PHONE
   Teach — how each analyzed song uses the circle:
   https://htmlpreview.github.io/?https://raw.githubusercontent.com/hioncrypto/coinbase-momentum-dashboard/cursor/music-teacher-app-0b84/music/teach.html
 
+  Pedalboard — Surfing with the Alien signal chain schematic:
+  https://htmlpreview.github.io/?https://raw.githubusercontent.com/hioncrypto/coinbase-momentum-dashboard/cursor/music-teacher-app-0b84/music/pedalboard.html
+
 DESKTOP
   1. Download index.html and songs.js into the same folder
      (or download the whole music/ folder).
@@ -22,6 +25,8 @@ WHAT'S INSIDE
   • Home — Music Teacher
   • Interactive Circle — tap keys, hear notes, relatives, diatonic chords
     Phone: .../music/interactive_circle.html on the same branch
+  • Teach — guided circle lessons per song
+  • Pedalboard — Surfing with the Alien studio / bedroom schematic
   • Lessons — circle, Aeolian cadence, modes, articulation, 12 lenses
   • Song Lab — pick song + lens + section (Pitch lens shows the wheel)
   • Circle — song sections on the circle-of-fifths map
@@ -29,4 +34,4 @@ WHAT'S INSIDE
 
 SONGS
   Over the Mountain · Diary of a Madman · Mr. Crowley
-  The Trooper · Aces High · Mozart Clarinet Quintet K.581
+  The Trooper · Aces High · Surfing with the Alien · Mozart Clarinet Quintet K.581
