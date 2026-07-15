@@ -57,6 +57,13 @@ MusicTeacher.SONGS = {
       { id: "solo", name: "Guitar solo", keys: ["G#m"], chords: "G♯ minor language", function: "i — pentatonic / Dorian color", note: "Still centered on G♯ minor: pentatonic, blues, and occasional raised 6th (Dorian) in the Rhoads lines." },
       { id: "resolve", name: "Resolve / close", keys: ["G#m"], chords: "G♯m", function: "i — home", note: "Everything collapses back onto the tonic. The circle journey ends where it began." },
     ],
+    teach: [
+      { title: "Plant the home", keys: ["G#m"], teach: "Find G♯m on the inner ring. That’s home. The song’s advantage: everything else will feel like a trip away from — or back to — this one wedge." },
+      { title: "Verse: one step of brightness", keys: ["G#m", "Db"], teach: "Verse adds C♯ (spelled Db on the wheel) — the IV of G♯m. On the circle, IV sits next door (counterclockwise from the relative-major side). Tiny move, big lift without leaving the neighborhood." },
+      { title: "Chorus: the Aeolian triangle", keys: ["E", "F#", "G#m"], teach: "E → F♯ → G♯m is VI → VII → i. Look: E and F♯ sit beside G♯m’s relative-major family. The song takes advantage of short circle hops for a huge emotional lift-then-fall — yearning that always lands home." },
+      { title: "Bridge: walk left", keys: ["C#m", "B", "A"], teach: "Bridge steps further around: C♯m–B–A. That’s using the circle as a path, not just a home — shade and color before the solo snaps back to G♯m." },
+      { title: "What it takes advantage of", keys: ["E", "F#", "G#m"], teach: "Takeaway: Over the Mountain lives on a tight Aeolian cluster. It doesn’t modulate far — it weaponizes neighbors for lift (VI–VII) and gravity (back to i)." },
+    ],
   },
   diary_of_a_madman: {
     title: "Diary of a Madman",
@@ -88,6 +95,13 @@ MusicTeacher.SONGS = {
       { id: "solo", name: "Solo (Hungarian minor)", keys: ["G#m"], chords: "G♯ Hungarian / Gypsy minor", function: "i — exotic tonic", note: "Harmonic minor + raised 4th over G♯, then exits into minor pentatonic. Same home, different scale color." },
       { id: "close", name: "Final hooks / close", keys: ["G#m"], chords: "G♯m refrain", function: "i — resignation", note: "Return to the refrain world. The circle doesn’t escape — it accepts the tonic." },
     ],
+    teach: [
+      { title: "Same home as Over the Mountain", keys: ["G#m"], teach: "Diary stays on G♯m — same wedge as Over the Mountain. Advantage: one tonic world for the whole album suite, so madness is scale-color and form, not a new key." },
+      { title: "Unstable approaches to i", keys: ["G#m", "C#m"], teach: "Verses lean toward C♯m (iv) with diminished/#11 cells. On the circle you’re still next to home — tension without leaving the block." },
+      { title: "The soft room: one step away", keys: ["Ebm"], teach: "Interlude sits near E♭m / D♯m — a neighbor shade on the wheel. Fragile “dear diary” moment = circle adjacency used as intimacy, not a big modulation." },
+      { title: "Hungarian solo: same wedge, new color", keys: ["G#m"], teach: "Solo stays on G♯m but flips to Hungarian/Gypsy minor (raised 4th). Circle lesson: you can change the paint without moving the house." },
+      { title: "What it takes advantage of", keys: ["G#m", "C#m", "Ebm"], teach: "Takeaway: Diary uses the circle for small escapes (iv, remote minor shade) then refuses to leave G♯m — obsession mapped as geography." },
+    ],
   },
   mr_crowley: {
     title: "Mr. Crowley",
@@ -116,6 +130,13 @@ MusicTeacher.SONGS = {
       { id: "chorus", name: "Chorus / heavy", keys: ["Dm", "Bb", "F", "C"], chords: "Dm · B♭ · F · C", function: "i → VI → III → VII", note: "Stays in the D-minor neighborhood: relative major F (III) brightens, then C (VII) leans back toward home." },
       { id: "solo", name: "Main solo", keys: ["Dm"], chords: "D minor / harmonic minor", function: "i — neoclassical language", note: "Rhoads written solo over D minor: pentatonic, harmonic-minor leading tones, classical runs — Diary’s Hungarian color is a spicier cousin of this toolkit." },
       { id: "outro", name: "Outro solo / close", keys: ["Dm", "A"], chords: "Dm · A · classical runs", function: "i ↔ V — resolve", note: "Trills, diminished tension, and V→i closure. Crowley uses the easier D-minor home with clearer classical cadences." },
+    ],
+    teach: [
+      { title: "Rotate the triangle to D minor", keys: ["Dm"], teach: "Find Dm on the inner ring. Same Aeolian engine as Diary/Over the Mountain — just rotated to an easier key. That’s the teaching trick: patterns move around the wheel." },
+      { title: "Classical V doorway", keys: ["Dm", "A"], teach: "Intro uses A major as V of Dm — clockwise neighbor on the major ring above. Classical music’s favorite short hop: i↔V." },
+      { title: "Verse: i–VII–VI triangle", keys: ["Dm", "C", "Bb"], teach: "Dm–C–B♭. Compare to Diary’s E–F♯–G♯m (VI–VII–i). Same three-chord triangle on the circle — Crowley starts on tonic and walks down; Diary hits the lift then home." },
+      { title: "Chorus adds relative major", keys: ["Dm", "Bb", "F", "C"], teach: "F (III) is Dm’s relative major — outer ring, same slice. Brightens without leaving the neighborhood." },
+      { title: "What it takes advantage of", keys: ["Dm", "C", "Bb", "A"], teach: "Takeaway: Crowley proves the Aeolian triangle is portable. Same circle shape as Diary, friendlier spelling, plus clear V→i cadences for classical closure." },
     ],
   },
   the_trooper: {
@@ -146,6 +167,12 @@ MusicTeacher.SONGS = {
       { id: "solo1", name: "Solo 1 (Adrian Smith)", keys: ["Em", "D", "Bm", "C"], chords: "E5–D5–B5–C5–D5", function: "i – VII – v – VI – VII", note: "E minor blues/pentatonic over the Aeolian loop. Bends and descending licks — rock voice on the Em battlefield." },
       { id: "solo2", name: "Solo 2 (Dave Murray)", keys: ["Am", "G", "Em", "F"], chords: "A5–G5–Em–F–G", function: "shift to Am (iv area)", note: "Same Aeolian machine relocated to A minor (iv of Em). Trills, bends, whammy — chaos before the charge returns home." },
       { id: "outro", name: "Final verse / outro", keys: ["Em"], chords: "Em theme + gallop", function: "i — return", note: "Harmony theme and gallop snap back to E minor. No happy cadence — the charge ends in the tonic’s smoke." },
+    ],
+    teach: [
+      { title: "Home: E minor", keys: ["Em"], teach: "Em on the inner ring. Maiden’s charge lives here. Advantage of the circle: keep harmony simple so rhythm (gallop) and twin leads can be the drama." },
+      { title: "Chorus: same triangle, new key", keys: ["D", "C", "Em", "G"], teach: "D–C–Em is VII–VI–i in E minor — identical family to Crowley/Diary. G (III) flashes relative-major brightness (outer ring above Em)." },
+      { title: "Solo 2: move the machine", keys: ["Am", "G", "Em", "F"], teach: "Same Aeolian loop relocated to Am (iv of Em). On the wheel, Am sits near Em’s neighborhood — a short move that feels like chaos without changing the song’s DNA." },
+      { title: "What it takes advantage of", keys: ["D", "C", "Em"], teach: "Takeaway: Trooper uses the circle for portable chord engines. Gallop + twin leads carry the story; harmony stays on short circle hops so the cavalry never loses the road." },
     ],
   },
   aces_high: {
@@ -179,6 +206,13 @@ MusicTeacher.SONGS = {
       { id: "solo2", name: "Solo 2 (Smith · mixed)", keys: ["Bm"], chords: "Bm (+ blues ♭5 / Dorian 6)", function: "v · whole-step climb", note: "Legato runs + blues licks + short staccato chromatic snaps — mixes detached and smooth inside one solo." },
       { id: "outro", name: "Final verse / chorus / riff", keys: ["Em", "C", "D"], chords: "return to Em–C–D world", function: "i — land", note: "Restates verse legato narrative + sustained chorus, then riff energy — full articulation arc closes." },
     ],
+    teach: [
+      { title: "Same Em home as Trooper", keys: ["Em"], teach: "Aces High shares Em with The Trooper. Circle advantage: one NWOBHM home key; difference is how they travel and articulate." },
+      { title: "i–VI–VII scramble", keys: ["Em", "C", "D"], teach: "Em–C–D = i–VI–VII. C and D are Em’s close major neighbors on the wheel — the flight path stays local so staccato intro can feel urgent without harmonic confusion." },
+      { title: "Chorus holds the same path", keys: ["Em", "C", "D", "G"], teach: "Chorus uses the same circle path but with long held chords (+ G lift). Advantage: identical geography, new articulation = new meaning (alarm → anthem)." },
+      { title: "Solos climb the circle", keys: ["Am", "Bm"], teach: "Solo 1 on Am (iv), Solo 2 on Bm (v). Whole-step climb around the minor ring — same machine, rising battlefield." },
+      { title: "What it takes advantage of", keys: ["Em", "C", "D", "Am", "Bm"], teach: "Takeaway: Aces High shows the circle as a runway. Short hops for the song body; iv→v climb for solo drama; articulation does the storytelling on top of that map." },
+    ],
   },
   mozart_k581: {
     title: "Clarinet Quintet in A, K. 581",
@@ -210,6 +244,13 @@ MusicTeacher.SONGS = {
       { id: "theme", name: "IV. Theme", keys: ["A", "E"], chords: "A → E → A", function: "I ↔ V", note: "Theme phrases walk tonic to dominant and back — the shortest path on the circle." },
       { id: "var3", name: "IV. Variation III", keys: ["Am"], chords: "A minor", function: "i — parallel shade", note: "Viola-led variation flips to Aeolian again before the major close." },
       { id: "close", name: "IV. Close", keys: ["A"], chords: "A major", function: "I — Adagio → Allegro", note: "Final return to A major. The circle’s journey is local: A, E, D, and parallel Am." },
+    ],
+    teach: [
+      { title: "Home: A major (outer ring)", keys: ["A"], teach: "Mozart starts on the major ring — A. Classical music’s home base uses the circle differently than metal: I–V–IV geography, not Aeolian triangles." },
+      { title: "Dominant: one step clockwise", keys: ["A", "E"], teach: "Allegro second theme leans to E (V). Clockwise = up a fifth. The shortest, strongest classical move on the wheel." },
+      { title: "Subdominant: one step left", keys: ["D"], teach: "Larghetto sits in D (IV) — counterclockwise. Warmth and rest without remote keys." },
+      { title: "Parallel shade: flip the mode", keys: ["Am"], teach: "Trio I / Var. III flip to Am — same slice, inner ring. Not a far modulation: parallel Aeolian as intimate shadow." },
+      { title: "What it takes advantage of", keys: ["A", "E", "D", "Am"], teach: "Takeaway: Mozart uses the circle’s closest neighbors only (I, V, IV, parallel i). Maximum clarity — contrast by mode and movement, not distant travel." },
     ],
   },
 };

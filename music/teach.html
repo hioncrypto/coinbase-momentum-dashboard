@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Teach · Circle of Fifths · Music Teacher</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #0e1218; --panel: #161c26; --line: rgba(232,210,160,0.18);
+      --gold: #e8d2a0; --gold-bright: #f3e4bc; --ember: #c4784a;
+      --mint: #7faf9a; --text: #e8e2d6; --muted: #9aa3b2;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; min-height: 100%;
+      background:
+        radial-gradient(ellipse 80% 55% at 50% -10%, rgba(196,120,74,0.16), transparent 55%),
+        linear-gradient(165deg, #0a0d12 0%, #121821 45%, #0e1218 100%);
+      color: var(--text);
+      font-family: "IBM Plex Sans", system-ui, sans-serif;
+    }
+    body { display: grid; grid-template-rows: auto auto 1fr auto; min-height: 100vh; }
+    header {
+      padding: 1.1rem clamp(1rem, 3vw, 2.25rem) 0.8rem;
+      border-bottom: 1px solid var(--line);
+    }
+    .eyebrow {
+      margin: 0 0 0.25rem; font-size: 0.72rem; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--ember); font-weight: 600;
+    }
+    .eyebrow a { color: inherit; text-decoration: none; }
+    h1 {
+      margin: 0; font-family: Fraunces, Georgia, serif;
+      font-size: clamp(1.45rem, 3.2vw, 2.1rem); color: var(--gold-bright);
+    }
+    .sub { margin: 0.35rem 0 0; color: var(--muted); max-width: 42rem; line-height: 1.45; font-size: 0.92rem; }
+    .sound-banner {
+      display: none; padding: 0.65rem 1rem; text-align: center; cursor: pointer;
+      background: rgba(196,120,74,0.28); border-bottom: 1px solid rgba(232,210,160,0.35);
+      color: var(--gold-bright); font-weight: 600;
+    }
+    .sound-banner.show { display: block; }
+    main {
+      display: grid;
+      grid-template-columns: minmax(260px, 360px) 1fr;
+      min-height: 0;
+    }
+    @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+    .sidebar {
+      padding: 1rem clamp(1rem, 3vw, 1.5rem);
+      border-right: 1px solid var(--line);
+      background: rgba(14,18,24,0.55);
+      overflow-y: auto;
+    }
+    @media (max-width: 900px) { .sidebar { border-right: none; border-bottom: 1px solid var(--line); } }
+    .field {
+      display: block; font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--muted); margin: 0 0 0.4rem; font-weight: 600;
+    }
+    select {
+      width: 100%; appearance: none;
+      background: var(--panel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%239aa3b2' d='M1 1l5 5 5-5'/%3E%3C/svg%3E") right 0.9rem center / 12px no-repeat;
+      color: var(--text); border: 1px solid var(--line); border-radius: 8px;
+      padding: 0.7rem 2.2rem 0.7rem 0.9rem; font: 500 0.95rem "IBM Plex Sans", sans-serif;
+      margin-bottom: 0.85rem; cursor: pointer;
+    }
+    .song-blurb {
+      margin: 0 0 1rem; padding: 0.75rem 0.85rem; background: var(--panel);
+      border: 1px solid var(--line); border-radius: 10px; color: var(--muted);
+      font-size: 0.86rem; line-height: 1.4;
+    }
+    .song-blurb strong {
+      display: block; font-family: Fraunces, Georgia, serif; color: var(--gold);
+      margin-bottom: 0.25rem; font-size: 1.05rem;
+    }
+    .step-card {
+      background: rgba(14,18,24,0.65); border: 1px solid rgba(232,210,160,0.35);
+      border-radius: 12px; padding: 1rem 1.05rem; margin-bottom: 0.85rem;
+    }
+    .step-num {
+      margin: 0 0 0.35rem; font-size: 0.7rem; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--ember); font-weight: 600;
+    }
+    .step-card h2 {
+      margin: 0 0 0.5rem; font-family: Fraunces, Georgia, serif;
+      color: var(--gold-bright); font-size: 1.25rem;
+    }
+    .step-card p { margin: 0; color: var(--muted); line-height: 1.5; font-size: 0.95rem; }
+    .chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.75rem; }
+    .chip {
+      font-size: 0.78rem; font-weight: 600; padding: 0.28rem 0.5rem; border-radius: 999px;
+      border: 1px solid rgba(232,210,160,0.28); color: var(--gold);
+      background: rgba(232,210,160,0.06); cursor: pointer;
+    }
+    .nav-row { display: flex; gap: 0.5rem; margin-top: 0.25rem; }
+    .btn {
+      flex: 1; appearance: none; border: 1px solid rgba(232,210,160,0.35);
+      background: linear-gradient(135deg, rgba(196,120,74,0.35), rgba(232,210,160,0.1));
+      color: var(--gold-bright); font: 600 0.9rem "IBM Plex Sans", sans-serif;
+      padding: 0.7rem 0.8rem; border-radius: 10px; cursor: pointer;
+    }
+    .btn:disabled { opacity: 0.35; cursor: default; }
+    .btn.ghost { background: transparent; border-color: var(--line); color: var(--text); }
+    .dots { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.85rem 0 0; }
+    .dot {
+      width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--line);
+      background: transparent; padding: 0; cursor: pointer;
+    }
+    .dot.on { background: var(--ember); border-color: var(--gold); }
+    .viz { display: grid; place-items: center; padding: 1rem; min-height: min(65vh, 600px); }
+    .wheel-wrap { width: min(100%, 520px); }
+    #wheel { width: 100%; height: auto; display: block; touch-action: manipulation; }
+    .key-wedge .face { transition: fill 0.25s, opacity 0.25s; }
+    .key-label {
+      fill: var(--text); font-size: 13px; font-weight: 600;
+      font-family: "IBM Plex Sans", sans-serif; pointer-events: none;
+    }
+    .minor-label { font-size: 11px; fill: var(--muted); }
+    .center-disk { fill: #0c1016; stroke: rgba(232,210,160,0.2); pointer-events: none; }
+    .center-title {
+      fill: var(--gold-bright); font-family: Fraunces, Georgia, serif;
+      font-size: 28px; font-weight: 700; text-anchor: middle; pointer-events: none;
+    }
+    .center-sub {
+      fill: var(--muted); font-size: 11px; letter-spacing: 0.16em;
+      text-anchor: middle; font-weight: 600; pointer-events: none;
+    }
+    .key-wedge.dim .face { opacity: 0.28; }
+    .key-wedge.lit .face { fill: rgba(196,120,74,0.55) !important; opacity: 1; }
+    .key-wedge.tonic .face { fill: rgba(232,210,160,0.75) !important; }
+    .key-wedge.lit .key-label, .key-wedge.tonic .key-label { fill: #0e1218; }
+    .path-arc {
+      fill: none; stroke: var(--ember); stroke-width: 3; stroke-linecap: round;
+      stroke-dasharray: 140; animation: draw 0.55s ease forwards;
+    }
+    @keyframes draw { from { stroke-dashoffset: 140; opacity: 0; } to { stroke-dashoffset: 0; opacity: 1; } }
+    footer {
+      padding: 0.8rem clamp(1rem, 3vw, 2.25rem);
+      border-top: 1px solid var(--line); color: var(--muted); font-size: 0.78rem;
+    }
+    footer a { color: var(--gold); }
+  </style>
+</head>
+<body>
+  <header>
+    <p class="eyebrow"><a href="index.html">Music Teacher</a> · Guided lesson</p>
+    <h1>How each song uses the circle</h1>
+    <p class="sub">Step through the songs already analyzed — watch the wheel light up and hear how they take advantage of short hops, triangles, and home keys.</p>
+  </header>
+
+  <div class="sound-banner show" id="soundBanner">Tap here once to enable sound</div>
+
+  <main>
+    <aside class="sidebar">
+      <label class="field" for="songSelect">Song</label>
+      <select id="songSelect"></select>
+      <div class="song-blurb" id="songBlurb"></div>
+
+      <div class="step-card">
+        <p class="step-num" id="stepNum">Step 1</p>
+        <h2 id="stepTitle">…</h2>
+        <p id="stepTeach">…</p>
+        <div class="chips" id="stepChips"></div>
+      </div>
+
+      <div class="nav-row">
+        <button type="button" class="btn ghost" id="prevBtn">Previous</button>
+        <button type="button" class="btn" id="nextBtn">Next</button>
+      </div>
+      <div class="dots" id="dots"></div>
+    </aside>
+
+    <section class="viz">
+      <div class="wheel-wrap">
+        <svg id="wheel" viewBox="0 0 560 560" role="img" aria-label="Circle of fifths lesson"></svg>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    Songs from your prior analyses ·
+    <a href="interactive_circle.html">Free explore</a> ·
+    <a href="index.html?view=circle">Song sections</a>
+  </footer>
+
+  <script>
+    /* Self-contained: works on phone htmlpreview */
+    const MAJORS = ["C","G","D","A","E","B","F#","Db","Ab","Eb","Bb","F"];
+    const MINORS = ["Am","Em","Bm","F#m","C#m","G#m","Ebm","Bbm","Fm","Cm","Gm","Dm"];
+    const ALIASES = { "C#":"Db","G#":"Ab","D#":"Eb","A#":"Bb","Abm":"G#m","Dbm":"C#m" };
+    const PRETTY = {
+      "F#":"F♯","C#":"C♯","G#":"G♯","Db":"D♭","Eb":"E♭","Ab":"A♭","Bb":"B♭",
+      "F#m":"F♯m","C#m":"C♯m","G#m":"G♯m","Ebm":"E♭m","Bbm":"B♭m"
+    };
+    function pretty(k){ return PRETTY[k]||k; }
+    function toWheel(k){
+      const s=String(k).trim();
+      if (MAJORS.includes(s)||MINORS.includes(s)) return s;
+      return ALIASES[s]||s;
+    }
+
+    const FREQ = {
+      C:261.63,"C#":277.18,Db:277.18,D:293.66,"D#":311.13,Eb:311.13,
+      E:329.63,F:349.23,"F#":369.99,Gb:369.99,G:392,"G#":415.3,Ab:415.3,
+      A:440,"A#":466.16,Bb:466.16,B:493.88
+    };
+    let ctx=null;
+    async function unlock(){
+      const AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC) return;
+      if(!ctx) ctx=new AC();
+      if(ctx.state==="suspended") await ctx.resume();
+      document.getElementById("soundBanner").classList.remove("show");
+    }
+    function playKey(key){
+      if(!ctx) return;
+      const root=String(key).endsWith("m")?key.slice(0,-1):key;
+      let f=FREQ[root]||FREQ[ALIASES[root]]||FREQ[toWheel(root)];
+      if(!f) return;
+      if(String(key).endsWith("m")) f*=0.5;
+      const osc=ctx.createOscillator(), g=ctx.createGain();
+      osc.type="sine"; osc.frequency.value=f;
+      const now=ctx.currentTime;
+      g.gain.setValueAtTime(0.0001,now);
+      g.gain.exponentialRampToValueAtTime(0.26,now+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001,now+0.4);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(now); osc.stop(now+0.45);
+    }
+    function playKeys(keys){
+      keys.forEach((k,i)=> setTimeout(()=>playKey(toWheel(k)), i*220));
+    }
+
+    /** Teaching data for songs already analyzed */
+    const SONGS = {
+      over_the_mountain: {
+        title: "Over the Mountain",
+        artist: "Ozzy · Diary of a Madman",
+        tonic: "G#m",
+        blurb: "Aeolian metal lift — short hops for yearning.",
+        steps: [
+          { title: "Plant the home", keys: ["G#m"], teach: "Find G♯m on the inner ring. That’s home. Advantage: every other move will feel like leaving or returning to this one wedge." },
+          { title: "Verse: one step of brightness", keys: ["G#m","Db"], teach: "Verse adds C♯ (Db on the wheel) — IV of G♯m. Tiny circle neighbor = lift without leaving the block." },
+          { title: "Chorus: the Aeolian triangle", keys: ["E","F#","G#m"], teach: "E → F♯ → G♯m is VI → VII → i. Short hops beside home create a huge emotional lift-then-fall. This is the song’s engine." },
+          { title: "Bridge: walk further", keys: ["C#m","B","A"], teach: "Bridge walks C♯m–B–A — using the circle as a path for shade, then the solo snaps back to G♯m." },
+          { title: "What it takes advantage of", keys: ["E","F#","G#m"], teach: "Takeaway: it never modulates far. It weaponizes neighbors — VI–VII for lift, i for gravity." },
+        ],
+      },
+      diary_of_a_madman: {
+        title: "Diary of a Madman",
+        artist: "Ozzy · Diary of a Madman",
+        tonic: "G#m",
+        blurb: "Same home as Over the Mountain — madness by color, not new keys.",
+        steps: [
+          { title: "Same home wedge", keys: ["G#m"], teach: "Diary stays on G♯m — same house as Over the Mountain. Advantage: one tonic for the suite; drama comes from scale color and form." },
+          { title: "Tension next door", keys: ["G#m","C#m"], teach: "Verses lean to C♯m (iv) with diminished colors. Still a neighbor on the wheel — uneasy, not lost." },
+          { title: "Soft room: one step away", keys: ["Ebm"], teach: "Interlude near E♭m — adjacent shade. Intimacy via circle adjacency, not a distant modulation." },
+          { title: "Hungarian solo: same house, new paint", keys: ["G#m"], teach: "Solo stays on G♯m but uses Hungarian minor (raised 4th). Circle lesson: change the color without moving the house." },
+          { title: "What it takes advantage of", keys: ["G#m","C#m","Ebm"], teach: "Takeaway: small escapes (iv, remote shade) then refusal to leave G♯m — obsession as geography." },
+        ],
+      },
+      mr_crowley: {
+        title: "Mr. Crowley",
+        artist: "Ozzy · Blizzard of Ozz · Randy Rhoads",
+        tonic: "Dm",
+        blurb: "Same Aeolian triangle as Diary — rotated to easier D minor.",
+        steps: [
+          { title: "Rotate to D minor", keys: ["Dm"], teach: "Find Dm. Same pattern family as Diary/Over the Mountain — just spun to a friendlier key. Patterns travel around the wheel." },
+          { title: "Classical V doorway", keys: ["Dm","A"], teach: "Organ intro uses A as V of Dm — clockwise fifth. Classical music’s favorite short hop." },
+          { title: "Verse: i–VII–VI triangle", keys: ["Dm","C","Bb"], teach: "Dm–C–B♭. Same three-chord triangle as Diary’s E–F♯–G♯m — Crowley starts on tonic and walks down; Diary lifts then home." },
+          { title: "Chorus: relative major flash", keys: ["Dm","Bb","F","C"], teach: "F is Dm’s relative major (outer ring, same slice). Brightens without leaving the neighborhood." },
+          { title: "What it takes advantage of", keys: ["Dm","C","Bb","A"], teach: "Takeaway: the Aeolian triangle is portable. Same circle shape as Diary, clearer V→i classical cadences." },
+        ],
+      },
+      the_trooper: {
+        title: "The Trooper",
+        artist: "Iron Maiden · Piece of Mind",
+        tonic: "Em",
+        blurb: "Same triangle again — harmony stays simple so gallop can charge.",
+        steps: [
+          { title: "Home: E minor", keys: ["Em"], teach: "Em on the inner ring. Keep harmony local so gallop + twin leads carry the drama." },
+          { title: "Chorus: VII–VI–i", keys: ["D","C","Em","G"], teach: "D–C–Em is the same Aeolian family as Crowley/Diary. G (III) flashes relative-major brightness." },
+          { title: "Solo 2: move the machine", keys: ["Am","G","Em","F"], teach: "Same loop relocated to Am (iv of Em). Short move on the wheel = chaos without new DNA." },
+          { title: "What it takes advantage of", keys: ["D","C","Em"], teach: "Takeaway: portable chord engines. Short circle hops keep the cavalry on the road while rhythm tells the war story." },
+        ],
+      },
+      aces_high: {
+        title: "Aces High",
+        artist: "Iron Maiden · Powerslave",
+        tonic: "Em",
+        blurb: "Same Em map as Trooper — articulation + solo climb do the extra work.",
+        steps: [
+          { title: "Shared Em home", keys: ["Em"], teach: "Same home as Trooper. Circle advantage: one NWOBHM key; difference is travel + articulation." },
+          { title: "i–VI–VII flight path", keys: ["Em","C","D"], teach: "Em–C–D stays on close neighbors so the staccato scramble feels urgent, not confused." },
+          { title: "Chorus: same path, held", keys: ["Em","C","D","G"], teach: "Same geography, long held chords. Identical map + new articulation = alarm becomes anthem." },
+          { title: "Solos climb iv → v", keys: ["Am","Bm"], teach: "Am then Bm — whole-step climb on the minor ring. Same machine, rising battlefield." },
+          { title: "What it takes advantage of", keys: ["Em","C","D","Am","Bm"], teach: "Takeaway: the circle is a runway. Short hops for the body; iv→v for solo drama; articulation tells the story on top." },
+        ],
+      },
+      mozart_k581: {
+        title: "Clarinet Quintet K.581",
+        artist: "W. A. Mozart",
+        tonic: "A",
+        blurb: "Classical I–V–IV + parallel minor — closest neighbors only.",
+        steps: [
+          { title: "Home: A major", keys: ["A"], teach: "Outer ring. Classical home uses I–V–IV geography, not metal’s Aeolian triangle." },
+          { title: "Dominant: clockwise fifth", keys: ["A","E"], teach: "Second theme leans to E (V). Shortest, strongest classical move on the wheel." },
+          { title: "Subdominant: step left", keys: ["D"], teach: "Larghetto in D (IV) — counterclockwise warmth." },
+          { title: "Parallel shade", keys: ["Am"], teach: "Trio I / Var. III flip to Am — same slice, inner ring. Mode flip, not distant travel." },
+          { title: "What it takes advantage of", keys: ["A","E","D","Am"], teach: "Takeaway: only the closest neighbors (I, V, IV, parallel i). Maximum clarity — contrast by mode and movement." },
+        ],
+      },
+    };
+
+    const CX=280,CY=280,R_OUT=250,R_MID=175,R_IN=105;
+    function polar(a,r){ const t=((a-90)*Math.PI)/180; return [CX+r*Math.cos(t), CY+r*Math.sin(t)]; }
+    function wedge(i,ro,ri){
+      const s=30,a0=i*s-s/2,a1=i*s+s/2;
+      const [x0,y0]=polar(a0,ro),[x1,y1]=polar(a1,ro),[x2,y2]=polar(a1,ri),[x3,y3]=polar(a0,ri);
+      return `M ${x0} ${y0} A ${ro} ${ro} 0 0 1 ${x1} ${y1} L ${x2} ${y2} A ${ri} ${ri} 0 0 0 ${x3} ${y3} Z`;
+    }
+    function labelPos(i,r){ return polar(i*30,r); }
+
+    function buildWheel(){
+      const svg=document.getElementById("wheel");
+      svg.innerHTML=`
+        <defs><radialGradient id="rg" cx="50%" cy="45%" r="55%">
+          <stop offset="0%" stop-color="#243041"/><stop offset="100%" stop-color="#121821"/>
+        </radialGradient></defs>
+        <circle cx="${CX}" cy="${CY}" r="${R_OUT+4}" fill="none" stroke="rgba(232,210,160,0.12)" stroke-width="8"/>
+        <circle class="center-disk" cx="${CX}" cy="${CY}" r="${R_IN-8}"/>
+        <text class="center-title" id="centerTitle" x="${CX}" y="${CY-4}">—</text>
+        <text class="center-sub" id="centerSub" x="${CX}" y="${CY+14}">HOME</text>
+        <g id="wedges"></g><g id="paths"></g>`;
+      const g=svg.querySelector("#wedges");
+      MAJORS.forEach((maj,i)=>{
+        const min=MINORS[i];
+        [[maj,R_OUT,R_MID,"url(#rg)",""],[min,R_MID,R_IN,"#1a222e","minor-label"]].forEach(([key,r0,r1,fill,cls])=>{
+          const el=document.createElementNS("http://www.w3.org/2000/svg","g");
+          el.classList.add("key-wedge"); el.dataset.key=key;
+          el.innerHTML=`<path class="face" d="${wedge(i,r0,r1)}" fill="${fill}" stroke="rgba(232,210,160,0.14)" stroke-width="1"/>`;
+          const [lx,ly]=labelPos(i,(r0+r1)/2);
+          const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+          t.classList.add("key-label"); if(cls) t.classList.add(cls);
+          t.setAttribute("x",lx); t.setAttribute("y",ly+4); t.setAttribute("text-anchor","middle");
+          t.textContent=pretty(key); el.appendChild(t);
+          el.style.cursor="pointer";
+          el.addEventListener("click",()=>{ unlock().then(()=>playKey(key)); });
+          g.appendChild(el);
+        });
+      });
+    }
+
+    function keyPoint(key){
+      const k=toWheel(key);
+      let i=MAJORS.indexOf(k), ring="major";
+      if(i<0){ i=MINORS.indexOf(k); ring="minor"; }
+      if(i<0) return null;
+      const r=ring==="major"?(R_OUT+R_MID)/2:(R_MID+R_IN)/2;
+      const [x,y]=labelPos(i,r);
+      return {x,y};
+    }
+
+    function drawPath(keys){
+      const paths=document.getElementById("paths");
+      paths.innerHTML="";
+      const pts=keys.map(keyPoint).filter(Boolean);
+      for(let i=0;i<pts.length-1;i++){
+        const a=pts[i], b=pts[i+1];
+        const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+        const cx=CX+(mx-CX)*0.55, cy=CY+(my-CY)*0.55;
+        const p=document.createElementNS("http://www.w3.org/2000/svg","path");
+        p.classList.add("path-arc");
+        p.setAttribute("d",`M ${a.x} ${a.y} Q ${cx} ${cy} ${b.x} ${b.y}`);
+        paths.appendChild(p);
+      }
+    }
+
+    let songId="over_the_mountain", step=0;
+
+    function render(){
+      const song=SONGS[songId];
+      const s=song.steps[step];
+      document.getElementById("songBlurb").innerHTML=`<strong>${song.title}</strong>${song.artist}<br/>${song.blurb}`;
+      document.getElementById("stepNum").textContent=`Step ${step+1} of ${song.steps.length}`;
+      document.getElementById("stepTitle").textContent=s.title;
+      document.getElementById("stepTeach").textContent=s.teach;
+      document.getElementById("stepChips").innerHTML=s.keys.map(k=>`<button type="button" class="chip" data-k="${k}">${pretty(toWheel(k))}</button>`).join("");
+      document.getElementById("stepChips").querySelectorAll(".chip").forEach(btn=>{
+        btn.addEventListener("click",()=>unlock().then(()=>playKey(btn.dataset.k)));
+      });
+      document.getElementById("prevBtn").disabled=step===0;
+      document.getElementById("nextBtn").disabled=step===song.steps.length-1;
+      document.getElementById("nextBtn").textContent=step===song.steps.length-1?"Done":"Next";
+
+      const dots=document.getElementById("dots");
+      dots.innerHTML=song.steps.map((_,i)=>`<button type="button" class="dot${i===step?" on":""}" data-i="${i}" aria-label="Step ${i+1}"></button>`).join("");
+      dots.querySelectorAll(".dot").forEach(d=>d.addEventListener("click",()=>{ step=+d.dataset.i; render(); hear(); }));
+
+      const tonic=toWheel(song.tonic);
+      const active=new Set(s.keys.map(toWheel));
+      document.getElementById("centerTitle").textContent=pretty(tonic);
+      document.querySelectorAll(".key-wedge").forEach(el=>{
+        el.classList.remove("lit","dim","tonic");
+        if(active.has(el.dataset.key)){
+          el.classList.add("lit");
+          if(el.dataset.key===tonic) el.classList.add("tonic");
+        } else el.classList.add("dim");
+      });
+      drawPath(s.keys);
+    }
+
+    function hear(){ unlock().then(()=>playKeys(SONGS[songId].steps[step].keys)); }
+
+    const sel=document.getElementById("songSelect");
+    sel.innerHTML=Object.entries(SONGS).map(([id,s])=>`<option value="${id}">${s.title}</option>`).join("");
+    sel.addEventListener("change",()=>{ songId=sel.value; step=0; render(); hear(); });
+    document.getElementById("prevBtn").addEventListener("click",()=>{ if(step>0){ step--; render(); hear(); }});
+    document.getElementById("nextBtn").addEventListener("click",()=>{
+      if(step<SONGS[songId].steps.length-1){ step++; render(); hear(); }
+    });
+    document.getElementById("soundBanner").addEventListener("click",()=>unlock().then(hear));
+
+    document.addEventListener("keydown",e=>{
+      if(e.key==="ArrowRight"||e.key==="ArrowDown"){ e.preventDefault(); document.getElementById("nextBtn").click(); }
+      if(e.key==="ArrowLeft"||e.key==="ArrowUp"){ e.preventDefault(); document.getElementById("prevBtn").click(); }
+    });
+
+    buildWheel();
+    const params=new URLSearchParams(location.search);
+    if(params.get("song")&&SONGS[params.get("song")]) songId=params.get("song");
+    sel.value=songId;
+    render();
+  </script>
+</body>
+</html>
