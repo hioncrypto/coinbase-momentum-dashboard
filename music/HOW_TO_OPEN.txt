@@ -3,8 +3,11 @@ MUSIC TEACHER — standalone project (not part of your crypto tracker)
 HOW TO OPEN
 -----------
 PHONE
-  Open this link in Safari / Chrome after the branch is on GitHub:
+  Music Teacher home:
   https://htmlpreview.github.io/?https://raw.githubusercontent.com/hioncrypto/coinbase-momentum-dashboard/cursor/music-teacher-app-0b84/music/index.html
+
+  Interactive Circle of Fifths (tap keys + sound):
+  https://htmlpreview.github.io/?https://raw.githubusercontent.com/hioncrypto/coinbase-momentum-dashboard/cursor/music-teacher-app-0b84/music/interactive_circle.html
 
 DESKTOP
   1. Download index.html and songs.js into the same folder
@@ -14,9 +17,11 @@ DESKTOP
 
 WHAT'S INSIDE
   • Home — Music Teacher
+  • Interactive Circle — tap keys, hear notes, relatives, diatonic chords
+    Phone: .../music/interactive_circle.html on the same branch
   • Lessons — circle, Aeolian cadence, modes, articulation, 12 lenses
   • Song Lab — pick song + lens + section (Pitch lens shows the wheel)
-  • Circle — full circle-of-fifths map
+  • Circle — song sections on the circle-of-fifths map
   • Drills — practice quizzes
 
 SONGS

@@ -97,6 +97,25 @@
       background: linear-gradient(135deg, rgba(196, 120, 74, 0.2), rgba(232, 210, 160, 0.06));
     }
 
+    nav a.nav-ext {
+      border: 1px solid transparent;
+      color: var(--muted);
+      font: 600 0.78rem "IBM Plex Sans", sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.45rem 0.7rem;
+      border-radius: 8px;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      transition: color 0.2s, background 0.2s, border-color 0.2s;
+    }
+    nav a.nav-ext:hover {
+      color: var(--gold-bright);
+      background: var(--panel);
+      border-color: rgba(232, 210, 160, 0.35);
+    }
+
     .view { display: none; min-height: 0; }
     .view.active { display: block; animation: fadeUp 0.45s ease; }
 
@@ -617,6 +636,7 @@
       <button type="button" data-nav="lessons">Lessons</button>
       <button type="button" data-nav="lab">Song Lab</button>
       <button type="button" data-nav="circle">Circle</button>
+      <a class="nav-ext" href="interactive_circle.html">Explore</a>
       <button type="button" data-nav="drills">Drills</button>
     </nav>
   </header>
@@ -628,7 +648,8 @@
         <h1>Music Teacher</h1>
         <p>Learn how songs work — harmony on the circle of fifths, plus melody, rhythm, articulation, form, and the rest of the full analysis toolkit.</p>
         <div class="cta-row">
-          <button type="button" class="btn" data-nav="lab">Open Song Lab</button>
+          <a class="btn" href="interactive_circle.html">Interactive Circle</a>
+          <button type="button" class="btn ghost" data-nav="lab">Open Song Lab</button>
           <button type="button" class="btn ghost" data-nav="lessons">Start a lesson</button>
         </div>
       </div>
@@ -690,7 +711,7 @@
       <div class="page-head">
         <p class="eyebrow">Harmonic map</p>
         <h1>Circle of Fifths</h1>
-        <p>Each song section lights its keys so you can see how the harmony moves — tonic, lift, and return.</p>
+        <p>Each song section lights its keys so you can see how the harmony moves — tonic, lift, and return. For a tap-to-explore wheel with sound, open the <a href="interactive_circle.html" style="color:var(--gold)">Interactive Circle</a>.</p>
       </div>
       <div class="lab-layout">
         <aside class="sidebar-panel">

@@ -4,6 +4,7 @@ Standalone music-learning project — **not** part of the crypto scanner.
 
 Interactive teacher for song analysis:
 
+- **Interactive Circle of Fifths** — tap any key, hear it, see relative / V / IV, play diatonic chords (`interactive_circle.html`)
 - **Song Lab** — twelve analysis lenses (pitch, melody, rhythm, articulation, form, texture, dynamics, timbre, technique, lyrics, style, effect)
 - **Circle of Fifths** — section-by-section harmonic map
 - **Lessons** — Aeolian cadence, modes, articulation storytelling, and more
@@ -40,17 +41,19 @@ python -m http.server 8765 --directory music
 
 ### Deep links
 
+- Interactive circle on E minor: `interactive_circle.html?key=Em`
 - Song Lab, Aces High articulation: `index.html?view=lab&song=aces_high&lens=articulation`
 - Circle, Trooper chorus: `index.html?view=circle&song=the_trooper&section=chorus`
-- Standalone circle page: `circle_of_fifths.html?song=mr_crowley`
+- Standalone song circle: `circle_of_fifths.html?song=mr_crowley`
 
 ## Files
 
 ```
 music/
-  index.html              ← Music Teacher app
-  songs.js                ← catalog + lens analyses
-  circle_of_fifths.html   ← standalone circle (legacy-friendly)
+  index.html                 ← Music Teacher app
+  interactive_circle.html    ← tap-to-explore circle + sound
+  songs.js                   ← catalog + lens analyses
+  circle_of_fifths.html      ← song-section circle
   README.md
   HOW_TO_OPEN.txt
 ```
