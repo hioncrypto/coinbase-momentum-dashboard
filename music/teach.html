@@ -166,6 +166,50 @@
       border-top: 1px solid var(--line); color: var(--muted); font-size: 0.78rem;
     }
     footer a { color: var(--gold); }
+
+    /* Pedal settings cards (Surfing) — large numbers on each pedal */
+    #pedalPanel { display: none; margin-top: 1rem; }
+    #pedalPanel.show { display: block; }
+    #pedalPanel h3 {
+      margin: 0 0 0.55rem;
+      font-family: Fraunces, Georgia, serif;
+      font-size: 1.05rem; color: var(--gold);
+    }
+    .fx-pedal {
+      margin: 0 0 0.65rem;
+      padding: 0.7rem 0.75rem;
+      border-radius: 12px;
+      border: 2px solid rgba(232,210,160,0.4);
+      background: #2a1a16;
+    }
+    .fx-pedal.wah { background: #c9a24a; color: #1a1208; border-color: #f3e4bc; }
+    .fx-pedal.drive { background: #4a2a22; border-color: #c4784a; }
+    .fx-pedal.amp { background: #1c1412; }
+    .fx-pedal.rack { background: #16302c; border-color: rgba(127,175,154,0.55); }
+    .fx-pedal .fx-name {
+      margin: 0 0 0.45rem;
+      font-family: Fraunces, Georgia, serif;
+      font-size: 1rem; font-weight: 700; color: var(--gold-bright);
+    }
+    .fx-pedal.wah .fx-name { color: #1a1208; }
+    .fx-row {
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 0.5rem; padding: 0.28rem 0.4rem; margin: 0.22rem 0;
+      background: rgba(0,0,0,0.35); border-radius: 7px;
+      font-size: 0.88rem; font-weight: 600;
+    }
+    .fx-pedal.wah .fx-row { background: rgba(0,0,0,0.16); color: #1a1208; }
+    .fx-num {
+      font-family: ui-monospace, monospace;
+      font-size: 1.2rem; font-weight: 700;
+      background: var(--ember); color: #0e1218;
+      padding: 0.1rem 0.45rem; border-radius: 6px; min-width: 2.4rem; text-align: center;
+    }
+    .fx-pedal.wah .fx-num { background: #1a1208; color: #f3e4bc; }
+    .fx-arrow { text-align: center; color: var(--ember); font-weight: 700; margin: 0.1rem 0 0.45rem; }
+    #pedalPanel a.more {
+      display: inline-block; margin-top: 0.35rem; color: var(--gold); font-size: 0.85rem;
+    }
   </style>
 </head>
 <body>
@@ -193,6 +237,42 @@
   <main>
     <aside class="sidebar">
       <div class="song-blurb" id="songBlurb"></div>
+
+      <div id="pedalPanel" aria-label="Effects pedal settings">
+        <h3>Effects pedal settings</h3>
+        <div class="fx-pedal wah">
+          <p class="fx-name">Cry Baby Wah</p>
+          <div class="fx-row"><span>Engage</span><span class="fx-num">ON</span></div>
+          <div class="fx-row"><span>Rock position</span><span class="fx-num">MID</span></div>
+          <div class="fx-row"><span>Use</span><span class="fx-num">PARK</span></div>
+        </div>
+        <div class="fx-arrow">▼</div>
+        <div class="fx-pedal drive">
+          <p class="fx-name">Chandler Tube Driver</p>
+          <div class="fx-row"><span>Out Level</span><span class="fx-num">7</span></div>
+          <div class="fx-row"><span>Hi</span><span class="fx-num">8</span></div>
+          <div class="fx-row"><span>Lo</span><span class="fx-num">4</span></div>
+          <div class="fx-row"><span>Tube Drive</span><span class="fx-num">6</span></div>
+        </div>
+        <div class="fx-arrow">▼</div>
+        <div class="fx-pedal amp">
+          <p class="fx-name">Marshall 1959</p>
+          <div class="fx-row"><span>Presence</span><span class="fx-num">6</span></div>
+          <div class="fx-row"><span>Bass</span><span class="fx-num">3</span></div>
+          <div class="fx-row"><span>Middle</span><span class="fx-num">8</span></div>
+          <div class="fx-row"><span>Treble</span><span class="fx-num">6</span></div>
+          <div class="fx-row"><span>Volume I</span><span class="fx-num">7</span></div>
+          <div class="fx-row"><span>Volume II</span><span class="fx-num">0</span></div>
+        </div>
+        <div class="fx-arrow">▼</div>
+        <div class="fx-pedal rack">
+          <p class="fx-name">Eventide H949</p>
+          <div class="fx-row"><span>Main Level</span><span class="fx-num">6</span></div>
+          <div class="fx-row"><span>Low / High</span><span class="fx-num">5</span></div>
+          <div class="fx-row"><span>Pitch Ratio</span><span class="fx-num">0.989</span></div>
+        </div>
+        <a class="more" href="pedalboard.html">Full pedalboard page →</a>
+      </div>
 
       <div class="step-card">
         <p class="step-num" id="stepNum">Step 1</p>
@@ -536,6 +616,7 @@
         mozart_k581: "clarinet chamber clean",
       })[songId] || "song tone";
       document.getElementById("songBlurb").innerHTML=`<strong>${song.title}</strong>${song.artist}<br/>${song.blurb}<br/><em style="color:var(--ember)">Tone: ${toneName}</em>`;
+      document.getElementById("pedalPanel").classList.toggle("show", songId === "surfing_with_the_alien");
       document.getElementById("stepNum").textContent=`Step ${step+1} of ${song.steps.length}`;
       document.getElementById("stepTitle").textContent=s.title;
       document.getElementById("stepTeach").textContent=s.teach;

@@ -12,8 +12,11 @@ PHONE
   Teach — how each analyzed song uses the circle:
   https://htmlpreview.github.io/?https://raw.githubusercontent.com/hioncrypto/coinbase-momentum-dashboard/cursor/music-teacher-app-0b84/music/teach.html
 
-  Pedalboard — Surfing with the Alien (settings printed on each pedal):
-  https://htmlpreview.github.io/?https://raw.githubusercontent.com/hioncrypto/coinbase-momentum-dashboard/cursor/music-teacher-app-0b84/music/pedalboard.html?v=2
+  Pedalboard — Surfing settings ON each pedal (scroll the stacked cards):
+  https://htmlpreview.github.io/?https://raw.githubusercontent.com/hioncrypto/coinbase-momentum-dashboard/cursor/music-teacher-app-0b84/music/pedalboard.html
+
+  Teach with Surfing selected (also shows pedal settings in the sidebar):
+  https://htmlpreview.github.io/?https://raw.githubusercontent.com/hioncrypto/coinbase-momentum-dashboard/cursor/music-teacher-app-0b84/music/teach.html?song=surfing_with_the_alien
 
 DESKTOP
   1. Download index.html and songs.js into the same folder
