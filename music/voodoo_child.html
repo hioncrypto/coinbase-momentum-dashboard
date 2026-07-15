@@ -176,6 +176,36 @@
       color: var(--gold); font-size: 0.95rem; margin-bottom: 0.2rem;
     }
 
+    /* —— Pick + mute chug —— */
+    .pick-stage {
+      background: var(--panel); border: 1px solid var(--line);
+      border-radius: 14px; padding: 1rem 0.75rem 1.15rem;
+      max-width: 520px; margin: 0 auto 1.25rem;
+    }
+    .pick-svg { width: 100%; max-width: 380px; display: block; margin: 0 auto; }
+    .pick-readout {
+      text-align: center; margin: 0.5rem 0 0;
+      font-family: "JetBrains Mono", monospace; font-size: 1.15rem; color: var(--bright);
+    }
+    .pick-readout .dir {
+      display: inline-block; min-width: 3.2rem;
+      background: rgba(196,120,74,0.35); border-radius: 8px;
+      padding: 0.15rem 0.45rem; margin-right: 0.35rem;
+    }
+    .mute-badge {
+      display: inline-block; background: #c4784a; color: #0e1218;
+      font-weight: 700; font-size: 0.75rem; letter-spacing: 0.06em;
+      padding: 0.15rem 0.45rem; border-radius: 6px; margin-right: 0.35rem;
+    }
+    .chug-legend {
+      display: flex; flex-wrap: wrap; gap: 0.5rem 1rem;
+      margin: 0.75rem 0; font-size: 0.85rem; color: var(--muted);
+    }
+    .chug-legend code {
+      font-family: "JetBrains Mono", monospace; color: var(--bright);
+      background: #0a0d12; padding: 0.1rem 0.35rem; border-radius: 4px;
+    }
+
     footer {
       padding: 1rem clamp(1rem, 3vw, 2rem);
       border-top: 1px solid var(--line); color: var(--muted); font-size: 0.78rem;
@@ -193,9 +223,10 @@
   </header>
 
   <div class="tabs" role="tablist">
-    <button type="button" class="active" data-panel="effects">1 · Effects pedals</button>
-    <button type="button" data-panel="wah">2 · Wah rocking</button>
-    <button type="button" data-panel="tab">3 · Tablature</button>
+    <button type="button" class="active" data-panel="effects">1 · Effects</button>
+    <button type="button" data-panel="wah">2 · Wah rock</button>
+    <button type="button" data-panel="chug">3 · Mute chug + pick</button>
+    <button type="button" data-panel="tab">4 · Full tab</button>
   </div>
 
   <main>
@@ -295,10 +326,119 @@
       </div>
     </section>
 
+    <!-- MUTE CHUG + PICK -->
+    <section class="panel" id="panel-chug">
+      <h2>Muted string chugging + pick motion</h2>
+      <p class="note">
+        The intro’s grit is <strong style="color:var(--bright)">palm-muted chugs</strong> on the low strings —
+        edge of the picking hand rests on the bridge so notes go <em>chuck / chug</em>, not open ring.
+        Alternate <strong style="color:var(--bright)">↓ down</strong> and <strong style="color:var(--bright)">↑ up</strong> strokes keep the pulse locked.
+      </p>
+
+      <div class="pick-stage">
+        <svg class="pick-svg" viewBox="0 0 380 260" aria-label="Picking hand moving up and down">
+          <!-- strings -->
+          <g stroke="#e8d2a0" stroke-width="1.5" opacity="0.55">
+            <line x1="40" y1="70" x2="340" y2="70"/>
+            <line x1="40" y1="95" x2="340" y2="95"/>
+            <line x1="40" y1="120" x2="340" y2="120"/>
+            <line x1="40" y1="145" x2="340" y2="145"/>
+            <line x1="40" y1="170" x2="340" y2="170"/>
+            <line x1="40" y1="195" x2="340" y2="195"/>
+          </g>
+          <text x="48" y="58" fill="#9aa3b2" font-size="11" font-family="IBM Plex Sans,sans-serif">high e</text>
+          <text x="48" y="218" fill="#9aa3b2" font-size="11" font-family="IBM Plex Sans,sans-serif">low E (chug here)</text>
+          <!-- palm mute block -->
+          <rect x="250" y="155" width="70" height="55" rx="8" fill="rgba(196,120,74,0.35)" stroke="#c4784a" stroke-width="2"/>
+          <text x="260" y="178" fill="#f3e4bc" font-size="12" font-weight="700" font-family="IBM Plex Sans,sans-serif">PALM</text>
+          <text x="260" y="194" fill="#f3e4bc" font-size="12" font-weight="700" font-family="IBM Plex Sans,sans-serif">MUTE</text>
+          <!-- pick (animated) -->
+          <g id="pickHand">
+            <polygon points="190,130 210,145 190,160 170,145" fill="#c9a24a" stroke="#1a1208" stroke-width="2"/>
+            <text id="pickArrow" x="190" y="105" text-anchor="middle" fill="#c4784a" font-size="28" font-weight="700">↓</text>
+          </g>
+          <!-- stroke path hint -->
+          <path d="M190 85 L190 175" stroke="#c4784a" stroke-width="2" stroke-dasharray="4 6" opacity="0.5"/>
+        </svg>
+        <p class="pick-readout" id="pickReadout"><span class="dir" id="pickDir">↓ DOWN</span> stroke · palm mute ON</p>
+        <div class="wah-controls">
+          <button type="button" class="primary" id="btnPick">▶ Animate pick up / down</button>
+          <button type="button" id="btnPickStop">Stop</button>
+        </div>
+      </div>
+
+      <div class="chug-legend">
+        <span><span class="mute-badge">PM</span> = palm mute (hand on bridge)</span>
+        <span><code>x</code> = muted scratch (no pitch)</span>
+        <span><code>↓</code> = downstroke · <code>↑</code> = upstroke</span>
+      </div>
+
+      <div class="tab-wrap">
+        <div class="tab-meta">
+          <span><strong>Intro chug cell</strong> — before / under the wah talk</span>
+          <span><strong>~96 BPM</strong> eighth-note pulse</span>
+        </div>
+<pre class="tab">Palm-muted low-E chugs (shapes in E · tune to E♭)
+
+PM————————————|PM————————————|PM——————
+↓   ↑   ↓   ↑   ↓   ↑   ↓   ↑   ↓   ↑   ↓
+e|---------------------------------------|
+B|---------------------------------------|
+G|---------------------------------------|
+D|---------------------------------------|
+A|---------------------------------------|
+E|--0---0---0---0---0---0---0---0---0----|
+    chuck chuck chuck … (dead, percussive)
+
+Muted string scratches (wah often parked ~⅔)
+     ↓     ↑     ↓     ↑
+e|--------------------------------|
+B|--------------------------------|
+G|--------------------------------|
+D|--x-----x-----x-----x-----------|
+A|--x-----x-----x-----x-----------|
+E|--x-----x-----x-----x-----------|
+   “chk”  “chk” — scrape muted strings
+
+Chug → open into the lick (release mute on the rise)
+PM——————|  free———————————————
+↓   ↑   ↓    ↓    ↓         ↓
+e|-------------------------------|
+B|-------------------------------|
+G|----------0h2p0----0h2p0-------|
+D|--------2--------2-------------|
+A|-------------------------------|
+E|--0---0------------------------|
+   mute     ↑ release PM · pick DOWN on accents
+
+How to hold the mute
+1. Side of picking hand rests lightly on the bridge / low strings.
+2. Dig the pick DOWN through low E — short “chuck,” not a sustained note.
+3. Come UP through the same string for the reply stroke.
+4. Keep the wrist loose; motion is mostly forearm + wrist, pick tip pointing slightly in.
+5. When the melodic 0h2p0 starts, lift the palm slightly so the notes can ring/wah.</pre>
+
+        <div class="wah-track">
+          <strong>Pick motion rules for this intro</strong><br/>
+          <strong>↓ Down</strong> on the beat / accent chugs and on the start of each lick cell.<br/>
+          <strong>↑ Up</strong> on the off-beats — fills the eighth-note groove between downs.<br/>
+          Don’t “pick from the elbow” on every note — small stroke, big attitude.<br/>
+          Fuzz stays on: the mute + pick attack creates the chug; the wah shapes the vowel.
+        </div>
+      </div>
+
+      <div class="wah-steps" style="margin-top:1rem">
+        <div class="wah-step"><b>↓ Downstroke</b>Pick moves toward the floor through the string. Accents + chugs.</div>
+        <div class="wah-step"><b>↑ Upstroke</b>Pick moves toward the ceiling. Off-beat replies.</div>
+        <div class="wah-step"><b>PM chug</b>Palm kills sustain — you hear attack, not ring.</div>
+        <div class="wah-step"><b>Release</b>Lift palm when the wah lick sings so notes can open.</div>
+      </div>
+    </section>
+
     <!-- TAB -->
     <section class="panel" id="panel-tab">
       <h2>Intro / main riff tablature</h2>
-      <p class="note">Written in <strong style="color:var(--bright)">E shapes</strong> — tune down ½ step to E♭ so it matches the record. Educational approximation of the classic wah riff (not a licensed transcription).</p>
+      <p class="note">Written in <strong style="color:var(--bright)">E shapes</strong> — tune down ½ step to E♭ so it matches the record. Includes <span class="mute-badge">PM</span> chugs and ↓↑ pick marks. Educational approximation (not a licensed transcription).</p>
 
       <div class="tab-wrap">
         <div class="tab-meta">
@@ -306,41 +446,52 @@
           <span><strong>Feel</strong> ~96 BPM · blues-rock</span>
           <span><strong>Key feel</strong> E minor pentatonic / E7♯9</span>
         </div>
-<pre class="tab" id="tabBlock">Wah intro riff (shapes as in E · sound ½ step lower)
+<pre class="tab" id="tabBlock">A) Muted chug lead-in
+PM————————————————
+↓   ↑   ↓   ↑   ↓   ↑   ↓   ↑
+e|--------------------------------|
+B|--------------------------------|
+G|--------------------------------|
+D|--------------------------------|
+A|--------------------------------|
+E|--0---0---0---0---0---0---0---0-|
 
-     heel← →toe     heel← →toe     heel← →toe
+B) Wah intro riff (release mute on the rises)
+     heel← →toe     heel← →toe
+   ↓      ↓        ↓      ↓
 e|-----------------------------------------------|
 B|-----------------------------------------------|
 G|------0h2p0----0h2p0----0h2p0------------------|
 D|----2--------2--------2--------2p0-------------|
 A|-----------------------------------2p0---------|
-E|---------------------------------------0--3b0--|
-      ↑ rock open     ↑ rock         ↑ rock back
-        on the rise     mid phrase     into low E
+E|--0------------------------------------0--3b0--|
+   PM↑ free…………………………………     ↑ rock back
+      release mute · DOWN on accents
 
-E7♯9 “Hendrix chord” stabs (wah more open / toe)
+C) E7♯9 stabs (wah more open / toe)
+   ↓        ↓        ↓
 e|--0--------0--------0--------------------------|
 B|--0--------0--------0--------------------------|
 G|--1--------1--------1--------------------------|
 D|--0--------0--------0--------------------------|
 A|--2--------2--------2--------------------------|
 E|--0--------0--------0--------------------------|
-   wah!     wah!     wah!
+   wah!     wah!     wah!   (mostly DOWN strokes)
 
-Minor lick again (same shapes · keep rocking)
+D) Minor lick again
+   ↓      ↓        ↓
 e|-----------------------------------------------|
 B|-----------------------------------------------|
 G|------0h2p0----0h2p0----0h2--------------------|
 D|----2--------2--------2----2p0-----------------|
 A|-------------------------------2p0-------------|
-E|-----------------------------------0-----------|</pre>
+E|--0--------------------------------0-----------|</pre>
 
         <div class="wah-track">
-          <strong>How the rock lines up with the tab</strong><br/>
-          On each <code style="color:var(--bright)">0h2p0</code> rise → push <strong>toe</strong> (open).<br/>
-          On the <code style="color:var(--bright)">2p0</code> / low-E fall → pull <strong>heel</strong> (closed).<br/>
-          On each E7♯9 stab → quick <strong>toe accent</strong> (“wah!”), then settle.<br/>
-          Tip: learn the fretting clean first, <em>then</em> add the rock — don’t start both at once.
+          <strong>Stack the parts</strong><br/>
+          1) Palm-mute chugs with ↓↑ eighths → 2) release mute into wah lick → 3) rock wah heel↔toe → 4) E7♯9 DOWN stabs.<br/>
+          On each <code style="color:var(--bright)">0h2p0</code> rise → <strong>toe</strong> + mostly <strong>↓</strong> accents.<br/>
+          On the fall / low E → <strong>heel</strong>; optional light PM again between phrases.
         </div>
       </div>
 
@@ -362,6 +513,7 @@ E|-----------------------------------0-----------|</pre>
     const panels = {
       effects: document.getElementById("panel-effects"),
       wah: document.getElementById("panel-wah"),
+      chug: document.getElementById("panel-chug"),
       tab: document.getElementById("panel-tab"),
     };
     document.querySelectorAll(".tabs button").forEach((btn) => {
@@ -369,6 +521,7 @@ E|-----------------------------------0-----------|</pre>
         document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("active", b === btn));
         Object.keys(panels).forEach((k) => panels[k].classList.toggle("active", k === btn.dataset.panel));
         if (btn.dataset.panel === "wah") startRock();
+        if (btn.dataset.panel === "chug") startPick();
       });
     });
 
@@ -381,7 +534,6 @@ E|-----------------------------------0-----------|</pre>
 
     function setWah(open01) {
       const o = Math.max(0, Math.min(1, open01));
-      /* rocker angle: heel down = negative, toe down = positive */
       const angle = -18 + o * 36;
       rocker.setAttribute("transform", `rotate(${angle} 210 150)`);
       wahFill.style.width = `${Math.round(o * 100)}%`;
@@ -404,17 +556,16 @@ E|-----------------------------------0-----------|</pre>
 
     function startRock() {
       stopRock();
+      stopPick();
       t0 = performance.now();
-      const beat = 625; /* ~96 BPM eighth ≈ 312ms; phrase cycle ~2.5s */
       function frame(now) {
         const t = (now - t0) / 1000;
-        /* Phrase: rise open, fall closed — synced to riff feel */
         const phase = (t % 2.5) / 2.5;
         let open;
-        if (phase < 0.35) open = 0.35 + phase * 1.5;      /* rock to toe */
-        else if (phase < 0.55) open = 0.88;               /* hold bright */
-        else if (phase < 0.85) open = 0.88 - (phase - 0.55) * 1.8; /* heel */
-        else open = 0.35 + (phase - 0.85) * 0.5;          /* settle */
+        if (phase < 0.35) open = 0.35 + phase * 1.5;
+        else if (phase < 0.55) open = 0.88;
+        else if (phase < 0.85) open = 0.88 - (phase - 0.55) * 1.8;
+        else open = 0.35 + (phase - 0.85) * 0.5;
         setWah(open);
         animId = requestAnimationFrame(frame);
       }
@@ -425,7 +576,48 @@ E|-----------------------------------0-----------|</pre>
     document.getElementById("btnPark").addEventListener("click", parkIntro);
     document.getElementById("btnStop").addEventListener("click", () => { stopRock(); setWah(0.5); });
 
+    /* Pick up/down animation */
+    const pickHand = document.getElementById("pickHand");
+    const pickArrow = document.getElementById("pickArrow");
+    const pickDir = document.getElementById("pickDir");
+    let pickAnim = null;
+    let pickT0 = 0;
+
+    function setPick(down) {
+      /* down = toward floor (higher y), up = toward ceiling (lower y) */
+      const y = down ? 18 : -18;
+      pickHand.setAttribute("transform", `translate(0 ${y})`);
+      pickArrow.textContent = down ? "↓" : "↑";
+      pickDir.textContent = down ? "↓ DOWN" : "↑ UP";
+    }
+
+    function stopPick() {
+      if (pickAnim) cancelAnimationFrame(pickAnim);
+      pickAnim = null;
+    }
+
+    function startPick() {
+      stopPick();
+      stopRock();
+      pickT0 = performance.now();
+      function frame(now) {
+        const t = (now - pickT0) / 1000;
+        /* eighth notes at ~96 BPM → 312ms per stroke */
+        const stroke = Math.floor(t / 0.312) % 2 === 0;
+        setPick(stroke);
+        pickAnim = requestAnimationFrame(frame);
+      }
+      pickAnim = requestAnimationFrame(frame);
+    }
+
+    document.getElementById("btnPick").addEventListener("click", startPick);
+    document.getElementById("btnPickStop").addEventListener("click", () => {
+      stopPick();
+      setPick(true);
+    });
+
     parkIntro();
+    setPick(true);
   </script>
 </body>
 </html>
