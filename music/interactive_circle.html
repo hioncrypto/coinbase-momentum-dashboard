@@ -290,6 +290,43 @@
       border-color: var(--line);
       color: var(--text);
     }
+
+    .song-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.65rem 1rem;
+      padding: 0.85rem clamp(1rem, 3vw, 2.25rem);
+      border-bottom: 1px solid var(--line);
+      background: rgba(10, 13, 18, 0.96);
+      position: sticky;
+      top: 0;
+      z-index: 40;
+    }
+    .song-bar .field {
+      margin: 0;
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ember);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .song-bar select {
+      appearance: none;
+      -webkit-appearance: none;
+      flex: 1 1 260px;
+      min-width: 0;
+      width: 100%;
+      background: #1c2430 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23e8d2a0' d='M1 1l5 5 5-5'/%3E%3C/svg%3E") right 0.9rem center / 12px no-repeat;
+      color: var(--gold-bright);
+      border: 2px solid rgba(232, 210, 160, 0.55);
+      border-radius: 10px;
+      padding: 0.85rem 2.5rem 0.85rem 1rem;
+      font: 600 1.05rem "IBM Plex Sans", sans-serif;
+      cursor: pointer;
+    }
+
     footer {
       padding: 0.85rem clamp(1rem, 3vw, 2.25rem);
       border-top: 1px solid var(--line);
@@ -300,10 +337,23 @@
   </style>
 </head>
 <body>
+  <div class="song-bar">
+    <label class="field" for="songSelect">Choose a song</label>
+    <select id="songSelect" aria-label="Choose a song">
+      <option value="">Explore keys (no song)</option>
+      <option value="over_the_mountain">Over the Mountain — Ozzy</option>
+      <option value="diary_of_a_madman">Diary of a Madman — Ozzy</option>
+      <option value="mr_crowley">Mr. Crowley — Ozzy</option>
+      <option value="the_trooper">The Trooper — Iron Maiden</option>
+      <option value="aces_high">Aces High — Iron Maiden</option>
+      <option value="mozart_k581">Clarinet Quintet K.581 — Mozart</option>
+    </select>
+  </div>
+
   <header>
     <p class="eyebrow"><a href="index.html">Music Teacher</a> · Explore</p>
     <h1>Interactive Circle of Fifths</h1>
-    <p class="sub">Tap any key to hear it. Drag around the wheel to play every note. Self-contained — works on phone.</p>
+    <p class="sub">Pick a song above to open its guided circle lesson, or tap keys here for distorted guitar power chords.</p>
   </header>
 
   <div class="sound-banner show" id="soundBanner" role="button" tabindex="0">
