@@ -512,6 +512,7 @@
       font-weight: 600;
     }
 
+    .key-wedge { cursor: pointer; }
     .key-wedge.dim .face { opacity: 0.35; }
     .key-wedge.lit .face {
       fill: rgba(196, 120, 74, 0.55) !important;
@@ -711,7 +712,7 @@
       <div class="page-head">
         <p class="eyebrow">Harmonic map</p>
         <h1>Circle of Fifths</h1>
-        <p>Each song section lights its keys so you can see how the harmony moves — tonic, lift, and return. For a tap-to-explore wheel with sound, open the <a href="interactive_circle.html" style="color:var(--gold)">Interactive Circle</a>.</p>
+        <p>Each song section lights its keys so you can see how the harmony moves — tonic, lift, and return. Tap any key to hear it; changing sections plays the progression. For free explore mode, open the <a href="interactive_circle.html" style="color:var(--gold)">Interactive Circle</a>.</p>
       </div>
       <div class="lab-layout">
         <aside class="sidebar-panel">
@@ -759,6 +760,7 @@
   <footer class="site">Standalone Music Teacher project · not part of the crypto tracker · open this HTML on phone or desktop</footer>
 
   <script src="songs.js"></script>
+  <script src="audio.js"></script>
   <script>
     const { SONGS, LENSES, MAJORS, MINORS, ALIASES } = MusicTeacher;
 
@@ -989,6 +991,11 @@
         minG.appendChild(tm);
         g.appendChild(minG);
       });
+      // Tap / drag any key to hear it
+      if (window.MusicAudio) {
+        svg.dataset.audioBound = "";
+        MusicAudio.bindWheel(svg);
+      }
     }
 
     function keyIndex(key) {
@@ -1079,6 +1086,7 @@
     let labLensId = "articulation";
     let labSectionId = null;
     let labWheelReady = false;
+    let labLastHeard = "";
 
     function renderLab() {
       const song = SONGS[labSongId];
@@ -1154,6 +1162,13 @@
         svg.querySelector(".center-title").textContent = prettyTonic(song.tonic);
         highlightKeys(svg, sec.keys, song.tonic);
         drawPath(svg, sec.keys);
+        if (window.MusicAudio) {
+          const token = labSongId + ":" + sec.id;
+          if (labLastHeard !== token) {
+            labLastHeard = token;
+            MusicAudio.playKeys(sec.keys.map(toWheelKey), 240);
+          }
+        }
       }
     }
 
@@ -1161,6 +1176,8 @@
     let cofSongId = "over_the_mountain";
     let cofSectionId = null;
     let cofWheelReady = false;
+    let cofLastHeard = "";
+    let labLastHeard = "";
 
     function renderCof() {
       const song = SONGS[cofSongId];
@@ -1204,6 +1221,13 @@
       svg.querySelector(".center-title").textContent = prettyTonic(song.tonic);
       highlightKeys(svg, sec.keys, song.tonic);
       drawPath(svg, sec.keys);
+      if (window.MusicAudio) {
+        const token = cofSongId + ":" + sec.id;
+        if (cofLastHeard !== token) {
+          cofLastHeard = token;
+          MusicAudio.playKeys(sec.keys.map(toWheelKey), 240);
+        }
+      }
 
       document.getElementById("cofDetail").innerHTML = `
         <h2>${sec.name}</h2>

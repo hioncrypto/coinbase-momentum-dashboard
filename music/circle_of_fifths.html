@@ -428,8 +428,9 @@
     </section>
   </main>
 
-  <footer>Built from prior Ozzy harmonic analysis · majors outer ring · relative minors inner</footer>
+  <footer>Built from prior Ozzy harmonic analysis · majors outer ring · relative minors inner · tap any key to hear it</footer>
 
+  <script src="audio.js"></script>
   <script>
     /** Circle of fifths order starting at C (12 o'clock), clockwise by fifths. */
     const MAJORS = ["C", "G", "D", "A", "E", "B", "F#", "Db", "Ab", "Eb", "Bb", "F"];
@@ -910,6 +911,11 @@
         minG.appendChild(tm);
         g.appendChild(minG);
       });
+
+      if (window.MusicAudio) {
+        svg.dataset.audioBound = "";
+        MusicAudio.bindWheel(svg);
+      }
     }
 
     function keyIndex(key) {
@@ -1029,6 +1035,13 @@
 
       highlightKeys(sec.keys, song.tonic);
       drawPath(sec.keys);
+      if (window.MusicAudio) {
+        const token = currentSongId + ":" + sec.id;
+        if (window.__cofHeard !== token) {
+          window.__cofHeard = token;
+          MusicAudio.playKeys(sec.keys.map(toWheelKey), 240);
+        }
+      }
     }
 
     function renderAll() {
