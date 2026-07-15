@@ -241,77 +241,122 @@
       E:82.41,F:87.31,"F#":92.5,Gb:92.5,G:98,"G#":103.83,Ab:103.83,
       A:110,"A#":116.54,Bb:116.54,B:123.47
     };
-    let ctx=null, bus=null, lastKey=null, lastAt=0;
+
+    const TONE = {
+      over_the_mountain: { drive:90, pre:0.28, master:0.15, midHz:900, midGain:4, presence:2, lowpass:4200, attack:0.012, sustain:0.55, release:0.85, voicing:"power", detune:1.002, osc:"sawtooth" },
+      diary_of_a_madman: { drive:70, pre:0.24, master:0.13, midHz:700, midGain:3, presence:0.5, lowpass:3200, attack:0.04, sustain:0.65, release:1.15, voicing:"power", detune:1.0015, osc:"sawtooth" },
+      mr_crowley: { drive:55, pre:0.22, master:0.14, midHz:850, midGain:5, presence:1.5, lowpass:3800, attack:0.025, sustain:0.6, release:1.0, voicing:"triad", detune:1.002, osc:"sawtooth", organ:true },
+      the_trooper: { drive:75, pre:0.26, master:0.14, midHz:1100, midGain:3.5, presence:4, lowpass:5000, attack:0.006, sustain:0.4, release:0.7, voicing:"power", detune:1.004, osc:"sawtooth", twin:true },
+      aces_high: { drive:80, pre:0.25, master:0.14, midHz:1050, midGain:3, presence:4.5, lowpass:5200, attack:0.005, sustain:0.35, release:0.65, voicing:"power", detune:1.004, osc:"sawtooth", twin:true, staccato:true },
+      mozart_k581: { drive:0, pre:0.2, master:0.11, midHz:1200, midGain:1, presence:-2, lowpass:2800, attack:0.06, sustain:0.7, release:1.4, voicing:"triad", detune:1.0008, osc:"triangle", clean:true },
+    };
+
+    let ctx=null, bus=null, lastKey=null, lastAt=0, activeTone="over_the_mountain";
 
     function makeDistortionCurve(amount){
-      const n=2048, curve=new Float32Array(n), k=amount;
+      const n=2048, curve=new Float32Array(n), k=Math.max(1,amount);
       for(let i=0;i<n;i++){
         const x=(i*2)/n-1;
-        curve[i]=Math.tanh(((1+k)*x)/(1+k*Math.abs(x))*2.2);
+        curve[i]=amount<1?x:Math.tanh(((1+k)*x)/(1+k*Math.abs(x))*1.4);
       }
       return curve;
     }
     function ensureAmp(){
-      if(!ctx||bus) return;
-      const pre=ctx.createGain(); pre.gain.value=0.55;
-      const dist=ctx.createWaveShaper(); dist.curve=makeDistortionCurve(280); dist.oversample="4x";
-      const mid=ctx.createBiquadFilter(); mid.type="peaking"; mid.frequency.value=800; mid.Q.value=1.1; mid.gain.value=6;
-      const presence=ctx.createBiquadFilter(); presence.type="highshelf"; presence.frequency.value=2500; presence.gain.value=3.5;
-      const lowcut=ctx.createBiquadFilter(); lowcut.type="highpass"; lowcut.frequency.value=70;
-      const lowpass=ctx.createBiquadFilter(); lowpass.type="lowpass"; lowpass.frequency.value=5500;
-      const master=ctx.createGain(); master.gain.value=0.38;
+      if(!ctx) return;
+      if(bus) return;
+      const pre=ctx.createGain();
+      const dist=ctx.createWaveShaper(); dist.oversample="2x";
+      const lowcut=ctx.createBiquadFilter(); lowcut.type="highpass"; lowcut.frequency.value=65;
+      const mid=ctx.createBiquadFilter(); mid.type="peaking"; mid.Q.value=1;
+      const presence=ctx.createBiquadFilter(); presence.type="highshelf"; presence.frequency.value=2400;
+      const lowpass=ctx.createBiquadFilter(); lowpass.type="lowpass"; lowpass.Q.value=0.7;
+      const master=ctx.createGain();
+      const dry=ctx.createGain(); dry.gain.value=0;
       pre.connect(dist); dist.connect(lowcut); lowcut.connect(mid);
-      mid.connect(presence); presence.connect(lowpass); lowpass.connect(master); master.connect(ctx.destination);
-      bus={pre};
+      mid.connect(presence); presence.connect(lowpass); lowpass.connect(master);
+      pre.connect(dry); dry.connect(master); master.connect(ctx.destination);
+      bus={pre,dist,mid,presence,lowpass,master,dry};
+    }
+    function applySongTone(id){
+      activeTone=TONE[id]?id:"over_the_mountain";
+      const p=TONE[activeTone];
+      ensureAmp();
+      if(!bus) return p;
+      bus.pre.gain.value=p.clean?p.pre*0.35:p.pre;
+      bus.master.gain.value=p.master;
+      bus.dist.curve=makeDistortionCurve(p.drive);
+      bus.mid.frequency.value=p.midHz; bus.mid.gain.value=p.midGain;
+      bus.presence.gain.value=p.presence; bus.lowpass.frequency.value=p.lowpass;
+      bus.dry.gain.value=p.clean?0.85:0.05;
+      return p;
     }
     async function unlock(){
       const AC=window.AudioContext||window.webkitAudioContext;
       if(!AC) return;
       if(!ctx) ctx=new AC();
       ensureAmp();
+      applySongTone(activeTone);
       if(ctx.state==="suspended") await ctx.resume();
       document.getElementById("soundBanner").classList.remove("show");
     }
-    function stringHit(freq, when, dur, gain){
+    function stringHit(freq, when, dur, gain, p){
       if(!ctx||!bus||freq==null) return;
       const osc=ctx.createOscillator(), osc2=ctx.createOscillator();
       const g=ctx.createGain(), filter=ctx.createBiquadFilter();
-      osc.type="sawtooth"; osc2.type="sawtooth";
+      osc.type=p.osc||"sawtooth"; osc2.type=p.osc||"sawtooth";
       osc.frequency.setValueAtTime(freq, when);
-      osc2.frequency.setValueAtTime(freq*1.003, when);
+      osc2.frequency.setValueAtTime(freq*(p.detune||1.002), when);
       filter.type="lowpass";
-      filter.frequency.setValueAtTime(4200, when);
-      filter.frequency.exponentialRampToValueAtTime(1600, when+Math.min(0.35,dur*0.4));
-      filter.Q.value=1.2;
-      const peak=gain==null?0.45:gain, d=dur||0.9;
+      filter.frequency.setValueAtTime(p.clean?2400:3600, when);
+      filter.frequency.exponentialRampToValueAtTime(p.clean?1400:1400, when+Math.min(0.4,dur*0.45));
+      filter.Q.value=p.twin?1.4:0.9;
+      const peak=(gain==null?0.28:gain)*(p.staccato?0.9:1);
+      const d=dur||p.release||0.9, atk=p.attack||0.015;
       g.gain.setValueAtTime(0.0001, when);
-      g.gain.exponentialRampToValueAtTime(peak, when+0.008);
-      g.gain.exponentialRampToValueAtTime(peak*0.7, when+0.12);
-      g.gain.exponentialRampToValueAtTime(peak*0.25, when+d*0.55);
+      g.gain.exponentialRampToValueAtTime(peak, when+atk);
+      g.gain.exponentialRampToValueAtTime(peak*(p.sustain||0.5), when+atk+d*0.2);
       g.gain.exponentialRampToValueAtTime(0.0001, when+d);
       osc.connect(filter); osc2.connect(filter); filter.connect(g); g.connect(bus.pre);
       osc.start(when); osc2.start(when);
       osc.stop(when+d+0.05); osc2.stop(when+d+0.05);
+      if(p.organ){
+        const o=ctx.createOscillator(), og=ctx.createGain();
+        o.type="sine"; o.frequency.setValueAtTime(freq*2, when);
+        og.gain.setValueAtTime(0.0001, when);
+        og.gain.exponentialRampToValueAtTime(peak*0.12, when+0.05);
+        og.gain.exponentialRampToValueAtTime(0.0001, when+d);
+        o.connect(og); og.connect(bus.pre); o.start(when); o.stop(when+d+0.05);
+      }
     }
     function playKey(key){
       if(!ctx) return;
+      const p=TONE[activeTone]||TONE.over_the_mountain;
       const rootName=String(key).endsWith("m")?key.slice(0,-1):key;
       let root=GUITAR_ROOT[rootName]||GUITAR_ROOT[ALIASES[rootName]]||GUITAR_ROOT[toWheel(rootName)];
       if(!root) return;
       const t=performance.now();
-      if(lastKey===key && t-lastAt<95) return;
+      if(lastKey===key && t-lastAt<100) return;
       lastKey=key; lastAt=t;
-      while(root>180) root*=0.5;
-      while(root<55) root*=2;
-      const now=ctx.currentTime+0.01, dur=1.0;
+      if(p.clean){ while(root<130) root*=2; while(root>320) root*=0.5; }
+      else { while(root>170) root*=0.5; while(root<55) root*=2; }
+      const now=ctx.currentTime+0.01, dur=p.release, gScale=0.75;
       const minor=String(key).endsWith("m");
-      stringHit(root, now, dur, 0.5);
-      stringHit(root*Math.pow(2,7/12), now+0.012, dur, 0.42);
-      stringHit(root*2, now+0.02, dur*0.95, 0.28);
-      stringHit(root*Math.pow(2,(minor?3:4)/12), now+0.03, dur*0.85, 0.12);
+      if(p.voicing==="triad"||p.clean){
+        const third=minor?3:4;
+        stringHit(root, now, dur, 0.28*gScale, p);
+        stringHit(root*Math.pow(2,third/12), now+0.03, dur*0.95, 0.2*gScale, p);
+        stringHit(root*Math.pow(2,7/12), now+0.05, dur*0.9, 0.18*gScale, p);
+      } else {
+        stringHit(root, now, dur, 0.3*gScale, p);
+        stringHit(root*Math.pow(2,7/12), now+0.015, dur, 0.24*gScale, p);
+        stringHit(root*2, now+0.025, dur*0.9, 0.14*gScale, p);
+        if(p.twin) stringHit(root*Math.pow(2,(minor?3:4)/12), now+0.04, dur*0.8, 0.08*gScale, p);
+      }
     }
     function playKeys(keys){
-      keys.forEach((k,i)=> setTimeout(()=>playKey(toWheel(k)), i*300));
+      const p=TONE[activeTone]||TONE.over_the_mountain;
+      const gap=p.staccato?240:320;
+      keys.forEach((k,i)=> setTimeout(()=>playKey(toWheel(k)), i*gap));
     }
 
     /** Teaching data for songs already analyzed */
@@ -464,7 +509,16 @@
     function render(){
       const song=SONGS[songId];
       const s=song.steps[step];
-      document.getElementById("songBlurb").innerHTML=`<strong>${song.title}</strong>${song.artist}<br/>${song.blurb}`;
+      applySongTone(songId);
+      const toneName = ({
+        over_the_mountain: "Rhoads crunch",
+        diary_of_a_madman: "dark gothic Rhoads",
+        mr_crowley: "classical metal + organ",
+        the_trooper: "Maiden Marshall gallop",
+        aces_high: "Maiden scramble / anthem",
+        mozart_k581: "clarinet chamber clean",
+      })[songId] || "song tone";
+      document.getElementById("songBlurb").innerHTML=`<strong>${song.title}</strong>${song.artist}<br/>${song.blurb}<br/><em style="color:var(--ember)">Tone: ${toneName}</em>`;
       document.getElementById("stepNum").textContent=`Step ${step+1} of ${song.steps.length}`;
       document.getElementById("stepTitle").textContent=s.title;
       document.getElementById("stepTeach").textContent=s.teach;
@@ -493,7 +547,7 @@
       drawPath(s.keys);
     }
 
-    function hear(){ unlock().then(()=>playKeys(SONGS[songId].steps[step].keys)); }
+    function hear(){ unlock().then(()=>{ applySongTone(songId); playKeys(SONGS[songId].steps[step].keys); }); }
 
     const sel=document.getElementById("songSelect");
     // Options are in the HTML dropdown — keep them, just wire change + deep link

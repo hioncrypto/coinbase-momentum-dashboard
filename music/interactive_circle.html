@@ -353,7 +353,8 @@
   <header>
     <p class="eyebrow"><a href="index.html">Music Teacher</a> · Explore</p>
     <h1>Interactive Circle of Fifths</h1>
-    <p class="sub">Pick a song above to open its guided circle lesson, or tap keys here for distorted guitar power chords.</p>
+    <p class="sub">Pick a song above to match its tone and dynamics, or explore keys with a soft crunch. <a href="teach.html" id="teachLink" style="color:var(--gold)">Open guided lesson →</a></p>
+    <p class="sub" id="toneLabel" style="margin-top:0.35rem;color:var(--ember)">Tone: soft crunch</p>
   </header>
 
   <div class="sound-banner show" id="soundBanner" role="button" tabindex="0">
@@ -420,11 +421,27 @@
       A: 110.0, "A#": 116.54, Bb: 116.54, B: 123.47,
     };
 
+    const TONE = {
+      default: { drive: 35, pre: 0.2, master: 0.12, midHz: 900, midGain: 2, presence: 1, lowpass: 4000, attack: 0.02, sustain: 0.5, release: 0.85, voicing: "power", detune: 1.002, osc: "sawtooth" },
+      over_the_mountain: { drive: 90, pre: 0.28, master: 0.15, midHz: 900, midGain: 4, presence: 2, lowpass: 4200, attack: 0.012, sustain: 0.55, release: 0.85, voicing: "power", detune: 1.002, osc: "sawtooth" },
+      diary_of_a_madman: { drive: 70, pre: 0.24, master: 0.13, midHz: 700, midGain: 3, presence: 0.5, lowpass: 3200, attack: 0.04, sustain: 0.65, release: 1.15, voicing: "power", detune: 1.0015, osc: "sawtooth" },
+      mr_crowley: { drive: 55, pre: 0.22, master: 0.14, midHz: 850, midGain: 5, presence: 1.5, lowpass: 3800, attack: 0.025, sustain: 0.6, release: 1.0, voicing: "triad", detune: 1.002, osc: "sawtooth", organ: true },
+      the_trooper: { drive: 75, pre: 0.26, master: 0.14, midHz: 1100, midGain: 3.5, presence: 4, lowpass: 5000, attack: 0.006, sustain: 0.4, release: 0.7, voicing: "power", detune: 1.004, osc: "sawtooth", twin: true },
+      aces_high: { drive: 80, pre: 0.25, master: 0.14, midHz: 1050, midGain: 3, presence: 4.5, lowpass: 5200, attack: 0.005, sustain: 0.35, release: 0.65, voicing: "power", detune: 1.004, osc: "sawtooth", twin: true, staccato: true },
+      mozart_k581: { drive: 0, pre: 0.2, master: 0.11, midHz: 1200, midGain: 1, presence: -2, lowpass: 2800, attack: 0.06, sustain: 0.7, release: 1.4, voicing: "triad", detune: 1.0008, osc: "triangle", clean: true },
+    };
+
+    const SONG_TONIC = {
+      over_the_mountain: "G#m", diary_of_a_madman: "G#m", mr_crowley: "Dm",
+      the_trooper: "Em", aces_high: "Em", mozart_k581: "A",
+    };
+
     let audioCtx = null;
     let bus = null;
     let lastKey = null;
     let lastAt = 0;
     let soundReady = false;
+    let activeTone = "default";
 
     function rootOf(key) {
       const s = String(key || "").trim();
@@ -446,10 +463,10 @@
     function makeDistortionCurve(amount) {
       const n = 2048;
       const curve = new Float32Array(n);
-      const k = amount;
+      const k = Math.max(1, amount);
       for (let i = 0; i < n; i++) {
         const x = (i * 2) / n - 1;
-        curve[i] = Math.tanh(((1 + k) * x) / (1 + k * Math.abs(x)) * 2.2);
+        curve[i] = amount < 1 ? x : Math.tanh(((1 + k) * x) / (1 + k * Math.abs(x)) * 1.4);
       }
       return curve;
     }
@@ -457,24 +474,53 @@
     function ensureAmp() {
       if (!audioCtx || bus) return;
       const pre = audioCtx.createGain();
-      pre.gain.value = 0.55;
       const dist = audioCtx.createWaveShaper();
-      dist.curve = makeDistortionCurve(280);
-      dist.oversample = "4x";
-      const mid = audioCtx.createBiquadFilter();
-      mid.type = "peaking"; mid.frequency.value = 800; mid.Q.value = 1.1; mid.gain.value = 6;
-      const presence = audioCtx.createBiquadFilter();
-      presence.type = "highshelf"; presence.frequency.value = 2500; presence.gain.value = 3.5;
+      dist.oversample = "2x";
       const lowcut = audioCtx.createBiquadFilter();
-      lowcut.type = "highpass"; lowcut.frequency.value = 70;
+      lowcut.type = "highpass"; lowcut.frequency.value = 65;
+      const mid = audioCtx.createBiquadFilter();
+      mid.type = "peaking"; mid.Q.value = 1;
+      const presence = audioCtx.createBiquadFilter();
+      presence.type = "highshelf"; presence.frequency.value = 2400;
       const lowpass = audioCtx.createBiquadFilter();
-      lowpass.type = "lowpass"; lowpass.frequency.value = 5500; lowpass.Q.value = 0.7;
+      lowpass.type = "lowpass"; lowpass.Q.value = 0.7;
       const master = audioCtx.createGain();
-      master.gain.value = 0.38;
+      const dry = audioCtx.createGain();
+      dry.gain.value = 0;
       pre.connect(dist); dist.connect(lowcut); lowcut.connect(mid);
       mid.connect(presence); presence.connect(lowpass); lowpass.connect(master);
-      master.connect(audioCtx.destination);
-      bus = { pre };
+      pre.connect(dry); dry.connect(master); master.connect(audioCtx.destination);
+      bus = { pre, dist, mid, presence, lowpass, master, dry };
+      applySongTone(activeTone);
+    }
+
+    function applySongTone(id) {
+      activeTone = TONE[id] ? id : "default";
+      const p = TONE[activeTone];
+      ensureAmp();
+      if (!bus) return p;
+      bus.pre.gain.value = p.clean ? p.pre * 0.35 : p.pre;
+      bus.master.gain.value = p.master;
+      bus.dist.curve = makeDistortionCurve(p.drive);
+      bus.mid.frequency.value = p.midHz;
+      bus.mid.gain.value = p.midGain;
+      bus.presence.gain.value = p.presence;
+      bus.lowpass.frequency.value = p.lowpass;
+      bus.dry.gain.value = p.clean ? 0.85 : 0.05;
+      const label = document.getElementById("toneLabel");
+      if (label) {
+        const names = {
+          default: "soft crunch",
+          over_the_mountain: "Rhoads crunch",
+          diary_of_a_madman: "dark gothic Rhoads",
+          mr_crowley: "classical metal + organ",
+          the_trooper: "Maiden Marshall gallop",
+          aces_high: "Maiden scramble / anthem",
+          mozart_k581: "clarinet chamber clean",
+        };
+        label.textContent = "Tone: " + (names[activeTone] || names.default);
+      }
+      return p;
     }
 
     async function unlockAudio() {
@@ -506,68 +552,93 @@
       return !el || el.checked;
     }
 
-    function stringHit(freq, when, dur, gain) {
+    function stringHit(freq, when, dur, gain, p) {
       if (!audioCtx || !bus || freq == null) return;
       const osc = audioCtx.createOscillator();
       const osc2 = audioCtx.createOscillator();
       const g = audioCtx.createGain();
       const filter = audioCtx.createBiquadFilter();
-      osc.type = "sawtooth";
-      osc2.type = "sawtooth";
+      osc.type = p.osc || "sawtooth";
+      osc2.type = p.osc || "sawtooth";
       osc.frequency.setValueAtTime(freq, when);
-      osc2.frequency.setValueAtTime(freq * 1.003, when);
+      osc2.frequency.setValueAtTime(freq * (p.detune || 1.002), when);
       filter.type = "lowpass";
-      filter.frequency.setValueAtTime(4200, when);
-      filter.frequency.exponentialRampToValueAtTime(1600, when + Math.min(0.35, dur * 0.4));
-      filter.Q.value = 1.2;
-      const peak = gain == null ? 0.45 : gain;
-      const d = dur || 0.9;
+      filter.frequency.setValueAtTime(p.clean ? 2400 : 3600, when);
+      filter.frequency.exponentialRampToValueAtTime(1400, when + Math.min(0.4, dur * 0.45));
+      filter.Q.value = p.twin ? 1.4 : 0.9;
+      const peak = (gain == null ? 0.28 : gain) * (p.staccato ? 0.9 : 1);
+      const d = dur || p.release || 0.9;
+      const atk = p.attack || 0.015;
       g.gain.setValueAtTime(0.0001, when);
-      g.gain.exponentialRampToValueAtTime(peak, when + 0.008);
-      g.gain.exponentialRampToValueAtTime(peak * 0.7, when + 0.12);
-      g.gain.exponentialRampToValueAtTime(peak * 0.25, when + d * 0.55);
+      g.gain.exponentialRampToValueAtTime(peak, when + atk);
+      g.gain.exponentialRampToValueAtTime(peak * (p.sustain || 0.5), when + atk + d * 0.2);
       g.gain.exponentialRampToValueAtTime(0.0001, when + d);
       osc.connect(filter); osc2.connect(filter); filter.connect(g); g.connect(bus.pre);
       osc.start(when); osc2.start(when);
       osc.stop(when + d + 0.05); osc2.stop(when + d + 0.05);
+      if (p.organ) {
+        const o = audioCtx.createOscillator();
+        const og = audioCtx.createGain();
+        o.type = "sine";
+        o.frequency.setValueAtTime(freq * 2, when);
+        og.gain.setValueAtTime(0.0001, when);
+        og.gain.exponentialRampToValueAtTime(peak * 0.12, when + 0.05);
+        og.gain.exponentialRampToValueAtTime(0.0001, when + d);
+        o.connect(og); og.connect(bus.pre);
+        o.start(when); o.stop(when + d + 0.05);
+      }
     }
 
     async function playKey(key, opts) {
       opts = opts || {};
       if (!soundOn()) return false;
       await unlockAudio();
+      const p = TONE[activeTone] || TONE.default;
       let root = freqOf(key);
       if (root == null) return false;
       const t = performance.now();
-      if (opts.scrub && lastKey === key && t - lastAt < 95) return false;
+      if (opts.scrub && lastKey === key && t - lastAt < 100) return false;
       lastKey = key;
       lastAt = t;
-      while (root > 180) root *= 0.5;
-      while (root < 55) root *= 2;
+      if (p.clean) {
+        while (root < 130) root *= 2;
+        while (root > 320) root *= 0.5;
+      } else {
+        while (root > 170) root *= 0.5;
+        while (root < 55) root *= 2;
+      }
       const now = audioCtx.currentTime + 0.01;
       const scrub = !!opts.scrub;
-      const dur = opts.dur || (scrub ? 0.55 : 1.05);
-      const gScale = opts.gainScale || 1;
-      // Power chord: root + fifth + octave
-      stringHit(root, now, dur, 0.5 * gScale);
-      stringHit(root * Math.pow(2, 7 / 12), now + 0.012, dur, 0.42 * gScale);
-      stringHit(root * 2, now + 0.02, dur * 0.95, 0.28 * gScale);
-      const thirdSemis = isMinor(key) ? 3 : 4;
-      stringHit(root * Math.pow(2, thirdSemis / 12), now + 0.03, dur * 0.85, 0.12 * gScale);
+      let dur = opts.dur || (scrub ? p.release * 0.55 : p.release);
+      const gScale = (opts.gainScale || 1) * 0.75;
+      if (p.voicing === "triad" || p.clean) {
+        const third = isMinor(key) ? 3 : 4;
+        stringHit(root, now, dur, 0.28 * gScale, p);
+        stringHit(root * Math.pow(2, third / 12), now + 0.03, dur * 0.95, 0.2 * gScale, p);
+        stringHit(root * Math.pow(2, 7 / 12), now + 0.05, dur * 0.9, 0.18 * gScale, p);
+      } else {
+        stringHit(root, now, dur, 0.3 * gScale, p);
+        stringHit(root * Math.pow(2, 7 / 12), now + 0.015, dur, 0.24 * gScale, p);
+        stringHit(root * 2, now + 0.025, dur * 0.9, 0.14 * gScale, p);
+        if (p.twin) {
+          stringHit(root * Math.pow(2, (isMinor(key) ? 3 : 4) / 12), now + 0.04, dur * 0.8, 0.08 * gScale, p);
+        }
+      }
       return true;
     }
 
     function playKeys(keys, gap) {
+      const p = TONE[activeTone] || TONE.default;
       const list = keys.slice();
-      const g = gap == null ? 300 : gap;
+      const g = gap == null ? (p.staccato ? 240 : 300) : gap;
       list.forEach((k, i) => {
-        setTimeout(() => { playKey(k, { dur: 0.85 }); }, i * g);
+        setTimeout(() => { playKey(k, { dur: p.release * 0.85 }); }, i * g);
       });
     }
 
     function playChord(root, quality) {
       const key = (quality === "min" || quality === "dim") ? rootOf(root) + "m" : rootOf(root);
-      unlockAudio().then(() => playKey(key, { dur: 1.15, gainScale: 1.05 }));
+      unlockAudio().then(() => playKey(key, { dur: 1.1, gainScale: 0.9 }));
     }
 
     /* —— Circle data / UI —— */
