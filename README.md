@@ -35,6 +35,10 @@ Copy `.env.example` to `.env` for local Docker tests.
 - Terms: [legal/TERMS.md](legal/TERMS.md) (review with counsel before selling)
 - Privacy: [legal/PRIVACY.md](legal/PRIVACY.md)
 
+## Music · Circle of Fifths
+
+Song-section harmonic map (standalone): [`music/circle_of_fifths.html`](music/circle_of_fifths.html) — see [`music/README.md`](music/README.md).
+
 ## Legacy files
 
 `app_v2.py`, `app-before-cursor.py`, and `app_broken_backup.py` are old backups — **use `app.py` only**.
