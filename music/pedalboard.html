@@ -3,10 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta http-equiv="Cache-Control" content="no-cache" />
   <title>Pedalboard · Surfing with the Alien · Music Teacher</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
   <style>
     :root {
       --ink: #0e1218;
@@ -42,7 +43,7 @@
     .eyebrow a { color: inherit; text-decoration: none; }
     h1 {
       margin: 0; font-family: Fraunces, Georgia, serif;
-      font-size: clamp(1.4rem, 3.2vw, 2rem); color: var(--gold-bright);
+      font-size: clamp(1.35rem, 3.2vw, 2rem); color: var(--gold-bright);
     }
     .sub { margin: 0.4rem 0 0; color: var(--muted); max-width: 42rem; line-height: 1.45; font-size: 0.92rem; }
 
@@ -66,9 +67,8 @@
     main { padding: 1.25rem clamp(1rem, 3vw, 2.25rem) 2.5rem; }
 
     .board-wrap {
-      position: relative;
       border-radius: 18px;
-      padding: 1.25rem 0.75rem 1.5rem;
+      padding: 1.15rem 0.75rem 1.4rem;
       background:
         linear-gradient(180deg, #3a2e22 0%, var(--board) 40%, var(--board-edge) 100%);
       box-shadow:
@@ -89,176 +89,153 @@
       align-items: stretch;
       justify-content: center;
       gap: 0;
-      min-width: min(100%, 1100px);
+      min-width: min(100%, 1180px);
       margin: 0 auto;
-      padding: 0.25rem 0.35rem 0.5rem;
+      padding: 0.2rem 0.3rem 0.4rem;
     }
 
     .node {
       flex: 0 0 auto;
-      width: clamp(148px, 20vw, 190px);
+      width: clamp(160px, 22vw, 210px);
       display: flex; flex-direction: column; align-items: center;
     }
-    .pedal, .end-box {
-      width: 100%;
-      border-radius: 12px;
-      padding: 0.75rem 0.65rem 0.8rem;
-      text-align: center;
-      position: relative;
-      animation: rise 0.55s ease both;
-    }
-    .node:nth-child(1) .end-box { animation-delay: 0.04s; }
-    .node:nth-child(3) .pedal { animation-delay: 0.1s; }
-    .node:nth-child(5) .pedal { animation-delay: 0.16s; }
-    .node:nth-child(7) .end-box,
-    .node:nth-child(7) .pedal { animation-delay: 0.22s; }
-    .node:nth-child(9) .end-box,
-    .node:nth-child(9) .pedal { animation-delay: 0.28s; }
-    @keyframes rise {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: none; }
-    }
 
-    .end-box {
-      background: linear-gradient(160deg, #243041, #1a222e);
-      border: 1px solid rgba(232,210,160,0.35);
-      min-height: 168px;
-      display: flex; flex-direction: column; justify-content: flex-start; gap: 0.2rem;
+    .unit {
+      width: 100%;
+      border-radius: 14px;
+      padding: 0.7rem 0.65rem 0.75rem;
+      text-align: center;
+      box-shadow: 0 7px 0 #0a0d12, 0 12px 20px rgba(0,0,0,0.4);
+      border: 2px solid rgba(232,210,160,0.4);
+      min-height: 220px;
+      display: flex;
+      flex-direction: column;
     }
-    .end-box.guitar {
-      background: linear-gradient(160deg, #3a2a1c, #231810);
+    .unit.guitar {
+      background: linear-gradient(165deg, #3a2a1c, #231810);
       border-color: rgba(196,120,74,0.55);
     }
-    .end-box.amp {
-      background: linear-gradient(160deg, #2a1c18, #14100e);
-      border-color: rgba(196,120,74,0.45);
+    .unit.wah {
+      background: linear-gradient(165deg, #d4ae52, #8f702c);
+      border-color: #f3e4bc;
+      color: #1a1208;
+      box-shadow: 0 7px 0 #4a3818, 0 12px 20px rgba(0,0,0,0.4);
     }
-    .end-box.rack {
-      background: linear-gradient(160deg, #1a2a28, #101818);
-      border-color: rgba(127,175,154,0.5);
-    }
-
-    .pedal {
-      background: linear-gradient(165deg, #1e2836, #141a24);
-      border: 2px solid rgba(232,210,160,0.4);
-      min-height: 168px;
-      box-shadow: 0 6px 0 #0a0d12, 0 10px 18px rgba(0,0,0,0.35);
-    }
-    .pedal.wah {
-      background: linear-gradient(165deg, #c9a24a, #8a6a28);
-      border-color: #e8d2a0; color: #1a1408;
-      box-shadow: 0 6px 0 #4a3818, 0 10px 18px rgba(0,0,0,0.35);
-    }
-    .pedal.drive {
-      background: linear-gradient(165deg, #4a2a22, #2a1512);
+    .unit.drive {
+      background: linear-gradient(165deg, #5a3228, #2a1512);
       border-color: #c4784a;
     }
-    .pedal.fx {
-      background: linear-gradient(165deg, #1a2e2a, #101c1a);
+    .unit.amp {
+      background: linear-gradient(165deg, #2e1e1a, #14100e);
+      border-color: rgba(196,120,74,0.5);
+    }
+    .unit.rack, .unit.fx {
+      background: linear-gradient(165deg, #1c322e, #101c1a);
       border-color: rgba(127,175,154,0.55);
     }
 
     .kind {
-      font-size: 0.6rem; letter-spacing: 0.14em; text-transform: uppercase;
-      font-weight: 600; opacity: 0.75; margin: 0;
+      margin: 0;
+      font-size: 0.58rem; letter-spacing: 0.12em; text-transform: uppercase;
+      font-weight: 700; opacity: 0.8;
     }
-    .pedal.wah .kind { color: #2a1c08; }
+    .unit.wah .kind { color: #2a1c08; }
     .name {
-      margin: 0.12rem 0 0.45rem;
+      margin: 0.15rem 0 0.55rem;
       font-family: Fraunces, Georgia, serif;
-      font-size: 0.92rem; font-weight: 700; line-height: 1.15;
+      font-size: 1.05rem; font-weight: 700; line-height: 1.1;
       color: var(--gold-bright);
     }
-    .pedal.wah .name { color: #1a1208; }
-    .end-box .name { font-size: 0.88rem; }
+    .unit.wah .name { color: #1a1208; }
 
-    .dials {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.35rem 0.3rem;
+    /* SETTINGS stamped on the pedal face */
+    .settings {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 0.28rem;
       margin: 0;
+      padding: 0.45rem 0.4rem;
+      background: rgba(0,0,0,0.38);
+      border: 1px solid rgba(232,210,160,0.28);
+      border-radius: 10px;
+      list-style: none;
     }
-    .dials.cols-1 { grid-template-columns: 1fr; }
-    .dials.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
-    .dial {
-      background: rgba(0,0,0,0.28);
-      border: 1px solid rgba(232,210,160,0.18);
-      border-radius: 8px;
-      padding: 0.28rem 0.2rem 0.32rem;
+    .unit.wah .settings {
+      background: rgba(26,18,8,0.22);
+      border-color: rgba(26,18,8,0.3);
+    }
+    .settings li {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.18rem 0.15rem;
+      border-bottom: 1px solid rgba(232,210,160,0.12);
+    }
+    .settings li:last-child { border-bottom: none; }
+    .unit.wah .settings li { border-bottom-color: rgba(26,18,8,0.18); }
+
+    .settings .knob-name {
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+      text-align: left;
+    }
+    .unit.wah .settings .knob-name { color: #3a2a12; }
+
+    .settings .knob-val {
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--gold-bright);
+      line-height: 1;
+      background: rgba(196,120,74,0.22);
+      border: 1px solid rgba(232,210,160,0.35);
+      border-radius: 6px;
+      padding: 0.2rem 0.4rem;
+      min-width: 2.4rem;
       text-align: center;
     }
-    .pedal.wah .dial {
-      background: rgba(40,28,8,0.2);
-      border-color: rgba(40,28,8,0.25);
+    .unit.wah .settings .knob-val {
+      color: #1a1208;
+      background: rgba(255,246,216,0.55);
+      border-color: rgba(26,18,8,0.35);
     }
-    .dial .k {
-      display: block;
-      width: 22px; height: 22px; margin: 0 auto 0.15rem;
-      border-radius: 50%;
-      background: radial-gradient(circle at 35% 30%, #f3e4bc, #8a7650 55%, #3a3220);
-      border: 1px solid rgba(0,0,0,0.4);
-      position: relative;
-    }
-    .dial .k::after {
-      content: "";
-      position: absolute; left: 50%; top: 3px;
-      width: 2px; height: 7px; margin-left: -1px;
-      background: #1a1408; border-radius: 1px;
-      transform-origin: bottom center;
-      transform: rotate(var(--rot, 0deg));
-    }
-    .pedal.wah .dial .k {
-      background: radial-gradient(circle at 35% 30%, #fff6d8, #6a5020);
-    }
-    .dial .lab {
-      display: block;
-      font-size: 0.58rem; letter-spacing: 0.04em; text-transform: uppercase;
-      color: var(--muted); line-height: 1.1;
-    }
-    .pedal.wah .dial .lab { color: #3a2a12; }
-    .dial .val {
-      display: block;
-      font-family: "JetBrains Mono", ui-monospace, monospace;
-      font-size: 0.78rem; font-weight: 600;
-      color: var(--gold-bright); margin-top: 0.05rem; line-height: 1.1;
-    }
-    .pedal.wah .dial .val { color: #1a1208; }
 
-    .note {
+    .tip {
       margin: 0.45rem 0 0;
-      font-size: 0.66rem; line-height: 1.25; color: var(--muted);
+      font-size: 0.68rem;
+      line-height: 1.25;
+      color: var(--muted);
     }
-    .pedal.wah .note { color: #3a2a12; }
-    .end-box .note { color: rgba(232,210,160,0.72); }
+    .unit.wah .tip { color: #3a2a12; }
 
-    .footswitch {
-      width: 16px; height: 16px; border-radius: 50%; margin: 0.4rem auto 0;
-      background: radial-gradient(circle at 40% 35%, #666, #222 70%);
+    .switch {
+      width: 18px; height: 18px; border-radius: 50%;
+      margin: 0.45rem auto 0;
+      background: radial-gradient(circle at 40% 35%, #777, #222 70%);
       border: 1px solid #000;
     }
-    .pedal.wah .footswitch { background: radial-gradient(circle at 40% 35%, #444, #111); }
+    .unit.wah .switch { background: radial-gradient(circle at 40% 35%, #555, #111); }
 
     .cable {
-      flex: 0 0 22px;
+      flex: 0 0 20px;
       display: flex; align-items: center; justify-content: center;
-      position: relative; align-self: center; height: 40px;
+      position: relative; align-self: center; height: 36px;
     }
     .cable::before {
       content: "";
       width: 100%; height: 4px;
       background: linear-gradient(90deg, #8a4a2a, var(--cable), #8a4a2a);
       border-radius: 2px;
-      box-shadow: 0 1px 0 rgba(0,0,0,0.5);
-      animation: pulse 1.8s ease-in-out infinite;
     }
     .cable::after {
       content: "▶";
-      position: absolute; right: -2px; top: 50%; transform: translateY(-52%);
+      position: absolute; right: -3px; top: 50%; transform: translateY(-52%);
       color: var(--ember); font-size: 0.65rem;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 0.65; }
-      50% { opacity: 1; }
     }
 
     .chain-line {
@@ -271,44 +248,7 @@
       font-size: clamp(0.68rem, 2vw, 0.82rem);
       color: var(--gold-bright);
       text-align: center;
-      letter-spacing: -0.01em;
       line-height: 1.5;
-    }
-
-    .settings-table {
-      margin-top: 1.25rem;
-      width: 100%;
-      border-collapse: collapse;
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      overflow: hidden;
-      font-size: 0.86rem;
-    }
-    .settings-table caption {
-      text-align: left;
-      padding: 0.85rem 1rem 0.55rem;
-      font-family: Fraunces, Georgia, serif;
-      font-size: 1.05rem; color: var(--gold);
-      caption-side: top;
-    }
-    .settings-table th,
-    .settings-table td {
-      padding: 0.55rem 0.85rem;
-      border-top: 1px solid var(--line);
-      text-align: left;
-      vertical-align: top;
-    }
-    .settings-table th {
-      width: 32%;
-      color: var(--gold-bright);
-      font-weight: 600;
-      background: rgba(0,0,0,0.18);
-    }
-    .settings-table td { color: var(--muted); line-height: 1.4; }
-    .settings-table .mono {
-      font-family: "JetBrains Mono", ui-monospace, monospace;
-      font-size: 0.8rem; color: var(--gold-bright);
     }
 
     .panel {
@@ -335,7 +275,7 @@
     .card li + li { margin-top: 0.35rem; }
     .mono {
       font-family: "JetBrains Mono", ui-monospace, monospace;
-      font-size: 0.8rem; color: var(--gold-bright);
+      font-size: 0.82rem; color: var(--gold-bright);
     }
 
     footer {
@@ -344,15 +284,13 @@
       color: var(--muted); font-size: 0.78rem;
     }
     footer a { color: var(--gold); }
-
     .hidden { display: none !important; }
 
     @media (max-width: 800px) {
-      .flow { flex-direction: column; align-items: center; gap: 0; min-width: 0; }
-      .node { width: min(280px, 100%); }
-      .cable {
-        flex: 0 0 32px; width: 40px; height: 32px;
-      }
+      .flow { flex-direction: column; align-items: center; min-width: 0; }
+      .node { width: min(300px, 100%); }
+      .unit { min-height: 0; }
+      .cable { flex: 0 0 30px; width: 40px; height: 30px; }
       .cable::before {
         width: 4px; height: 100%;
         background: linear-gradient(180deg, #8a4a2a, var(--cable), #8a4a2a);
@@ -361,446 +299,216 @@
         content: "▼"; right: auto; left: 50%; top: auto; bottom: -2px;
         transform: translateX(-50%);
       }
-      .settings-table th { width: 38%; }
+      .settings .knob-val { font-size: 1.15rem; min-width: 2.8rem; }
+      .settings .knob-name { font-size: 0.8rem; }
     }
   </style>
 </head>
 <body>
   <header>
     <p class="eyebrow"><a href="index.html">Music Teacher</a> · Tone lab</p>
-    <h1>Surfing with the Alien — pedalboard + settings</h1>
-    <p class="sub">Each box shows published knob positions (Guitar World / Satriani accounts). Studio = title-track lead; Bedroom = practical substitutes.</p>
+    <h1>Surfing with the Alien — settings on each pedal</h1>
+    <p class="sub">Every effects box has its knobs printed on the face. Numbers are published starting points — trim by ear.</p>
   </header>
 
   <div class="tabs" role="tablist">
-    <button type="button" class="active" data-view="studio" role="tab" aria-selected="true">Studio chain + knobs</button>
-    <button type="button" data-view="bedroom" role="tab" aria-selected="false">Bedroom / modern</button>
+    <button type="button" class="active" data-view="studio" role="tab" aria-selected="true">Studio pedals</button>
+    <button type="button" data-view="bedroom" role="tab" aria-selected="false">Bedroom pedals</button>
   </div>
 
   <main>
-    <!-- STUDIO -->
     <section id="view-studio">
-      <div class="board-wrap" aria-label="Studio pedalboard schematic with settings">
-        <p class="board-label">Signal flow · knobs = published starting points (0–10 unless noted)</p>
+      <div class="board-wrap">
+        <p class="board-label">Title-track lead · settings stamped on each unit</p>
         <div class="flow">
+
           <div class="node">
-            <div class="end-box guitar">
-              <p class="kind">Source</p>
+            <div class="unit guitar">
+              <p class="kind">Guitar</p>
               <p class="name">Kramer Pacer</p>
-              <div class="dials">
-                <div class="dial">
-                  <span class="k" style="--rot:110deg"></span>
-                  <span class="lab">Volume</span>
-                  <span class="val">10</span>
-                </div>
-                <div class="dial">
-                  <span class="k" style="--rot:110deg"></span>
-                  <span class="lab">Tone</span>
-                  <span class="val">10</span>
-                </div>
-              </div>
-              <p class="note">Bridge humbucker (Duncan JB era) · vols full up</p>
+              <ul class="settings" aria-label="Guitar settings">
+                <li><span class="knob-name">Pickup</span><span class="knob-val">BRG</span></li>
+                <li><span class="knob-name">Volume</span><span class="knob-val">10</span></li>
+                <li><span class="knob-name">Tone</span><span class="knob-val">10</span></li>
+              </ul>
+              <p class="tip">Duncan JB-era bridge</p>
             </div>
           </div>
           <div class="cable" aria-hidden="true"></div>
+
           <div class="node">
-            <div class="pedal wah">
-              <p class="kind">Pedal 1 · Cry Baby / Vox wah</p>
-              <p class="name">Wah</p>
-              <div class="dials cols-1">
-                <div class="dial">
-                  <span class="k" style="--rot:20deg"></span>
-                  <span class="lab">Rock position</span>
-                  <span class="val">~ mid-open</span>
-                </div>
-              </div>
-              <p class="note">Park for vocal mid-honk, or sweep peaks. No fixed number — hear the “vowel.”</p>
-              <div class="footswitch"></div>
+            <div class="unit wah">
+              <p class="kind">Effects pedal 1</p>
+              <p class="name">Cry Baby Wah</p>
+              <ul class="settings" aria-label="Wah settings">
+                <li><span class="knob-name">Engage</span><span class="knob-val">ON</span></li>
+                <li><span class="knob-name">Rock pos.</span><span class="knob-val">MID</span></li>
+                <li><span class="knob-name">Use</span><span class="knob-val">PARK</span></li>
+              </ul>
+              <p class="tip">Mid-open = vocal honk · or sweep peaks</p>
+              <div class="switch"></div>
             </div>
           </div>
           <div class="cable" aria-hidden="true"></div>
+
           <div class="node">
-            <div class="pedal drive">
-              <p class="kind">Pedal 2 · Chandler Tube Driver</p>
-              <p class="name">Tube Driver</p>
-              <div class="dials">
-                <div class="dial">
-                  <span class="k" style="--rot:55deg"></span>
-                  <span class="lab">Out Level</span>
-                  <span class="val">7</span>
-                </div>
-                <div class="dial">
-                  <span class="k" style="--rot:75deg"></span>
-                  <span class="lab">Hi</span>
-                  <span class="val">8</span>
-                </div>
-                <div class="dial">
-                  <span class="k" style="--rot:-20deg"></span>
-                  <span class="lab">Lo</span>
-                  <span class="val">4</span>
-                </div>
-                <div class="dial">
-                  <span class="k" style="--rot:35deg"></span>
-                  <span class="lab">Tube Drive</span>
-                  <span class="val">6</span>
-                </div>
-              </div>
-              <div class="footswitch"></div>
+            <div class="unit drive">
+              <p class="kind">Effects pedal 2</p>
+              <p class="name">Chandler Tube Driver</p>
+              <ul class="settings" aria-label="Tube Driver settings">
+                <li><span class="knob-name">Out Level</span><span class="knob-val">7</span></li>
+                <li><span class="knob-name">Hi</span><span class="knob-val">8</span></li>
+                <li><span class="knob-name">Lo</span><span class="knob-val">4</span></li>
+                <li><span class="knob-name">Tube Drive</span><span class="knob-val">6</span></li>
+              </ul>
+              <div class="switch"></div>
             </div>
           </div>
           <div class="cable" aria-hidden="true"></div>
+
           <div class="node">
-            <div class="end-box amp">
-              <p class="kind">Amp · Marshall 1959 Super Lead</p>
-              <p class="name">Marshall head</p>
-              <div class="dials cols-3">
-                <div class="dial">
-                  <span class="k" style="--rot:35deg"></span>
-                  <span class="lab">Pres</span>
-                  <span class="val">6</span>
-                </div>
-                <div class="dial">
-                  <span class="k" style="--rot:-40deg"></span>
-                  <span class="lab">Bass</span>
-                  <span class="val">3</span>
-                </div>
-                <div class="dial">
-                  <span class="k" style="--rot:75deg"></span>
-                  <span class="lab">Mid</span>
-                  <span class="val">8</span>
-                </div>
-                <div class="dial">
-                  <span class="k" style="--rot:35deg"></span>
-                  <span class="lab">Treble</span>
-                  <span class="val">6</span>
-                </div>
-                <div class="dial">
-                  <span class="k" style="--rot:55deg"></span>
-                  <span class="lab">Vol I</span>
-                  <span class="val">7</span>
-                </div>
-                <div class="dial">
-                  <span class="k" style="--rot:-90deg"></span>
-                  <span class="lab">Vol II</span>
-                  <span class="val">0</span>
-                </div>
-              </div>
-              <p class="note">Input I (top left) · 4×12 cab</p>
+            <div class="unit amp">
+              <p class="kind">Amp</p>
+              <p class="name">Marshall 1959</p>
+              <ul class="settings" aria-label="Marshall settings">
+                <li><span class="knob-name">Presence</span><span class="knob-val">6</span></li>
+                <li><span class="knob-name">Bass</span><span class="knob-val">3</span></li>
+                <li><span class="knob-name">Middle</span><span class="knob-val">8</span></li>
+                <li><span class="knob-name">Treble</span><span class="knob-val">6</span></li>
+                <li><span class="knob-name">Volume I</span><span class="knob-val">7</span></li>
+                <li><span class="knob-name">Volume II</span><span class="knob-val">0</span></li>
+              </ul>
+              <p class="tip">Input I top left · 4×12 cab</p>
             </div>
           </div>
         </div>
       </div>
 
-      <p class="chain-line">Guitar → Wah → Chandler Tube Driver → Marshall 1959 → (rack) Eventide H949</p>
-
-      <!-- Rack FX as second board strip -->
-      <div class="board-wrap" style="margin-top:1rem" aria-label="Studio rack effects settings">
-        <p class="board-label">Studio rack thickener (after amp / in mix)</p>
-        <div class="flow" style="min-width:0; justify-content:center">
-          <div class="node" style="width:min(340px,100%)">
-            <div class="end-box rack">
-              <p class="kind">Rack · Eventide H949 Harmonizer</p>
-              <p class="name">Slight detune double</p>
-              <div class="dials">
-                <div class="dial">
-                  <span class="k" style="--rot:35deg"></span>
-                  <span class="lab">Main Level</span>
-                  <span class="val">6</span>
-                </div>
-                <div class="dial">
-                  <span class="k" style="--rot:15deg"></span>
-                  <span class="lab">Low</span>
-                  <span class="val">5</span>
-                </div>
-                <div class="dial">
-                  <span class="k" style="--rot:15deg"></span>
-                  <span class="lab">High</span>
-                  <span class="val">5</span>
-                </div>
-                <div class="dial">
-                  <span class="k" style="--rot:-50deg"></span>
-                  <span class="lab">Pitch Ratio</span>
-                  <span class="val">0.989</span>
-                </div>
-              </div>
-              <p class="note">Control: Manual · Function: Norm · Algorithm: 1 · Function button: In</p>
+      <div class="board-wrap" style="margin-top:1rem">
+        <p class="board-label">Rack effect (studio thickener)</p>
+        <div class="flow" style="min-width:0">
+          <div class="node" style="width:min(320px,100%)">
+            <div class="unit rack">
+              <p class="kind">Effects rack</p>
+              <p class="name">Eventide H949</p>
+              <ul class="settings" aria-label="H949 settings">
+                <li><span class="knob-name">Main Level</span><span class="knob-val">6</span></li>
+                <li><span class="knob-name">Low</span><span class="knob-val">5</span></li>
+                <li><span class="knob-name">High</span><span class="knob-val">5</span></li>
+                <li><span class="knob-name">Pitch Ratio</span><span class="knob-val">0.989</span></li>
+                <li><span class="knob-name">Mode</span><span class="knob-val">MAN</span></li>
+                <li><span class="knob-name">Algorithm</span><span class="knob-val">1</span></li>
+              </ul>
+              <p class="tip">Function: Norm · Function button: In</p>
             </div>
           </div>
         </div>
       </div>
 
-      <table class="settings-table">
-        <caption>Full settings cheat sheet (studio title track)</caption>
-        <tbody>
-          <tr>
-            <th>Kramer Pacer</th>
-            <td>Bridge pickup · <span class="mono">Volume 10</span> · <span class="mono">Tone 10</span></td>
-          </tr>
-          <tr>
-            <th>Cry Baby / Vox wah</th>
-            <td>On in chain · rock to <span class="mono">mid-open</span> for parked “vowel,” or sweep for peaks (no fixed knob)</td>
-          </tr>
-          <tr>
-            <th>Chandler Tube Driver</th>
-            <td>
-              <span class="mono">Out Level 7</span> ·
-              <span class="mono">Hi 8</span> ·
-              <span class="mono">Lo 4</span> ·
-              <span class="mono">Tube Drive 6</span>
-            </td>
-          </tr>
-          <tr>
-            <th>Marshall 1959 Super Lead</th>
-            <td>
-              <span class="mono">Presence 6</span> ·
-              <span class="mono">Bass 3</span> ·
-              <span class="mono">Middle 8</span> ·
-              <span class="mono">Treble 6</span> ·
-              <span class="mono">Volume I 7</span> ·
-              <span class="mono">Volume II 0</span>
-              · Input I top left · 4×12
-            </td>
-          </tr>
-          <tr>
-            <th>Eventide H949</th>
-            <td>
-              <span class="mono">Main Level 6</span> ·
-              <span class="mono">Low 5</span> ·
-              <span class="mono">High 5</span> ·
-              <span class="mono">Pitch Ratio 0.989</span>
-              · Manual · Norm · Algorithm 1 · Function In
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <p class="chain-line">Guitar → Wah (MID/PARK) → Tube Driver (7 / 8 / 4 / 6) → Marshall (6·3·8·6·7·0) → H949 (0.989)</p>
 
       <div class="panel">
         <article class="card">
-          <h2>What each control does here</h2>
+          <h2>DS-1 (album-adjacent dirt)</h2>
+          <p>If you only have a Boss DS-1 instead of a Tube Driver:</p>
           <ul>
-            <li><strong style="color:var(--gold-bright)">Tube Drive 6</strong> — singing sustain, not metal fizz</li>
-            <li><strong style="color:var(--gold-bright)">Hi 8 / Lo 4</strong> — bright lead edge, controlled bottom</li>
-            <li><strong style="color:var(--gold-bright)">Marshall Mid 8 / Bass 3</strong> — throaty mid-forward crunch platform</li>
-            <li><strong style="color:var(--gold-bright)">H949 0.989</strong> — almost-unison thickener (abrasive width)</li>
+            <li><span class="mono">Distortion</span> → <span class="mono">8–10</span></li>
+            <li><span class="mono">Tone</span> → <span class="mono">8–9 o’clock</span> (darker)</li>
+            <li><span class="mono">Level</span> → unity with clean</li>
+            <li>Into a cleaner amp, not an already-hot Marshall</li>
           </ul>
         </article>
         <article class="card">
-          <h2>Album-adjacent DS-1</h2>
-          <p>Other album tones used <span class="mono">Boss DS-1</span> into cleaner amps. Starting point if that’s your only dirt box:</p>
-          <ul>
-            <li><span class="mono">Distortion</span> high (~8–10)</li>
-            <li><span class="mono">Tone</span> ~8–9 o’clock (darker)</li>
-            <li><span class="mono">Level</span> to match clean volume</li>
-            <li>Into a <em>cleaner</em> Marshall / JC-120 — not a already-hot amp</li>
-          </ul>
+          <h2>Read the pedals</h2>
+          <p>On each yellow/red/green box, the dark plate lists <strong style="color:var(--gold-bright)">knob name → number</strong>. That is the setting for that effect.</p>
         </article>
       </div>
     </section>
 
-    <!-- BEDROOM -->
     <section id="view-bedroom" class="hidden">
-      <div class="board-wrap" aria-label="Modern bedroom pedalboard with settings">
-        <p class="board-label">Same jobs as the studio chain · dial these first, then trim by ear</p>
+      <div class="board-wrap">
+        <p class="board-label">Bedroom / modern substitutes · settings on each pedal</p>
         <div class="flow">
           <div class="node">
-            <div class="end-box guitar">
-              <p class="kind">Source</p>
-              <p class="name">Humbucker bridge</p>
-              <div class="dials">
-                <div class="dial">
-                  <span class="k" style="--rot:110deg"></span>
-                  <span class="lab">Volume</span>
-                  <span class="val">10</span>
-                </div>
-                <div class="dial">
-                  <span class="k" style="--rot:90deg"></span>
-                  <span class="lab">Tone</span>
-                  <span class="val">8–10</span>
-                </div>
-              </div>
-              <p class="note">JB / PAF-ish</p>
+            <div class="unit guitar">
+              <p class="kind">Guitar</p>
+              <p class="name">Humbucker</p>
+              <ul class="settings">
+                <li><span class="knob-name">Pickup</span><span class="knob-val">BRG</span></li>
+                <li><span class="knob-name">Volume</span><span class="knob-val">10</span></li>
+                <li><span class="knob-name">Tone</span><span class="knob-val">8–10</span></li>
+              </ul>
             </div>
           </div>
           <div class="cable" aria-hidden="true"></div>
           <div class="node">
-            <div class="pedal wah">
-              <p class="kind">Optional · Cry Baby</p>
-              <p class="name">Wah</p>
-              <div class="dials cols-1">
-                <div class="dial">
-                  <span class="k" style="--rot:20deg"></span>
-                  <span class="lab">Park</span>
-                  <span class="val">mid-open</span>
-                </div>
-              </div>
-              <p class="note">Or bypass and sweep only on hooks</p>
-              <div class="footswitch"></div>
+            <div class="unit wah">
+              <p class="kind">Effects pedal</p>
+              <p class="name">Cry Baby</p>
+              <ul class="settings">
+                <li><span class="knob-name">Engage</span><span class="knob-val">OPT</span></li>
+                <li><span class="knob-name">Rock pos.</span><span class="knob-val">MID</span></li>
+              </ul>
+              <div class="switch"></div>
             </div>
           </div>
           <div class="cable" aria-hidden="true"></div>
           <div class="node">
-            <div class="pedal drive">
-              <p class="kind">Must-have · Tube Driver / OD</p>
-              <p class="name">OD / Tube OD</p>
-              <div class="dials">
-                <div class="dial">
-                  <span class="k" style="--rot:35deg"></span>
-                  <span class="lab">Drive</span>
-                  <span class="val">5–6</span>
-                </div>
-                <div class="dial">
-                  <span class="k" style="--rot:55deg"></span>
-                  <span class="lab">Tone / Hi</span>
-                  <span class="val">7–8</span>
-                </div>
-                <div class="dial">
-                  <span class="k" style="--rot:-20deg"></span>
-                  <span class="lab">Bass / Lo</span>
-                  <span class="val">3–4</span>
-                </div>
-                <div class="dial">
-                  <span class="k" style="--rot:55deg"></span>
-                  <span class="lab">Level</span>
-                  <span class="val">7</span>
-                </div>
-              </div>
-              <div class="footswitch"></div>
+            <div class="unit drive">
+              <p class="kind">Effects pedal</p>
+              <p class="name">Tube OD / Driver</p>
+              <ul class="settings">
+                <li><span class="knob-name">Drive</span><span class="knob-val">5–6</span></li>
+                <li><span class="knob-name">Tone / Hi</span><span class="knob-val">7–8</span></li>
+                <li><span class="knob-name">Bass / Lo</span><span class="knob-val">3–4</span></li>
+                <li><span class="knob-name">Level</span><span class="knob-val">7</span></li>
+              </ul>
+              <div class="switch"></div>
             </div>
           </div>
           <div class="cable" aria-hidden="true"></div>
           <div class="node">
-            <div class="pedal fx">
-              <p class="kind">Optional · delay / width</p>
-              <p class="name">Delay · chorus</p>
-              <div class="dials">
-                <div class="dial">
-                  <span class="k" style="--rot:-40deg"></span>
-                  <span class="lab">Delay</span>
-                  <span class="val">15–30 ms</span>
-                </div>
-                <div class="dial">
-                  <span class="k" style="--rot:-60deg"></span>
-                  <span class="lab">Mix</span>
-                  <span class="val">15–25%</span>
-                </div>
-                <div class="dial">
-                  <span class="k" style="--rot:-50deg"></span>
-                  <span class="lab">Detune</span>
-                  <span class="val">±5–10¢</span>
-                </div>
-                <div class="dial">
-                  <span class="k" style="--rot:-70deg"></span>
-                  <span class="lab">Chorus</span>
-                  <span class="val">light</span>
-                </div>
-              </div>
-              <div class="footswitch"></div>
+            <div class="unit fx">
+              <p class="kind">Effects pedal</p>
+              <p class="name">Delay / Detune</p>
+              <ul class="settings">
+                <li><span class="knob-name">Delay</span><span class="knob-val">20ms</span></li>
+                <li><span class="knob-name">Mix</span><span class="knob-val">20%</span></li>
+                <li><span class="knob-name">Detune</span><span class="knob-val">±8¢</span></li>
+                <li><span class="knob-name">Chorus</span><span class="knob-val">LT</span></li>
+              </ul>
+              <div class="switch"></div>
             </div>
           </div>
           <div class="cable" aria-hidden="true"></div>
           <div class="node">
-            <div class="end-box amp">
-              <p class="kind">Amp / modeler · Plexi / JCM</p>
+            <div class="unit amp">
+              <p class="kind">Amp / modeler</p>
               <p class="name">Marshall-ish</p>
-              <div class="dials cols-3">
-                <div class="dial">
-                  <span class="k" style="--rot:20deg"></span>
-                  <span class="lab">Gain</span>
-                  <span class="val">4–5</span>
-                </div>
-                <div class="dial">
-                  <span class="k" style="--rot:-40deg"></span>
-                  <span class="lab">Bass</span>
-                  <span class="val">3</span>
-                </div>
-                <div class="dial">
-                  <span class="k" style="--rot:75deg"></span>
-                  <span class="lab">Mid</span>
-                  <span class="val">7–8</span>
-                </div>
-                <div class="dial">
-                  <span class="k" style="--rot:35deg"></span>
-                  <span class="lab">Treble</span>
-                  <span class="val">6</span>
-                </div>
-                <div class="dial">
-                  <span class="k" style="--rot:35deg"></span>
-                  <span class="lab">Pres</span>
-                  <span class="val">5–6</span>
-                </div>
-                <div class="dial">
-                  <span class="k" style="--rot:55deg"></span>
-                  <span class="lab">Master</span>
-                  <span class="val">room</span>
-                </div>
-              </div>
-              <p class="note">Let the OD do the push · keep amp mid-gain</p>
+              <ul class="settings">
+                <li><span class="knob-name">Gain</span><span class="knob-val">4–5</span></li>
+                <li><span class="knob-name">Bass</span><span class="knob-val">3</span></li>
+                <li><span class="knob-name">Mid</span><span class="knob-val">7–8</span></li>
+                <li><span class="knob-name">Treble</span><span class="knob-val">6</span></li>
+                <li><span class="knob-name">Presence</span><span class="knob-val">5–6</span></li>
+              </ul>
             </div>
           </div>
         </div>
       </div>
-
-      <p class="chain-line">Guitar → Wah → Tube OD (Drive 5–6) → Delay/Detune → Marshall-ish (Gain 4–5, Mid 7–8)</p>
-
-      <table class="settings-table">
-        <caption>Bedroom / modeler cheat sheet</caption>
-        <tbody>
-          <tr>
-            <th>Wah</th>
-            <td>Park <span class="mono">mid-open</span>, or bypass and only sweep hooks</td>
-          </tr>
-          <tr>
-            <th>Tube Driver / OD</th>
-            <td>
-              <span class="mono">Drive 5–6</span> ·
-              <span class="mono">Hi / Tone 7–8</span> ·
-              <span class="mono">Lo / Bass 3–4</span> ·
-              <span class="mono">Level ~7</span>
-            </td>
-          </tr>
-          <tr>
-            <th>Delay / width</th>
-            <td>
-              Slap <span class="mono">15–30 ms</span> · mix <span class="mono">15–25%</span> ·
-              micro-pitch <span class="mono">±5–10 cents</span> (H949 stand-in)
-            </td>
-          </tr>
-          <tr>
-            <th>Amp / modeler</th>
-            <td>
-              Plexi / JCM ·
-              <span class="mono">Gain 4–5</span> ·
-              <span class="mono">Bass 3</span> ·
-              <span class="mono">Mid 7–8</span> ·
-              <span class="mono">Treble 6</span> ·
-              <span class="mono">Presence 5–6</span>
-            </td>
-          </tr>
-          <tr>
-            <th>Boss DS-1 only</th>
-            <td>
-              <span class="mono">Dist high</span> ·
-              <span class="mono">Tone 8–9 o’clock</span> ·
-              Level to unity · into a <em>cleaner</em> amp
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
+      <p class="chain-line">Wah MID · OD Drive 5–6 / Hi 7–8 / Lo 3–4 / Lvl 7 · Delay 20ms 20% · Amp Gain 4–5 Mid 7–8</p>
       <div class="panel">
         <article class="card">
           <h2>Hear it in Music Teacher</h2>
-          <p>Teach / Circle “Satriani singing mid-gain” approximates this mid-forward Tube Driver → Marshall feel.</p>
-          <p style="margin-top:0.55rem"><a href="teach.html?song=surfing_with_the_alien" style="color:var(--gold)">Open Surfing lesson →</a></p>
+          <p><a href="teach.html?song=surfing_with_the_alien" style="color:var(--gold)">Open Surfing lesson →</a></p>
         </article>
       </div>
     </section>
   </main>
 
   <footer>
-    Knob numbers from published Satriani / Guitar World recreations of the <em>Surfing with the Alien</em> lead path · trim by ear ·
+    Settings printed on each effects pedal · from published Surfing recreations ·
     <a href="teach.html?song=surfing_with_the_alien">Teach</a> ·
-    <a href="interactive_circle.html">Circle</a> ·
     <a href="index.html">Hub</a>
   </footer>
 
