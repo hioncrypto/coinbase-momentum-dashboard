@@ -4,7 +4,7 @@ HOW TO OPEN
 -----------
 PHONE
   Open this link in Safari / Chrome after the branch is on GitHub:
-  https://htmlpreview.github.io/?https://raw.githubusercontent.com/hioncrypto/coinbase-momentum-dashboard/cursor/music-teacher-0b84/music/index.html
+  https://htmlpreview.github.io/?https://raw.githubusercontent.com/hioncrypto/coinbase-momentum-dashboard/cursor/music-teacher-app-0b84/music/index.html
 
 DESKTOP
   1. Download index.html and songs.js into the same folder

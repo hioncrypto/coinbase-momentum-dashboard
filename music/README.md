@@ -26,7 +26,7 @@ Interactive teacher for song analysis:
 
 After this branch is pushed, open:
 
-`https://htmlpreview.github.io/?https://raw.githubusercontent.com/hioncrypto/coinbase-momentum-dashboard/cursor/music-teacher-0b84/music/index.html`
+`https://htmlpreview.github.io/?https://raw.githubusercontent.com/hioncrypto/coinbase-momentum-dashboard/cursor/music-teacher-app-0b84/music/index.html`
 
 ### Desktop
 
