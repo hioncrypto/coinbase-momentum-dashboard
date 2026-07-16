@@ -24,6 +24,7 @@ Interactive teacher for song analysis:
 | Aces High (Iron Maiden) | Staccato → legato articulation |
 | Surfing with the Alien (Satriani) | G major I↔IV · modal solo ladder · Tube Driver tone |
 | Voodoo Child (Slight Return) (Hendrix) | Em blues · wah rock · Fuzz Face · Marshall |
+| Desert Rose (Sting / Cheb Mami) | C Aeolian · III (E♭) mirage · Vsus home |
 | Clarinet Quintet K.581 (Mozart) | Ionian / parallel Aeolian |
 
 ## How to open

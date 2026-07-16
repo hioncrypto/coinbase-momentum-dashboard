@@ -59,6 +59,13 @@ window.MusicAudio = (function () {
       attack: 0.008, sustain: 0.5, release: 0.9,
       voicing: "power", detune: 1.004, osc: "sawtooth",
     },
+    desert_rose: {
+      name: "Desert Rose pads / soft edge",
+      drive: 12, pre: 0.2, master: 0.12,
+      midHz: 700, midGain: 2, presence: 0, lowpass: 3600,
+      attack: 0.05, sustain: 0.72, release: 1.35,
+      voicing: "triad", detune: 1.0015, osc: "triangle", organ: true,
+    },
     mozart_k581: {
       name: "Clarinet chamber clean",
       drive: 0, pre: 0.35, master: 0.12,

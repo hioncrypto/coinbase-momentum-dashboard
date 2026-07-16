@@ -223,6 +223,7 @@
       <option value="aces_high">Aces High — Iron Maiden</option>
       <option value="surfing_with_the_alien">Surfing with the Alien — Satriani</option>
       <option value="voodoo_child">Voodoo Child — Hendrix</option>
+      <option value="desert_rose">Desert Rose — Sting / Cheb Mami</option>
       <option value="mozart_k581">Clarinet Quintet K.581 — Mozart</option>
     </select>
   </div>
@@ -333,6 +334,7 @@
       aces_high: { drive:80, pre:0.25, master:0.14, midHz:1050, midGain:3, presence:4.5, lowpass:5200, attack:0.005, sustain:0.35, release:0.65, voicing:"power", detune:1.004, osc:"sawtooth", twin:true, staccato:true },
       surfing_with_the_alien: { drive:45, pre:0.22, master:0.13, midHz:950, midGain:5, presence:3, lowpass:4500, attack:0.018, sustain:0.62, release:1.05, voicing:"triad", detune:1.003, osc:"sawtooth", organ:true },
       voodoo_child: { drive:85, pre:0.26, master:0.14, midHz:800, midGain:6, presence:3, lowpass:4800, attack:0.008, sustain:0.5, release:0.9, voicing:"power", detune:1.004, osc:"sawtooth" },
+      desert_rose: { drive:12, pre:0.2, master:0.12, midHz:700, midGain:2, presence:0, lowpass:3600, attack:0.05, sustain:0.72, release:1.35, voicing:"triad", detune:1.0015, osc:"triangle", organ:true },
       mozart_k581: { drive:0, pre:0.2, master:0.11, midHz:1200, midGain:1, presence:-2, lowpass:2800, attack:0.06, sustain:0.7, release:1.4, voicing:"triad", detune:1.0008, osc:"triangle", clean:true },
     };
 
@@ -535,6 +537,19 @@
           { title: "What it takes advantage of", keys: ["Em","E"], teach: "Takeaway: simplest tonic map + talking wah. Fretting first, then rock heel↔toe with each rise and fall." },
         ],
       },
+      desert_rose: {
+        title: "Desert Rose",
+        artist: "Sting feat. Cheb Mami · 1999",
+        tonic: "Cm",
+        blurb: "Aeolian descent for thirst; E♭ relative-major lift for the mirage; Vsus brings you home.",
+        steps: [
+          { title: "Home: C minor", keys: ["Cm"], teach: "Find Cm on the inner ring. Desert Rose is Aeolian pop — longing planted on i." },
+          { title: "Verse: walk flat-side", keys: ["Cm","Bb","Ab","Fm"], teach: "Cm→B♭→A♭→Fm = i–VII–VI–iv. Counterclockwise neighbors — a road that never leaves the map." },
+          { title: "The Vsus door", keys: ["G","Cm"], teach: "G7sus is V of Cm — clockwise fifth. Pop loop with a classical cadence trick." },
+          { title: "Chorus mirage: E♭", keys: ["Eb","Cm","Bb"], teach: "E♭ is III / relative major of Cm. Oasis sunlight, then the cadence wakes you back in the desert." },
+          { title: "What it takes advantage of", keys: ["Cm","Ab","Eb","G"], teach: "Takeaway: Aeolian descent = thirst; III lift = hope; Vsus→i = return. Two voices, one circle." },
+        ],
+      },
       mozart_k581: {
         title: "Clarinet Quintet K.581",
         artist: "W. A. Mozart",
@@ -628,6 +643,7 @@
         aces_high: "Maiden scramble / anthem",
         surfing_with_the_alien: "Satriani singing mid-gain",
         voodoo_child: "Hendrix wah + fuzz Marshall",
+        desert_rose: "Desert Rose soft pads",
         mozart_k581: "clarinet chamber clean",
       })[songId] || "song tone";
       document.getElementById("songBlurb").innerHTML=`<strong>${song.title}</strong>${song.artist}<br/>${song.blurb}<br/><em style="color:var(--ember)">Tone: ${toneName}</em>`;
