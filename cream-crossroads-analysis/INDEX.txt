@@ -1,0 +1,15 @@
+CREAM — CROSSROADS
+Deep musical analysis + Circle of Fifths
+========================================
+
+This folder is a UNIQUE, STANDALONE deliverable.
+It is intentionally NOT part of any music-teacher app,
+multi-song Circle of Fifths tool, or other project.
+
+Open in a browser:
+  cream_crossroads_deep_analysis.html
+
+Source recording analyzed:
+  https://youtu.be/PE9HvSdcaL4
+  Cream — “Crossroads” (live, Winterland Ballroom, 10 Mar 1968)
+  Wheels of Fire (live disc), released 1968
