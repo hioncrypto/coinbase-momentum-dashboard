@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Interactive Circle of Fifths · Music Teacher</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #0e1218;
+      --panel: #161c26;
+      --line: rgba(232, 210, 160, 0.18);
+      --gold: #e8d2a0;
+      --gold-bright: #f3e4bc;
+      --ember: #c4784a;
+      --mint: #7faf9a;
+      --sky: #7a9ec4;
+      --text: #e8e2d6;
+      --muted: #9aa3b2;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background:
+        radial-gradient(ellipse 80% 55% at 50% -10%, rgba(196, 120, 74, 0.16), transparent 55%),
+        radial-gradient(ellipse 45% 40% at 95% 85%, rgba(122, 158, 196, 0.08), transparent 50%),
+        linear-gradient(165deg, #0a0d12 0%, #121821 45%, #0e1218 100%);
+      color: var(--text);
+      font-family: "IBM Plex Sans", system-ui, sans-serif;
+    }
+    body { display: grid; grid-template-rows: auto auto auto 1fr auto; min-height: 100vh; }
+    header {
+      padding: 1.15rem clamp(1rem, 3vw, 2.25rem) 0.85rem;
+      border-bottom: 1px solid var(--line);
+    }
+    .eyebrow {
+      margin: 0 0 0.3rem;
+      font-size: 0.72rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--ember);
+      font-weight: 600;
+    }
+    .eyebrow a { color: inherit; text-decoration: none; }
+    h1 {
+      margin: 0;
+      font-family: Fraunces, Georgia, serif;
+      font-size: clamp(1.55rem, 3.5vw, 2.3rem);
+      color: var(--gold-bright);
+      letter-spacing: -0.02em;
+    }
+    .sub {
+      margin: 0.4rem 0 0;
+      max-width: 40rem;
+      color: var(--muted);
+      line-height: 1.45;
+      font-size: 0.95rem;
+    }
+    .sound-banner {
+      display: none;
+      padding: 0.7rem 1rem;
+      background: rgba(196, 120, 74, 0.25);
+      border-bottom: 1px solid rgba(232, 210, 160, 0.35);
+      color: var(--gold-bright);
+      font-weight: 600;
+      text-align: center;
+      cursor: pointer;
+    }
+    .sound-banner.show { display: block; }
+    main {
+      display: grid;
+      grid-template-columns: minmax(250px, 320px) 1fr;
+      min-height: 0;
+    }
+    @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+    .sidebar {
+      padding: 1.1rem clamp(1rem, 3vw, 1.5rem);
+      border-right: 1px solid var(--line);
+      background: rgba(14, 18, 24, 0.55);
+      overflow-y: auto;
+    }
+    @media (max-width: 860px) {
+      .sidebar { border-right: none; border-bottom: 1px solid var(--line); }
+    }
+    .field {
+      display: block;
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 0 0 0.4rem;
+      font-weight: 600;
+    }
+    .mode-toggle {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.4rem;
+      margin-bottom: 1.1rem;
+    }
+    .mode-toggle button {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--muted);
+      font: 600 0.88rem "IBM Plex Sans", sans-serif;
+      padding: 0.65rem 0.5rem;
+      border-radius: 9px;
+      cursor: pointer;
+    }
+    .mode-toggle button.active {
+      color: var(--gold-bright);
+      border-color: rgba(232, 210, 160, 0.45);
+      background: linear-gradient(135deg, rgba(196, 120, 74, 0.28), rgba(232, 210, 160, 0.08));
+    }
+    .checks {
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+      margin-bottom: 1.15rem;
+    }
+    .checks label {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      font-size: 0.88rem;
+      cursor: pointer;
+    }
+    .checks input { accent-color: var(--ember); width: 1rem; height: 1rem; }
+    .info {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 0.95rem 1rem;
+    }
+    .info .key-name {
+      font-family: Fraunces, Georgia, serif;
+      font-size: 1.85rem;
+      color: var(--gold-bright);
+      margin: 0;
+    }
+    .info .key-mode {
+      margin: 0.2rem 0 0.75rem;
+      color: var(--ember);
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+    .info dl {
+      margin: 0;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 0.35rem 0.75rem;
+      font-size: 0.88rem;
+    }
+    .info dt { color: var(--muted); }
+    .info dd { margin: 0; font-weight: 500; }
+    .chords { margin-top: 1rem; }
+    .chords h2 {
+      margin: 0 0 0.5rem;
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .chord-row { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+    .chord-chip {
+      appearance: none;
+      border: 1px solid rgba(232, 210, 160, 0.28);
+      background: rgba(232, 210, 160, 0.06);
+      color: var(--gold);
+      font: 600 0.8rem "IBM Plex Sans", sans-serif;
+      padding: 0.4rem 0.55rem;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .chord-chip small {
+      display: block;
+      color: var(--muted);
+      font-weight: 500;
+      font-size: 0.68rem;
+      margin-top: 0.1rem;
+    }
+    .hint {
+      margin: 1rem 0 0;
+      font-size: 0.82rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .viz {
+      display: grid;
+      place-items: center;
+      padding: 1rem;
+      min-height: min(70vh, 640px);
+    }
+    .wheel-wrap { width: min(100%, 560px); position: relative; }
+    #wheel {
+      width: 100%;
+      height: auto;
+      display: block;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .key-wedge { cursor: pointer; }
+    .key-wedge .face {
+      pointer-events: all;
+      transition: fill 0.2s ease, opacity 0.2s ease, stroke 0.2s ease;
+    }
+    .key-label {
+      fill: var(--text);
+      font-size: 14px;
+      font-weight: 600;
+      font-family: "IBM Plex Sans", sans-serif;
+      pointer-events: none;
+    }
+    .minor-label { font-size: 12px; fill: var(--muted); }
+    .center-disk { fill: #0c1016; stroke: rgba(232,210,160,0.22); stroke-width: 1.5; pointer-events: none; }
+    .center-title {
+      fill: var(--gold-bright);
+      font-family: Fraunces, Georgia, serif;
+      font-size: 32px;
+      font-weight: 700;
+      text-anchor: middle;
+      pointer-events: none;
+    }
+    .center-sub {
+      fill: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      text-anchor: middle;
+      font-weight: 600;
+      pointer-events: none;
+    }
+    .key-wedge.dim .face { opacity: 0.32; }
+    .key-wedge.neighbor .face { fill: rgba(122, 158, 196, 0.45) !important; opacity: 1; }
+    .key-wedge.relative .face { fill: rgba(127, 175, 154, 0.5) !important; opacity: 1; }
+    .key-wedge.selected .face {
+      fill: rgba(232, 210, 160, 0.78) !important;
+      opacity: 1;
+      stroke: #f3e4bc !important;
+      stroke-width: 2;
+    }
+    .key-wedge.selected .key-label,
+    .key-wedge.relative .key-label,
+    .key-wedge.neighbor .key-label { fill: #0e1218; }
+    .key-wedge:hover .face,
+    .key-wedge.pressed .face {
+      stroke: rgba(232, 210, 160, 0.7);
+      stroke-width: 2;
+    }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem 1.2rem;
+      justify-content: center;
+      margin-top: 0.75rem;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+    .legend span::before {
+      content: "";
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 0.4rem;
+      vertical-align: middle;
+    }
+    .l-sel::before { background: var(--gold); }
+    .l-rel::before { background: var(--mint); }
+    .l-nb::before { background: var(--sky); }
+    .play-btn {
+      appearance: none;
+      margin-top: 0.85rem;
+      width: 100%;
+      border: 1px solid rgba(232, 210, 160, 0.35);
+      background: linear-gradient(135deg, rgba(196, 120, 74, 0.35), rgba(232, 210, 160, 0.1));
+      color: var(--gold-bright);
+      font: 600 0.9rem "IBM Plex Sans", sans-serif;
+      padding: 0.7rem 1rem;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+    .play-btn.ghost {
+      margin-top: 0.45rem;
+      background: transparent;
+      border-color: var(--line);
+      color: var(--text);
+    }
+
+    .song-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.65rem 1rem;
+      padding: 0.85rem clamp(1rem, 3vw, 2.25rem);
+      border-bottom: 1px solid var(--line);
+      background: rgba(10, 13, 18, 0.96);
+      position: sticky;
+      top: 0;
+      z-index: 40;
+    }
+    .song-bar .field {
+      margin: 0;
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ember);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .song-bar select {
+      appearance: none;
+      -webkit-appearance: none;
+      flex: 1 1 260px;
+      min-width: 0;
+      width: 100%;
+      background: #1c2430 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23e8d2a0' d='M1 1l5 5 5-5'/%3E%3C/svg%3E") right 0.9rem center / 12px no-repeat;
+      color: var(--gold-bright);
+      border: 2px solid rgba(232, 210, 160, 0.55);
+      border-radius: 10px;
+      padding: 0.85rem 2.5rem 0.85rem 1rem;
+      font: 600 1.05rem "IBM Plex Sans", sans-serif;
+      cursor: pointer;
+    }
+
+    footer {
+      padding: 0.85rem clamp(1rem, 3vw, 2.25rem);
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.78rem;
+    }
+    footer a { color: var(--gold); }
+  </style>
+</head>
+<body>
+  <div class="song-bar">
+    <label class="field" for="songSelect">Choose a song</label>
+    <select id="songSelect" aria-label="Choose a song">
+      <option value="">Explore keys (no song)</option>
+      <option value="over_the_mountain">Over the Mountain — Ozzy</option>
+      <option value="diary_of_a_madman">Diary of a Madman — Ozzy</option>
+      <option value="mr_crowley">Mr. Crowley — Ozzy</option>
+      <option value="the_trooper">The Trooper — Iron Maiden</option>
+      <option value="aces_high">Aces High — Iron Maiden</option>
+      <option value="rime_of_the_ancient_mariner">Rime of the Ancient Mariner — Iron Maiden</option>
+      <option value="surfing_with_the_alien">Surfing with the Alien — Satriani</option>
+      <option value="voodoo_child">Voodoo Child — Hendrix</option>
+      <option value="desert_rose">Desert Rose — Sting / Cheb Mami</option>
+      <option value="mozart_k581">Clarinet Quintet K.581 — Mozart</option>
+    </select>
+  </div>
+
+  <header>
+    <p class="eyebrow"><a href="index.html">Music Teacher</a> · Explore</p>
+    <h1>Interactive Circle of Fifths</h1>
+    <p class="sub">Pick a song above to match its tone and dynamics, or explore keys with a soft crunch. <a href="teach.html" id="teachLink" style="color:var(--gold)">Open guided lesson →</a></p>
+    <p class="sub" id="toneLabel" style="margin-top:0.35rem;color:var(--ember)">Tone: soft crunch</p>
+  </header>
+
+  <div class="sound-banner show" id="soundBanner" role="button" tabindex="0">
+    Tap here to enable sound, then tap any key on the circle
+  </div>
+
+  <main>
+    <aside class="sidebar">
+      <span class="field">Mode</span>
+      <div class="mode-toggle" role="group" aria-label="Major or minor">
+        <button type="button" id="modeMajor" class="active">Major</button>
+        <button type="button" id="modeMinor">Minor</button>
+      </div>
+
+      <span class="field">Show</span>
+      <div class="checks">
+        <label><input type="checkbox" id="showRelative" checked /> Relative major / minor</label>
+        <label><input type="checkbox" id="showNeighbors" checked /> Dominant &amp; subdominant</label>
+        <label><input type="checkbox" id="soundOn" checked /> Sound on</label>
+      </div>
+
+      <div class="info">
+        <p class="key-name" id="keyName">C</p>
+        <p class="key-mode" id="keyMode">Major · Ionian</p>
+        <dl>
+          <dt>Signature</dt><dd id="sig">no sharps / flats</dd>
+          <dt>Relative</dt><dd id="rel">Am</dd>
+          <dt>Dominant (V)</dt><dd id="dom">G</dd>
+          <dt>Subdominant (IV)</dt><dd id="sub">F</dd>
+        </dl>
+        <button type="button" class="play-btn" id="playTonic">Play tonic</button>
+        <button type="button" class="play-btn ghost" id="playAll">Play all 24 notes</button>
+        <div class="chords">
+          <h2>Diatonic chords — tap to hear</h2>
+          <div class="chord-row" id="chordRow"></div>
+        </div>
+      </div>
+      <p class="hint">Every wedge makes a sound. Outer ring = majors · Inner = minors · Clockwise = up a fifth.</p>
+    </aside>
+
+    <section class="viz">
+      <div class="wheel-wrap">
+        <svg id="wheel" viewBox="0 0 560 560" role="img" aria-label="Interactive circle of fifths"></svg>
+        <div class="legend">
+          <span class="l-sel">Selected</span>
+          <span class="l-rel">Relative</span>
+          <span class="l-nb">V / IV neighbors</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    Music Teacher ·
+    <a href="index.html?view=circle">Song sections</a> ·
+    <a href="index.html">Home</a>
+  </footer>
+
+  <script>
+    /* —— Heavy distorted guitar (inlined for phone htmlpreview) —— */
+    const GUITAR_ROOT = {
+      C: 65.41, "C#": 69.3, Db: 69.3, D: 73.42, "D#": 77.78, Eb: 77.78,
+      E: 82.41, F: 87.31, "F#": 92.5, Gb: 92.5, G: 98.0, "G#": 103.83, Ab: 103.83,
+      A: 110.0, "A#": 116.54, Bb: 116.54, B: 123.47,
+    };
+
+    const TONE = {
+      default: { drive: 35, pre: 0.2, master: 0.12, midHz: 900, midGain: 2, presence: 1, lowpass: 4000, attack: 0.02, sustain: 0.5, release: 0.85, voicing: "power", detune: 1.002, osc: "sawtooth" },
+      over_the_mountain: { drive: 90, pre: 0.28, master: 0.15, midHz: 900, midGain: 4, presence: 2, lowpass: 4200, attack: 0.012, sustain: 0.55, release: 0.85, voicing: "power", detune: 1.002, osc: "sawtooth" },
+      diary_of_a_madman: { drive: 70, pre: 0.24, master: 0.13, midHz: 700, midGain: 3, presence: 0.5, lowpass: 3200, attack: 0.04, sustain: 0.65, release: 1.15, voicing: "power", detune: 1.0015, osc: "sawtooth" },
+      mr_crowley: { drive: 55, pre: 0.22, master: 0.14, midHz: 850, midGain: 5, presence: 1.5, lowpass: 3800, attack: 0.025, sustain: 0.6, release: 1.0, voicing: "triad", detune: 1.002, osc: "sawtooth", organ: true },
+      the_trooper: { drive: 75, pre: 0.26, master: 0.14, midHz: 1100, midGain: 3.5, presence: 4, lowpass: 5000, attack: 0.006, sustain: 0.4, release: 0.7, voicing: "power", detune: 1.004, osc: "sawtooth", twin: true },
+      aces_high: { drive: 80, pre: 0.25, master: 0.14, midHz: 1050, midGain: 3, presence: 4.5, lowpass: 5200, attack: 0.005, sustain: 0.35, release: 0.65, voicing: "power", detune: 1.004, osc: "sawtooth", twin: true, staccato: true },
+      rime_of_the_ancient_mariner: { drive: 72, pre: 0.24, master: 0.14, midHz: 1000, midGain: 3.2, presence: 3.5, lowpass: 4800, attack: 0.01, sustain: 0.5, release: 1.05, voicing: "power", detune: 1.0035, osc: "sawtooth", twin: true },
+      surfing_with_the_alien: { drive: 45, pre: 0.22, master: 0.13, midHz: 950, midGain: 5, presence: 3, lowpass: 4500, attack: 0.018, sustain: 0.62, release: 1.05, voicing: "triad", detune: 1.003, osc: "sawtooth", organ: true },
+      voodoo_child: { drive: 85, pre: 0.26, master: 0.14, midHz: 800, midGain: 6, presence: 3, lowpass: 4800, attack: 0.008, sustain: 0.5, release: 0.9, voicing: "power", detune: 1.004, osc: "sawtooth" },
+      desert_rose: { drive: 12, pre: 0.2, master: 0.12, midHz: 700, midGain: 2, presence: 0, lowpass: 3600, attack: 0.05, sustain: 0.72, release: 1.35, voicing: "triad", detune: 1.0015, osc: "triangle", organ: true },
+      mozart_k581: { drive: 0, pre: 0.2, master: 0.11, midHz: 1200, midGain: 1, presence: -2, lowpass: 2800, attack: 0.06, sustain: 0.7, release: 1.4, voicing: "triad", detune: 1.0008, osc: "triangle", clean: true },
+    };
+
+    const SONG_TONIC = {
+      over_the_mountain: "G#m", diary_of_a_madman: "G#m", mr_crowley: "Dm",
+      the_trooper: "Em", aces_high: "Em", rime_of_the_ancient_mariner: "Em",
+      surfing_with_the_alien: "G", voodoo_child: "Em", desert_rose: "Cm", mozart_k581: "A",
+    };
+
+    let audioCtx = null;
+    let bus = null;
+    let lastKey = null;
+    let lastAt = 0;
+    let soundReady = false;
+    let activeTone = "default";
+
+    function rootOf(key) {
+      const s = String(key || "").trim();
+      return s.endsWith("m") ? s.slice(0, -1) : s;
+    }
+    function isMinor(key) {
+      return String(key || "").trim().endsWith("m");
+    }
+    function freqOf(key) {
+      const root = rootOf(key);
+      let f = GUITAR_ROOT[root];
+      if (f == null) {
+        const alt = { "D#": "Eb", "G#": "Ab", "A#": "Bb", "C#": "Db", Gb: "F#" };
+        f = GUITAR_ROOT[alt[root]];
+      }
+      return f || null;
+    }
+
+    function makeDistortionCurve(amount) {
+      const n = 2048;
+      const curve = new Float32Array(n);
+      const k = Math.max(1, amount);
+      for (let i = 0; i < n; i++) {
+        const x = (i * 2) / n - 1;
+        curve[i] = amount < 1 ? x : Math.tanh(((1 + k) * x) / (1 + k * Math.abs(x)) * 1.4);
+      }
+      return curve;
+    }
+
+    function ensureAmp() {
+      if (!audioCtx || bus) return;
+      const pre = audioCtx.createGain();
+      const dist = audioCtx.createWaveShaper();
+      dist.oversample = "2x";
+      const lowcut = audioCtx.createBiquadFilter();
+      lowcut.type = "highpass"; lowcut.frequency.value = 65;
+      const mid = audioCtx.createBiquadFilter();
+      mid.type = "peaking"; mid.Q.value = 1;
+      const presence = audioCtx.createBiquadFilter();
+      presence.type = "highshelf"; presence.frequency.value = 2400;
+      const lowpass = audioCtx.createBiquadFilter();
+      lowpass.type = "lowpass"; lowpass.Q.value = 0.7;
+      const master = audioCtx.createGain();
+      const dry = audioCtx.createGain();
+      dry.gain.value = 0;
+      pre.connect(dist); dist.connect(lowcut); lowcut.connect(mid);
+      mid.connect(presence); presence.connect(lowpass); lowpass.connect(master);
+      pre.connect(dry); dry.connect(master); master.connect(audioCtx.destination);
+      bus = { pre, dist, mid, presence, lowpass, master, dry };
+      applySongTone(activeTone);
+    }
+
+    function applySongTone(id) {
+      activeTone = TONE[id] ? id : "default";
+      const p = TONE[activeTone];
+      ensureAmp();
+      if (!bus) return p;
+      bus.pre.gain.value = p.clean ? p.pre * 0.35 : p.pre;
+      bus.master.gain.value = p.master;
+      bus.dist.curve = makeDistortionCurve(p.drive);
+      bus.mid.frequency.value = p.midHz;
+      bus.mid.gain.value = p.midGain;
+      bus.presence.gain.value = p.presence;
+      bus.lowpass.frequency.value = p.lowpass;
+      bus.dry.gain.value = p.clean ? 0.85 : 0.05;
+      const label = document.getElementById("toneLabel");
+      if (label) {
+        const names = {
+          default: "soft crunch",
+          over_the_mountain: "Rhoads crunch",
+          diary_of_a_madman: "dark gothic Rhoads",
+          mr_crowley: "classical metal + organ",
+          the_trooper: "Maiden Marshall gallop",
+          aces_high: "Maiden scramble / anthem",
+          rime_of_the_ancient_mariner: "Maiden epic / storm theater",
+          surfing_with_the_alien: "Satriani singing mid-gain",
+          voodoo_child: "Hendrix wah + fuzz Marshall",
+          desert_rose: "Desert Rose soft pads",
+          mozart_k581: "clarinet chamber clean",
+        };
+        label.textContent = "Tone: " + (names[activeTone] || names.default);
+      }
+      return p;
+    }
+
+    async function unlockAudio() {
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return false;
+        if (!audioCtx) audioCtx = new AC();
+        ensureAmp();
+        if (audioCtx.state === "suspended") await audioCtx.resume();
+        const buf = audioCtx.createBuffer(1, 1, 22050);
+        const src = audioCtx.createBufferSource();
+        src.buffer = buf;
+        src.connect(audioCtx.destination);
+        src.start(0);
+        soundReady = audioCtx.state === "running";
+        if (soundReady) {
+          const b = document.getElementById("soundBanner");
+          if (b) b.classList.remove("show");
+        }
+        return soundReady;
+      } catch (err) {
+        console.warn("audio unlock failed", err);
+        return false;
+      }
+    }
+
+    function soundOn() {
+      const el = document.getElementById("soundOn");
+      return !el || el.checked;
+    }
+
+    function stringHit(freq, when, dur, gain, p) {
+      if (!audioCtx || !bus || freq == null) return;
+      const osc = audioCtx.createOscillator();
+      const osc2 = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      const filter = audioCtx.createBiquadFilter();
+      osc.type = p.osc || "sawtooth";
+      osc2.type = p.osc || "sawtooth";
+      osc.frequency.setValueAtTime(freq, when);
+      osc2.frequency.setValueAtTime(freq * (p.detune || 1.002), when);
+      filter.type = "lowpass";
+      filter.frequency.setValueAtTime(p.clean ? 2400 : 3600, when);
+      filter.frequency.exponentialRampToValueAtTime(1400, when + Math.min(0.4, dur * 0.45));
+      filter.Q.value = p.twin ? 1.4 : 0.9;
+      const peak = (gain == null ? 0.28 : gain) * (p.staccato ? 0.9 : 1);
+      const d = dur || p.release || 0.9;
+      const atk = p.attack || 0.015;
+      g.gain.setValueAtTime(0.0001, when);
+      g.gain.exponentialRampToValueAtTime(peak, when + atk);
+      g.gain.exponentialRampToValueAtTime(peak * (p.sustain || 0.5), when + atk + d * 0.2);
+      g.gain.exponentialRampToValueAtTime(0.0001, when + d);
+      osc.connect(filter); osc2.connect(filter); filter.connect(g); g.connect(bus.pre);
+      osc.start(when); osc2.start(when);
+      osc.stop(when + d + 0.05); osc2.stop(when + d + 0.05);
+      if (p.organ) {
+        const o = audioCtx.createOscillator();
+        const og = audioCtx.createGain();
+        o.type = "sine";
+        o.frequency.setValueAtTime(freq * 2, when);
+        og.gain.setValueAtTime(0.0001, when);
+        og.gain.exponentialRampToValueAtTime(peak * 0.12, when + 0.05);
+        og.gain.exponentialRampToValueAtTime(0.0001, when + d);
+        o.connect(og); og.connect(bus.pre);
+        o.start(when); o.stop(when + d + 0.05);
+      }
+    }
+
+    async function playKey(key, opts) {
+      opts = opts || {};
+      if (!soundOn()) return false;
+      await unlockAudio();
+      const p = TONE[activeTone] || TONE.default;
+      let root = freqOf(key);
+      if (root == null) return false;
+      const t = performance.now();
+      if (opts.scrub && lastKey === key && t - lastAt < 100) return false;
+      lastKey = key;
+      lastAt = t;
+      if (p.clean) {
+        while (root < 130) root *= 2;
+        while (root > 320) root *= 0.5;
+      } else {
+        while (root > 170) root *= 0.5;
+        while (root < 55) root *= 2;
+      }
+      const now = audioCtx.currentTime + 0.01;
+      const scrub = !!opts.scrub;
+      let dur = opts.dur || (scrub ? p.release * 0.55 : p.release);
+      const gScale = (opts.gainScale || 1) * 0.75;
+      if (p.voicing === "triad" || p.clean) {
+        const third = isMinor(key) ? 3 : 4;
+        stringHit(root, now, dur, 0.28 * gScale, p);
+        stringHit(root * Math.pow(2, third / 12), now + 0.03, dur * 0.95, 0.2 * gScale, p);
+        stringHit(root * Math.pow(2, 7 / 12), now + 0.05, dur * 0.9, 0.18 * gScale, p);
+      } else {
+        stringHit(root, now, dur, 0.3 * gScale, p);
+        stringHit(root * Math.pow(2, 7 / 12), now + 0.015, dur, 0.24 * gScale, p);
+        stringHit(root * 2, now + 0.025, dur * 0.9, 0.14 * gScale, p);
+        if (p.twin) {
+          stringHit(root * Math.pow(2, (isMinor(key) ? 3 : 4) / 12), now + 0.04, dur * 0.8, 0.08 * gScale, p);
+        }
+      }
+      return true;
+    }
+
+    function playKeys(keys, gap) {
+      const p = TONE[activeTone] || TONE.default;
+      const list = keys.slice();
+      const g = gap == null ? (p.staccato ? 240 : 300) : gap;
+      list.forEach((k, i) => {
+        setTimeout(() => { playKey(k, { dur: p.release * 0.85 }); }, i * g);
+      });
+    }
+
+    function playChord(root, quality) {
+      const key = (quality === "min" || quality === "dim") ? rootOf(root) + "m" : rootOf(root);
+      unlockAudio().then(() => playKey(key, { dur: 1.1, gainScale: 0.9 }));
+    }
+
+    /* —— Circle data / UI —— */
+    const MAJORS = ["C", "G", "D", "A", "E", "B", "F#", "Db", "Ab", "Eb", "Bb", "F"];
+    const MINORS = ["Am", "Em", "Bm", "F#m", "C#m", "G#m", "Ebm", "Bbm", "Fm", "Cm", "Gm", "Dm"];
+    const MAJOR_SIG = [
+      "no ♯ / ♭", "1♯ (F♯)", "2♯ (F♯ C♯)", "3♯ (F♯ C♯ G♯)", "4♯ (F♯ C♯ G♯ D♯)",
+      "5♯ (F♯ C♯ G♯ D♯ A♯)", "6♯ (F♯ C♯ G♯ D♯ A♯ E♯)",
+      "5♭ (B♭ E♭ A♭ D♭ G♭)", "4♭ (B♭ E♭ A♭ D♭)", "3♭ (B♭ E♭ A♭)", "2♭ (B♭ E♭)", "1♭ (B♭)",
+    ];
+    const PRETTY = {
+      "F#": "F♯", "C#": "C♯", "G#": "G♯", "D#": "D♯", "A#": "A♯",
+      Db: "D♭", Eb: "E♭", Ab: "A♭", Bb: "B♭", Gb: "G♭",
+      "F#m": "F♯m", "C#m": "C♯m", "G#m": "G♯m", Ebm: "E♭m", Bbm: "B♭m",
+    };
+    function pretty(k) { return PRETTY[k] || k; }
+
+    let selected = "C";
+    let scrubbing = false;
+    let scrubTimer = null;
+
+    const CX = 280, CY = 280, R_OUT = 250, R_MID = 175, R_IN = 100;
+
+    function polar(angleDeg, r) {
+      const a = ((angleDeg - 90) * Math.PI) / 180;
+      return [CX + r * Math.cos(a), CY + r * Math.sin(a)];
+    }
+    function wedgePath(i, rOuter, rInner) {
+      const step = 30;
+      const a0 = i * step - step / 2;
+      const a1 = i * step + step / 2;
+      const [x0, y0] = polar(a0, rOuter);
+      const [x1, y1] = polar(a1, rOuter);
+      const [x2, y2] = polar(a1, rInner);
+      const [x3, y3] = polar(a0, rInner);
+      return `M ${x0} ${y0} A ${rOuter} ${rOuter} 0 0 1 ${x1} ${y1} L ${x2} ${y2} A ${rInner} ${rInner} 0 0 0 ${x3} ${y3} Z`;
+    }
+    function labelPos(i, r) { return polar(i * 30, r); }
+
+    function indexOfKey(key) {
+      let i = MAJORS.indexOf(key);
+      if (i >= 0) return { ring: "major", i };
+      i = MINORS.indexOf(key);
+      if (i >= 0) return { ring: "minor", i };
+      return null;
+    }
+    function relativeOf(key) {
+      const info = indexOfKey(key);
+      if (!info) return null;
+      return info.ring === "major" ? MINORS[info.i] : MAJORS[info.i];
+    }
+    function neighborsOf(key) {
+      const info = indexOfKey(key);
+      if (!info) return { dom: null, sub: null };
+      const ring = info.ring === "major" ? MAJORS : MINORS;
+      return { dom: ring[(info.i + 1) % 12], sub: ring[(info.i + 11) % 12] };
+    }
+
+    function diatonicChords(key) {
+      const majorIv = [0, 2, 4, 5, 7, 9, 11];
+      const minorIv = [0, 2, 3, 5, 7, 8, 10];
+      const root = rootOf(key);
+      const sharpNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+      const flatNames = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+      const preferFlat = ["Db", "Ab", "Eb", "Bb", "F", "Ebm", "Bbm", "Fm", "Cm", "Gm"].includes(key);
+      const names = preferFlat ? flatNames : sharpNames;
+      let start = sharpNames.indexOf(root);
+      if (start < 0) start = flatNames.indexOf(root);
+      if (start < 0) {
+        const alt = { Db: 1, Eb: 3, Gb: 6, Ab: 8, Bb: 10, "C#": 1, "D#": 3, "F#": 6, "G#": 8, "A#": 10 };
+        start = alt[root];
+      }
+      if (start == null || start < 0) return [];
+      const intervals = isMinor(key) ? minorIv : majorIv;
+      const qualities = isMinor(key)
+        ? ["min", "dim", "maj", "min", "min", "maj", "maj"]
+        : ["maj", "min", "min", "maj", "maj", "min", "dim"];
+      const roman = isMinor(key)
+        ? ["i", "ii°", "III", "iv", "v", "VI", "VII"]
+        : ["I", "ii", "iii", "IV", "V", "vi", "vii°"];
+      return intervals.map((iv, deg) => {
+        const note = names[(start + iv) % 12];
+        const q = qualities[deg];
+        const label = q === "maj" ? note : q === "min" ? note + "m" : note + "°";
+        return { label, roman: roman[deg], root: note, quality: q };
+      });
+    }
+
+    function selectKey(key, silent) {
+      selected = key;
+      document.getElementById("modeMajor").classList.toggle("active", !isMinor(key));
+      document.getElementById("modeMinor").classList.toggle("active", isMinor(key));
+      render();
+      if (!silent) playKey(key);
+    }
+
+    function hitKeyFromPoint(clientX, clientY) {
+      const el = document.elementFromPoint(clientX, clientY);
+      if (!el) return null;
+      const wedge = el.closest ? el.closest(".key-wedge") : null;
+      return wedge && wedge.dataset.key ? wedge.dataset.key : null;
+    }
+
+    function onKeyInteract(key, scrub) {
+      if (!key) return;
+      playKey(key, { scrub: !!scrub });
+      clearTimeout(scrubTimer);
+      scrubTimer = setTimeout(() => selectKey(key, true), scrub ? 50 : 0);
+    }
+
+    function buildWheel() {
+      const svg = document.getElementById("wheel");
+      // Center disk drawn first so wedges sit on top and receive all taps
+      svg.innerHTML = `
+        <defs>
+          <radialGradient id="ringGlow" cx="50%" cy="45%" r="55%">
+            <stop offset="0%" stop-color="#243041"/>
+            <stop offset="100%" stop-color="#121821"/>
+          </radialGradient>
+        </defs>
+        <circle cx="${CX}" cy="${CY}" r="${R_OUT + 6}" fill="none" stroke="rgba(232,210,160,0.12)" stroke-width="8" pointer-events="none"/>
+        <circle class="center-disk" cx="${CX}" cy="${CY}" r="${R_IN - 10}"/>
+        <text class="center-title" id="centerTitle" x="${CX}" y="${CY - 6}">C</text>
+        <text class="center-sub" id="centerSub" x="${CX}" y="${CY + 16}">MAJOR</text>
+        <g id="wedges"></g>
+      `;
+
+      const g = svg.querySelector("#wedges");
+      MAJORS.forEach((maj, i) => {
+        const min = MINORS[i];
+
+        function makeWedge(key, r0, r1, fill, labelClass) {
+          const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+          group.classList.add("key-wedge");
+          group.dataset.key = key;
+          group.setAttribute("role", "button");
+          group.setAttribute("tabindex", "0");
+          group.setAttribute("aria-label", key);
+
+          const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+          path.classList.add("face");
+          path.setAttribute("d", wedgePath(i, r0, r1));
+          path.setAttribute("fill", fill);
+          path.setAttribute("stroke", "rgba(232,210,160,0.15)");
+          path.setAttribute("stroke-width", "1");
+          group.appendChild(path);
+
+          const [lx, ly] = labelPos(i, (r0 + r1) / 2);
+          const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          text.classList.add("key-label");
+          if (labelClass) text.classList.add(labelClass);
+          text.setAttribute("x", lx);
+          text.setAttribute("y", ly + 4);
+          text.setAttribute("text-anchor", "middle");
+          text.textContent = pretty(key);
+          group.appendChild(text);
+
+          // Direct handlers on every wedge — guaranteed play
+          const press = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            group.classList.add("pressed");
+            unlockAudio().then(() => onKeyInteract(key, false));
+          };
+          group.addEventListener("pointerdown", press);
+          group.addEventListener("click", press);
+          group.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              unlockAudio().then(() => selectKey(key));
+            }
+          });
+          group.addEventListener("pointerup", () => group.classList.remove("pressed"));
+          group.addEventListener("pointerleave", () => group.classList.remove("pressed"));
+
+          g.appendChild(group);
+        }
+
+        makeWedge(maj, R_OUT, R_MID, "url(#ringGlow)", null);
+        makeWedge(min, R_MID, R_IN, "#1a222e", "minor-label");
+      });
+
+      // Drag scrub across notes
+      svg.addEventListener("pointerdown", (e) => {
+        scrubbing = true;
+        try { svg.setPointerCapture(e.pointerId); } catch (_) {}
+        unlockAudio();
+        const key = hitKeyFromPoint(e.clientX, e.clientY);
+        if (key) onKeyInteract(key, true);
+      });
+      svg.addEventListener("pointermove", (e) => {
+        if (!scrubbing) return;
+        const key = hitKeyFromPoint(e.clientX, e.clientY);
+        if (key) onKeyInteract(key, true);
+      });
+      const endScrub = () => { scrubbing = false; };
+      svg.addEventListener("pointerup", endScrub);
+      svg.addEventListener("pointercancel", endScrub);
+      svg.addEventListener("pointerleave", endScrub);
+    }
+
+    function render() {
+      const showRel = document.getElementById("showRelative").checked;
+      const showNb = document.getElementById("showNeighbors").checked;
+      const rel = relativeOf(selected);
+      const { dom, sub } = neighborsOf(selected);
+      const info = indexOfKey(selected);
+
+      document.getElementById("keyName").textContent = pretty(selected);
+      document.getElementById("keyMode").textContent = isMinor(selected)
+        ? "Minor · Aeolian (natural)"
+        : "Major · Ionian";
+      document.getElementById("sig").textContent = MAJOR_SIG[info ? info.i : 0];
+      document.getElementById("rel").textContent = pretty(rel || "—");
+      document.getElementById("dom").textContent = pretty(dom || "—");
+      document.getElementById("sub").textContent = pretty(sub || "—");
+      document.getElementById("centerTitle").textContent = pretty(selected);
+      document.getElementById("centerSub").textContent = isMinor(selected) ? "MINOR" : "MAJOR";
+
+      document.querySelectorAll(".key-wedge").forEach((el) => {
+        const k = el.dataset.key;
+        el.classList.remove("selected", "relative", "neighbor", "dim");
+        if (k === selected) el.classList.add("selected");
+        else if (showRel && k === rel) el.classList.add("relative");
+        else if (showNb && (k === dom || k === sub)) el.classList.add("neighbor");
+        else el.classList.add("dim");
+      });
+
+      const row = document.getElementById("chordRow");
+      row.innerHTML = "";
+      diatonicChords(selected).forEach((c) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "chord-chip";
+        btn.innerHTML = `${pretty(c.label)}<small>${c.roman}</small>`;
+        btn.addEventListener("click", () => {
+          unlockAudio().then(() => playChord(c.root, c.quality));
+        });
+        row.appendChild(btn);
+      });
+    }
+
+    document.getElementById("soundBanner").addEventListener("click", () => {
+      unlockAudio().then((ok) => {
+        if (ok) playKey(selected);
+      });
+    });
+    document.getElementById("modeMajor").addEventListener("click", () => {
+      const info = indexOfKey(selected);
+      if (info) selectKey(MAJORS[info.i]);
+    });
+    document.getElementById("modeMinor").addEventListener("click", () => {
+      const info = indexOfKey(selected);
+      if (info) selectKey(MINORS[info.i]);
+    });
+    ["showRelative", "showNeighbors"].forEach((id) => {
+      document.getElementById(id).addEventListener("change", render);
+    });
+    document.getElementById("playTonic").addEventListener("click", () => {
+      unlockAudio().then(() => playKey(selected, { dur: 0.7 }));
+    });
+    document.getElementById("playAll").addEventListener("click", () => {
+      unlockAudio().then(() => {
+        const all = [];
+        for (let i = 0; i < 12; i++) all.push(MAJORS[i], MINORS[i]);
+        playKeys(all, 140);
+      });
+    });
+
+    document.addEventListener("keydown", (e) => {
+      const info = indexOfKey(selected);
+      if (!info) return;
+      const ring = info.ring === "major" ? MAJORS : MINORS;
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        selectKey(ring[(info.i + 1) % 12]);
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        selectKey(ring[(info.i + 11) % 12]);
+      } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+        e.preventDefault();
+        selectKey(relativeOf(selected));
+      }
+    });
+
+    // Verify all 24 keys have frequencies
+    [...MAJORS, ...MINORS].forEach((k) => {
+      if (freqOf(k) == null) console.error("Missing frequency for", k);
+    });
+
+    buildWheel();
+    const params = new URLSearchParams(location.search);
+    const key = params.get("key");
+    if (key && (MAJORS.includes(key) || MINORS.includes(key))) selectKey(key, true);
+    else render();
+
+    // Song dropdown → apply that song's tone + jump to its tonic
+    const songSel = document.getElementById("songSelect");
+    if (songSel) {
+      songSel.addEventListener("change", () => {
+        const id = songSel.value || "default";
+        applySongTone(id);
+        const teach = document.getElementById("teachLink");
+        if (teach) {
+          teach.href = id && id !== "default" ? ("teach.html?song=" + encodeURIComponent(id)) : "teach.html";
+        }
+        const tonic = SONG_TONIC[id];
+        if (tonic) {
+          unlockAudio().then(() => selectKey(tonic));
+        }
+      });
+    }
+  </script>
+</body>
+</html>

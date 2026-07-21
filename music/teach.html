@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Teach · Circle of Fifths · Music Teacher</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #0e1218; --panel: #161c26; --line: rgba(232,210,160,0.18);
+      --gold: #e8d2a0; --gold-bright: #f3e4bc; --ember: #c4784a;
+      --mint: #7faf9a; --text: #e8e2d6; --muted: #9aa3b2;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; min-height: 100%;
+      background:
+        radial-gradient(ellipse 80% 55% at 50% -10%, rgba(196,120,74,0.16), transparent 55%),
+        linear-gradient(165deg, #0a0d12 0%, #121821 45%, #0e1218 100%);
+      color: var(--text);
+      font-family: "IBM Plex Sans", system-ui, sans-serif;
+    }
+    body { display: grid; grid-template-rows: auto auto auto auto 1fr auto; min-height: 100vh; }
+    header {
+      padding: 1.1rem clamp(1rem, 3vw, 2.25rem) 0.8rem;
+      border-bottom: 1px solid var(--line);
+    }
+    .eyebrow {
+      margin: 0 0 0.25rem; font-size: 0.72rem; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--ember); font-weight: 600;
+    }
+    .eyebrow a { color: inherit; text-decoration: none; }
+    h1 {
+      margin: 0; font-family: Fraunces, Georgia, serif;
+      font-size: clamp(1.45rem, 3.2vw, 2.1rem); color: var(--gold-bright);
+    }
+    .sub { margin: 0.35rem 0 0; color: var(--muted); max-width: 42rem; line-height: 1.45; font-size: 0.92rem; }
+    .sound-banner {
+      display: none; padding: 0.65rem 1rem; text-align: center; cursor: pointer;
+      background: rgba(196,120,74,0.28); border-bottom: 1px solid rgba(232,210,160,0.35);
+      color: var(--gold-bright); font-weight: 600;
+    }
+    .sound-banner.show { display: block; }
+    main {
+      display: grid;
+      grid-template-columns: minmax(260px, 360px) 1fr;
+      min-height: 0;
+    }
+    @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+    .sidebar {
+      padding: 1rem clamp(1rem, 3vw, 1.5rem);
+      border-right: 1px solid var(--line);
+      background: rgba(14,18,24,0.55);
+      overflow-y: auto;
+    }
+    @media (max-width: 900px) { .sidebar { border-right: none; border-bottom: 1px solid var(--line); } }
+    .field {
+      display: block; font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--muted); margin: 0 0 0.4rem; font-weight: 600;
+    }
+    .song-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.65rem 1rem;
+      padding: 0.85rem clamp(1rem, 3vw, 2.25rem);
+      border-bottom: 1px solid var(--line);
+      background: rgba(10, 13, 18, 0.96);
+      position: sticky;
+      top: 0;
+      z-index: 40;
+    }
+    .song-bar .field { margin: 0; white-space: nowrap; color: var(--ember); }
+    select {
+      appearance: none;
+      -webkit-appearance: none;
+      background: #1c2430 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23e8d2a0' d='M1 1l5 5 5-5'/%3E%3C/svg%3E") right 0.9rem center / 12px no-repeat;
+      color: var(--gold-bright);
+      border: 2px solid rgba(232,210,160,0.55);
+      border-radius: 10px;
+      padding: 0.85rem 2.5rem 0.85rem 1rem;
+      font: 600 1.05rem "IBM Plex Sans", sans-serif;
+      cursor: pointer;
+    }
+    .song-bar select {
+      flex: 1 1 260px;
+      min-width: 0;
+      max-width: 100%;
+      width: 100%;
+      margin: 0;
+    }
+    .song-blurb {
+      margin: 0 0 1rem; padding: 0.75rem 0.85rem; background: var(--panel);
+      border: 1px solid var(--line); border-radius: 10px; color: var(--muted);
+      font-size: 0.86rem; line-height: 1.4;
+    }
+    .song-blurb strong {
+      display: block; font-family: Fraunces, Georgia, serif; color: var(--gold);
+      margin-bottom: 0.25rem; font-size: 1.05rem;
+    }
+    .step-card {
+      background: rgba(14,18,24,0.65); border: 1px solid rgba(232,210,160,0.35);
+      border-radius: 12px; padding: 1rem 1.05rem; margin-bottom: 0.85rem;
+    }
+    .step-num {
+      margin: 0 0 0.35rem; font-size: 0.7rem; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--ember); font-weight: 600;
+    }
+    .step-card h2 {
+      margin: 0 0 0.5rem; font-family: Fraunces, Georgia, serif;
+      color: var(--gold-bright); font-size: 1.25rem;
+    }
+    .step-card p { margin: 0; color: var(--muted); line-height: 1.5; font-size: 0.95rem; }
+    .chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.75rem; }
+    .chip {
+      font-size: 0.78rem; font-weight: 600; padding: 0.28rem 0.5rem; border-radius: 999px;
+      border: 1px solid rgba(232,210,160,0.28); color: var(--gold);
+      background: rgba(232,210,160,0.06); cursor: pointer;
+    }
+    .nav-row { display: flex; gap: 0.5rem; margin-top: 0.25rem; }
+    .btn {
+      flex: 1; appearance: none; border: 1px solid rgba(232,210,160,0.35);
+      background: linear-gradient(135deg, rgba(196,120,74,0.35), rgba(232,210,160,0.1));
+      color: var(--gold-bright); font: 600 0.9rem "IBM Plex Sans", sans-serif;
+      padding: 0.7rem 0.8rem; border-radius: 10px; cursor: pointer;
+    }
+    .btn:disabled { opacity: 0.35; cursor: default; }
+    .btn.ghost { background: transparent; border-color: var(--line); color: var(--text); }
+    .dots { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.85rem 0 0; }
+    .dot {
+      width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--line);
+      background: transparent; padding: 0; cursor: pointer;
+    }
+    .dot.on { background: var(--ember); border-color: var(--gold); }
+    .viz { display: grid; place-items: center; padding: 1rem; min-height: min(65vh, 600px); }
+    .wheel-wrap { width: min(100%, 520px); }
+    #wheel { width: 100%; height: auto; display: block; touch-action: manipulation; }
+    .key-wedge .face { transition: fill 0.25s, opacity 0.25s; }
+    .key-label {
+      fill: var(--text); font-size: 13px; font-weight: 600;
+      font-family: "IBM Plex Sans", sans-serif; pointer-events: none;
+    }
+    .minor-label { font-size: 11px; fill: var(--muted); }
+    .center-disk { fill: #0c1016; stroke: rgba(232,210,160,0.2); pointer-events: none; }
+    .center-title {
+      fill: var(--gold-bright); font-family: Fraunces, Georgia, serif;
+      font-size: 28px; font-weight: 700; text-anchor: middle; pointer-events: none;
+    }
+    .center-sub {
+      fill: var(--muted); font-size: 11px; letter-spacing: 0.16em;
+      text-anchor: middle; font-weight: 600; pointer-events: none;
+    }
+    .key-wedge.dim .face { opacity: 0.28; }
+    .key-wedge.lit .face { fill: rgba(196,120,74,0.55) !important; opacity: 1; }
+    .key-wedge.tonic .face { fill: rgba(232,210,160,0.75) !important; }
+    .key-wedge.lit .key-label, .key-wedge.tonic .key-label { fill: #0e1218; }
+    .path-arc {
+      fill: none; stroke: var(--ember); stroke-width: 3; stroke-linecap: round;
+      stroke-dasharray: 140; animation: draw 0.55s ease forwards;
+    }
+    @keyframes draw { from { stroke-dashoffset: 140; opacity: 0; } to { stroke-dashoffset: 0; opacity: 1; } }
+    footer {
+      padding: 0.8rem clamp(1rem, 3vw, 2.25rem);
+      border-top: 1px solid var(--line); color: var(--muted); font-size: 0.78rem;
+    }
+    footer a { color: var(--gold); }
+
+    /* Pedal settings cards (Surfing) — large numbers on each pedal */
+    #pedalPanel { display: none; margin-top: 1rem; }
+    #pedalPanel.show { display: block; }
+    #pedalPanel h3 {
+      margin: 0 0 0.55rem;
+      font-family: Fraunces, Georgia, serif;
+      font-size: 1.05rem; color: var(--gold);
+    }
+    .fx-pedal {
+      margin: 0 0 0.65rem;
+      padding: 0.7rem 0.75rem;
+      border-radius: 12px;
+      border: 2px solid rgba(232,210,160,0.4);
+      background: #2a1a16;
+    }
+    .fx-pedal.wah { background: #c9a24a; color: #1a1208; border-color: #f3e4bc; }
+    .fx-pedal.drive { background: #4a2a22; border-color: #c4784a; }
+    .fx-pedal.amp { background: #1c1412; }
+    .fx-pedal.rack { background: #16302c; border-color: rgba(127,175,154,0.55); }
+    .fx-pedal .fx-name {
+      margin: 0 0 0.45rem;
+      font-family: Fraunces, Georgia, serif;
+      font-size: 1rem; font-weight: 700; color: var(--gold-bright);
+    }
+    .fx-pedal.wah .fx-name { color: #1a1208; }
+    .fx-row {
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 0.5rem; padding: 0.28rem 0.4rem; margin: 0.22rem 0;
+      background: rgba(0,0,0,0.35); border-radius: 7px;
+      font-size: 0.88rem; font-weight: 600;
+    }
+    .fx-pedal.wah .fx-row { background: rgba(0,0,0,0.16); color: #1a1208; }
+    .fx-num {
+      font-family: ui-monospace, monospace;
+      font-size: 1.2rem; font-weight: 700;
+      background: var(--ember); color: #0e1218;
+      padding: 0.1rem 0.45rem; border-radius: 6px; min-width: 2.4rem; text-align: center;
+    }
+    .fx-pedal.wah .fx-num { background: #1a1208; color: #f3e4bc; }
+    .fx-arrow { text-align: center; color: var(--ember); font-weight: 700; margin: 0.1rem 0 0.45rem; }
+    #pedalPanel a.more {
+      display: inline-block; margin-top: 0.35rem; color: var(--gold); font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="song-bar">
+    <label class="field" for="songSelect">Choose a song</label>
+    <select id="songSelect" aria-label="Choose a song to learn on the circle">
+      <option value="over_the_mountain">Over the Mountain — Ozzy</option>
+      <option value="diary_of_a_madman">Diary of a Madman — Ozzy</option>
+      <option value="mr_crowley">Mr. Crowley — Ozzy</option>
+      <option value="the_trooper">The Trooper — Iron Maiden</option>
+      <option value="aces_high">Aces High — Iron Maiden</option>
+      <option value="rime_of_the_ancient_mariner">Rime of the Ancient Mariner — Iron Maiden</option>
+      <option value="surfing_with_the_alien">Surfing with the Alien — Satriani</option>
+      <option value="voodoo_child">Voodoo Child — Hendrix</option>
+      <option value="desert_rose">Desert Rose — Sting / Cheb Mami</option>
+      <option value="mozart_k581">Clarinet Quintet K.581 — Mozart</option>
+    </select>
+  </div>
+
+  <header>
+    <p class="eyebrow"><a href="index.html">Music Teacher</a> · Guided lesson</p>
+    <h1>How each song uses the circle</h1>
+    <p class="sub">Pick a song above, then step through how it uses the circle of fifths.</p>
+  </header>
+
+  <div class="sound-banner show" id="soundBanner">Tap here once to enable sound</div>
+
+  <main>
+    <aside class="sidebar">
+      <div class="song-blurb" id="songBlurb"></div>
+
+      <div id="pedalPanel" aria-label="Effects pedal settings">
+        <h3>Effects pedal settings</h3>
+        <div class="fx-pedal wah">
+          <p class="fx-name">Cry Baby Wah</p>
+          <div class="fx-row"><span>Engage</span><span class="fx-num">ON</span></div>
+          <div class="fx-row"><span>Rock position</span><span class="fx-num">MID</span></div>
+          <div class="fx-row"><span>Use</span><span class="fx-num">PARK</span></div>
+        </div>
+        <div class="fx-arrow">▼</div>
+        <div class="fx-pedal drive">
+          <p class="fx-name">Chandler Tube Driver</p>
+          <div class="fx-row"><span>Out Level</span><span class="fx-num">7</span></div>
+          <div class="fx-row"><span>Hi</span><span class="fx-num">8</span></div>
+          <div class="fx-row"><span>Lo</span><span class="fx-num">4</span></div>
+          <div class="fx-row"><span>Tube Drive</span><span class="fx-num">6</span></div>
+        </div>
+        <div class="fx-arrow">▼</div>
+        <div class="fx-pedal amp">
+          <p class="fx-name">Marshall 1959</p>
+          <div class="fx-row"><span>Presence</span><span class="fx-num">6</span></div>
+          <div class="fx-row"><span>Bass</span><span class="fx-num">3</span></div>
+          <div class="fx-row"><span>Middle</span><span class="fx-num">8</span></div>
+          <div class="fx-row"><span>Treble</span><span class="fx-num">6</span></div>
+          <div class="fx-row"><span>Volume I</span><span class="fx-num">7</span></div>
+          <div class="fx-row"><span>Volume II</span><span class="fx-num">0</span></div>
+        </div>
+        <div class="fx-arrow">▼</div>
+        <div class="fx-pedal rack">
+          <p class="fx-name">Eventide H949</p>
+          <div class="fx-row"><span>Main Level</span><span class="fx-num">6</span></div>
+          <div class="fx-row"><span>Low / High</span><span class="fx-num">5</span></div>
+          <div class="fx-row"><span>Pitch Ratio</span><span class="fx-num">0.989</span></div>
+        </div>
+        <a class="more" href="pedalboard.html">Full pedalboard page →</a>
+      </div>
+
+      <div class="step-card">
+        <p class="step-num" id="stepNum">Step 1</p>
+        <h2 id="stepTitle">…</h2>
+        <p id="stepTeach">…</p>
+        <div class="chips" id="stepChips"></div>
+      </div>
+
+      <div class="nav-row">
+        <button type="button" class="btn ghost" id="prevBtn">Previous</button>
+        <button type="button" class="btn" id="nextBtn">Next</button>
+      </div>
+      <div class="dots" id="dots"></div>
+    </aside>
+
+    <section class="viz">
+      <div class="wheel-wrap">
+        <svg id="wheel" viewBox="0 0 560 560" role="img" aria-label="Circle of fifths lesson"></svg>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    Songs from your prior analyses ·
+    <a href="interactive_circle.html">Free explore</a> ·
+    <a href="pedalboard.html">Surfing pedalboard</a> ·
+    <a href="index.html?view=circle">Song sections</a>
+  </footer>
+
+  <script>
+    /* Self-contained: works on phone htmlpreview */
+    const MAJORS = ["C","G","D","A","E","B","F#","Db","Ab","Eb","Bb","F"];
+    const MINORS = ["Am","Em","Bm","F#m","C#m","G#m","Ebm","Bbm","Fm","Cm","Gm","Dm"];
+    const ALIASES = { "C#":"Db","G#":"Ab","D#":"Eb","A#":"Bb","Abm":"G#m","Dbm":"C#m" };
+    const PRETTY = {
+      "F#":"F♯","C#":"C♯","G#":"G♯","Db":"D♭","Eb":"E♭","Ab":"A♭","Bb":"B♭",
+      "F#m":"F♯m","C#m":"C♯m","G#m":"G♯m","Ebm":"E♭m","Bbm":"B♭m"
+    };
+    function pretty(k){ return PRETTY[k]||k; }
+    function toWheel(k){
+      const s=String(k).trim();
+      if (MAJORS.includes(s)||MINORS.includes(s)) return s;
+      return ALIASES[s]||s;
+    }
+
+    const GUITAR_ROOT = {
+      C:65.41,"C#":69.3,Db:69.3,D:73.42,"D#":77.78,Eb:77.78,
+      E:82.41,F:87.31,"F#":92.5,Gb:92.5,G:98,"G#":103.83,Ab:103.83,
+      A:110,"A#":116.54,Bb:116.54,B:123.47
+    };
+
+    const TONE = {
+      over_the_mountain: { drive:90, pre:0.28, master:0.15, midHz:900, midGain:4, presence:2, lowpass:4200, attack:0.012, sustain:0.55, release:0.85, voicing:"power", detune:1.002, osc:"sawtooth" },
+      diary_of_a_madman: { drive:70, pre:0.24, master:0.13, midHz:700, midGain:3, presence:0.5, lowpass:3200, attack:0.04, sustain:0.65, release:1.15, voicing:"power", detune:1.0015, osc:"sawtooth" },
+      mr_crowley: { drive:55, pre:0.22, master:0.14, midHz:850, midGain:5, presence:1.5, lowpass:3800, attack:0.025, sustain:0.6, release:1.0, voicing:"triad", detune:1.002, osc:"sawtooth", organ:true },
+      the_trooper: { drive:75, pre:0.26, master:0.14, midHz:1100, midGain:3.5, presence:4, lowpass:5000, attack:0.006, sustain:0.4, release:0.7, voicing:"power", detune:1.004, osc:"sawtooth", twin:true },
+      aces_high: { drive:80, pre:0.25, master:0.14, midHz:1050, midGain:3, presence:4.5, lowpass:5200, attack:0.005, sustain:0.35, release:0.65, voicing:"power", detune:1.004, osc:"sawtooth", twin:true, staccato:true },
+      rime_of_the_ancient_mariner: { drive:72, pre:0.24, master:0.14, midHz:1000, midGain:3.2, presence:3.5, lowpass:4800, attack:0.01, sustain:0.5, release:1.05, voicing:"power", detune:1.0035, osc:"sawtooth", twin:true },
+      surfing_with_the_alien: { drive:45, pre:0.22, master:0.13, midHz:950, midGain:5, presence:3, lowpass:4500, attack:0.018, sustain:0.62, release:1.05, voicing:"triad", detune:1.003, osc:"sawtooth", organ:true },
+      voodoo_child: { drive:85, pre:0.26, master:0.14, midHz:800, midGain:6, presence:3, lowpass:4800, attack:0.008, sustain:0.5, release:0.9, voicing:"power", detune:1.004, osc:"sawtooth" },
+      desert_rose: { drive:12, pre:0.2, master:0.12, midHz:700, midGain:2, presence:0, lowpass:3600, attack:0.05, sustain:0.72, release:1.35, voicing:"triad", detune:1.0015, osc:"triangle", organ:true },
+      mozart_k581: { drive:0, pre:0.2, master:0.11, midHz:1200, midGain:1, presence:-2, lowpass:2800, attack:0.06, sustain:0.7, release:1.4, voicing:"triad", detune:1.0008, osc:"triangle", clean:true },
+    };
+
+    let ctx=null, bus=null, lastKey=null, lastAt=0, activeTone="over_the_mountain";
+
+    function makeDistortionCurve(amount){
+      const n=2048, curve=new Float32Array(n), k=Math.max(1,amount);
+      for(let i=0;i<n;i++){
+        const x=(i*2)/n-1;
+        curve[i]=amount<1?x:Math.tanh(((1+k)*x)/(1+k*Math.abs(x))*1.4);
+      }
+      return curve;
+    }
+    function ensureAmp(){
+      if(!ctx) return;
+      if(bus) return;
+      const pre=ctx.createGain();
+      const dist=ctx.createWaveShaper(); dist.oversample="2x";
+      const lowcut=ctx.createBiquadFilter(); lowcut.type="highpass"; lowcut.frequency.value=65;
+      const mid=ctx.createBiquadFilter(); mid.type="peaking"; mid.Q.value=1;
+      const presence=ctx.createBiquadFilter(); presence.type="highshelf"; presence.frequency.value=2400;
+      const lowpass=ctx.createBiquadFilter(); lowpass.type="lowpass"; lowpass.Q.value=0.7;
+      const master=ctx.createGain();
+      const dry=ctx.createGain(); dry.gain.value=0;
+      pre.connect(dist); dist.connect(lowcut); lowcut.connect(mid);
+      mid.connect(presence); presence.connect(lowpass); lowpass.connect(master);
+      pre.connect(dry); dry.connect(master); master.connect(ctx.destination);
+      bus={pre,dist,mid,presence,lowpass,master,dry};
+    }
+    function applySongTone(id){
+      activeTone=TONE[id]?id:"over_the_mountain";
+      const p=TONE[activeTone];
+      ensureAmp();
+      if(!bus) return p;
+      bus.pre.gain.value=p.clean?p.pre*0.35:p.pre;
+      bus.master.gain.value=p.master;
+      bus.dist.curve=makeDistortionCurve(p.drive);
+      bus.mid.frequency.value=p.midHz; bus.mid.gain.value=p.midGain;
+      bus.presence.gain.value=p.presence; bus.lowpass.frequency.value=p.lowpass;
+      bus.dry.gain.value=p.clean?0.85:0.05;
+      return p;
+    }
+    async function unlock(){
+      const AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC) return;
+      if(!ctx) ctx=new AC();
+      ensureAmp();
+      applySongTone(activeTone);
+      if(ctx.state==="suspended") await ctx.resume();
+      document.getElementById("soundBanner").classList.remove("show");
+    }
+    function stringHit(freq, when, dur, gain, p){
+      if(!ctx||!bus||freq==null) return;
+      const osc=ctx.createOscillator(), osc2=ctx.createOscillator();
+      const g=ctx.createGain(), filter=ctx.createBiquadFilter();
+      osc.type=p.osc||"sawtooth"; osc2.type=p.osc||"sawtooth";
+      osc.frequency.setValueAtTime(freq, when);
+      osc2.frequency.setValueAtTime(freq*(p.detune||1.002), when);
+      filter.type="lowpass";
+      filter.frequency.setValueAtTime(p.clean?2400:3600, when);
+      filter.frequency.exponentialRampToValueAtTime(p.clean?1400:1400, when+Math.min(0.4,dur*0.45));
+      filter.Q.value=p.twin?1.4:0.9;
+      const peak=(gain==null?0.28:gain)*(p.staccato?0.9:1);
+      const d=dur||p.release||0.9, atk=p.attack||0.015;
+      g.gain.setValueAtTime(0.0001, when);
+      g.gain.exponentialRampToValueAtTime(peak, when+atk);
+      g.gain.exponentialRampToValueAtTime(peak*(p.sustain||0.5), when+atk+d*0.2);
+      g.gain.exponentialRampToValueAtTime(0.0001, when+d);
+      osc.connect(filter); osc2.connect(filter); filter.connect(g); g.connect(bus.pre);
+      osc.start(when); osc2.start(when);
+      osc.stop(when+d+0.05); osc2.stop(when+d+0.05);
+      if(p.organ){
+        const o=ctx.createOscillator(), og=ctx.createGain();
+        o.type="sine"; o.frequency.setValueAtTime(freq*2, when);
+        og.gain.setValueAtTime(0.0001, when);
+        og.gain.exponentialRampToValueAtTime(peak*0.12, when+0.05);
+        og.gain.exponentialRampToValueAtTime(0.0001, when+d);
+        o.connect(og); og.connect(bus.pre); o.start(when); o.stop(when+d+0.05);
+      }
+    }
+    function playKey(key){
+      if(!ctx) return;
+      const p=TONE[activeTone]||TONE.over_the_mountain;
+      const rootName=String(key).endsWith("m")?key.slice(0,-1):key;
+      let root=GUITAR_ROOT[rootName]||GUITAR_ROOT[ALIASES[rootName]]||GUITAR_ROOT[toWheel(rootName)];
+      if(!root) return;
+      const t=performance.now();
+      if(lastKey===key && t-lastAt<100) return;
+      lastKey=key; lastAt=t;
+      if(p.clean){ while(root<130) root*=2; while(root>320) root*=0.5; }
+      else { while(root>170) root*=0.5; while(root<55) root*=2; }
+      const now=ctx.currentTime+0.01, dur=p.release, gScale=0.75;
+      const minor=String(key).endsWith("m");
+      if(p.voicing==="triad"||p.clean){
+        const third=minor?3:4;
+        stringHit(root, now, dur, 0.28*gScale, p);
+        stringHit(root*Math.pow(2,third/12), now+0.03, dur*0.95, 0.2*gScale, p);
+        stringHit(root*Math.pow(2,7/12), now+0.05, dur*0.9, 0.18*gScale, p);
+      } else {
+        stringHit(root, now, dur, 0.3*gScale, p);
+        stringHit(root*Math.pow(2,7/12), now+0.015, dur, 0.24*gScale, p);
+        stringHit(root*2, now+0.025, dur*0.9, 0.14*gScale, p);
+        if(p.twin) stringHit(root*Math.pow(2,(minor?3:4)/12), now+0.04, dur*0.8, 0.08*gScale, p);
+      }
+    }
+    function playKeys(keys){
+      const p=TONE[activeTone]||TONE.over_the_mountain;
+      const gap=p.staccato?240:320;
+      keys.forEach((k,i)=> setTimeout(()=>playKey(toWheel(k)), i*gap));
+    }
+
+    /** Teaching data for songs already analyzed */
+    const SONGS = {
+      over_the_mountain: {
+        title: "Over the Mountain",
+        artist: "Ozzy · Diary of a Madman",
+        tonic: "G#m",
+        blurb: "Aeolian metal lift — short hops for yearning.",
+        steps: [
+          { title: "Plant the home", keys: ["G#m"], teach: "Find G♯m on the inner ring. That’s home. Advantage: every other move will feel like leaving or returning to this one wedge." },
+          { title: "Verse: one step of brightness", keys: ["G#m","Db"], teach: "Verse adds C♯ (Db on the wheel) — IV of G♯m. Tiny circle neighbor = lift without leaving the block." },
+          { title: "Chorus: the Aeolian triangle", keys: ["E","F#","G#m"], teach: "E → F♯ → G♯m is VI → VII → i. Short hops beside home create a huge emotional lift-then-fall. This is the song’s engine." },
+          { title: "Bridge: walk further", keys: ["C#m","B","A"], teach: "Bridge walks C♯m–B–A — using the circle as a path for shade, then the solo snaps back to G♯m." },
+          { title: "What it takes advantage of", keys: ["E","F#","G#m"], teach: "Takeaway: it never modulates far. It weaponizes neighbors — VI–VII for lift, i for gravity." },
+        ],
+      },
+      diary_of_a_madman: {
+        title: "Diary of a Madman",
+        artist: "Ozzy · Diary of a Madman",
+        tonic: "G#m",
+        blurb: "Same home as Over the Mountain — madness by color, not new keys.",
+        steps: [
+          { title: "Same home wedge", keys: ["G#m"], teach: "Diary stays on G♯m — same house as Over the Mountain. Advantage: one tonic for the suite; drama comes from scale color and form." },
+          { title: "Tension next door", keys: ["G#m","C#m"], teach: "Verses lean to C♯m (iv) with diminished colors. Still a neighbor on the wheel — uneasy, not lost." },
+          { title: "Soft room: one step away", keys: ["Ebm"], teach: "Interlude near E♭m — adjacent shade. Intimacy via circle adjacency, not a distant modulation." },
+          { title: "Hungarian solo: same house, new paint", keys: ["G#m"], teach: "Solo stays on G♯m but uses Hungarian minor (raised 4th). Circle lesson: change the color without moving the house." },
+          { title: "What it takes advantage of", keys: ["G#m","C#m","Ebm"], teach: "Takeaway: small escapes (iv, remote shade) then refusal to leave G♯m — obsession as geography." },
+        ],
+      },
+      mr_crowley: {
+        title: "Mr. Crowley",
+        artist: "Ozzy · Blizzard of Ozz · Randy Rhoads",
+        tonic: "Dm",
+        blurb: "Same Aeolian triangle as Diary — rotated to easier D minor.",
+        steps: [
+          { title: "Rotate to D minor", keys: ["Dm"], teach: "Find Dm. Same pattern family as Diary/Over the Mountain — just spun to a friendlier key. Patterns travel around the wheel." },
+          { title: "Classical V doorway", keys: ["Dm","A"], teach: "Organ intro uses A as V of Dm — clockwise fifth. Classical music’s favorite short hop." },
+          { title: "Verse: i–VII–VI triangle", keys: ["Dm","C","Bb"], teach: "Dm–C–B♭. Same three-chord triangle as Diary’s E–F♯–G♯m — Crowley starts on tonic and walks down; Diary lifts then home." },
+          { title: "Chorus: relative major flash", keys: ["Dm","Bb","F","C"], teach: "F is Dm’s relative major (outer ring, same slice). Brightens without leaving the neighborhood." },
+          { title: "What it takes advantage of", keys: ["Dm","C","Bb","A"], teach: "Takeaway: the Aeolian triangle is portable. Same circle shape as Diary, clearer V→i classical cadences." },
+        ],
+      },
+      the_trooper: {
+        title: "The Trooper",
+        artist: "Iron Maiden · Piece of Mind",
+        tonic: "Em",
+        blurb: "Same triangle again — harmony stays simple so gallop can charge.",
+        steps: [
+          { title: "Home: E minor", keys: ["Em"], teach: "Em on the inner ring. Keep harmony local so gallop + twin leads carry the drama." },
+          { title: "Chorus: VII–VI–i", keys: ["D","C","Em","G"], teach: "D–C–Em is the same Aeolian family as Crowley/Diary. G (III) flashes relative-major brightness." },
+          { title: "Solo 2: move the machine", keys: ["Am","G","Em","F"], teach: "Same loop relocated to Am (iv of Em). Short move on the wheel = chaos without new DNA." },
+          { title: "What it takes advantage of", keys: ["D","C","Em"], teach: "Takeaway: portable chord engines. Short circle hops keep the cavalry on the road while rhythm tells the war story." },
+        ],
+      },
+      aces_high: {
+        title: "Aces High",
+        artist: "Iron Maiden · Powerslave",
+        tonic: "Em",
+        blurb: "Same Em map as Trooper — articulation + solo climb do the extra work.",
+        steps: [
+          { title: "Shared Em home", keys: ["Em"], teach: "Same home as Trooper. Circle advantage: one NWOBHM key; difference is travel + articulation." },
+          { title: "i–VI–VII flight path", keys: ["Em","C","D"], teach: "Em–C–D stays on close neighbors so the staccato scramble feels urgent, not confused." },
+          { title: "Chorus: same path, held", keys: ["Em","C","D","G"], teach: "Same geography, long held chords. Identical map + new articulation = alarm becomes anthem." },
+          { title: "Solos climb iv → v", keys: ["Am","Bm"], teach: "Am then Bm — whole-step climb on the minor ring. Same machine, rising battlefield." },
+          { title: "What it takes advantage of", keys: ["Em","C","D","Am","Bm"], teach: "Takeaway: the circle is a runway. Short hops for the body; iv→v for solo drama; articulation tells the story on top." },
+        ],
+      },
+      rime_of_the_ancient_mariner: {
+        title: "Rime of the Ancient Mariner",
+        artist: "Iron Maiden · Powerslave",
+        tonic: "Em",
+        blurb: "Same Em–C–D engine as Aces High — form and silence carry the 13-minute curse.",
+        steps: [
+          { title: "Same Em home as Aces High", keys: ["Em"], teach: "Find Em. Rime shares Powerslave’s Em with Aces High. One key so a long epic can change mood without changing address." },
+          { title: "Tale engine: Em–C–D", keys: ["Em","C","D"], teach: "Em–C–D = i–VI–VII. Same triangle family as Aces High/Trooper — harmony stays local so Coleridge’s plot can be long." },
+          { title: "Curse as VI–VII–i loop", keys: ["C","D","Em"], teach: "“On and on…” runs VI–VII into i forever. Same hops as a chorus lift, flipped into doom." },
+          { title: "Storm: brief circle exile", keys: ["F#m","A","F","G","Em"], teach: "Instrumental wanders (F♯m/A, F/G), then snaps home. Remote-feeling drama can still be short wheel travel." },
+          { title: "What it takes advantage of", keys: ["Em","C","D"], teach: "Takeaway: weaponize form and dynamics on a tiny circle map. Silence tells the curse; Em–C–D is the mariner’s eternal road." },
+        ],
+      },
+      surfing_with_the_alien: {
+        title: "Surfing with the Alien",
+        artist: "Joe Satriani · 1987",
+        tonic: "G",
+        blurb: "G↔C hook surf, then a modal solo ladder back to G.",
+        steps: [
+          { title: "Home: G major", keys: ["G"], teach: "Find G on the outer ring. Bright major home — different from the Aeolian metal triangles." },
+          { title: "The I↔IV surf", keys: ["G","C"], teach: "Body shuttles G↔C. C is IV — one step left. Tiny hop = the hook you hum." },
+          { title: "Solo leaves the beach", keys: ["C#m","G"], teach: "Solo jumps to C♯ modal color — alien geography against familiar G." },
+          { title: "Climb back: E♭ then F", keys: ["Ebm","F","G"], teach: "E♭ (♭VI) then F (♭VII) are rungs toward home. Intensity up as circle distance shrinks." },
+          { title: "What it takes advantage of", keys: ["G","C","F"], teach: "Takeaway: simple I–IV for the tune; modal ladder for the solo thrill. Return feels inevitable." },
+        ],
+      },
+      voodoo_child: {
+        title: "Voodoo Child (Slight Return)",
+        artist: "Jimi Hendrix · 1968",
+        tonic: "Em",
+        blurb: "Wah + fuzz Marshall blues — harmony stays near Em so the wah can talk.",
+        steps: [
+          { title: "Home: E minor blues", keys: ["Em"], teach: "Find Em. Voodoo Child keeps the circle simple — filter and fuzz carry the drama." },
+          { title: "E7♯9 punches", keys: ["E","Em"], teach: "Hendrix chord on the tonic letter while lines stay minor-pentatonic — tension without remote keys." },
+          { title: "Neighbors only", keys: ["Em","G","A"], teach: "Verse colors stay local (G, A). Short hops; long wah phrases." },
+          { title: "What it takes advantage of", keys: ["Em","E"], teach: "Takeaway: simplest tonic map + talking wah. Fretting first, then rock heel↔toe with each rise and fall." },
+        ],
+      },
+      desert_rose: {
+        title: "Desert Rose",
+        artist: "Sting feat. Cheb Mami · 1999",
+        tonic: "Cm",
+        blurb: "Aeolian descent for thirst; E♭ relative-major lift for the mirage; Vsus brings you home.",
+        steps: [
+          { title: "Home: C minor", keys: ["Cm"], teach: "Find Cm on the inner ring. Desert Rose is Aeolian pop — longing planted on i." },
+          { title: "Verse: walk flat-side", keys: ["Cm","Bb","Ab","Fm"], teach: "Cm→B♭→A♭→Fm = i–VII–VI–iv. Counterclockwise neighbors — a road that never leaves the map." },
+          { title: "The Vsus door", keys: ["G","Cm"], teach: "G7sus is V of Cm — clockwise fifth. Pop loop with a classical cadence trick." },
+          { title: "Chorus mirage: E♭", keys: ["Eb","Cm","Bb"], teach: "E♭ is III / relative major of Cm. Oasis sunlight, then the cadence wakes you back in the desert." },
+          { title: "What it takes advantage of", keys: ["Cm","Ab","Eb","G"], teach: "Takeaway: Aeolian descent = thirst; III lift = hope; Vsus→i = return. Two voices, one circle." },
+        ],
+      },
+      mozart_k581: {
+        title: "Clarinet Quintet K.581",
+        artist: "W. A. Mozart",
+        tonic: "A",
+        blurb: "Classical I–V–IV + parallel minor — closest neighbors only.",
+        steps: [
+          { title: "Home: A major", keys: ["A"], teach: "Outer ring. Classical home uses I–V–IV geography, not metal’s Aeolian triangle." },
+          { title: "Dominant: clockwise fifth", keys: ["A","E"], teach: "Second theme leans to E (V). Shortest, strongest classical move on the wheel." },
+          { title: "Subdominant: step left", keys: ["D"], teach: "Larghetto in D (IV) — counterclockwise warmth." },
+          { title: "Parallel shade", keys: ["Am"], teach: "Trio I / Var. III flip to Am — same slice, inner ring. Mode flip, not distant travel." },
+          { title: "What it takes advantage of", keys: ["A","E","D","Am"], teach: "Takeaway: only the closest neighbors (I, V, IV, parallel i). Maximum clarity — contrast by mode and movement." },
+        ],
+      },
+    };
+
+    const CX=280,CY=280,R_OUT=250,R_MID=175,R_IN=105;
+    function polar(a,r){ const t=((a-90)*Math.PI)/180; return [CX+r*Math.cos(t), CY+r*Math.sin(t)]; }
+    function wedge(i,ro,ri){
+      const s=30,a0=i*s-s/2,a1=i*s+s/2;
+      const [x0,y0]=polar(a0,ro),[x1,y1]=polar(a1,ro),[x2,y2]=polar(a1,ri),[x3,y3]=polar(a0,ri);
+      return `M ${x0} ${y0} A ${ro} ${ro} 0 0 1 ${x1} ${y1} L ${x2} ${y2} A ${ri} ${ri} 0 0 0 ${x3} ${y3} Z`;
+    }
+    function labelPos(i,r){ return polar(i*30,r); }
+
+    function buildWheel(){
+      const svg=document.getElementById("wheel");
+      svg.innerHTML=`
+        <defs><radialGradient id="rg" cx="50%" cy="45%" r="55%">
+          <stop offset="0%" stop-color="#243041"/><stop offset="100%" stop-color="#121821"/>
+        </radialGradient></defs>
+        <circle cx="${CX}" cy="${CY}" r="${R_OUT+4}" fill="none" stroke="rgba(232,210,160,0.12)" stroke-width="8"/>
+        <circle class="center-disk" cx="${CX}" cy="${CY}" r="${R_IN-8}"/>
+        <text class="center-title" id="centerTitle" x="${CX}" y="${CY-4}">—</text>
+        <text class="center-sub" id="centerSub" x="${CX}" y="${CY+14}">HOME</text>
+        <g id="wedges"></g><g id="paths"></g>`;
+      const g=svg.querySelector("#wedges");
+      MAJORS.forEach((maj,i)=>{
+        const min=MINORS[i];
+        [[maj,R_OUT,R_MID,"url(#rg)",""],[min,R_MID,R_IN,"#1a222e","minor-label"]].forEach(([key,r0,r1,fill,cls])=>{
+          const el=document.createElementNS("http://www.w3.org/2000/svg","g");
+          el.classList.add("key-wedge"); el.dataset.key=key;
+          el.innerHTML=`<path class="face" d="${wedge(i,r0,r1)}" fill="${fill}" stroke="rgba(232,210,160,0.14)" stroke-width="1"/>`;
+          const [lx,ly]=labelPos(i,(r0+r1)/2);
+          const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+          t.classList.add("key-label"); if(cls) t.classList.add(cls);
+          t.setAttribute("x",lx); t.setAttribute("y",ly+4); t.setAttribute("text-anchor","middle");
+          t.textContent=pretty(key); el.appendChild(t);
+          el.style.cursor="pointer";
+          el.addEventListener("click",()=>{ unlock().then(()=>playKey(key)); });
+          g.appendChild(el);
+        });
+      });
+    }
+
+    function keyPoint(key){
+      const k=toWheel(key);
+      let i=MAJORS.indexOf(k), ring="major";
+      if(i<0){ i=MINORS.indexOf(k); ring="minor"; }
+      if(i<0) return null;
+      const r=ring==="major"?(R_OUT+R_MID)/2:(R_MID+R_IN)/2;
+      const [x,y]=labelPos(i,r);
+      return {x,y};
+    }
+
+    function drawPath(keys){
+      const paths=document.getElementById("paths");
+      paths.innerHTML="";
+      const pts=keys.map(keyPoint).filter(Boolean);
+      for(let i=0;i<pts.length-1;i++){
+        const a=pts[i], b=pts[i+1];
+        const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+        const cx=CX+(mx-CX)*0.55, cy=CY+(my-CY)*0.55;
+        const p=document.createElementNS("http://www.w3.org/2000/svg","path");
+        p.classList.add("path-arc");
+        p.setAttribute("d",`M ${a.x} ${a.y} Q ${cx} ${cy} ${b.x} ${b.y}`);
+        paths.appendChild(p);
+      }
+    }
+
+    let songId="over_the_mountain", step=0;
+
+    function render(){
+      const song=SONGS[songId];
+      const s=song.steps[step];
+      applySongTone(songId);
+      const toneName = ({
+        over_the_mountain: "Rhoads crunch",
+        diary_of_a_madman: "dark gothic Rhoads",
+        mr_crowley: "classical metal + organ",
+        the_trooper: "Maiden Marshall gallop",
+        aces_high: "Maiden scramble / anthem",
+        rime_of_the_ancient_mariner: "Maiden epic / storm theater",
+        surfing_with_the_alien: "Satriani singing mid-gain",
+        voodoo_child: "Hendrix wah + fuzz Marshall",
+        desert_rose: "Desert Rose soft pads",
+        mozart_k581: "clarinet chamber clean",
+      })[songId] || "song tone";
+      document.getElementById("songBlurb").innerHTML=`<strong>${song.title}</strong>${song.artist}<br/>${song.blurb}<br/><em style="color:var(--ember)">Tone: ${toneName}</em>`;
+      const pedal=document.getElementById("pedalPanel");
+      if(songId==="surfing_with_the_alien"){
+        pedal.classList.add("show");
+        pedal.innerHTML=`<h3>Effects pedal settings</h3>
+        <div class="fx-pedal wah"><p class="fx-name">Cry Baby Wah</p>
+          <div class="fx-row"><span>Engage</span><span class="fx-num">ON</span></div>
+          <div class="fx-row"><span>Rock position</span><span class="fx-num">MID</span></div>
+          <div class="fx-row"><span>Use</span><span class="fx-num">PARK</span></div></div>
+        <div class="fx-arrow">▼</div>
+        <div class="fx-pedal drive"><p class="fx-name">Chandler Tube Driver</p>
+          <div class="fx-row"><span>Out Level</span><span class="fx-num">7</span></div>
+          <div class="fx-row"><span>Hi</span><span class="fx-num">8</span></div>
+          <div class="fx-row"><span>Lo</span><span class="fx-num">4</span></div>
+          <div class="fx-row"><span>Tube Drive</span><span class="fx-num">6</span></div></div>
+        <div class="fx-arrow">▼</div>
+        <div class="fx-pedal amp"><p class="fx-name">Marshall 1959</p>
+          <div class="fx-row"><span>Presence</span><span class="fx-num">6</span></div>
+          <div class="fx-row"><span>Bass</span><span class="fx-num">3</span></div>
+          <div class="fx-row"><span>Middle</span><span class="fx-num">8</span></div>
+          <div class="fx-row"><span>Treble</span><span class="fx-num">6</span></div>
+          <div class="fx-row"><span>Volume I</span><span class="fx-num">7</span></div>
+          <div class="fx-row"><span>Volume II</span><span class="fx-num">0</span></div></div>
+        <a class="more" href="pedalboard.html">Full Surfing pedalboard →</a>`;
+      } else if(songId==="voodoo_child"){
+        pedal.classList.add("show");
+        pedal.innerHTML=`<h3>Effects pedal settings</h3>
+        <div class="fx-pedal wah"><p class="fx-name">Vox / Cry Baby Wah</p>
+          <div class="fx-row"><span>Engage</span><span class="fx-num">ON</span></div>
+          <div class="fx-row"><span>Intro park</span><span class="fx-num">~⅔</span></div>
+          <div class="fx-row"><span>Motion</span><span class="fx-num">ROCK</span></div></div>
+        <div class="fx-arrow">▼</div>
+        <div class="fx-pedal drive"><p class="fx-name">Fuzz Face</p>
+          <div class="fx-row"><span>Fuzz</span><span class="fx-num">9</span></div>
+          <div class="fx-row"><span>Volume</span><span class="fx-num">7</span></div></div>
+        <div class="fx-arrow">▼</div>
+        <div class="fx-pedal amp"><p class="fx-name">Marshall Plexi</p>
+          <div class="fx-row"><span>Presence</span><span class="fx-num">6</span></div>
+          <div class="fx-row"><span>Bass</span><span class="fx-num">5</span></div>
+          <div class="fx-row"><span>Middle</span><span class="fx-num">7</span></div>
+          <div class="fx-row"><span>Treble</span><span class="fx-num">6</span></div>
+          <div class="fx-row"><span>Volume I</span><span class="fx-num">7</span></div>
+          <div class="fx-row"><span>Volume II</span><span class="fx-num">3</span></div></div>
+        <a class="more" href="voodoo_child.html">Tab + wah rock animation →</a>`;
+      } else {
+        pedal.classList.remove("show");
+      }
+      document.getElementById("stepNum").textContent=`Step ${step+1} of ${song.steps.length}`;
+      document.getElementById("stepTitle").textContent=s.title;
+      document.getElementById("stepTeach").textContent=s.teach;
+      document.getElementById("stepChips").innerHTML=s.keys.map(k=>`<button type="button" class="chip" data-k="${k}">${pretty(toWheel(k))}</button>`).join("");
+      document.getElementById("stepChips").querySelectorAll(".chip").forEach(btn=>{
+        btn.addEventListener("click",()=>unlock().then(()=>playKey(btn.dataset.k)));
+      });
+      document.getElementById("prevBtn").disabled=step===0;
+      document.getElementById("nextBtn").disabled=step===song.steps.length-1;
+      document.getElementById("nextBtn").textContent=step===song.steps.length-1?"Done":"Next";
+
+      const dots=document.getElementById("dots");
+      dots.innerHTML=song.steps.map((_,i)=>`<button type="button" class="dot${i===step?" on":""}" data-i="${i}" aria-label="Step ${i+1}"></button>`).join("");
+      dots.querySelectorAll(".dot").forEach(d=>d.addEventListener("click",()=>{ step=+d.dataset.i; render(); hear(); }));
+
+      const tonic=toWheel(song.tonic);
+      const active=new Set(s.keys.map(toWheel));
+      document.getElementById("centerTitle").textContent=pretty(tonic);
+      document.querySelectorAll(".key-wedge").forEach(el=>{
+        el.classList.remove("lit","dim","tonic");
+        if(active.has(el.dataset.key)){
+          el.classList.add("lit");
+          if(el.dataset.key===tonic) el.classList.add("tonic");
+        } else el.classList.add("dim");
+      });
+      drawPath(s.keys);
+    }
+
+    function hear(){ unlock().then(()=>{ applySongTone(songId); playKeys(SONGS[songId].steps[step].keys); }); }
+
+    const sel=document.getElementById("songSelect");
+    // Options are in the HTML dropdown — keep them, just wire change + deep link
+    sel.addEventListener("change",()=>{
+      songId=sel.value; step=0; render(); hear();
+      const url=new URL(location.href);
+      url.searchParams.set("song", songId);
+      history.replaceState(null,"",url);
+    });
+    document.getElementById("prevBtn").addEventListener("click",()=>{ if(step>0){ step--; render(); hear(); }});
+    document.getElementById("nextBtn").addEventListener("click",()=>{
+      if(step<SONGS[songId].steps.length-1){ step++; render(); hear(); }
+    });
+    document.getElementById("soundBanner").addEventListener("click",()=>unlock().then(hear));
+
+    document.addEventListener("keydown",e=>{
+      if(e.key==="ArrowRight"||e.key==="ArrowDown"){ e.preventDefault(); document.getElementById("nextBtn").click(); }
+      if(e.key==="ArrowLeft"||e.key==="ArrowUp"){ e.preventDefault(); document.getElementById("prevBtn").click(); }
+    });
+
+    buildWheel();
+    const params=new URLSearchParams(location.search);
+    if(params.get("song")&&SONGS[params.get("song")]) songId=params.get("song");
+    sel.value=songId;
+    render();
+  </script>
+</body>
+</html>

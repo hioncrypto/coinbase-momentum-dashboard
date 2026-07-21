@@ -1,0 +1,1349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Music Teacher</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #0e1218;
+      --panel: #161c26;
+      --panel-2: #1c2430;
+      --line: rgba(232, 210, 160, 0.18);
+      --gold: #e8d2a0;
+      --gold-bright: #f3e4bc;
+      --ember: #c4784a;
+      --mint: #7faf9a;
+      --text: #e8e2d6;
+      --muted: #9aa3b2;
+      --major-fill: #243041;
+      --minor-fill: #1a222e;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background:
+        radial-gradient(ellipse 80% 55% at 50% -10%, rgba(196, 120, 74, 0.16), transparent 55%),
+        radial-gradient(ellipse 50% 40% at 90% 80%, rgba(127, 175, 154, 0.08), transparent 50%),
+        linear-gradient(165deg, #0a0d12 0%, #121821 45%, #0e1218 100%);
+      color: var(--text);
+      font-family: "IBM Plex Sans", system-ui, sans-serif;
+    }
+
+    body {
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      min-height: 100vh;
+    }
+
+    .topbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem 1.25rem;
+      padding: 0.85rem clamp(1rem, 3vw, 2.25rem);
+      border-bottom: 1px solid var(--line);
+      background: rgba(10, 13, 18, 0.72);
+      backdrop-filter: blur(10px);
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+
+    .brand {
+      font-family: Fraunces, Georgia, serif;
+      font-weight: 700;
+      font-size: 1.15rem;
+      color: var(--gold-bright);
+      letter-spacing: -0.02em;
+      text-decoration: none;
+      border: none;
+      background: none;
+      cursor: pointer;
+      padding: 0;
+    }
+
+    nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+    }
+
+    nav button {
+      appearance: none;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--muted);
+      font: 600 0.78rem "IBM Plex Sans", sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.45rem 0.7rem;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: color 0.2s, background 0.2s, border-color 0.2s;
+    }
+
+    nav button:hover { color: var(--text); background: var(--panel); }
+    nav button.active {
+      color: var(--gold-bright);
+      border-color: rgba(232, 210, 160, 0.35);
+      background: linear-gradient(135deg, rgba(196, 120, 74, 0.2), rgba(232, 210, 160, 0.06));
+    }
+
+    nav a.nav-ext {
+      border: 1px solid transparent;
+      color: var(--muted);
+      font: 600 0.78rem "IBM Plex Sans", sans-serif;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.45rem 0.7rem;
+      border-radius: 8px;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      transition: color 0.2s, background 0.2s, border-color 0.2s;
+    }
+    nav a.nav-ext:hover {
+      color: var(--gold-bright);
+      background: var(--panel);
+      border-color: rgba(232, 210, 160, 0.35);
+    }
+
+    .view { display: none; min-height: 0; }
+    .view.active { display: block; animation: fadeUp 0.45s ease; }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    @keyframes pathDraw {
+      from { stroke-dashoffset: 120; opacity: 0; }
+      to { stroke-dashoffset: 0; opacity: 1; }
+    }
+
+    @keyframes wedgeLit {
+      from { filter: brightness(0.85); }
+      to { filter: brightness(1); }
+    }
+
+    /* —— Home —— */
+    .hero {
+      min-height: calc(100vh - 3.5rem);
+      display: grid;
+      align-content: center;
+      padding: clamp(2rem, 6vw, 4.5rem) clamp(1.25rem, 4vw, 3rem);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: "";
+      position: absolute;
+      inset: 8% 5% auto auto;
+      width: min(52vw, 420px);
+      aspect-ratio: 1;
+      border-radius: 50%;
+      border: 1px solid rgba(232, 210, 160, 0.12);
+      box-shadow:
+        0 0 0 28px rgba(196, 120, 74, 0.04),
+        0 0 0 56px rgba(232, 210, 160, 0.03);
+      animation: spinSlow 48s linear infinite;
+      pointer-events: none;
+    }
+
+    @keyframes spinSlow { to { transform: rotate(360deg); } }
+
+    .hero-inner { position: relative; max-width: 38rem; }
+
+    .hero h1 {
+      margin: 0;
+      font-family: Fraunces, Georgia, serif;
+      font-size: clamp(2.6rem, 8vw, 4.6rem);
+      line-height: 0.98;
+      letter-spacing: -0.03em;
+      color: var(--gold-bright);
+    }
+
+    .hero p {
+      margin: 1.1rem 0 0;
+      color: var(--muted);
+      font-size: clamp(1rem, 2.2vw, 1.15rem);
+      line-height: 1.5;
+      max-width: 32rem;
+    }
+
+    .cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem;
+      margin-top: 1.75rem;
+    }
+
+    .btn {
+      appearance: none;
+      border: 1px solid rgba(232, 210, 160, 0.35);
+      background: linear-gradient(135deg, rgba(196, 120, 74, 0.35), rgba(232, 210, 160, 0.12));
+      color: var(--gold-bright);
+      font: 600 0.9rem "IBM Plex Sans", sans-serif;
+      padding: 0.75rem 1.15rem;
+      border-radius: 10px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+
+    .btn:hover { transform: translateY(-1px); border-color: var(--gold); }
+    .btn.ghost {
+      background: transparent;
+      color: var(--text);
+      border-color: var(--line);
+    }
+
+    /* —— Shared page chrome —— */
+    .page {
+      padding: 1.35rem clamp(1rem, 3vw, 2.25rem) 2.5rem;
+      max-width: 1180px;
+      margin: 0 auto;
+    }
+
+    .page-head { margin-bottom: 1.35rem; }
+
+    .page-head h1 {
+      margin: 0;
+      font-family: Fraunces, Georgia, serif;
+      font-size: clamp(1.7rem, 3.5vw, 2.35rem);
+      color: var(--gold-bright);
+      letter-spacing: -0.02em;
+    }
+
+    .page-head p {
+      margin: 0.4rem 0 0;
+      color: var(--muted);
+      max-width: 40rem;
+      line-height: 1.45;
+    }
+
+    .eyebrow {
+      margin: 0 0 0.35rem;
+      font-size: 0.72rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--ember);
+      font-weight: 600;
+    }
+
+    /* —— Lessons —— */
+    .lesson-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .lesson-card {
+      text-align: left;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 1rem 1.05rem;
+      color: inherit;
+      cursor: pointer;
+      font: inherit;
+      transition: border-color 0.2s, transform 0.2s, background 0.2s;
+    }
+
+    .lesson-card:hover,
+    .lesson-card.active {
+      border-color: rgba(232, 210, 160, 0.45);
+      background: linear-gradient(160deg, rgba(196, 120, 74, 0.16), var(--panel));
+      transform: translateY(-2px);
+    }
+
+    .lesson-card strong {
+      display: block;
+      font-family: Fraunces, Georgia, serif;
+      color: var(--gold);
+      font-size: 1.05rem;
+      margin-bottom: 0.3rem;
+    }
+
+    .lesson-card span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.85rem;
+      line-height: 1.4;
+    }
+
+    .lesson-body {
+      background: rgba(14, 18, 24, 0.55);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 1.25rem 1.35rem;
+      line-height: 1.55;
+    }
+
+    .lesson-body h2 {
+      margin: 0 0 0.65rem;
+      font-family: Fraunces, Georgia, serif;
+      color: var(--gold-bright);
+      font-size: 1.45rem;
+    }
+
+    .lesson-body h3 {
+      margin: 1.2rem 0 0.4rem;
+      color: var(--ember);
+      font-size: 0.8rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .lesson-body p { margin: 0.45rem 0; color: var(--text); }
+    .lesson-body ul { margin: 0.4rem 0 0; padding-left: 1.15rem; color: var(--muted); }
+    .lesson-body li { margin: 0.25rem 0; }
+    .lesson-body .example {
+      margin-top: 1rem;
+      padding: 0.85rem 1rem;
+      border-left: 3px solid var(--ember);
+      background: var(--panel);
+      border-radius: 0 10px 10px 0;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    /* —— Song Lab —— */
+    .lab-layout {
+      display: grid;
+      grid-template-columns: minmax(220px, 300px) 1fr;
+      gap: 1rem;
+      align-items: start;
+    }
+
+    @media (max-width: 860px) {
+      .lab-layout { grid-template-columns: 1fr; }
+    }
+
+    .sidebar-panel {
+      background: rgba(14, 18, 24, 0.55);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 1rem;
+    }
+
+    label.field {
+      display: block;
+      font-size: 0.72rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.4rem;
+      font-weight: 600;
+    }
+
+    select {
+      width: 100%;
+      appearance: none;
+      background: var(--panel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%239aa3b2' d='M1 1l5 5 5-5'/%3E%3C/svg%3E") right 0.9rem center / 12px no-repeat;
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0.7rem 2.2rem 0.7rem 0.9rem;
+      font: 500 0.95rem "IBM Plex Sans", sans-serif;
+      margin-bottom: 1rem;
+      cursor: pointer;
+    }
+
+    select:focus { outline: 2px solid var(--ember); outline-offset: 1px; }
+
+    .song-meta {
+      margin: 0 0 1rem;
+      padding: 0.8rem 0.9rem;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+    }
+
+    .song-meta strong {
+      display: block;
+      font-family: Fraunces, Georgia, serif;
+      color: var(--gold);
+      margin-bottom: 0.2rem;
+    }
+
+    .song-meta p {
+      margin: 0;
+      font-size: 0.84rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .lens-list, .sections {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .lens-btn, .section-btn {
+      text-align: left;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      padding: 0.65rem 0.8rem;
+      color: var(--text);
+      cursor: pointer;
+      font: inherit;
+      transition: background 0.2s, border-color 0.2s, transform 0.2s;
+    }
+
+    .lens-btn:hover, .section-btn:hover {
+      background: var(--panel);
+      border-color: var(--line);
+    }
+
+    .lens-btn.active, .section-btn.active {
+      background: linear-gradient(135deg, rgba(196, 120, 74, 0.22), rgba(232, 210, 160, 0.08));
+      border-color: rgba(232, 210, 160, 0.4);
+      transform: translateX(2px);
+    }
+
+    .lens-btn .name, .section-btn .name {
+      display: block;
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+
+    .lens-btn .hint, .section-btn .chords {
+      display: block;
+      margin-top: 0.15rem;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    .lab-main {
+      display: grid;
+      gap: 1rem;
+    }
+
+    .analysis-panel, .detail {
+      background: rgba(14, 18, 24, 0.55);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 1.15rem 1.25rem;
+    }
+
+    .analysis-panel h2, .detail h2 {
+      margin: 0 0 0.35rem;
+      font-family: Fraunces, Georgia, serif;
+      color: var(--gold-bright);
+      font-size: 1.35rem;
+    }
+
+    .function {
+      color: var(--ember);
+      font-weight: 600;
+      font-size: 0.9rem;
+      margin-bottom: 0.55rem;
+    }
+
+    .analysis-panel p, .detail p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-top: 0.85rem;
+    }
+
+    .chip {
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      padding: 0.3rem 0.55rem;
+      border-radius: 999px;
+      border: 1px solid rgba(232, 210, 160, 0.28);
+      color: var(--gold);
+      background: rgba(232, 210, 160, 0.06);
+    }
+
+    .wheel-wrap {
+      display: flex;
+      justify-content: center;
+      padding: 0.5rem;
+    }
+
+    #wheel {
+      width: min(100%, 520px);
+      height: auto;
+    }
+
+    .key-label {
+      fill: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+      font-family: "IBM Plex Sans", sans-serif;
+      pointer-events: none;
+    }
+
+    .minor-label { font-size: 11px; fill: var(--muted); }
+    .center-disk { fill: #0c1016; stroke: rgba(232,210,160,0.2); }
+    .center-title {
+      fill: var(--gold-bright);
+      font-family: Fraunces, Georgia, serif;
+      font-size: 28px;
+      font-weight: 700;
+      text-anchor: middle;
+    }
+    .center-sub {
+      fill: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-anchor: middle;
+      font-weight: 600;
+    }
+
+    .key-wedge { cursor: pointer; }
+    .key-wedge.dim .face { opacity: 0.35; }
+    .key-wedge.lit .face {
+      fill: rgba(196, 120, 74, 0.55) !important;
+      animation: wedgeLit 0.35s ease;
+    }
+    .key-wedge.tonic .face {
+      fill: rgba(232, 210, 160, 0.72) !important;
+    }
+    .key-wedge.lit .key-label,
+    .key-wedge.tonic .key-label { fill: #0e1218; }
+
+    .path-arc {
+      fill: none;
+      stroke: var(--ember);
+      stroke-width: 3;
+      stroke-linecap: round;
+      opacity: 0;
+    }
+    .path-arc.visible {
+      opacity: 1;
+      stroke-dasharray: 120;
+      animation: pathDraw 0.55s ease forwards;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.85rem 1.25rem;
+      justify-content: center;
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-top: 0.35rem;
+    }
+
+    .legend span::before {
+      content: "";
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 0.4rem;
+      vertical-align: middle;
+    }
+    .l-tonic::before { background: var(--gold); }
+    .l-active::before { background: var(--ember); }
+    .l-path::before { background: var(--ember); box-shadow: 0 0 0 2px rgba(196,120,74,0.25); }
+
+    /* —— Drills —— */
+    .drill-card {
+      background: rgba(14, 18, 24, 0.55);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 1.35rem;
+      max-width: 640px;
+    }
+
+    .drill-q {
+      font-family: Fraunces, Georgia, serif;
+      font-size: 1.35rem;
+      color: var(--gold-bright);
+      margin: 0 0 1rem;
+    }
+
+    .choices {
+      display: grid;
+      gap: 0.5rem;
+    }
+
+    .choice {
+      text-align: left;
+      padding: 0.8rem 1rem;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--text);
+      font: inherit;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    .choice:hover { border-color: rgba(232, 210, 160, 0.4); }
+    .choice.correct {
+      border-color: var(--mint);
+      background: rgba(127, 175, 154, 0.15);
+    }
+    .choice.wrong {
+      border-color: #a85a5a;
+      background: rgba(168, 90, 90, 0.12);
+    }
+
+    .drill-feedback {
+      margin-top: 1rem;
+      color: var(--muted);
+      line-height: 1.45;
+      min-height: 1.4em;
+    }
+
+    .drill-score {
+      margin: 0 0 1rem;
+      color: var(--ember);
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    footer.site {
+      padding: 1rem clamp(1rem, 3vw, 2.25rem) 1.5rem;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+
+    .cof-only .lab-layout { grid-template-columns: minmax(240px, 320px) 1fr; }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <button type="button" class="brand" data-nav="home" aria-label="Music Teacher home">Music Teacher</button>
+    <nav aria-label="Primary">
+      <button type="button" data-nav="home">Home</button>
+      <button type="button" data-nav="lessons">Lessons</button>
+      <a class="nav-ext" href="teach.html">Teach</a>
+      <a class="nav-ext" href="pedalboard.html">Pedalboard</a>
+      <a class="nav-ext" href="voodoo_child.html">Voodoo Child</a>
+      <button type="button" data-nav="lab">Song Lab</button>
+      <button type="button" data-nav="circle">Circle</button>
+      <a class="nav-ext" href="interactive_circle.html">Explore</a>
+      <button type="button" data-nav="drills">Drills</button>
+    </nav>
+  </header>
+
+  <!-- HOME -->
+  <section class="view active" id="view-home">
+    <div class="hero">
+      <div class="hero-inner">
+        <h1>Music Teacher</h1>
+        <p>Learn how songs work — harmony on the circle of fifths, plus melody, rhythm, articulation, form, and the rest of the full analysis toolkit.</p>
+        <div class="cta-row">
+          <a class="btn" href="teach.html">Teach me on the wheel</a>
+          <a class="btn ghost" href="interactive_circle.html">Interactive Circle</a>
+          <a class="btn ghost" href="pedalboard.html">Surfing pedalboard</a>
+          <a class="btn ghost" href="voodoo_14_32_transcription.html">Voodoo tab 0:14–0:32</a>
+          <a class="btn ghost" href="voodoo_child.html">Voodoo Child tone + mute</a>
+          <button type="button" class="btn ghost" data-nav="lab">Open Song Lab</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- LESSONS -->
+  <section class="view" id="view-lessons">
+    <div class="page">
+      <div class="page-head">
+        <p class="eyebrow">Theory studio</p>
+        <h1>Lessons</h1>
+        <p>Core ideas behind the songs in your catalog — from the circle of fifths to articulation storytelling.</p>
+      </div>
+      <div class="lesson-grid" id="lessonGrid"></div>
+      <article class="lesson-body" id="lessonBody"></article>
+    </div>
+  </section>
+
+  <!-- SONG LAB -->
+  <section class="view" id="view-lab">
+    <div class="page">
+      <div class="page-head">
+        <p class="eyebrow">Twelve lenses</p>
+        <h1>Song Lab</h1>
+        <p>Pick a song, choose an analysis lens, then step through sections. Pitch lens lights the circle of fifths.</p>
+      </div>
+      <div class="lab-layout">
+        <aside class="sidebar-panel">
+          <label class="field" for="labSong">Song</label>
+          <select id="labSong"></select>
+          <div class="song-meta" id="labMeta"></div>
+          <label class="field">Lens</label>
+          <div class="lens-list" id="lensList"></div>
+          <label class="field" style="margin-top:1rem">Sections</label>
+          <div class="sections" id="labSections"></div>
+        </aside>
+        <div class="lab-main">
+          <div class="analysis-panel" id="labLensPanel"></div>
+          <div class="detail" id="labSectionDetail"></div>
+          <div id="labWheelBlock" hidden>
+            <div class="wheel-wrap">
+              <svg id="labWheel" viewBox="0 0 560 560" role="img" aria-label="Circle of fifths"></svg>
+            </div>
+            <div class="legend">
+              <span class="l-tonic">Home / tonic</span>
+              <span class="l-active">Active in section</span>
+              <span class="l-path">Progression path</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CIRCLE -->
+  <section class="view" id="view-circle">
+    <div class="page cof-only">
+      <div class="page-head">
+        <p class="eyebrow">Harmonic map</p>
+        <h1>Circle of Fifths</h1>
+        <p>Each song section lights its keys so you can see how the harmony moves — tonic, lift, and return. Tap any key to hear it; changing sections plays the progression. For free explore mode, open the <a href="interactive_circle.html" style="color:var(--gold)">Interactive Circle</a>.</p>
+      </div>
+      <div class="lab-layout">
+        <aside class="sidebar-panel">
+          <label class="field" for="cofSong">Song</label>
+          <select id="cofSong"></select>
+          <div class="song-meta" id="cofMeta"></div>
+          <label class="field">Sections</label>
+          <div class="sections" id="cofSections"></div>
+        </aside>
+        <div class="lab-main">
+          <div class="wheel-wrap">
+            <svg id="cofWheel" viewBox="0 0 560 560" role="img" aria-label="Circle of fifths diagram"></svg>
+          </div>
+          <div class="detail" id="cofDetail"></div>
+          <div class="legend">
+            <span class="l-tonic">Home / tonic</span>
+            <span class="l-active">Active in section</span>
+            <span class="l-path">Progression path</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DRILLS -->
+  <section class="view" id="view-drills">
+    <div class="page">
+      <div class="page-head">
+        <p class="eyebrow">Practice</p>
+        <h1>Drills</h1>
+        <p>Quick checks on modes, Aeolian cadences, and articulation — drawn from songs you already know.</p>
+      </div>
+      <div class="drill-card">
+        <p class="drill-score" id="drillScore">Score 0 / 0</p>
+        <h2 class="drill-q" id="drillQ">Loading…</h2>
+        <div class="choices" id="drillChoices"></div>
+        <p class="drill-feedback" id="drillFeedback"></p>
+        <div class="cta-row" style="margin-top:1.25rem">
+          <button type="button" class="btn" id="drillNext">Next question</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="site">Standalone Music Teacher project · not part of the crypto tracker · open this HTML on phone or desktop</footer>
+
+  <script src="songs.js"></script>
+  <script src="audio.js"></script>
+  <script>
+    const { SONGS, LENSES, MAJORS, MINORS, ALIASES } = MusicTeacher;
+
+    const LESSONS = [
+      {
+        id: "circle",
+        title: "Circle of fifths",
+        teaser: "How keys sit next to each other",
+        body: `
+          <h2>Circle of fifths</h2>
+          <p>Majors sit on the outer ring; their relative minors sit inside. Move clockwise = up a fifth; counterclockwise = up a fourth (or down a fifth).</p>
+          <h3>Why it matters</h3>
+          <p>Song sections often travel short distances on this map. When a chorus “lifts,” it often steps to VI / VII / III — neighbors you can see on the wheel.</p>
+          <div class="example">Try <em>Over the Mountain</em> chorus: E → F♯ → G♯m. That VI–VII–i path is a short walk on the circle.</div>
+        `,
+      },
+      {
+        id: "aeolian",
+        title: "Aeolian metal cadence",
+        teaser: "VI–VII–i and i–VII–VI",
+        body: `
+          <h2>The Aeolian metal cadence</h2>
+          <p>Natural minor (Aeolian) loves the three-chord triangle: tonic (i), subtonic (VII), and submediant (VI). Rock/metal often spells it <strong>VI–VII–i</strong> (lift then home) or <strong>i–VII–VI</strong> (home then walk down).</p>
+          <h3>Same family, different keys</h3>
+          <ul>
+            <li><em>Over the Mountain / Diary</em> — E–F♯–G♯m (VI–VII–i in G♯m)</li>
+            <li><em>Mr. Crowley</em> — Dm–C–B♭ (i–VII–VI in Dm)</li>
+            <li><em>The Trooper / Aces High</em> — D–C–Em world (VII–VI–i in Em)</li>
+            <li><em>Rime of the Ancient Mariner</em> — same Em–C–D engine; form & silence carry the epic</li>
+          </ul>
+          <div class="example">Train your ear: once you hear that triangle, you recognize it across Ozzy and Maiden even when the tonic changes.</div>
+        `,
+      },
+      {
+        id: "modes",
+        title: "Modes & scale color",
+        teaser: "Ionian, Aeolian, Dorian, Hungarian",
+        body: `
+          <h2>Modes & scale color</h2>
+          <p>Same tonic letter can wear different scales. Mode = which steps are raised or lowered relative to major.</p>
+          <ul>
+            <li><strong>Ionian</strong> — major brightness (Mozart K.581 home)</li>
+            <li><strong>Aeolian</strong> — natural minor (most of the metal catalog here)</li>
+            <li><strong>Dorian</strong> — minor with raised 6th (solo color)</li>
+            <li><strong>Hungarian / Gypsy minor</strong> — harmonic minor + raised 4th (Diary solo)</li>
+            <li><strong>Parallel minor</strong> — same tonic letter, flipped mode (A major ↔ A minor in Mozart)</li>
+          </ul>
+          <div class="example">Diary stays on G♯ but changes <em>color</em> — diminished cells, then Hungarian intervals — without abandoning the home key.</div>
+        `,
+      },
+      {
+        id: "articulation",
+        title: "Articulation as story",
+        teaser: "Staccato → legato → tenuto",
+        body: `
+          <h2>Articulation as storytelling</h2>
+          <p>How notes are attacked can narrate as clearly as chord changes. <em>Aces High</em> is the teaching example:</p>
+          <ul>
+            <li><strong>Intro</strong> — staccato / light palm mute: scramble alarm</li>
+            <li><strong>Verse</strong> — legato / connected: flight narrative</li>
+            <li><strong>Chorus</strong> — tenuto / held chords: anthem</li>
+          </ul>
+          <div class="example">When you analyze a song, ask: where does attack change? That shift is often the emotional plot twist.</div>
+        `,
+      },
+      {
+        id: "rhythm",
+        title: "Groove & meter",
+        teaser: "Gallop, odd meters, feel",
+        body: `
+          <h2>Rhythm & time</h2>
+          <p>Harmony is only one engine. Rhythm can <em>be</em> the character.</p>
+          <ul>
+            <li><strong>Harris gallop</strong> — eighth + two sixteenths: cavalry in <em>The Trooper</em> / <em>Aces High</em></li>
+            <li><strong>Odd meters</strong> — Diary verses (~7/8) and hook (~6/8): instability as form</li>
+            <li><strong>Held values</strong> — Aces High chorus uses the longest notes for the anthem</li>
+          </ul>
+        `,
+      },
+      {
+        id: "twelve",
+        title: "The 12 lenses",
+        teaser: "Full song makeup checklist",
+        body: `
+          <h2>Analyze with twelve lenses</h2>
+          <p>The circle of fifths maps harmony geography. A full analysis stacks more lenses:</p>
+          <ol>
+            ${LENSES.map((l) => `<li><strong>${l.name}</strong> — ${l.hint}</li>`).join("")}
+          </ol>
+          <div class="example">Song Lab defaults to all twelve. Start with Pitch, then Articulation on <em>Aces High</em> — you’ll hear why both matter.</div>
+        `,
+      },
+    ];
+
+    const DRILLS = [
+      {
+        q: "In Over the Mountain, the chorus E → F♯ → G♯m is which function path?",
+        choices: ["I → V → I", "VI → VII → i (Aeolian cadence)", "ii → V → I", "iv → V → i"],
+        answer: 1,
+        explain: "E and F♯ are VI and VII in G♯ minor — the classic Aeolian lift-and-fall back to i.",
+      },
+      {
+        q: "Mr. Crowley verse Dm → C → B♭ is the same triangle as Diary’s E–F♯–G♯m. How is it spelled from the tonic?",
+        choices: ["VI → VII → i", "i → VII → VI", "I → IV → V", "i → iv → V"],
+        answer: 1,
+        explain: "Crowley starts on tonic: i–VII–VI. Diary often hits the lift as VI–VII–i. Same three keys, different starting point.",
+      },
+      {
+        q: "Aces High intro vs verse — what changes most dramatically?",
+        choices: ["Key center jumps to B major", "Articulation: staccato scramble → legato flow", "Meter switches to 7/8", "It becomes major Ionian"],
+        answer: 1,
+        explain: "Home stays E Aeolian. The storytelling flip is articulation — detached alarm into connected verse phrasing.",
+      },
+      {
+        q: "Mozart K.581 Trio I moves from A major to A minor. What kind of contrast is that?",
+        choices: ["Remote modulation to a distant key", "Parallel mode flip (Ionian → Aeolian)", "Relative major shift", "Whole-tone collection"],
+        answer: 1,
+        explain: "Same tonic letter, flipped mode — parallel Aeolian shade, not a far trip on the circle.",
+      },
+      {
+        q: "The Trooper’s gallop (eighth + two sixteenths) primarily teaches which lens?",
+        choices: ["Timbre only", "Rhythm as character", "Lyrics rhyme scheme", "Dynamics terracing"],
+        answer: 1,
+        explain: "The Harris gallop is the cavalry — rhythm carries the narrative as much as Em harmony.",
+      },
+      {
+        q: "Hungarian / Gypsy minor (Diary solo) is best described as:",
+        choices: ["Major pentatonic", "Harmonic minor + raised 4th", "Whole-tone scale", "Mixolydian ♭6"],
+        answer: 1,
+        explain: "Exotic tonic color: harmonic minor with a raised 4th — same home, different intervals.",
+      },
+    ];
+
+    /* —— Navigation —— */
+    let currentView = "home";
+
+    function showView(id) {
+      currentView = id;
+      document.querySelectorAll(".view").forEach((v) => v.classList.toggle("active", v.id === "view-" + id));
+      document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("active", b.dataset.nav === id));
+      const url = new URL(location.href);
+      if (id === "home") url.searchParams.delete("view");
+      else url.searchParams.set("view", id);
+      history.replaceState(null, "", url);
+      if (id === "lab") renderLab();
+      if (id === "circle") renderCof();
+      if (id === "drills") ensureDrill();
+      if (id === "lessons") renderLessons();
+    }
+
+    document.querySelectorAll("[data-nav]").forEach((el) => {
+      el.addEventListener("click", () => showView(el.dataset.nav));
+    });
+
+    /* —— Circle helpers —— */
+    function toWheelKey(raw) {
+      const s = String(raw).trim();
+      if (MAJORS.includes(s) || MINORS.includes(s)) return s;
+      if (ALIASES[s]) return ALIASES[s];
+      return s;
+    }
+
+    const CX = 280, CY = 280;
+    const R_OUT = 250, R_MID = 175, R_IN = 105;
+
+    function polar(angleDeg, r) {
+      const a = ((angleDeg - 90) * Math.PI) / 180;
+      return [CX + r * Math.cos(a), CY + r * Math.sin(a)];
+    }
+
+    function wedgePath(i, rOuter, rInner) {
+      const step = 30;
+      const a0 = i * step - step / 2;
+      const a1 = i * step + step / 2;
+      const [x0, y0] = polar(a0, rOuter);
+      const [x1, y1] = polar(a1, rOuter);
+      const [x2, y2] = polar(a1, rInner);
+      const [x3, y3] = polar(a0, rInner);
+      return `M ${x0} ${y0} A ${rOuter} ${rOuter} 0 0 1 ${x1} ${y1} L ${x2} ${y2} A ${rInner} ${rInner} 0 0 0 ${x3} ${y3} Z`;
+    }
+
+    function labelPos(i, r) {
+      return polar(i * 30, r);
+    }
+
+    function buildWheel(svg) {
+      svg.innerHTML = `
+        <defs>
+          <radialGradient id="ringGlow-${svg.id}" cx="50%" cy="45%" r="55%">
+            <stop offset="0%" stop-color="#243041"/>
+            <stop offset="100%" stop-color="#121821"/>
+          </radialGradient>
+        </defs>
+        <circle cx="${CX}" cy="${CY}" r="${R_OUT + 4}" fill="none" stroke="rgba(232,210,160,0.12)" stroke-width="8"/>
+        <g class="wedges"></g>
+        <g class="paths"></g>
+        <circle class="center-disk" cx="${CX}" cy="${CY}" r="${R_IN - 8}"/>
+        <text class="center-title" x="${CX}" y="${CY - 4}">—</text>
+        <text class="center-sub" x="${CX}" y="${CY + 14}">TONIC</text>
+      `;
+      const g = svg.querySelector(".wedges");
+      MAJORS.forEach((maj, i) => {
+        const min = MINORS[i];
+        const majG = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        majG.classList.add("key-wedge");
+        majG.dataset.key = maj;
+        majG.innerHTML = `<path class="face" d="${wedgePath(i, R_OUT, R_MID)}" fill="url(#ringGlow-${svg.id})" stroke="rgba(232,210,160,0.15)" stroke-width="1"/>`;
+        const [lx, ly] = labelPos(i, (R_OUT + R_MID) / 2);
+        const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        t.classList.add("key-label");
+        t.setAttribute("x", lx);
+        t.setAttribute("y", ly + 4);
+        t.setAttribute("text-anchor", "middle");
+        t.textContent = maj;
+        majG.appendChild(t);
+        g.appendChild(majG);
+
+        const minG = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        minG.classList.add("key-wedge");
+        minG.dataset.key = min;
+        minG.innerHTML = `<path class="face" d="${wedgePath(i, R_MID, R_IN)}" fill="#1a222e" stroke="rgba(232,210,160,0.12)" stroke-width="1"/>`;
+        const [mx, my] = labelPos(i, (R_MID + R_IN) / 2);
+        const tm = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        tm.classList.add("key-label", "minor-label");
+        tm.setAttribute("x", mx);
+        tm.setAttribute("y", my + 3);
+        tm.setAttribute("text-anchor", "middle");
+        tm.textContent = min;
+        minG.appendChild(tm);
+        g.appendChild(minG);
+      });
+      // Tap / drag any key to hear it
+      if (window.MusicAudio) {
+        svg.dataset.audioBound = "";
+        MusicAudio.bindWheel(svg);
+      }
+    }
+
+    function keyIndex(key) {
+      const k = toWheelKey(key);
+      let i = MAJORS.indexOf(k);
+      if (i >= 0) return { ring: "major", i, key: k };
+      i = MINORS.indexOf(k);
+      if (i >= 0) return { ring: "minor", i, key: k };
+      return null;
+    }
+
+    function keyPoint(key) {
+      const info = keyIndex(key);
+      if (!info) return null;
+      const r = info.ring === "major" ? (R_OUT + R_MID) / 2 : (R_MID + R_IN) / 2;
+      const [x, y] = labelPos(info.i, r);
+      return { x, y, ...info };
+    }
+
+    function drawPath(svg, keys) {
+      const paths = svg.querySelector(".paths");
+      paths.innerHTML = "";
+      const pts = keys.map(keyPoint).filter(Boolean);
+      if (pts.length < 2) return;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const a = pts[i], b = pts[i + 1];
+        const mx = (a.x + b.x) / 2;
+        const my = (a.y + b.y) / 2;
+        const cx = CX + (mx - CX) * 0.55;
+        const cy = CY + (my - CY) * 0.55;
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.classList.add("path-arc", "visible");
+        path.setAttribute("d", `M ${a.x} ${a.y} Q ${cx} ${cy} ${b.x} ${b.y}`);
+        paths.appendChild(path);
+      }
+    }
+
+    function highlightKeys(svg, activeKeys, tonic) {
+      const active = new Set(activeKeys.map(toWheelKey));
+      const ton = toWheelKey(tonic);
+      svg.querySelectorAll(".key-wedge").forEach((el) => {
+        const k = el.dataset.key;
+        el.classList.remove("lit", "dim", "tonic");
+        if (active.has(k)) {
+          el.classList.add("lit");
+          if (k === ton) el.classList.add("tonic");
+        } else {
+          el.classList.add("dim");
+        }
+      });
+    }
+
+    function prettyTonic(t) {
+      const pretty = { "G#m": "G♯m", "C#m": "C♯m", "F#m": "F♯m", "F#": "F♯", "Db": "D♭", "Ab": "A♭", "Eb": "E♭", "Bb": "B♭" };
+      return pretty[t] || t;
+    }
+
+    function fillSongSelect(sel, current) {
+      sel.innerHTML = Object.entries(SONGS)
+        .map(([id, s]) => `<option value="${id}">${s.title}</option>`)
+        .join("");
+      sel.value = current;
+    }
+
+    /* —— Lessons —— */
+    let currentLesson = "circle";
+
+    function renderLessons() {
+      const grid = document.getElementById("lessonGrid");
+      grid.innerHTML = LESSONS.map((l) => `
+        <button type="button" class="lesson-card${l.id === currentLesson ? " active" : ""}" data-lesson="${l.id}">
+          <strong>${l.title}</strong>
+          <span>${l.teaser}</span>
+        </button>
+      `).join("");
+      grid.querySelectorAll("[data-lesson]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          currentLesson = btn.dataset.lesson;
+          renderLessons();
+        });
+      });
+      const lesson = LESSONS.find((l) => l.id === currentLesson) || LESSONS[0];
+      document.getElementById("lessonBody").innerHTML = lesson.body;
+    }
+
+    /* —— Song Lab —— */
+    let labSongId = "aces_high";
+    let labLensId = "articulation";
+    let labSectionId = null;
+    let labWheelReady = false;
+    let labLastHeard = "";
+
+    function renderLab() {
+      const song = SONGS[labSongId];
+      if (!labSectionId || !song.sections.some((s) => s.id === labSectionId)) {
+        labSectionId = song.sections[0].id;
+      }
+
+      const sel = document.getElementById("labSong");
+      fillSongSelect(sel, labSongId);
+      sel.onchange = () => {
+        labSongId = sel.value;
+        labSectionId = SONGS[labSongId].sections[0].id;
+        renderLab();
+      };
+
+      document.getElementById("labMeta").innerHTML = `
+        <strong>${song.title}</strong>
+        <p>${song.artist}<br/>${song.mode}</p>
+      `;
+
+      const lensList = document.getElementById("lensList");
+      lensList.innerHTML = LENSES.map((l) => `
+        <button type="button" class="lens-btn${l.id === labLensId ? " active" : ""}" data-lens="${l.id}">
+          <span class="name">${l.short}</span>
+          <span class="hint">${l.hint}</span>
+        </button>
+      `).join("");
+      lensList.querySelectorAll("[data-lens]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          labLensId = btn.dataset.lens;
+          renderLab();
+        });
+      });
+
+      const secList = document.getElementById("labSections");
+      secList.innerHTML = "";
+      song.sections.forEach((sec) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "section-btn" + (sec.id === labSectionId ? " active" : "");
+        btn.innerHTML = `<span class="name">${sec.name}</span><span class="chords">${sec.chords}</span>`;
+        btn.addEventListener("click", () => {
+          labSectionId = sec.id;
+          renderLab();
+        });
+        secList.appendChild(btn);
+      });
+
+      const lens = LENSES.find((l) => l.id === labLensId);
+      const lensText = song.lenses[labLensId] || song.blurb;
+      document.getElementById("labLensPanel").innerHTML = `
+        <h2>${lens.name}</h2>
+        <p>${lensText}</p>
+      `;
+
+      const sec = song.sections.find((s) => s.id === labSectionId) || song.sections[0];
+      document.getElementById("labSectionDetail").innerHTML = `
+        <h2>${sec.name}</h2>
+        <div class="function">${sec.function}</div>
+        <p>${sec.note}</p>
+        <div class="chips">${sec.keys.map((k) => `<span class="chip">${prettyTonic(k)}</span>`).join("")}</div>
+      `;
+
+      const wheelBlock = document.getElementById("labWheelBlock");
+      const showWheel = labLensId === "pitch";
+      wheelBlock.hidden = !showWheel;
+      if (showWheel) {
+        const svg = document.getElementById("labWheel");
+        if (!labWheelReady) {
+          buildWheel(svg);
+          labWheelReady = true;
+        }
+        svg.querySelector(".center-title").textContent = prettyTonic(song.tonic);
+        highlightKeys(svg, sec.keys, song.tonic);
+        drawPath(svg, sec.keys);
+        if (window.MusicAudio) {
+          const token = labSongId + ":" + sec.id;
+          if (labLastHeard !== token) {
+            labLastHeard = token;
+            MusicAudio.playKeys(sec.keys.map(toWheelKey), 240);
+          }
+        }
+      }
+    }
+
+    /* —— Circle view —— */
+    let cofSongId = "over_the_mountain";
+    let cofSectionId = null;
+    let cofWheelReady = false;
+    let cofLastHeard = "";
+
+    function renderCof() {
+      const song = SONGS[cofSongId];
+      if (!cofSectionId || !song.sections.some((s) => s.id === cofSectionId)) {
+        cofSectionId = song.sections[0].id;
+      }
+
+      const sel = document.getElementById("cofSong");
+      fillSongSelect(sel, cofSongId);
+      sel.onchange = () => {
+        cofSongId = sel.value;
+        cofSectionId = SONGS[cofSongId].sections[0].id;
+        renderCof();
+      };
+
+      document.getElementById("cofMeta").innerHTML = `
+        <strong>${song.title}</strong>
+        <p>${song.artist}<br/>${song.mode}</p>
+      `;
+
+      const list = document.getElementById("cofSections");
+      list.innerHTML = "";
+      song.sections.forEach((sec) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "section-btn" + (sec.id === cofSectionId ? " active" : "");
+        btn.innerHTML = `<span class="name">${sec.name}</span><span class="chords">${sec.chords}</span>`;
+        btn.addEventListener("click", () => {
+          cofSectionId = sec.id;
+          renderCof();
+        });
+        list.appendChild(btn);
+      });
+
+      const svg = document.getElementById("cofWheel");
+      if (!cofWheelReady) {
+        buildWheel(svg);
+        cofWheelReady = true;
+      }
+      const sec = song.sections.find((s) => s.id === cofSectionId) || song.sections[0];
+      svg.querySelector(".center-title").textContent = prettyTonic(song.tonic);
+      highlightKeys(svg, sec.keys, song.tonic);
+      drawPath(svg, sec.keys);
+      if (window.MusicAudio) {
+        const token = cofSongId + ":" + sec.id;
+        if (cofLastHeard !== token) {
+          cofLastHeard = token;
+          MusicAudio.playKeys(sec.keys.map(toWheelKey), 240);
+        }
+      }
+
+      document.getElementById("cofDetail").innerHTML = `
+        <h2>${sec.name}</h2>
+        <div class="function">${sec.function}</div>
+        <p>${sec.note}</p>
+        <div class="chips">${sec.keys.map((k) => `<span class="chip">${prettyTonic(k)}</span>`).join("")}</div>
+      `;
+    }
+
+    /* —— Drills —— */
+    let drillOrder = [];
+    let drillIndex = 0;
+    let drillCorrect = 0;
+    let drillAsked = 0;
+    let drillAnswered = false;
+
+    function shuffle(arr) {
+      const a = arr.slice();
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    function ensureDrill() {
+      if (!drillOrder.length) {
+        drillOrder = shuffle(DRILLS.map((_, i) => i));
+        drillIndex = 0;
+      }
+      renderDrill();
+    }
+
+    function renderDrill() {
+      const item = DRILLS[drillOrder[drillIndex % drillOrder.length]];
+      document.getElementById("drillScore").textContent = `Score ${drillCorrect} / ${drillAsked}`;
+      document.getElementById("drillQ").textContent = item.q;
+      document.getElementById("drillFeedback").textContent = "";
+      drillAnswered = false;
+      const box = document.getElementById("drillChoices");
+      box.innerHTML = "";
+      item.choices.forEach((c, i) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "choice";
+        btn.textContent = c;
+        btn.addEventListener("click", () => {
+          if (drillAnswered) return;
+          drillAnswered = true;
+          drillAsked += 1;
+          const ok = i === item.answer;
+          if (ok) drillCorrect += 1;
+          box.querySelectorAll(".choice").forEach((el, j) => {
+            if (j === item.answer) el.classList.add("correct");
+            else if (j === i) el.classList.add("wrong");
+          });
+          document.getElementById("drillFeedback").textContent = item.explain;
+          document.getElementById("drillScore").textContent = `Score ${drillCorrect} / ${drillAsked}`;
+        });
+        box.appendChild(btn);
+      });
+    }
+
+    document.getElementById("drillNext").addEventListener("click", () => {
+      drillIndex = (drillIndex + 1) % DRILLS.length;
+      if (drillIndex === 0) drillOrder = shuffle(DRILLS.map((_, i) => i));
+      renderDrill();
+    });
+
+    /* —— Keyboard section walk on lab/circle —— */
+    document.addEventListener("keydown", (e) => {
+      if (currentView !== "lab" && currentView !== "circle") return;
+      const songId = currentView === "lab" ? labSongId : cofSongId;
+      const song = SONGS[songId];
+      let secId = currentView === "lab" ? labSectionId : cofSectionId;
+      const idx = song.sections.findIndex((s) => s.id === secId);
+      if (e.key === "ArrowDown" || e.key === "ArrowRight") {
+        e.preventDefault();
+        secId = song.sections[(idx + 1) % song.sections.length].id;
+      } else if (e.key === "ArrowUp" || e.key === "ArrowLeft") {
+        e.preventDefault();
+        secId = song.sections[(idx - 1 + song.sections.length) % song.sections.length].id;
+      } else return;
+      if (currentView === "lab") {
+        labSectionId = secId;
+        renderLab();
+      } else {
+        cofSectionId = secId;
+        renderCof();
+      }
+    });
+
+    /* —— Boot —— */
+    (function boot() {
+      const params = new URLSearchParams(location.search);
+      const view = params.get("view");
+      const song = params.get("song");
+      const section = params.get("section");
+      const lens = params.get("lens");
+      if (song && SONGS[song]) {
+        labSongId = song;
+        cofSongId = song;
+      }
+      if (section) {
+        labSectionId = section;
+        cofSectionId = section;
+      }
+      if (lens && LENSES.some((l) => l.id === lens)) labLensId = lens;
+      showView(view && ["home", "lessons", "lab", "circle", "drills"].includes(view) ? view : "home");
+    })();
+  </script>
+</body>
+</html>
