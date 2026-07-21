@@ -45,6 +45,13 @@ window.MusicAudio = (function () {
       attack: 0.005, sustain: 0.35, release: 0.65,
       voicing: "power", detune: 1.004, osc: "sawtooth", twin: true, staccato: true,
     },
+    rime_of_the_ancient_mariner: {
+      name: "Maiden epic / storm theater",
+      drive: 72, pre: 0.24, master: 0.14,
+      midHz: 1000, midGain: 3.2, presence: 3.5, lowpass: 4800,
+      attack: 0.01, sustain: 0.5, release: 1.05,
+      voicing: "power", detune: 1.0035, osc: "sawtooth", twin: true,
+    },
     surfing_with_the_alien: {
       name: "Satriani singing mid-gain",
       drive: 45, pre: 0.22, master: 0.13,

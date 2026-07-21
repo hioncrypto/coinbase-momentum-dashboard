@@ -22,6 +22,7 @@ Interactive teacher for song analysis:
 | Mr. Crowley (Ozzy) | D minor RR comparison |
 | The Trooper (Iron Maiden) | Gallop · twin leads |
 | Aces High (Iron Maiden) | Staccato → legato articulation |
+| Rime of the Ancient Mariner (Iron Maiden) | Em–C–D epic · form/silence as curse |
 | Surfing with the Alien (Satriani) | G major I↔IV · modal solo ladder · Tube Driver tone |
 | Voodoo Child (Slight Return) (Hendrix) | Em blues · wah rock · Fuzz Face · Marshall |
 | Desert Rose (Sting / Cheb Mami) | C Aeolian · III (E♭) mirage · Vsus home |
