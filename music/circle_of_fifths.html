@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Circle of Fifths · Song Sections</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #0e1218;
+      --panel: #161c26;
+      --panel-2: #1c2430;
+      --line: rgba(232, 210, 160, 0.18);
+      --gold: #e8d2a0;
+      --gold-bright: #f3e4bc;
+      --ember: #c4784a;
+      --ember-soft: rgba(196, 120, 74, 0.28);
+      --mint: #7faf9a;
+      --text: #e8e2d6;
+      --muted: #9aa3b2;
+      --major-fill: #243041;
+      --minor-fill: #1a222e;
+      --active: #e8d2a0;
+      --path: #c4784a;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background:
+        radial-gradient(ellipse 80% 55% at 50% -10%, rgba(196, 120, 74, 0.16), transparent 55%),
+        radial-gradient(ellipse 50% 40% at 90% 80%, rgba(127, 175, 154, 0.08), transparent 50%),
+        linear-gradient(165deg, #0a0d12 0%, #121821 45%, #0e1218 100%);
+      color: var(--text);
+      font-family: "IBM Plex Sans", system-ui, sans-serif;
+    }
+
+    body {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      min-height: 100vh;
+    }
+
+    header {
+      padding: 1.5rem clamp(1rem, 3vw, 2.5rem) 0.75rem;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .eyebrow {
+      margin: 0 0 0.35rem;
+      font-size: 0.75rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--ember);
+      font-weight: 600;
+    }
+
+    h1 {
+      margin: 0;
+      font-family: Fraunces, Georgia, serif;
+      font-weight: 700;
+      font-size: clamp(1.6rem, 3.5vw, 2.4rem);
+      letter-spacing: -0.02em;
+      color: var(--gold-bright);
+    }
+
+    .sub {
+      margin: 0.45rem 0 0;
+      max-width: 42rem;
+      color: var(--muted);
+      line-height: 1.45;
+      font-size: 0.95rem;
+    }
+
+    main {
+      display: grid;
+      grid-template-columns: minmax(260px, 340px) 1fr;
+      gap: 0;
+      min-height: 0;
+    }
+
+    @media (max-width: 900px) {
+      main {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr;
+      }
+    }
+
+    .sidebar {
+      padding: 1.25rem clamp(1rem, 3vw, 1.75rem);
+      border-right: 1px solid var(--line);
+      background: rgba(14, 18, 24, 0.55);
+      backdrop-filter: blur(8px);
+      overflow-y: auto;
+    }
+
+    @media (max-width: 900px) {
+      .sidebar { border-right: none; border-bottom: 1px solid var(--line); }
+    }
+
+    label.field {
+      display: block;
+      font-size: 0.72rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.45rem;
+      font-weight: 600;
+    }
+
+    select {
+      width: 100%;
+      appearance: none;
+      background: var(--panel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%239aa3b2' d='M1 1l5 5 5-5'/%3E%3C/svg%3E") right 0.9rem center / 12px no-repeat;
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0.7rem 2.2rem 0.7rem 0.9rem;
+      font: 500 0.95rem "IBM Plex Sans", sans-serif;
+      margin-bottom: 1.35rem;
+      cursor: pointer;
+    }
+
+    select:focus {
+      outline: 2px solid var(--ember);
+      outline-offset: 1px;
+    }
+
+    .song-meta {
+      margin: -0.5rem 0 1.25rem;
+      padding: 0.85rem 1rem;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+    }
+
+    .song-meta strong {
+      display: block;
+      font-family: Fraunces, Georgia, serif;
+      font-size: 1.05rem;
+      color: var(--gold);
+      margin-bottom: 0.25rem;
+    }
+
+    .song-meta p {
+      margin: 0;
+      font-size: 0.85rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .sections {
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+    }
+
+    .section-btn {
+      text-align: left;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      padding: 0.75rem 0.9rem;
+      color: var(--text);
+      cursor: pointer;
+      transition: background 0.25s ease, border-color 0.25s ease, transform 0.2s ease;
+      font: inherit;
+    }
+
+    .section-btn:hover {
+      background: var(--panel);
+      border-color: var(--line);
+    }
+
+    .section-btn.active {
+      background: linear-gradient(135deg, rgba(196, 120, 74, 0.22), rgba(232, 210, 160, 0.08));
+      border-color: rgba(232, 210, 160, 0.4);
+      transform: translateX(3px);
+    }
+
+    .section-btn .name {
+      display: block;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .section-btn .chords {
+      display: block;
+      margin-top: 0.2rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+    }
+
+    .section-btn.active .chords { color: var(--gold); }
+
+    .viz {
+      display: grid;
+      grid-template-rows: 1fr auto;
+      min-height: 0;
+      padding: 1rem clamp(0.5rem, 2vw, 1.5rem) 1.5rem;
+    }
+
+    .wheel-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      min-height: 420px;
+    }
+
+    #wheel {
+      width: min(92vw, 560px);
+      height: auto;
+      filter: drop-shadow(0 18px 40px rgba(0, 0, 0, 0.45));
+    }
+
+    .key-wedge {
+      cursor: pointer;
+      transition: opacity 0.3s ease;
+    }
+
+    .key-wedge.dim { opacity: 0.28; }
+    .key-wedge.lit { opacity: 1; }
+
+    .key-wedge .face {
+      transition: fill 0.35s ease, stroke 0.35s ease;
+    }
+
+    .key-wedge.lit .face {
+      fill: var(--ember-soft);
+      stroke: var(--gold);
+      stroke-width: 2.2;
+    }
+
+    .key-wedge.tonic .face {
+      fill: rgba(232, 210, 160, 0.35);
+      stroke: var(--gold-bright);
+      stroke-width: 2.6;
+    }
+
+    .key-label {
+      fill: var(--text);
+      font-family: "IBM Plex Sans", sans-serif;
+      font-weight: 600;
+      font-size: 13px;
+      pointer-events: none;
+      transition: fill 0.3s ease, opacity 0.3s ease;
+    }
+
+    .key-wedge.dim .key-label { opacity: 0.35; }
+    .key-wedge.lit .key-label { fill: var(--gold-bright); }
+
+    .minor-label { font-size: 11px; fill: var(--muted); }
+    .key-wedge.lit .minor-label { fill: var(--gold); }
+
+    .center-disk {
+      fill: var(--ink);
+      stroke: var(--line);
+      stroke-width: 1.5;
+    }
+
+    .center-title {
+      fill: var(--gold);
+      font-family: Fraunces, Georgia, serif;
+      font-size: 15px;
+      font-weight: 700;
+      text-anchor: middle;
+    }
+
+    .center-sub {
+      fill: var(--muted);
+      font-family: "IBM Plex Sans", sans-serif;
+      font-size: 10px;
+      text-anchor: middle;
+      letter-spacing: 0.08em;
+    }
+
+    .path-arc {
+      fill: none;
+      stroke: var(--path);
+      stroke-width: 2.5;
+      stroke-linecap: round;
+      stroke-dasharray: 6 5;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+      pointer-events: none;
+    }
+
+    .path-arc.visible { opacity: 0.85; animation: dash 1.4s linear infinite; }
+
+    @keyframes dash {
+      to { stroke-dashoffset: -22; }
+    }
+
+    .detail {
+      margin: 0 auto;
+      width: min(920px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 1.1rem 1.35rem;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 1rem;
+      align-items: start;
+      animation: rise 0.45s ease both;
+    }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .detail h2 {
+      margin: 0 0 0.35rem;
+      font-family: Fraunces, Georgia, serif;
+      font-size: 1.25rem;
+      color: var(--gold-bright);
+      font-weight: 700;
+    }
+
+    .detail .function {
+      margin: 0 0 0.65rem;
+      color: var(--ember);
+      font-size: 0.82rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+
+    .detail p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 0.92rem;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      justify-content: flex-end;
+      max-width: 240px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.35rem 0.65rem;
+      border-radius: 999px;
+      background: rgba(232, 210, 160, 0.12);
+      border: 1px solid rgba(232, 210, 160, 0.28);
+      color: var(--gold);
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      justify-content: center;
+      margin-top: 0.85rem;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    .legend span::before {
+      content: "";
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 0.4rem;
+      vertical-align: -1px;
+    }
+
+    .legend .l-tonic::before { background: var(--gold-bright); }
+    .legend .l-active::before { background: var(--ember); }
+    .legend .l-path::before {
+      background: transparent;
+      border: 2px dashed var(--path);
+      border-radius: 0;
+      width: 14px;
+      height: 0;
+      vertical-align: 3px;
+    }
+
+    footer {
+      text-align: center;
+      padding: 0 1rem 1.25rem;
+      color: var(--muted);
+      font-size: 0.75rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <p class="eyebrow">Harmonic map</p>
+    <h1>Circle of Fifths</h1>
+    <p class="sub">Each song section lights its keys on the circle so you can see how the harmony moves — tonic, lift, and return. Deep-link: <a href="?song=crossroads">?song=crossroads</a>.</p>
+  </header>
+
+  <main>
+    <aside class="sidebar">
+      <label class="field" for="songSelect">Song</label>
+      <select id="songSelect" aria-label="Choose song"></select>
+      <div class="song-meta" id="songMeta"></div>
+      <label class="field">Sections</label>
+      <div class="sections" id="sectionList" role="listbox" aria-label="Song sections"></div>
+    </aside>
+
+    <section class="viz">
+      <div class="wheel-wrap">
+        <svg id="wheel" viewBox="0 0 560 560" role="img" aria-label="Circle of fifths diagram"></svg>
+      </div>
+      <div class="detail" id="detail"></div>
+      <div class="legend">
+        <span class="l-tonic">Home / tonic</span>
+        <span class="l-active">Active in section</span>
+        <span class="l-path">Progression path</span>
+      </div>
+      <p id="permalink" class="sub" style="margin:0.85rem 0 0; font-size:0.82rem"></p>
+    </section>
+  </main>
+
+  <footer>Built from prior Ozzy harmonic analysis · majors outer ring · relative minors inner</footer>
+
+  <script>
+    /** Circle of fifths order starting at C (12 o'clock), clockwise by fifths. */
+    const MAJORS = ["C", "G", "D", "A", "E", "B", "F#", "Db", "Ab", "Eb", "Bb", "F"];
+    const MINORS = ["Am", "Em", "Bm", "F#m", "C#m", "G#m", "Ebm", "Bbm", "Fm", "Cm", "Gm", "Dm"];
+
+    /** Normalize enharmonic spellings to wheel labels. */
+    const ALIASES = {
+      "C#": "Db", "Gb": "F#", "G#": "Ab", "D#": "Eb", "A#": "Bb",
+      "A#m": "Bbm", "D#m": "Ebm", "G#m": "G#m", "C#m": "C#m", "F#m": "F#m",
+      "Abm": "G#m", "Dbm": "C#m", "Gbm": "F#m",
+      "E": "E", "F#": "F#", "B": "B", "A": "A", "C#maj": "Db",
+      "C#M": "Db", "EM": "E", "F#M": "F#", "BM": "B", "AM": "A",
+    };
+
+    function toWheelKey(raw) {
+      const s = String(raw).trim();
+      if (MAJORS.includes(s) || MINORS.includes(s)) return s;
+      if (ALIASES[s]) return ALIASES[s];
+      // Major triad written without "m"
+      const asMinor = s.endsWith("m") ? s : null;
+      if (asMinor && MINORS.includes(asMinor)) return asMinor;
+      if (MAJORS.includes(s.replace(/maj$/i, ""))) return s.replace(/maj$/i, "");
+      return s;
+    }
+
+    const SONGS = {
+      over_the_mountain: {
+        title: "Over the Mountain",
+        artist: "Ozzy Osbourne · Diary of a Madman (1981)",
+        tonic: "G#m",
+        mode: "G♯ Aeolian (natural minor)",
+        blurb: "Concert key G♯ minor (E♭ tuning). The emotional engine is the Aeolian metal cadence VI–VII–i.",
+        sections: [
+          {
+            id: "intro",
+            name: "Intro / main riff",
+            keys: ["G#m"],
+            chords: "G♯m pedal",
+            function: "i — tonic gravity",
+            note: "Palm-muted root and double-stop pull-offs lock the ear on G♯ minor before the verse opens.",
+          },
+          {
+            id: "verse",
+            name: "Verse",
+            keys: ["G#m", "Db"],
+            chords: "G♯m → C♯",
+            function: "i → IV",
+            note: "Dark tonic pedal with a bright IV lift. Heavy chant-like vocal over the minor home.",
+          },
+          {
+            id: "chorus",
+            name: "Chorus",
+            keys: ["E", "F#", "G#m"],
+            chords: "E → F♯ → (G♯m)",
+            function: "VI → VII → i",
+            note: "Relative-major lift (E / F♯) then the classic Aeolian return to G♯m — the song’s lift-and-fall.",
+          },
+          {
+            id: "bridge",
+            name: "Bridge",
+            keys: ["C#m", "B", "A"],
+            chords: "C♯m → B → A",
+            function: "iv → III → II♭ color",
+            note: "Steps left on the circle: parallel minor of IV, then III, then an open A-major color before home.",
+          },
+          {
+            id: "solo",
+            name: "Guitar solo",
+            keys: ["G#m"],
+            chords: "G♯ minor language",
+            function: "i — pentatonic / Dorian color",
+            note: "Still centered on G♯ minor: pentatonic, blues, and occasional raised 6th (Dorian) in the Rhoads lines.",
+          },
+          {
+            id: "resolve",
+            name: "Resolve / close",
+            keys: ["G#m"],
+            chords: "G♯m",
+            function: "i — home",
+            note: "Everything collapses back onto the tonic. The circle journey ends where it began.",
+          },
+        ],
+      },
+      diary_of_a_madman: {
+        title: "Diary of a Madman",
+        artist: "Ozzy Osbourne · Diary of a Madman (1981)",
+        tonic: "G#m",
+        mode: "G♯ minor with Dorian, diminished & Hungarian colors",
+        blurb: "Same tonic world as Over the Mountain, but the harmony wanders farther — altered cells, parallel shades, and exotic minor in the solo.",
+        sections: [
+          {
+            id: "intro",
+            name: "Clean intro",
+            keys: ["G#m"],
+            chords: "altered / dim → G♯m",
+            function: "Unstable approach to i",
+            note: "Classical, uncanny harmony (#11, dim7, add9) with gravity toward G♯ minor — Brouwer-inspired opening.",
+          },
+          {
+            id: "riff",
+            name: "Odd-meter riff",
+            keys: ["G#m"],
+            chords: "G♯-minor world",
+            function: "i — compressed classical material",
+            note: "Band enters; the classical cells harden into a stalking G♯-minor metal frame.",
+          },
+          {
+            id: "verse",
+            name: "Verses (~7/8)",
+            keys: ["G#m", "C#m"],
+            chords: "G♯7♯11 → G♯dim7 → C♯m6",
+            function: "altered i → iv color",
+            note: "Diminished and extended minor cells keep the tonic uneasy rather than settled.",
+          },
+          {
+            id: "hook",
+            name: "Hook / refrain (~6/8)",
+            keys: ["G#m"],
+            chords: "G♯ minor mantra",
+            function: "i — compound feel",
+            note: "“Diary of a madman…” swings harder over the same minor center — form as obsession.",
+          },
+          {
+            id: "interlude",
+            name: "Soft interlude",
+            keys: ["Ebm"],
+            chords: "~D♯m / related minor",
+            function: "remote minor shade",
+            note: "Fragile “dear diary” room: fingered Emadd9 world sounding near D♯ minor — a step away on the circle.",
+          },
+          {
+            id: "solo",
+            name: "Solo (Hungarian minor)",
+            keys: ["G#m"],
+            chords: "G♯ Hungarian / Gypsy minor",
+            function: "i — exotic tonic",
+            note: "Harmonic minor + raised 4th over G♯, then exits into minor pentatonic. Same home, different scale color.",
+          },
+          {
+            id: "close",
+            name: "Final hooks / close",
+            keys: ["G#m"],
+            chords: "G♯m refrain",
+            function: "i — resignation",
+            note: "Return to the refrain world. The circle doesn’t escape — it accepts the tonic.",
+          },
+        ],
+      },
+      mr_crowley: {
+        title: "Mr. Crowley",
+        artist: "Ozzy Osbourne · Blizzard of Ozz (1980) · Randy Rhoads",
+        tonic: "Dm",
+        mode: "D Aeolian / D harmonic minor — same tonal pattern as Diary, easier key",
+        blurb: "RR comparison: classical intro → minor home → Aeolian i–VII–VI (Dm–C–B♭), same chord family as Diary’s E–F♯–G♯m, just rotated and in friendlier D minor.",
+        sections: [
+          {
+            id: "intro",
+            name: "Organ / classical intro",
+            keys: ["Dm", "A"],
+            chords: "Dm → A",
+            function: "i → V",
+            note: "Gothic organ opens on D minor with a classical V pull (A) — same “classical doorway into metal” architecture as Diary’s clean intro.",
+          },
+          {
+            id: "verse",
+            name: "Verse",
+            keys: ["Dm", "C", "Bb"],
+            chords: "Dm → C → B♭",
+            function: "i → VII → VI",
+            note: "Same Aeolian three-chord engine as Diary. Diary spells it VI–VII–i (E–F♯–G♯m); Crowley starts on the tonic: i–VII–VI (Dm–C–B♭). Identical triangle on the circle.",
+          },
+          {
+            id: "chorus",
+            name: "Chorus / heavy",
+            keys: ["Dm", "Bb", "F", "C"],
+            chords: "Dm · B♭ · F · C",
+            function: "i → VI → III → VII",
+            note: "Stays in the D-minor neighborhood: relative major F (III) brightens, then C (VII) leans back toward home — still the Diary-family map, easier spelling.",
+          },
+          {
+            id: "solo",
+            name: "Main solo",
+            keys: ["Dm"],
+            chords: "D minor / harmonic minor",
+            function: "i — neoclassical language",
+            note: "Rhoads written solo over D minor: pentatonic, harmonic-minor leading tones, classical runs — Diary’s Hungarian color is a spicier cousin of this same neoclassical minor toolkit.",
+          },
+          {
+            id: "outro",
+            name: "Outro solo / close",
+            keys: ["Dm", "A"],
+            chords: "Dm · A · classical runs",
+            function: "i ↔ V — resolve",
+            note: "Trills, diminished tension, and V→i closure. Compare to Diary’s refusal to leave G♯m — Crowley uses the easier D-minor home with clearer classical cadences.",
+          },
+        ],
+      },
+      the_trooper: {
+        title: "The Trooper",
+        artist: "Iron Maiden · Piece of Mind (1983) · Steve Harris",
+        tonic: "Em",
+        mode: "E Aeolian — gallop metal; twin leads; brief Am solo shift",
+        blurb: "E-minor cavalry charge: VI–VII–i neighborhood like Diary/Crowley, driven by gallop rhythm and harmonized leads rather than classical V→i.",
+        sections: [
+          {
+            id: "intro",
+            name: "Intro / twin-lead theme",
+            keys: ["Em"],
+            chords: "E minor melody (harmonized)",
+            function: "i — thematic fanfare",
+            note: "Murray + Smith open in E Aeolian, often in 3rds. The lead *is* the riff — martial fanfare before the gallop locks in.",
+          },
+          {
+            id: "verse",
+            name: "Verse (gallop)",
+            keys: ["Em"],
+            chords: "Em / E5 pedal",
+            function: "i — charge engine",
+            note: "Harris gallop (eighth + two sixteenths) over E-minor home. Momentum over chord changes — cavalry as rhythm.",
+          },
+          {
+            id: "chorus",
+            name: "Chorus / lift",
+            keys: ["D", "C", "Em", "G"],
+            chords: "D → C → Em (G color)",
+            function: "VII → VI → i (III)",
+            note: "Same Aeolian triangle as Diary/Crowley: D–C–Em is VII–VI–i in E minor. G (III) flashes relative-major brightness.",
+          },
+          {
+            id: "solo1",
+            name: "Solo 1 (Adrian Smith)",
+            keys: ["Em", "D", "Bm", "C"],
+            chords: "E5–D5–B5–C5–D5",
+            function: "i – VII – v – VI – VII",
+            note: "E minor blues/pentatonic over the Aeolian loop. Bends and descending licks — rock voice on the Em battlefield.",
+          },
+          {
+            id: "solo2",
+            name: "Solo 2 (Dave Murray)",
+            keys: ["Am", "G", "Em", "F"],
+            chords: "A5–G5–Em–F–G",
+            function: "shift to Am (iv area)",
+            note: "Same Aeolian machine relocated to A minor (iv of Em). Trills, bends, whammy — chaos before the charge returns home.",
+          },
+          {
+            id: "outro",
+            name: "Final verse / outro",
+            keys: ["Em"],
+            chords: "Em theme + gallop",
+            function: "i — return",
+            note: "Harmony theme and gallop snap back to E minor. No happy cadence — the charge ends in the tonic’s smoke.",
+          },
+        ],
+      },
+      aces_high: {
+        title: "Aces High",
+        artist: "Iron Maiden · Powerslave (1984) · Steve Harris",
+        tonic: "Em",
+        mode: "E Aeolian with mobile i–VI–VII — solos Am → Bm",
+        blurb: "Full makeup: staccato/palm-muted twin-lead scramble → legato verse flow; gallop; Em Aeolian with key-hopping i–VI–VII; dual solos Am→Bm.",
+        sections: [
+          {
+            id: "intro",
+            name: "Intro / scramble (staccato)",
+            keys: ["F#m", "Am", "Em"],
+            chords: "harmonized 6-note cells + fast riff 2",
+            function: "i–VI–VII takeoff · detached attack",
+            note: "Light palm mute = staccato/percussive twin leads. Notes are short, separated, machine-gun articulated — scramble alarm before sustained singing tone arrives.",
+          },
+          {
+            id: "verse",
+            name: "Verse (legato shift)",
+            keys: ["Em", "D", "C"],
+            chords: "moving power chords under vocal",
+            function: "i + VII/VI · connected phrasing",
+            note: "Articulation flips: freer sustain/legato chord motion and vocal line vs intro’s chop. Gallop still drives, but phrases connect instead of spit.",
+          },
+          {
+            id: "prechorus",
+            name: "Pre-chorus / bridge 1",
+            keys: ["Em", "C", "D"],
+            chords: "repeating lick → split harmonies",
+            function: "tension climb",
+            note: "Tighter picked figures, then twin-lead split again — reintroduces harmonic bite before the held chorus chords.",
+          },
+          {
+            id: "chorus",
+            name: "Chorus (“Live to fly…”)",
+            keys: ["Em", "C", "D", "G"],
+            chords: "held power chords Em–C–D → G lift",
+            function: "i–VI–VII · sustained",
+            note: "Longest note values in the song: slammed, sustained chords under Dickinson’s anthem. Articulation = tenuto/held, opposite of intro staccato.",
+          },
+          {
+            id: "break",
+            name: "Break / solo launch",
+            keys: ["Am"],
+            chords: "A-minor riff (tricky rhythm)",
+            function: "iv staging",
+            note: "Percussive A-minor bed resets articulation toward attack again — runway for Murray’s legato solo voice.",
+          },
+          {
+            id: "solo1",
+            name: "Solo 1 (Murray · legato)",
+            keys: ["Am"],
+            chords: "Am pentatonic over Am bed",
+            function: "iv · fluid lead",
+            note: "Murray’s signature hammer/pull legato: connected streams vs Smith’s more picked bite. Articulation contrast between the two aces.",
+          },
+          {
+            id: "solo2",
+            name: "Solo 2 (Smith · mixed)",
+            keys: ["Bm"],
+            chords: "Bm (+ blues ♭5 / Dorian 6)",
+            function: "v · whole-step climb",
+            note: "Legato runs + blues licks + short staccato chromatic snaps — mixes detached and smooth inside one solo.",
+          },
+          {
+            id: "outro",
+            name: "Final verse / chorus / riff",
+            keys: ["Em", "C", "D"],
+            chords: "return to Em–C–D world",
+            function: "i — land",
+            note: "Restates verse legato narrative + sustained chorus, then riff energy — full articulation arc closes.",
+          },
+        ],
+      },
+      mozart_k581: {
+        title: "Clarinet Quintet in A, K. 581",
+        artist: "W. A. Mozart (1789)",
+        tonic: "A",
+        mode: "A major (Ionian), with parallel Aeolian contrast",
+        blurb: "Classical tonic–dominant–subdominant geography around A. Parallel A minor is shade, not a remote modulation.",
+        sections: [
+          {
+            id: "allegro",
+            name: "I. Allegro",
+            keys: ["A", "E"],
+            chords: "A major · 2nd theme → E",
+            function: "I → V (sonata)",
+            note: "Exposition sits in A; the second theme often leans to the dominant E — classic rightward move on the circle.",
+          },
+          {
+            id: "larghetto",
+            name: "II. Larghetto",
+            keys: ["D"],
+            chords: "D major",
+            function: "IV — subdominant",
+            note: "Warm leftward step to the subdominant. Aria-like 3/4 contrast to the bright A home.",
+          },
+          {
+            id: "menuetto",
+            name: "III. Menuetto",
+            keys: ["A"],
+            chords: "A major",
+            function: "I",
+            note: "Minuet returns to tonic A; the form frames the two trios.",
+          },
+          {
+            id: "trio1",
+            name: "III. Trio I",
+            keys: ["Am"],
+            chords: "A minor",
+            function: "i — parallel Aeolian",
+            note: "Same tonic letter, flipped mode. Strings alone — intimate shadow on the inner ring.",
+          },
+          {
+            id: "trio2",
+            name: "III. Trio II",
+            keys: ["A"],
+            chords: "A major",
+            function: "I — clarinet glow",
+            note: "Back to Ionian; clarinet solos over the strings in the home major.",
+          },
+          {
+            id: "theme",
+            name: "IV. Theme",
+            keys: ["A", "E"],
+            chords: "A → E → A",
+            function: "I ↔ V",
+            note: "Theme phrases walk tonic to dominant and back — the shortest path on the circle.",
+          },
+          {
+            id: "var3",
+            name: "IV. Variation III",
+            keys: ["Am"],
+            chords: "A minor",
+            function: "i — parallel shade",
+            note: "Viola-led variation flips to Aeolian again before the major close.",
+          },
+          {
+            id: "close",
+            name: "IV. Close",
+            keys: ["A"],
+            chords: "A major",
+            function: "I — Adagio → Allegro",
+            note: "Final return to A major. The circle’s journey is local: A, E, D, and parallel Am.",
+          },
+        ],
+      },
+
+      crossroads: {
+        title: "Crossroads",
+        artist: "Cream · Wheels of Fire (live, Winterland 1968)",
+        tonic: "A",
+        mode: "A blues / Mixolydian · I7–IV7–V7 (A7 · D7 · E7)",
+        blurb: "Blues-rock 12-bar: three adjacent circle stations — A (I7), D (IV7), E (V7) — drive the Winterland performance.",
+        sections: [
+          {
+            id: "intro",
+            name: "Intro riff",
+            keys: ["A", "D", "E"],
+            chords: "A7 → D7 → A7 → run to E",
+            function: "I7–IV7–I7 → V launch",
+            note: "Palm-muted A7 chatter, ringing D7 answers, then a blues-scale flourish that plants E so the vocal can enter on the dominant hinge.",
+          },
+          {
+            id: "verse",
+            name: "Vocal choruses",
+            keys: ["A", "D", "E"],
+            chords: "A7 · D7 · E7 (12-bar)",
+            function: "Full I7–IV7–V7 cycle",
+            note: "Quick-change twelve-bar under Clapton’s vocal. Harmony stays on the A–D–E triangle.",
+          },
+          {
+            id: "solo1",
+            name: "Solo 1 (mid-neck)",
+            keys: ["A", "D", "E", "F#m"],
+            chords: "A7 form · major→minor language",
+            function: "I neighborhood · storytelling climb",
+            note: "Major-pentatonic warmth climbing into minor pentatonic/blues. F♯m is relative-minor scalar color, not a chord home.",
+          },
+          {
+            id: "solo2",
+            name: "Solo 2 (upper neck)",
+            keys: ["A", "D", "E"],
+            chords: "A7 · D7 · E7 at full fire",
+            function: "Same triangle · register climax",
+            note: "Same I–IV–V lights at ~17th fret. High bends; piercing high A re-syncs the trio.",
+          },
+          {
+            id: "turnaround",
+            name: "Turnarounds / seams",
+            keys: ["E", "D", "A"],
+            chords: "E7 → D7 → A7 → E7",
+            function: "V–IV–I–V comma",
+            note: "Classic blues turnaround path on the circle between choruses.",
+          },
+          {
+            id: "close",
+            name: "Final vocal / close",
+            keys: ["A"],
+            chords: "A7 home hit",
+            function: "I7 — collapse to tonic",
+            note: "Form re-locks on A after the solo wire-walk.",
+          },
+        ],
+      },
+    };
+
+    const CX = 280, CY = 280;
+    const R_OUT = 250, R_MID = 175, R_IN = 105;
+
+    function polar(angleDeg, r) {
+      const a = ((angleDeg - 90) * Math.PI) / 180;
+      return [CX + r * Math.cos(a), CY + r * Math.sin(a)];
+    }
+
+    function wedgePath(i, rOuter, rInner) {
+      const step = 30;
+      const a0 = i * step - step / 2;
+      const a1 = i * step + step / 2;
+      const [x0, y0] = polar(a0, rOuter);
+      const [x1, y1] = polar(a1, rOuter);
+      const [x2, y2] = polar(a1, rInner);
+      const [x3, y3] = polar(a0, rInner);
+      return `M ${x0} ${y0} A ${rOuter} ${rOuter} 0 0 1 ${x1} ${y1} L ${x2} ${y2} A ${rInner} ${rInner} 0 0 0 ${x3} ${y3} Z`;
+    }
+
+    function labelPos(i, r) {
+      return polar(i * 30, r);
+    }
+
+    function buildWheel() {
+      const svg = document.getElementById("wheel");
+      svg.innerHTML = `
+        <defs>
+          <radialGradient id="ringGlow" cx="50%" cy="45%" r="55%">
+            <stop offset="0%" stop-color="#243041"/>
+            <stop offset="100%" stop-color="#121821"/>
+          </radialGradient>
+        </defs>
+        <circle cx="${CX}" cy="${CY}" r="${R_OUT + 4}" fill="none" stroke="rgba(232,210,160,0.12)" stroke-width="8"/>
+        <g id="wedges"></g>
+        <g id="paths"></g>
+        <circle class="center-disk" cx="${CX}" cy="${CY}" r="${R_IN - 8}"/>
+        <text class="center-title" id="centerTitle" x="${CX}" y="${CY - 4}">G♯m</text>
+        <text class="center-sub" id="centerSub" x="${CX}" y="${CY + 14}">TONIC</text>
+      `;
+
+      const g = svg.querySelector("#wedges");
+
+      MAJORS.forEach((maj, i) => {
+        const min = MINORS[i];
+        // Major outer wedge
+        const majG = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        majG.classList.add("key-wedge");
+        majG.dataset.key = maj;
+        majG.innerHTML = `
+          <path class="face" d="${wedgePath(i, R_OUT, R_MID)}" fill="url(#ringGlow)" stroke="rgba(232,210,160,0.15)" stroke-width="1"/>
+        `;
+        const [lx, ly] = labelPos(i, (R_OUT + R_MID) / 2);
+        const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        t.classList.add("key-label");
+        t.setAttribute("x", lx);
+        t.setAttribute("y", ly + 4);
+        t.setAttribute("text-anchor", "middle");
+        t.textContent = maj;
+        majG.appendChild(t);
+        g.appendChild(majG);
+
+        // Minor inner wedge
+        const minG = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        minG.classList.add("key-wedge");
+        minG.dataset.key = min;
+        minG.innerHTML = `
+          <path class="face" d="${wedgePath(i, R_MID, R_IN)}" fill="#1a222e" stroke="rgba(232,210,160,0.12)" stroke-width="1"/>
+        `;
+        const [mx, my] = labelPos(i, (R_MID + R_IN) / 2);
+        const tm = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        tm.classList.add("key-label", "minor-label");
+        tm.setAttribute("x", mx);
+        tm.setAttribute("y", my + 3);
+        tm.setAttribute("text-anchor", "middle");
+        tm.textContent = min;
+        minG.appendChild(tm);
+        g.appendChild(minG);
+      });
+    }
+
+    function keyIndex(key) {
+      const k = toWheelKey(key);
+      let i = MAJORS.indexOf(k);
+      if (i >= 0) return { ring: "major", i, key: k };
+      i = MINORS.indexOf(k);
+      if (i >= 0) return { ring: "minor", i, key: k };
+      return null;
+    }
+
+    function keyPoint(key) {
+      const info = keyIndex(key);
+      if (!info) return null;
+      const r = info.ring === "major" ? (R_OUT + R_MID) / 2 : (R_MID + R_IN) / 2;
+      const [x, y] = labelPos(info.i, r);
+      return { x, y, ...info };
+    }
+
+    function drawPath(keys) {
+      const paths = document.getElementById("paths");
+      paths.innerHTML = "";
+      const pts = keys.map(keyPoint).filter(Boolean);
+      if (pts.length < 2) return;
+
+      for (let i = 0; i < pts.length - 1; i++) {
+        const a = pts[i], b = pts[i + 1];
+        const mx = (a.x + b.x) / 2;
+        const my = (a.y + b.y) / 2;
+        // Pull control point slightly toward center for a gentle arc
+        const cx = CX + (mx - CX) * 0.55;
+        const cy = CY + (my - CY) * 0.55;
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.classList.add("path-arc", "visible");
+        path.setAttribute("d", `M ${a.x} ${a.y} Q ${cx} ${cy} ${b.x} ${b.y}`);
+        paths.appendChild(path);
+      }
+    }
+
+    function highlightKeys(activeKeys, tonic) {
+      const active = new Set(activeKeys.map(toWheelKey));
+      const ton = toWheelKey(tonic);
+      document.querySelectorAll(".key-wedge").forEach((el) => {
+        const k = el.dataset.key;
+        el.classList.remove("lit", "dim", "tonic");
+        if (active.has(k)) {
+          el.classList.add("lit");
+          if (k === ton) el.classList.add("tonic");
+        } else {
+          el.classList.add("dim");
+        }
+      });
+    }
+
+    let currentSongId = "crossroads";
+    let currentSectionId = null;
+
+    function renderSongSelect() {
+      const sel = document.getElementById("songSelect");
+      sel.innerHTML = Object.entries(SONGS)
+        .map(([id, s]) => `<option value="${id}">${s.title}</option>`)
+        .join("");
+      sel.value = currentSongId;
+      sel.addEventListener("change", () => {
+        currentSongId = sel.value;
+        currentSectionId = SONGS[currentSongId].sections[0].id;
+        renderAll();
+      });
+    }
+
+    function renderMeta() {
+      const song = SONGS[currentSongId];
+      document.getElementById("songMeta").innerHTML = `
+        <strong>${song.title}</strong>
+        <p>${song.artist}<br/>${song.mode}</p>
+      `;
+      document.getElementById("centerTitle").textContent = song.tonic.replace("G#m", "G♯m").replace("C#m", "C♯m");
+      // Prefer sharp spelling in center for Ozzy tunes
+      const pretty = { "G#m": "G♯m", "C#m": "C♯m", "F#m": "F♯m", "F#": "F♯", "Db": "D♭", "Ab": "A♭", "Eb": "E♭", "Bb": "B♭", "Am": "Am", "A": "A", "E": "E", "D": "D" };
+      document.getElementById("centerTitle").textContent = pretty[song.tonic] || song.tonic;
+    }
+
+    function renderSections() {
+      const song = SONGS[currentSongId];
+      const list = document.getElementById("sectionList");
+      list.innerHTML = "";
+      song.sections.forEach((sec) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "section-btn" + (sec.id === currentSectionId ? " active" : "");
+        btn.setAttribute("role", "option");
+        btn.setAttribute("aria-selected", sec.id === currentSectionId ? "true" : "false");
+        btn.innerHTML = `<span class="name">${sec.name}</span><span class="chords">${sec.chords}</span>`;
+        btn.addEventListener("click", () => {
+          currentSectionId = sec.id;
+          renderAll();
+        });
+        list.appendChild(btn);
+      });
+    }
+
+    function renderDetail() {
+      const song = SONGS[currentSongId];
+      const sec = song.sections.find((s) => s.id === currentSectionId) || song.sections[0];
+      currentSectionId = sec.id;
+
+      document.getElementById("detail").innerHTML = `
+        <div>
+          <h2>${sec.name}</h2>
+          <div class="function">${sec.function}</div>
+          <p>${sec.note}</p>
+        </div>
+        <div class="chips">
+          ${sec.keys.map((k) => `<span class="chip">${k.replace("#", "♯").replace("b", "♭")}</span>`).join("")}
+        </div>
+      `;
+
+      highlightKeys(sec.keys, song.tonic);
+      drawPath(sec.keys);
+    }
+
+    function syncUrl() {
+      const params = new URLSearchParams();
+      params.set("song", currentSongId);
+      if (currentSectionId) params.set("section", currentSectionId);
+      const qs = "?" + params.toString();
+      if (location.search !== qs) history.replaceState(null, "", qs);
+      const el = document.getElementById("permalink");
+      if (el) {
+        const href = (location.pathname.split("/").pop() || "circle_of_fifths.html") + qs;
+        el.innerHTML = `Link: <a href="${qs}"><code>${href}</code></a>`;
+      }
+    }
+
+    function renderAll() {
+      renderMeta();
+      renderSections();
+      renderDetail();
+      syncUrl();
+    }
+
+    // Keyboard: arrow keys walk sections
+    document.addEventListener("keydown", (e) => {
+      const song = SONGS[currentSongId];
+      const idx = song.sections.findIndex((s) => s.id === currentSectionId);
+      if (e.key === "ArrowDown" || e.key === "ArrowRight") {
+        e.preventDefault();
+        currentSectionId = song.sections[(idx + 1) % song.sections.length].id;
+        renderAll();
+      } else if (e.key === "ArrowUp" || e.key === "ArrowLeft") {
+        e.preventDefault();
+        currentSectionId = song.sections[(idx - 1 + song.sections.length) % song.sections.length].id;
+        renderAll();
+      }
+    });
+
+    function applyQuery() {
+      const params = new URLSearchParams(location.search);
+      const song = params.get("song");
+      const section = params.get("section");
+      if (song && SONGS[song]) currentSongId = song;
+      const secs = SONGS[currentSongId].sections;
+      if (section && secs.some((s) => s.id === section)) {
+        currentSectionId = section;
+      } else {
+        currentSectionId = secs[0].id;
+      }
+    }
+
+    buildWheel();
+    applyQuery();
+    renderSongSelect();
+    renderAll();
+  </script>
+</body>
+</html>
