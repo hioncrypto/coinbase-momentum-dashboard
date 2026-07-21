@@ -1,0 +1,1410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cream — Crossroads · Deep Musical Analysis &amp; Circle of Fifths</title>
+  <meta name="description" content="Standalone deep musical analysis of Cream's Crossroads (Winterland 1968) with interactive Circle of Fifths mapping." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg0: #0c1110;
+      --bg1: #121a18;
+      --panel: #17211e;
+      --panel-2: #1e2b27;
+      --line: rgba(214, 186, 120, 0.22);
+      --copper: #d6ba78;
+      --copper-bright: #f0dfa8;
+      --ember: #e0703a;
+      --teal: #5ec4a8;
+      --teal-dim: rgba(94, 196, 168, 0.18);
+      --text: #ebe6da;
+      --muted: #9aa89f;
+      --danger: #d46a6a;
+      --major-fill: #243530;
+      --minor-fill: #1a2622;
+      --active: #d6ba78;
+      --path: #e0703a;
+      --ink: #0c1110;
+    }
+
+    * { box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100%;
+      color: var(--text);
+      font-family: Sora, system-ui, sans-serif;
+      background:
+        radial-gradient(ellipse 90% 50% at 15% -5%, rgba(224, 112, 58, 0.14), transparent 55%),
+        radial-gradient(ellipse 60% 45% at 95% 20%, rgba(94, 196, 168, 0.1), transparent 50%),
+        radial-gradient(ellipse 50% 40% at 50% 100%, rgba(214, 186, 120, 0.06), transparent 55%),
+        linear-gradient(168deg, #0a0f0e 0%, #121a18 42%, #0c1110 100%);
+      line-height: 1.55;
+    }
+
+    a { color: var(--teal); }
+    a:hover { color: var(--copper-bright); }
+
+    .wrap {
+      width: min(1080px, calc(100% - 2rem));
+      margin: 0 auto;
+    }
+
+    /* —— Hero —— */
+    .hero {
+      position: relative;
+      overflow: hidden;
+      border-bottom: 1px solid var(--line);
+      padding: clamp(2.5rem, 7vw, 5rem) 0 clamp(2rem, 5vw, 3.25rem);
+    }
+
+    .hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(105deg, transparent 40%, rgba(224, 112, 58, 0.07) 70%, transparent 100%),
+        repeating-linear-gradient(
+          -18deg,
+          transparent,
+          transparent 11px,
+          rgba(94, 196, 168, 0.03) 11px,
+          rgba(94, 196, 168, 0.03) 12px
+        );
+      pointer-events: none;
+      animation: haze 14s ease-in-out infinite alternate;
+    }
+
+    @keyframes haze {
+      from { opacity: 0.7; transform: translateX(-1%); }
+      to { opacity: 1; transform: translateX(1%); }
+    }
+
+    .eyebrow {
+      margin: 0 0 0.75rem;
+      font-size: 0.72rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--ember);
+      font-weight: 600;
+      position: relative;
+    }
+
+    .brand {
+      margin: 0;
+      font-family: "Instrument Serif", Georgia, serif;
+      font-weight: 400;
+      font-size: clamp(3rem, 10vw, 5.6rem);
+      line-height: 0.92;
+      letter-spacing: -0.03em;
+      color: var(--copper-bright);
+      position: relative;
+      animation: rise 0.9s ease both;
+    }
+
+    .brand em {
+      font-style: italic;
+      color: var(--teal);
+      display: block;
+      font-size: 0.72em;
+      margin-top: 0.15em;
+    }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(18px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .lede {
+      margin: 1.25rem 0 0;
+      max-width: 38rem;
+      color: var(--muted);
+      font-size: 1.02rem;
+      position: relative;
+      animation: rise 0.9s 0.12s ease both;
+    }
+
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.55rem;
+      margin-top: 1.5rem;
+      position: relative;
+      animation: rise 0.9s 0.22s ease both;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.4rem 0.75rem;
+      border: 1px solid var(--line);
+      background: rgba(23, 33, 30, 0.75);
+      font-size: 0.78rem;
+      color: var(--copper);
+      letter-spacing: 0.02em;
+    }
+
+    .chip strong { color: var(--text); font-weight: 600; }
+
+    nav.toc {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1rem;
+      margin-top: 1.75rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid var(--line);
+      position: relative;
+    }
+
+    nav.toc a {
+      font-size: 0.8rem;
+      text-decoration: none;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      font-weight: 500;
+      transition: color 0.2s ease;
+    }
+
+    nav.toc a:hover { color: var(--copper-bright); }
+
+    /* —— Sections —— */
+    section.block {
+      padding: clamp(2rem, 5vw, 3.5rem) 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    section.block h2 {
+      margin: 0 0 0.35rem;
+      font-family: "Instrument Serif", Georgia, serif;
+      font-weight: 400;
+      font-size: clamp(1.85rem, 4vw, 2.55rem);
+      color: var(--copper-bright);
+      letter-spacing: -0.02em;
+    }
+
+    section.block .sec-sub {
+      margin: 0 0 1.5rem;
+      color: var(--muted);
+      max-width: 40rem;
+      font-size: 0.95rem;
+    }
+
+    .prose p {
+      margin: 0 0 1rem;
+      max-width: 46rem;
+      color: var(--text);
+      font-size: 0.98rem;
+    }
+
+    .prose p:last-child { margin-bottom: 0; }
+
+    .prose strong { color: var(--copper-bright); font-weight: 600; }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    @media (max-width: 760px) {
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+
+    .cardish {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      padding: 1.1rem 1.2rem;
+    }
+
+    .cardish h3 {
+      margin: 0 0 0.55rem;
+      font-family: "Instrument Serif", Georgia, serif;
+      font-size: 1.25rem;
+      color: var(--teal);
+      font-weight: 400;
+    }
+
+    .cardish p, .cardish li {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    .cardish ul {
+      margin: 0;
+      padding-left: 1.1rem;
+      display: grid;
+      gap: 0.35rem;
+    }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.75rem;
+      margin: 1.25rem 0 1.5rem;
+    }
+
+    @media (max-width: 760px) {
+      .stat-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    .stat {
+      background: linear-gradient(160deg, var(--panel-2), var(--panel));
+      border: 1px solid var(--line);
+      padding: 0.95rem 1rem;
+      transition: border-color 0.25s ease, transform 0.25s ease;
+    }
+
+    .stat:hover {
+      border-color: rgba(94, 196, 168, 0.45);
+      transform: translateY(-2px);
+    }
+
+    .stat .k {
+      display: block;
+      font-size: 0.68rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.35rem;
+      font-weight: 600;
+    }
+
+    .stat .v {
+      font-family: "Instrument Serif", Georgia, serif;
+      font-size: 1.35rem;
+      color: var(--copper-bright);
+      line-height: 1.15;
+    }
+
+    .callout {
+      margin: 1.35rem 0;
+      padding: 1rem 1.15rem;
+      border-left: 3px solid var(--ember);
+      background: rgba(224, 112, 58, 0.08);
+      color: var(--text);
+      font-size: 0.95rem;
+      max-width: 46rem;
+    }
+
+    .callout cite {
+      display: block;
+      margin-top: 0.45rem;
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-style: normal;
+    }
+
+    /* Form diagram */
+    .form-rail {
+      display: grid;
+      gap: 0.4rem;
+      margin: 1.25rem 0;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 5.5rem 1fr auto;
+      gap: 0.75rem;
+      align-items: center;
+      padding: 0.65rem 0.85rem;
+      background: var(--panel);
+      border: 1px solid transparent;
+      border-left: 3px solid var(--teal);
+      cursor: pointer;
+      transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+      font: inherit;
+      color: inherit;
+      text-align: left;
+      width: 100%;
+    }
+
+    .form-row:hover,
+    .form-row.active {
+      background: var(--panel-2);
+      border-color: var(--line);
+      border-left-color: var(--ember);
+      transform: translateX(3px);
+    }
+
+    .form-row .t {
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--ember);
+      font-weight: 600;
+    }
+
+    .form-row .n {
+      font-weight: 600;
+      font-size: 0.92rem;
+    }
+
+    .form-row .c {
+      font-size: 0.8rem;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    @media (max-width: 640px) {
+      .form-row {
+        grid-template-columns: 1fr;
+        gap: 0.2rem;
+      }
+      .form-row .c { white-space: normal; }
+    }
+
+    /* —— Circle of Fifths —— */
+    .cof-shell {
+      display: grid;
+      grid-template-columns: minmax(240px, 300px) 1fr;
+      gap: 0;
+      min-height: 520px;
+      border: 1px solid var(--line);
+      background: rgba(12, 17, 16, 0.55);
+      overflow: hidden;
+    }
+
+    @media (max-width: 900px) {
+      .cof-shell {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .cof-side {
+      padding: 1.15rem 1.2rem;
+      border-right: 1px solid var(--line);
+      background: rgba(14, 20, 18, 0.7);
+      overflow-y: auto;
+    }
+
+    @media (max-width: 900px) {
+      .cof-side { border-right: none; border-bottom: 1px solid var(--line); }
+    }
+
+    .cof-side .field {
+      display: block;
+      font-size: 0.68rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.4rem;
+      font-weight: 600;
+    }
+
+    .cof-meta {
+      margin: 0 0 1rem;
+      padding: 0.85rem 0.95rem;
+      background: var(--panel);
+      border: 1px solid var(--line);
+    }
+
+    .cof-meta strong {
+      display: block;
+      font-family: "Instrument Serif", Georgia, serif;
+      font-size: 1.2rem;
+      color: var(--copper);
+      margin-bottom: 0.2rem;
+      font-weight: 400;
+    }
+
+    .cof-meta p {
+      margin: 0;
+      font-size: 0.82rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .sec-btns {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .sec-btn {
+      text-align: left;
+      background: transparent;
+      border: 1px solid transparent;
+      padding: 0.7rem 0.8rem;
+      color: var(--text);
+      cursor: pointer;
+      font: inherit;
+      transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+    }
+
+    .sec-btn:hover {
+      background: var(--panel);
+      border-color: var(--line);
+    }
+
+    .sec-btn.active {
+      background: linear-gradient(135deg, rgba(224, 112, 58, 0.2), rgba(94, 196, 168, 0.08));
+      border-color: rgba(214, 186, 120, 0.4);
+      transform: translateX(3px);
+    }
+
+    .sec-btn .name {
+      display: block;
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+
+    .sec-btn .chords {
+      display: block;
+      margin-top: 0.15rem;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    .sec-btn.active .chords { color: var(--copper); }
+
+    .cof-stage {
+      position: relative;
+      display: grid;
+      place-items: center;
+      padding: 1rem;
+      min-height: 460px;
+      background:
+        radial-gradient(circle at 50% 50%, rgba(94, 196, 168, 0.07), transparent 55%),
+        var(--bg1);
+    }
+
+    .cof-svg {
+      width: min(100%, 460px);
+      height: auto;
+      overflow: visible;
+    }
+
+    .cof-svg .ring-label {
+      fill: var(--muted);
+      font-family: Sora, sans-serif;
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .cof-svg .key-wedge {
+      stroke: rgba(214, 186, 120, 0.18);
+      stroke-width: 1;
+      cursor: pointer;
+      transition: fill 0.25s ease, stroke 0.25s ease;
+    }
+
+    .cof-svg .key-wedge.major { fill: var(--major-fill); }
+    .cof-svg .key-wedge.minor { fill: var(--minor-fill); }
+
+    .cof-svg .key-wedge.lit {
+      fill: rgba(224, 112, 58, 0.55);
+      stroke: var(--copper-bright);
+      stroke-width: 2;
+      filter: drop-shadow(0 0 8px rgba(224, 112, 58, 0.35));
+    }
+
+    .cof-svg .key-wedge.tonic {
+      fill: rgba(94, 196, 168, 0.55);
+      stroke: var(--teal);
+      stroke-width: 2.5;
+      filter: drop-shadow(0 0 10px rgba(94, 196, 168, 0.4));
+    }
+
+    .cof-svg .key-text {
+      fill: var(--text);
+      font-family: Sora, sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      pointer-events: none;
+      text-anchor: middle;
+      dominant-baseline: middle;
+    }
+
+    .cof-svg .key-text.minor-label {
+      font-size: 11px;
+      font-weight: 500;
+      fill: var(--muted);
+    }
+
+    .cof-svg .key-text.lit-label { fill: var(--ink); font-weight: 700; }
+    .cof-svg .key-text.tonic-label { fill: var(--ink); font-weight: 700; }
+
+    .cof-center {
+      position: absolute;
+      text-align: center;
+      pointer-events: none;
+      max-width: 8.5rem;
+    }
+
+    .cof-center .ct {
+      font-family: "Instrument Serif", Georgia, serif;
+      font-size: 1.65rem;
+      color: var(--copper-bright);
+      line-height: 1;
+    }
+
+    .cof-center .cs {
+      margin-top: 0.25rem;
+      font-size: 0.72rem;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .cof-detail {
+      margin-top: 1rem;
+      padding: 1rem 1.15rem;
+      border: 1px solid var(--line);
+      background: var(--panel);
+    }
+
+    .cof-detail h3 {
+      margin: 0 0 0.35rem;
+      font-family: "Instrument Serif", Georgia, serif;
+      font-size: 1.35rem;
+      color: var(--copper-bright);
+      font-weight: 400;
+    }
+
+    .cof-detail .fn {
+      margin: 0 0 0.55rem;
+      color: var(--teal);
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+
+    .cof-detail p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.92rem;
+      max-width: 48rem;
+    }
+
+    .hint {
+      margin-top: 0.75rem;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    /* Scale tables */
+    .scale-row {
+      display: grid;
+      grid-template-columns: 9rem 1fr;
+      gap: 0.75rem;
+      align-items: baseline;
+      padding: 0.55rem 0;
+      border-bottom: 1px solid rgba(214, 186, 120, 0.1);
+      font-size: 0.9rem;
+    }
+
+    .scale-row:last-child { border-bottom: none; }
+
+    .scale-row .lab {
+      color: var(--ember);
+      font-weight: 600;
+      font-size: 0.78rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .scale-row .notes {
+      font-family: "Instrument Serif", Georgia, serif;
+      font-size: 1.15rem;
+      color: var(--copper-bright);
+      letter-spacing: 0.04em;
+    }
+
+    .timeline {
+      display: grid;
+      gap: 0;
+      margin: 1.25rem 0;
+      border-left: 2px solid rgba(94, 196, 168, 0.35);
+      padding-left: 1.1rem;
+    }
+
+    .tl-item {
+      position: relative;
+      padding: 0 0 1.15rem;
+    }
+
+    .tl-item::before {
+      content: "";
+      position: absolute;
+      left: -1.35rem;
+      top: 0.35rem;
+      width: 0.55rem;
+      height: 0.55rem;
+      border-radius: 50%;
+      background: var(--ember);
+      box-shadow: 0 0 0 3px rgba(224, 112, 58, 0.2);
+    }
+
+    .tl-item .when {
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--teal);
+      font-weight: 600;
+    }
+
+    .tl-item .what {
+      font-weight: 600;
+      margin: 0.15rem 0;
+    }
+
+    .tl-item .why {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    footer.page-foot {
+      padding: 2rem 0 3rem;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    footer.page-foot p { margin: 0 0 0.4rem; max-width: 40rem; }
+
+    .standalone-badge {
+      display: inline-block;
+      margin-top: 0.75rem;
+      padding: 0.35rem 0.65rem;
+      border: 1px dashed rgba(94, 196, 168, 0.45);
+      color: var(--teal);
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="wrap">
+      <p class="eyebrow">Standalone analysis · not part of any other project</p>
+      <h1 class="brand">CREAM<em>Crossroads</em></h1>
+      <p class="lede">
+        A full-spectrum musical reading of the Winterland Ballroom performance
+        that opened the live half of <em>Wheels of Fire</em> — style, form, harmony,
+        rhythm, guitar language, band interplay, and how the whole machine sits on the Circle of Fifths.
+      </p>
+      <div class="meta-row">
+        <span class="chip"><strong>Key</strong> A blues (A7 · D7 · E7)</span>
+        <span class="chip"><strong>Tempo</strong> ~130–132 BPM</span>
+        <span class="chip"><strong>Meter</strong> 4/4 straight eighths</span>
+        <span class="chip"><strong>Form</strong> 12-bar blues</span>
+        <span class="chip"><strong>Source</strong> <a href="https://youtu.be/PE9HvSdcaL4" target="_blank" rel="noopener">youtu.be/PE9HvSdcaL4</a></span>
+      </div>
+      <div class="meta-row" style="margin-top:1rem">
+        <span class="chip"><strong>CoF map</strong> <a href="../music/circle_of_fifths.html?song=crossroads">music/circle_of_fifths.html?song=crossroads</a></span>
+      </div>
+      <nav class="toc" aria-label="Sections">
+        <a href="../music/circle_of_fifths.html?song=crossroads">Open CoF map</a>
+        <a href="#identity">Identity</a>
+        <a href="#history">History</a>
+        <a href="#form">Form</a>
+        <a href="#harmony">Harmony</a>
+        <a href="#cof">Circle of Fifths</a>
+        <a href="#melody">Melody &amp; scales</a>
+        <a href="#rhythm">Rhythm</a>
+        <a href="#guitar">Guitar</a>
+        <a href="#band">Band</a>
+        <a href="#lyric">Lyric</a>
+        <a href="#production">Production</a>
+        <a href="#influence">Influence</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <!-- IDENTITY -->
+    <section class="block" id="identity">
+      <div class="wrap">
+        <h2>Style &amp; identity</h2>
+        <p class="sec-sub">What kind of music this is — and why that answer is more than “blues rock.”</p>
+
+        <div class="stat-grid">
+          <div class="stat"><span class="k">Genre spine</span><span class="v">Electric blues → hard rock</span></div>
+          <div class="stat"><span class="k">Ensemble</span><span class="v">Power trio (supergroup)</span></div>
+          <div class="stat"><span class="k">Aesthetic</span><span class="v">Live improvisation as form</span></div>
+          <div class="stat"><span class="k">Lineage</span><span class="v">Delta → Chicago → British blues boom</span></div>
+        </div>
+
+        <div class="prose">
+          <p>
+            Cream’s “Crossroads” is a <strong>blues-rock transformation</strong> of Robert Johnson’s
+            1936 Delta piece “Cross Road Blues.” It is not a museum cover: Clapton deliberately rebuilt
+            the song as a <strong>rock vehicle</strong> — a fixed riff, a regular 12-bar chassis, and room
+            for Marshall-volume improvisation. The result sits at the hinge where British blues revival
+            becomes late-’60s hard rock.
+          </p>
+          <p>
+            Stylistically you hear three stacked traditions at once: <strong>Delta country blues</strong>
+            (source material and lyric world), <strong>electric blues solo language</strong> of B.B. King
+            and Albert King (string bends, vocalized phrasing, no open-G slide), and
+            <strong>jazz-trio elasticity</strong> from Jack Bruce and Ginger Baker (bass as counter-melody,
+            drums as conversation). That fusion — blues grammar + rock drive + improvisational stretch —
+            is Cream’s signature.
+          </p>
+        </div>
+
+        <div class="grid-2" style="margin-top:1.25rem">
+          <div class="cardish">
+            <h3>What it is</h3>
+            <ul>
+              <li>Up-tempo 12-bar blues in A with dominant-seventh harmony</li>
+              <li>Straight-eighth rock groove (not Johnson’s fluid rubato)</li>
+              <li>Riff-driven head that never disappears under the solos</li>
+              <li>Two improvised guitar choruses that define the recording’s fame</li>
+              <li>Clapton on rare Cream lead vocal (Bruce signs off at the end)</li>
+            </ul>
+          </div>
+          <div class="cardish">
+            <h3>What it is not</h3>
+            <ul>
+              <li>Not open-tuning slide Delta blues</li>
+              <li>Not irregular 14–15 bar country-blues phrases</li>
+              <li>Not a slow minor blues or reggae later-Clapton reading</li>
+              <li>Not a studio overdub construction — it is a live capture</li>
+              <li>Not “satanic lyric theater” — the text kneels to God, not the Devil</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- HISTORY -->
+    <section class="block" id="history">
+      <div class="wrap">
+        <h2>Genealogy of the arrangement</h2>
+        <p class="sec-sub">How a San Antonio hotel-room blues became a Winterland rock standard.</p>
+
+        <div class="timeline">
+          <div class="tl-item">
+            <div class="when">27 Nov 1936</div>
+            <div class="what">Robert Johnson — “Cross Road Blues”</div>
+            <p class="why">Solo vocal + acoustic slide, open G tuned toward B; irregular phrase lengths; harp-style accents; ambiguous 4/4 vs 8/8 feel.</p>
+          </div>
+          <div class="tl-item">
+            <div class="when">1954 / 1960–61</div>
+            <div class="what">Elmore James — “Standing at the Crossroads”</div>
+            <p class="why">Electrified ensemble versions; Dust My Broom slide figure; lyric shifts toward lost-love standing-at-the-crossroads.</p>
+          </div>
+          <div class="tl-item">
+            <div class="when">Early 1966</div>
+            <div class="what">Eric Clapton &amp; the Powerhouse</div>
+            <p class="why">Studio hybrid with Steve Winwood vocal; Clapton already blending Cross Road Blues with Traveling Riverside Blues ideas — slower, more blues-based than Cream.</p>
+          </div>
+          <div class="tl-item">
+            <div class="when">Jul 1966 onward</div>
+            <div class="what">Cream live repertoire</div>
+            <p class="why">Clapton strips Johnson’s full-chorded slide line to a single-/two-string riff, locks it to straight eighths, and standardizes the form to clear I–IV–V twelve-bar cycles.</p>
+          </div>
+          <div class="tl-item">
+            <div class="when">10 Mar 1968 · Winterland</div>
+            <div class="what">The canonical take (~4:14–4:21)</div>
+            <p class="why">Opens the live disc of <em>Wheels of Fire</em>. Gibson SG into Marshall; two guitar solos; Bruce/Baker improvising hard under Clapton. Later issued as a U.S. single (Jan 1969, #28 Billboard Hot 100).</p>
+          </div>
+        </div>
+
+        <div class="callout">
+          “In ‘Crossroads’ there was a very definite riff… I just took it on a single string or two strings and embellished it. Out of all of the songs it was the easiest for me to see as a rock and roll vehicle.”
+          <cite>— Eric Clapton on rebuilding Johnson for a band format</cite>
+        </div>
+      </div>
+    </section>
+
+    <!-- FORM -->
+    <section class="block" id="form">
+      <div class="wrap">
+        <h2>Form &amp; architecture</h2>
+        <p class="sec-sub">The chassis is textbook 12-bar blues; the drama is how choruses escalate.</p>
+
+        <div class="prose">
+          <p>
+            Cream replaces Johnson’s elastic 14–15 bar verses with a <strong>invariant twelve-bar blues</strong>.
+            That decision is structural and cultural: it gives Bruce and Baker a predictable map, and it gives
+            Clapton choruses that can be stacked like jazz choruses — same form, rising intensity.
+          </p>
+          <p>
+            Typical quick-change 12-bar in A (dominant sevenths throughout):
+          </p>
+        </div>
+
+        <div class="cardish" style="margin:1rem 0 1.35rem; max-width:46rem">
+          <h3>12-bar map (A blues)</h3>
+          <p style="margin-bottom:0.65rem; color:var(--copper-bright); font-family:'Instrument Serif',Georgia,serif; font-size:1.15rem; letter-spacing:0.03em">
+            ||: A7 · A7 · A7 · A7 | D7 · D7 | A7 · A7 | E7 · D7 | A7 · E7 :||
+          </p>
+          <p>Functions: I7 (4) → IV7 (2) → I7 (2) → V7–IV7–I7–V7 turnaround. The final E7 is the springboard into the next chorus.</p>
+        </div>
+
+        <div class="form-rail" id="formRail" aria-label="Song sections">
+          <!-- filled by JS to sync with CoF -->
+        </div>
+
+        <div class="prose">
+          <p>
+            Approximate narrative on the Winterland cut: <strong>riff intro</strong> stating the A7 world →
+            <strong>vocal choruses</strong> (Johnson text + Traveling Riverside Blues “Rosedale” insert) with
+            fills → <strong>solo 1</strong> (~2 choruses, mid-neck, major→minor climb) → brief vocal return →
+            <strong>solo 2</strong> (the famous high-register assault, often cited as a holy-grail rock solo) →
+            final vocal / band hit home on A.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- HARMONY -->
+    <section class="block" id="harmony">
+      <div class="wrap">
+        <h2>Harmony &amp; tonality</h2>
+        <p class="sec-sub">Why “key of A” and “Mixolydian/blues” both feel true — and how the circle explains the I–IV–V machine.</p>
+
+        <div class="prose">
+          <p>
+            On paper the song is in <strong>A major / A Mixolydian blues</strong>: key signature thinking
+            (three sharps) plus flattened sevenths on every primary chord. In practice every pillar chord is a
+            <strong>dominant seventh</strong> — A7, D7, E7 — so the tonic itself is unstable in classical terms.
+            That is the blues paradox: the I chord already contains the leading-tone of the IV (the note G),
+            so “home” always leans forward.
+          </p>
+          <p>
+            Functional reading:
+          </p>
+        </div>
+
+        <div class="grid-2" style="margin:1.1rem 0 1.35rem">
+          <div class="cardish">
+            <h3>Chord roles</h3>
+            <ul>
+              <li><strong style="color:var(--copper-bright)">A7 (I7)</strong> — blues tonic; Mixolydian color (G natural)</li>
+              <li><strong style="color:var(--copper-bright)">D7 (IV7)</strong> — subdominant lift; bars 5–6 and turnaround step-down from E7</li>
+              <li><strong style="color:var(--copper-bright)">E7 (V7)</strong> — maximum tension; turnaround and chorus seams</li>
+            </ul>
+          </div>
+          <div class="cardish">
+            <h3>Circle distances</h3>
+            <ul>
+              <li>A → D is <strong>one fifth counterclockwise</strong> (add a flat / move to the IV)</li>
+              <li>A → E is <strong>one fifth clockwise</strong> (add a sharp / move to the V)</li>
+              <li>I–IV–V therefore form a <strong>tight neighborhood</strong>: three adjacent stations</li>
+              <li>Relative minor of A is F♯m — present as color in solos, not as a chord home</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="prose">
+          <p>
+            Because the progression never leaves that three-chord neighborhood, harmonic interest is not
+            modulation — it is <strong>voice-leading inside the blues scale set</strong>, chord-tone targeting,
+            and the major/minor ambiguity of blues melody over dominant harmony. The Circle of Fifths below
+            lights exactly that tight A–D–E triangle and walks it section by section.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- CIRCLE OF FIFTHS -->
+    <section class="block" id="cof">
+      <div class="wrap">
+        <h2>Circle of Fifths · Crossroads map</h2>
+        <p class="sec-sub">Unique interactive map for this song only — select a section to light its keys and read the function.</p>
+
+        <div class="cof-shell">
+          <aside class="cof-side">
+            <span class="field">Sections</span>
+            <div class="cof-meta" id="songMeta"></div>
+            <div class="sec-btns" id="secBtns"></div>
+            <p class="hint">Keyboard: ← → to step sections. Teal = tonic neighborhood; copper = active chord lights.</p>
+          </aside>
+          <div class="cof-stage">
+            <svg class="cof-svg" id="cofSvg" viewBox="0 0 500 500" role="img" aria-label="Circle of fifths for Crossroads"></svg>
+            <div class="cof-center">
+              <div class="ct" id="centerTitle">A</div>
+              <div class="cs" id="centerSub">blues tonic</div>
+            </div>
+          </div>
+        </div>
+        <div class="cof-detail" id="cofDetail">
+          <h3 id="detName">Intro riff</h3>
+          <div class="fn" id="detFn">I7 — establish the A7 home</div>
+          <p id="detNote"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- MELODY / SCALES -->
+    <section class="block" id="melody">
+      <div class="wrap">
+        <h2>Melody, scales &amp; blue notes</h2>
+        <p class="sec-sub">The solo vocabulary is the classic major/minor blues dual citizenship.</p>
+
+        <div class="cardish" style="margin-bottom:1.25rem">
+          <div class="scale-row">
+            <span class="lab">A minor pent.</span>
+            <span class="notes">A · C · D · E · G</span>
+          </div>
+          <div class="scale-row">
+            <span class="lab">A blues</span>
+            <span class="notes">A · C · D · E♭ · E · G &nbsp;(♭5 “blue note”)</span>
+          </div>
+          <div class="scale-row">
+            <span class="lab">A major pent.</span>
+            <span class="notes">A · B · C♯ · E · F♯</span>
+          </div>
+          <div class="scale-row">
+            <span class="lab">A Mixolydian</span>
+            <span class="notes">A · B · C♯ · D · E · F♯ · G</span>
+          </div>
+          <div class="scale-row">
+            <span class="lab">Sweet major 3rd</span>
+            <span class="notes">C♯ — Clapton’s “major note” (often G-string 6th fret in box 1) that separates minor blues from major chord color</span>
+          </div>
+        </div>
+
+        <div class="prose">
+          <p>
+            Solo 1 characteristically <strong>starts lower with major-pentatonic sweetness</strong> and climbs into
+            <strong>minor-pentatonic / blues</strong> density — a narrative arc inside one scale neighborhood.
+            Double-stops (often root+5) thicken mid-phrase punches. Solo 2 relocates the same language
+            roughly an octave higher (around the 17th fret), where Marshall compression and feedback turn
+            every bend into a vocal cry.
+          </p>
+          <p>
+            Over A7, both C (minor 3rd) and C♯ (major 3rd) are “legal” — the friction is the style.
+            Over D7, targeting F♯ and C (chord tones of D7) while still speaking A-blues creates the classic
+            IV-chord “inside/outside” blues feeling. Over E7, resolutions to E or B, or a landing on A as the
+            next chorus arrives, are the big structural commas.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- RHYTHM -->
+    <section class="block" id="rhythm">
+      <div class="wrap">
+        <h2>Rhythm, groove &amp; the “wrong beat”</h2>
+        <p class="sec-sub">Straight eighths, forward lean, and Clapton’s famous self-critique.</p>
+
+        <div class="prose">
+          <p>
+            Meter is a firm <strong>4/4</strong> at roughly <strong>130–132 BPM</strong>. Unlike Johnson’s
+            ambiguous swing/rubato, Cream commits to a <strong>straight-eighth rock pulse</strong>. Clapton and
+            Bruce hammer the riff on a regular grid; Baker supplies jazz-informed fills without dissolving the
+            downbeat for long.
+          </p>
+          <p>
+            Clapton has repeatedly said he feels parts of the solo sit on <strong>beats 1 and 3</strong> when he
+            meant to feel 2 and 4 — “most of that solo is on the wrong beat.” Paradoxically, that displacement
+            is part of why the solo feels so urgent: accents arrive where listeners’ bodies expect backbeats,
+            creating a perpetual falling-forward sensation. The band’s miracle is that they <strong>exit the
+            chaos together</strong> when the vocal returns.
+          </p>
+        </div>
+
+        <div class="callout">
+          “I’ve always had ‘Crossroads’ held up as… one of the great landmarks of guitar playing, but most of that solo is on the wrong beat… No wonder people think it’s so good — because it’s wrong!”
+          <cite>— Eric Clapton (Mojo interview, often cited regarding the Winterland solo)</cite>
+        </div>
+      </div>
+    </section>
+
+    <!-- GUITAR -->
+    <section class="block" id="guitar">
+      <div class="wrap">
+        <h2>Guitar craft &amp; tone</h2>
+        <p class="sec-sub">Riff construction, solo dramaturgy, and the SG/Marshall physical plant.</p>
+
+        <div class="grid-2">
+          <div class="cardish">
+            <h3>Riff &amp; rhythm guitar</h3>
+            <ul>
+              <li>Johnson’s full-chorded slide idea reduced to a lean single-/two-string figure</li>
+              <li>Palm-muted A7 chatter on early bars; more open ringing on D7 answers</li>
+              <li>Boogie / duple shuffle bass pattern under vocals (Johnson used it only briefly)</li>
+              <li>Standard tuning — no open G, no bottleneck</li>
+              <li>Intro ends with a fast A-blues run that plants E (V) for the vocal entry</li>
+            </ul>
+          </div>
+          <div class="cardish">
+            <h3>Lead language</h3>
+            <ul>
+              <li>Albert/B.B. King electric vocabulary: bends, vibrato, call-and-response phrases</li>
+              <li>Alternate picking + string skipping in the fast turnarounds</li>
+              <li>Register plan: mid-neck story (solo 1) → upper-neck blaze (solo 2)</li>
+              <li>Double-stops and unison/octave punches for “band-sized” melodic hits</li>
+              <li>~1964 Gibson SG → Marshall stack: singing midrange, natural compression, feedback as sustain</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="prose" style="margin-top:1.25rem">
+          <p>
+            Solo 2 is the cultural monument: a stampede opening, high bends that behave like screamed vowels,
+            momentary near-derailments (Clapton seeming to lose the form around the late first chorus of that
+            solo), then a piercing high A tonic that re-synchronizes the trio. Analysts often hear Bruce briefly
+            become a <strong>second soloist</strong> — abandoning straight-eight accompaniment for high-register
+            bass commentary — which is why the section feels like chamber improvisation at stadium volume.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- BAND -->
+    <section class="block" id="band">
+      <div class="wrap">
+        <h2>Trio interplay</h2>
+        <p class="sec-sub">Cream’s democratic tension: three lead voices sharing one blues form.</p>
+
+        <div class="prose">
+          <p>
+            <strong>Jack Bruce</strong> does not only “cover the roots.” His lines braid rhythm and harmony —
+            sometimes locking the riff with Clapton, sometimes counter-punching in the upper register during
+            solo peaks. That is upright-jazz-bass thinking translated to electric rock.
+          </p>
+          <p>
+            <strong>Ginger Baker</strong> brings jazz-trio drum syntax: fills as sentences, tom melodies,
+            and a refusal to be a mere timekeeper. The groove stays danceable enough for rock, but the detail
+            density is closer to Elvin Jones than to a backbeat-only garage drummer.
+          </p>
+          <p>
+            The aesthetic risk of the power trio is exposure — every timing disagreement is audible. “Crossroads”
+            turns that risk into drama: the listener hears the wire-walk and the recovery. That is live Cream
+            doctrine more than studio polish.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- LYRIC -->
+    <section class="block" id="lyric">
+      <div class="wrap">
+        <h2>Lyric world &amp; myth</h2>
+        <p class="sec-sub">Textual meaning versus the Faust legend that grew around the title.</p>
+
+        <div class="prose">
+          <p>
+            Johnson’s lyric begins at the crossroads asking the <strong>Lord</strong> for mercy — not bargains
+            with Satan. Verses track hitchhiking failure, sundown dread, and a message for Willie Brown that
+            he’s “sinkin’ down.” Scholars read layers: literal stranded traveler; Jim Crow
+            <strong>sundown-law terror</strong>; personal abandonment. The Faustian “sold his soul” myth is
+            mostly later folklore bolted onto the title and onto other Johnson songs (“Hellhound,”
+            “Me and the Devil Blues”).
+          </p>
+          <p>
+            Cream keeps the kneeling/mercy frame and twice inserts the
+            <strong>“goin’ down to Rosedale… barrelhouse… riverside”</strong> couplet from
+            “Traveling Riverside Blues,” turning the performance into a small Johnson medley while the band
+            stays on the Crossroads riff-form. Clapton’s vocal — one of his most assured with Cream — carries
+            urgency without theatrical devil-costume.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- PRODUCTION -->
+    <section class="block" id="production">
+      <div class="wrap">
+        <h2>Recording, edit lore &amp; reception</h2>
+        <p class="sec-sub">Winterland capture, album placement, and Clapton’s lifelong ambivalence.</p>
+
+        <div class="prose">
+          <p>
+            The famous take was cut <strong>live at Winterland, 10 March 1968</strong>, and placed as the opener
+            of the live half of <em>Wheels of Fire</em> (1968). Rumors that Tom Dowd or Felix Pappalardi
+            heavily edited a much longer jam down to four minutes circulate in the literature; Clapton shrugged
+            that he wouldn’t be surprised if they were lost in the form. Box-set producer Bill Levenson later
+            argued from audience tapes that Cream’s “Crossroads” typically ran about four minutes and that the
+            released take is not a Frankenstein edit. Either way, the issued performance feels continuous and
+            inevitable.
+          </p>
+          <p>
+            Critical culture crowned the guitar solo (Rolling Stone’s “Greatest Guitar Songs” lists historically
+            placed Cream’s version near the very top). Clapton himself often dismissed the track — irritation at
+            the beat placement, discomfort with the myth, impatience with old material. The gap between
+            <strong>artist judgment</strong> and <strong>listener canonization</strong> is itself part of the
+            song’s afterlife.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- INFLUENCE -->
+    <section class="block" id="influence">
+      <div class="wrap">
+        <h2>Influence &amp; why it still teaches</h2>
+        <p class="sec-sub">What players steal from this recording decades later.</p>
+
+        <div class="grid-2">
+          <div class="cardish">
+            <h3>Pedagogical gold</h3>
+            <ul>
+              <li>Complete 12-bar fluency at rock tempo</li>
+              <li>Major↔minor pentatonic switching as storytelling</li>
+              <li>Building a solo across choruses (register, density, dynamics)</li>
+              <li>Riff economy: one figure that can survive vocals and solos</li>
+              <li>Listening for bass/drums as improvising equals</li>
+            </ul>
+          </div>
+          <div class="cardish">
+            <h3>Historical ripple</h3>
+            <ul>
+              <li>Template for blues-rock power-trio covers (Skynyrd live, Rush’s Feedback, countless jams)</li>
+              <li>Proof that British blues could out-intensify Chicago volume without losing form</li>
+              <li>Rock and Roll Hall of Fame “songs that shaped rock” lineage (Johnson + Cream)</li>
+              <li>Clapton’s later Crossroads Centre / Guitar Festival naming — personal myth recycled into philanthropy</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="prose" style="margin-top:1.35rem">
+          <p>
+            If you boil the analysis to one sentence: <strong>Cream took a Delta prayer at the crossroads,
+            bolted it to a three-station Circle-of-Fifths engine (A–D–E), drove it at rock tempo, and let a
+            guitar solo argue with a jazz-trained rhythm section until the form almost broke — then snapped
+            home.</strong> That is the interesting circle this recording still adds to.
+          </p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="page-foot">
+    <div class="wrap">
+      <p>
+        Unique standalone file for Cream — “Crossroads” (source:
+        <a href="https://youtu.be/PE9HvSdcaL4" target="_blank" rel="noopener">https://youtu.be/PE9HvSdcaL4</a>).
+        Not integrated into any music-teacher app, multi-song Circle of Fifths project, or dashboard codebase features.
+      </p>
+      <p>
+        Analysis synthesizes widely documented arrangement facts (key of A blues; 12-bar I7–IV7–V7; Winterland 1968;
+        Johnson→Cream transformation; scale practice; published Clapton commentary). Timings vary slightly by release/transfer.
+      </p>
+      <span class="standalone-badge">Standalone · cream-crossroads-analysis/</span>
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      const MAJORS = ["C", "G", "D", "A", "E", "B", "F#", "Db", "Ab", "Eb", "Bb", "F"];
+      const MINORS = ["Am", "Em", "Bm", "F#m", "C#m", "G#m", "Ebm", "Bbm", "Fm", "Cm", "Gm", "Dm"];
+
+      const SONG = {
+        title: "Crossroads",
+        artist: "Cream · Wheels of Fire (live, Winterland 1968)",
+        tonic: "A",
+        mode: "A blues / Mixolydian · I7–IV7–V7",
+        blurb: "Three adjacent Circle stations — A, D, E — power the entire form.",
+        sections: [
+          {
+            id: "intro",
+            name: "Intro riff",
+            keys: ["A", "D", "E"],
+            chords: "A7 → D7 → A7 → run to E",
+            function: "I7–IV7–I7 → V launch",
+            note: "States the whole neighborhood at once: palm-muted A7 chatter, ringing D7 answers, then a blues-scale flourish that lands on E so the vocal can enter on the dominant hinge.",
+          },
+          {
+            id: "verse",
+            name: "Vocal choruses",
+            keys: ["A", "D", "E"],
+            chords: "A7 · D7 · E7 (12-bar)",
+            function: "Full I7–IV7–V7 cycle",
+            note: "Standard quick-change twelve-bar under Clapton’s vocal. Boogie bass pattern under the singing. Lyric world = Johnson mercy/crossroads + Riverside “Rosedale” insert. Harmony never leaves the A–D–E triangle.",
+          },
+          {
+            id: "solo1",
+            name: "Solo 1 (mid-neck)",
+            keys: ["A", "D", "E", "F#m"],
+            chords: "A7 form · major→minor language",
+            function: "I neighborhood · storytelling climb",
+            note: "Two choruses still on the blues map. Opens with lower major-pentatonic warmth, climbs into minor pentatonic/blues. F♯m lights as relative-minor color inside A major pentatonic (F♯) — not a chord change, a scalar shade.",
+          },
+          {
+            id: "solo2",
+            name: "Solo 2 (upper neck)",
+            keys: ["A", "D", "E"],
+            chords: "A7 · D7 · E7 at full fire",
+            function: "Same triangle · register climax",
+            note: "Same I–IV–V lights, new altitude (~17th fret). High bends, near-derailments, Bruce’s bass as second soloist. The circle doesn’t expand — intensity does. Resolution punches the tonic A to rejoin the band.",
+          },
+          {
+            id: "turnaround",
+            name: "Turnarounds / seams",
+            keys: ["E", "D", "A"],
+            chords: "E7 → D7 → A7 → E7",
+            function: "V–IV–I–V comma",
+            note: "The classic blues turnaround path on the circle: clockwise to E (V), back through D (IV) into A (I), then E again as springboard. This is the song’s punctuation mark between choruses.",
+          },
+          {
+            id: "close",
+            name: "Final vocal / close",
+            keys: ["A"],
+            chords: "A7 home hit",
+            function: "I7 — collapse to tonic",
+            note: "After the wire-walk of solo 2, form and band re-lock. Everything contracts to A — the teal tonic on the circle. Bruce’s spoken/sung send-off acknowledges Clapton owned the vocal.",
+          },
+        ],
+      };
+
+      let currentId = SONG.sections[0].id;
+
+      function polar(cx, cy, r, angleDeg) {
+        const a = ((angleDeg - 90) * Math.PI) / 180;
+        return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
+      }
+
+      function wedgePath(cx, cy, r0, r1, a0, a1) {
+        const p0 = polar(cx, cy, r1, a0);
+        const p1 = polar(cx, cy, r1, a1);
+        const p2 = polar(cx, cy, r0, a1);
+        const p3 = polar(cx, cy, r0, a0);
+        const large = a1 - a0 > 180 ? 1 : 0;
+        return [
+          `M ${p0.x} ${p0.y}`,
+          `A ${r1} ${r1} 0 ${large} 1 ${p1.x} ${p1.y}`,
+          `L ${p2.x} ${p2.y}`,
+          `A ${r0} ${r0} 0 ${large} 0 ${p3.x} ${p3.y}`,
+          "Z",
+        ].join(" ");
+      }
+
+      function buildCircle() {
+        const svg = document.getElementById("cofSvg");
+        const cx = 250, cy = 250;
+        const outerR = 220, midR = 150, innerR = 88;
+        const step = 30;
+        let html = "";
+
+        html += `<text class="ring-label" x="250" y="24" text-anchor="middle">Major</text>`;
+        html += `<text class="ring-label" x="250" y="478" text-anchor="middle">Relative minor</text>`;
+
+        MAJORS.forEach((name, i) => {
+          const a0 = i * step - step / 2;
+          const a1 = a0 + step;
+          const mid = a0 + step / 2;
+          const label = polar(cx, cy, (outerR + midR) / 2, mid);
+          html += `<path class="key-wedge major" data-key="${name}" d="${wedgePath(cx, cy, midR, outerR, a0, a1)}"></path>`;
+          html += `<text class="key-text" data-key-label="${name}" x="${label.x}" y="${label.y}">${name.replace("F#", "F♯").replace("Db", "D♭").replace("Ab", "A♭").replace("Eb", "E♭").replace("Bb", "B♭")}</text>`;
+        });
+
+        MINORS.forEach((name, i) => {
+          const a0 = i * step - step / 2;
+          const a1 = a0 + step;
+          const mid = a0 + step / 2;
+          const label = polar(cx, cy, (midR + innerR) / 2, mid);
+          const pretty = name
+            .replace("F#m", "F♯m")
+            .replace("C#m", "C♯m")
+            .replace("G#m", "G♯m")
+            .replace("Ebm", "E♭m")
+            .replace("Bbm", "B♭m");
+          html += `<path class="key-wedge minor" data-key="${name}" d="${wedgePath(cx, cy, innerR, midR, a0, a1)}"></path>`;
+          html += `<text class="key-text minor-label" data-key-label="${name}" x="${label.x}" y="${label.y}">${pretty}</text>`;
+        });
+
+        html += `<circle cx="${cx}" cy="${cy}" r="${innerR - 2}" fill="#0c1110" stroke="rgba(214,186,120,0.22)" stroke-width="1.5"></circle>`;
+        svg.innerHTML = html;
+      }
+
+      function highlight(keys, tonic) {
+        document.querySelectorAll(".key-wedge").forEach((el) => {
+          el.classList.remove("lit", "tonic");
+        });
+        document.querySelectorAll(".key-text").forEach((el) => {
+          el.classList.remove("lit-label", "tonic-label");
+        });
+
+        keys.forEach((k) => {
+          const wedge = document.querySelector(`.key-wedge[data-key="${k}"]`);
+          const label = document.querySelector(`.key-text[data-key-label="${k}"]`);
+          if (!wedge) return;
+          if (k === tonic || k === tonic + "m") {
+            wedge.classList.add("tonic");
+            if (label) label.classList.add("tonic-label");
+          } else {
+            wedge.classList.add("lit");
+            if (label) label.classList.add("lit-label");
+          }
+        });
+      }
+
+      function renderMeta() {
+        document.getElementById("songMeta").innerHTML = `
+          <strong>${SONG.title}</strong>
+          <p>${SONG.artist}<br/>${SONG.mode}</p>
+        `;
+      }
+
+      function renderButtons() {
+        const box = document.getElementById("secBtns");
+        box.innerHTML = "";
+        SONG.sections.forEach((sec) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "sec-btn" + (sec.id === currentId ? " active" : "");
+          btn.innerHTML = `<span class="name">${sec.name}</span><span class="chords">${sec.chords}</span>`;
+          btn.addEventListener("click", () => {
+            currentId = sec.id;
+            sync();
+          });
+          box.appendChild(btn);
+        });
+      }
+
+      function renderFormRail() {
+        const rail = document.getElementById("formRail");
+        if (!rail) return;
+        rail.innerHTML = "";
+        SONG.sections.forEach((sec) => {
+          const row = document.createElement("button");
+          row.type = "button";
+          row.className = "form-row" + (sec.id === currentId ? " active" : "");
+          row.innerHTML = `<span class="t">${sec.function.split("·")[0].trim()}</span><span class="n">${sec.name}</span><span class="c">${sec.chords}</span>`;
+          row.addEventListener("click", () => {
+            currentId = sec.id;
+            document.getElementById("cof").scrollIntoView({ behavior: "smooth", block: "start" });
+            sync();
+          });
+          rail.appendChild(row);
+        });
+      }
+
+      function sync() {
+        const sec = SONG.sections.find((s) => s.id === currentId) || SONG.sections[0];
+        renderButtons();
+        renderFormRail();
+        highlight(sec.keys, SONG.tonic);
+        document.getElementById("centerTitle").textContent = SONG.tonic;
+        document.getElementById("centerSub").textContent = sec.name;
+        document.getElementById("detName").textContent = sec.name;
+        document.getElementById("detFn").textContent = sec.function;
+        document.getElementById("detNote").textContent = sec.note;
+      }
+
+      document.addEventListener("keydown", (e) => {
+        if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+        const idx = SONG.sections.findIndex((s) => s.id === currentId);
+        if (idx < 0) return;
+        if (e.key === "ArrowRight") currentId = SONG.sections[(idx + 1) % SONG.sections.length].id;
+        else currentId = SONG.sections[(idx - 1 + SONG.sections.length) % SONG.sections.length].id;
+        sync();
+      });
+
+      buildCircle();
+      renderMeta();
+      sync();
+    })();
+  </script>
+</body>
+</html>

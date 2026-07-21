@@ -1,0 +1,16 @@
+CREAM — CROSSROADS
+Deep musical analysis + Circle of Fifths
+========================================
+
+Interactive Circle of Fifths (Crossroads selected):
+  ../music/circle_of_fifths.html?song=crossroads
+
+Direct section example (solo 2):
+  ../music/circle_of_fifths.html?song=crossroads&section=solo2
+
+Full prose analysis (this folder):
+  cream_crossroads_deep_analysis.html
+
+Source recording:
+  https://youtu.be/PE9HvSdcaL4
+  Cream — “Crossroads” (live, Winterland Ballroom, 10 Mar 1968)
