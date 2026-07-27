@@ -11,13 +11,17 @@ streamlit run app.py
 
 ### Compound interest calculator
 
-Open locally in Firefox (no GitHub, no Streamlit):
+**Open in Firefox on your computer (local file only):**
+
+1. Pull this branch (or download `compound-interest/open-me-in-firefox.html`)
+2. In Firefox: **File → Open File…**
+3. Select `compound-interest/open-me-in-firefox.html`
+
+Or from a terminal in the project folder:
 
 ```bash
-firefox compound-interest/index.html
+firefox compound-interest/open-me-in-firefox.html
 ```
-
-Or in Firefox: **File → Open File…** → choose `compound-interest/index.html`.
 
 Simple daily compound: principal × (1 + daily rate) repeated for N days.
 Example: 1.15% daily → multiply by 1.0115 each day.
