@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Compound Growth</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Sora:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #0f1f1a;
+      --muted: #4a6358;
+      --accent: #1a7a55;
+      --accent-deep: #0d4f38;
+      --gold: #c4a35a;
+      --line: rgba(15, 31, 26, 0.12);
+      --panel: rgba(255, 255, 255, 0.72);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      font-family: "Sora", sans-serif;
+      background:
+        radial-gradient(1200px 600px at 10% -10%, rgba(26, 122, 85, 0.18), transparent 55%),
+        radial-gradient(900px 500px at 95% 5%, rgba(196, 163, 90, 0.16), transparent 50%),
+        linear-gradient(165deg, #e8f0eb 0%, #f3f7f4 42%, #dde8e2 100%);
+    }
+
+    main {
+      width: min(1080px, calc(100% - 2rem));
+      margin: 0 auto;
+      padding: 2.5rem 0 3.5rem;
+    }
+
+    .hero {
+      margin-bottom: 1.75rem;
+      animation: rise 0.7s ease-out both;
+    }
+
+    .hero h1 {
+      font-family: "Fraunces", Georgia, serif;
+      font-size: clamp(2.4rem, 5vw, 3.5rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.05;
+      color: var(--accent-deep);
+      margin: 0 0 0.55rem;
+    }
+
+    .hero p {
+      margin: 0;
+      max-width: 34rem;
+      color: var(--muted);
+      font-size: 1.08rem;
+      line-height: 1.45;
+    }
+
+    .factors {
+      margin-top: 0.75rem;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1.05fr 1fr;
+      gap: 1.25rem;
+      align-items: start;
+    }
+
+    @media (max-width: 860px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 1.2rem 1.25rem 1.35rem;
+      backdrop-filter: blur(10px);
+      animation: rise 0.8s ease-out 0.08s both;
+    }
+
+    .panel h2 {
+      font-family: "Fraunces", Georgia, serif;
+      font-size: 1.35rem;
+      margin: 0 0 1rem;
+      letter-spacing: -0.01em;
+    }
+
+    .field {
+      margin-bottom: 0.95rem;
+    }
+
+    label {
+      display: block;
+      font-size: 0.86rem;
+      font-weight: 500;
+      margin-bottom: 0.35rem;
+    }
+
+    .hint {
+      display: block;
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-top: 0.28rem;
+    }
+
+    input[type="number"],
+    select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 0.7rem 0.8rem;
+      font: inherit;
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.9);
+      outline: none;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    input[type="number"]:focus,
+    select:focus {
+      border-color: rgba(26, 122, 85, 0.55);
+      box-shadow: 0 0 0 3px rgba(26, 122, 85, 0.12);
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+
+    .range-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 0.75rem;
+    }
+
+    .range-value {
+      font-family: "Fraunces", Georgia, serif;
+      font-weight: 700;
+      color: var(--accent-deep);
+    }
+
+    .results {
+      animation: rise 0.85s ease-out 0.16s both;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    @media (max-width: 860px) {
+      .cards { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: linear-gradient(160deg, rgba(255,255,255,0.92), rgba(232,240,235,0.86));
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 0.95rem 1rem;
+      min-height: 92px;
+    }
+
+    .card .label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin-bottom: 0.3rem;
+    }
+
+    .card .value {
+      font-family: "Fraunces", Georgia, serif;
+      font-size: 1.55rem;
+      font-weight: 700;
+      line-height: 1.15;
+    }
+
+    .card.highlight .value { color: var(--accent-deep); }
+
+    .chart-wrap {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.55);
+      padding: 0.75rem;
+      margin-bottom: 0.85rem;
+    }
+
+    canvas { width: 100%; height: 240px; display: block; }
+
+    .legend {
+      display: flex;
+      gap: 1rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 0.4rem;
+    }
+
+    .legend span::before {
+      content: "";
+      display: inline-block;
+      width: 0.7rem;
+      height: 0.7rem;
+      border-radius: 3px;
+      margin-right: 0.35rem;
+      vertical-align: -1px;
+    }
+
+    .legend .bal::before { background: #1a7a55; }
+    .legend .con::before { background: #c4a35a; }
+
+    details {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.45);
+      padding: 0.7rem 0.9rem;
+      margin-top: 0.75rem;
+    }
+
+    summary {
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0.75rem;
+      font-size: 0.88rem;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 0.45rem 0.35rem;
+      border-bottom: 1px solid var(--line);
+    }
+
+    th { color: var(--muted); font-weight: 500; }
+
+    .factor-table td:first-child { font-weight: 600; }
+
+    .hidden { display: none; }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(14px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="hero">
+      <h1>Compound Growth</h1>
+      <p>See how principal, rate, time, and contributions stack into long-term wealth.</p>
+      <p class="factors">Factors: starting principal · annual rate · years · compounding frequency · recurring contributions</p>
+    </header>
+
+    <div class="layout">
+      <section class="panel" aria-labelledby="inputs-title">
+        <h2 id="inputs-title">Inputs</h2>
+
+        <div class="field">
+          <label for="principal">Principal (starting amount)</label>
+          <input id="principal" type="number" min="0" step="100" value="10000" />
+          <span class="hint">The seed balance that compounds from day one.</span>
+        </div>
+
+        <div class="field">
+          <label for="rate">Annual interest rate (%)</label>
+          <input id="rate" type="number" min="0" max="100" step="0.1" value="7" />
+          <span class="hint">Nominal yearly return before compounding.</span>
+        </div>
+
+        <div class="field">
+          <div class="range-row">
+            <label for="years">Time horizon (years)</label>
+            <span class="range-value" id="yearsLabel">20</span>
+          </div>
+          <input id="years" type="range" min="1" max="50" value="20" />
+          <span class="hint">Longer horizons amplify compounding the most.</span>
+        </div>
+
+        <div class="field">
+          <label for="compound">Compounding frequency</label>
+          <select id="compound">
+            <option value="1">Annually (1×)</option>
+            <option value="2">Semi-annually (2×)</option>
+            <option value="4">Quarterly (4×)</option>
+            <option value="12" selected>Monthly (12×)</option>
+            <option value="365">Daily (365×)</option>
+          </select>
+          <span class="hint">How often interest is credited each year.</span>
+        </div>
+
+        <div class="field">
+          <label for="contribFreq">Contribution frequency</label>
+          <select id="contribFreq">
+            <option value="0">None</option>
+            <option value="12" selected>Monthly</option>
+            <option value="4">Quarterly</option>
+            <option value="1">Annually</option>
+          </select>
+        </div>
+
+        <div class="field" id="contribWrap">
+          <label for="contribution">Contribution amount</label>
+          <input id="contribution" type="number" min="0" step="25" value="250" />
+          <span class="hint">Recurring deposits that also earn compound interest.</span>
+        </div>
+      </section>
+
+      <section class="results" aria-live="polite">
+        <div class="cards">
+          <div class="card highlight">
+            <div class="label">Future value</div>
+            <div class="value" id="futureValue">$0.00</div>
+          </div>
+          <div class="card">
+            <div class="label">Total contributed</div>
+            <div class="value" id="totalContributed">$0.00</div>
+          </div>
+          <div class="card">
+            <div class="label">Interest earned</div>
+            <div class="value" id="interestEarned">$0.00</div>
+          </div>
+        </div>
+
+        <div class="chart-wrap panel" style="animation:none; padding:0.85rem;">
+          <canvas id="chart" width="640" height="240" aria-label="Balance versus contributions chart"></canvas>
+          <div class="legend">
+            <span class="bal">Balance</span>
+            <span class="con">Contributed</span>
+          </div>
+        </div>
+
+        <details>
+          <summary>Year-by-year breakdown</summary>
+          <div style="overflow-x:auto;">
+            <table>
+              <thead>
+                <tr><th>Year</th><th>Balance</th><th>Contributed</th><th>Interest</th></tr>
+              </thead>
+              <tbody id="scheduleBody"></tbody>
+            </table>
+          </div>
+        </details>
+
+        <details open>
+          <summary>What each factor means</summary>
+          <table class="factor-table">
+            <thead>
+              <tr><th>Factor</th><th>Why it matters</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Principal (P)</td><td>Starting balance — the seed that compounds from day one.</td></tr>
+              <tr><td>Annual rate (r)</td><td>Yearly return before compounding (e.g. 7% → 0.07).</td></tr>
+              <tr><td>Time (t)</td><td>Years invested. Long horizons amplify compounding most.</td></tr>
+              <tr><td>Compounding (n)</td><td>Times per year interest is credited (monthly, daily, etc.).</td></tr>
+              <tr><td>Contribution (PMT)</td><td>Ongoing deposits; each one starts compounding on its own.</td></tr>
+              <tr><td>Contribution frequency</td><td>How often you add money (monthly / quarterly / annually).</td></tr>
+            </tbody>
+          </table>
+        </details>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    const money = (n) =>
+      n.toLocaleString(undefined, { style: "currency", currency: "USD" });
+
+    function futureValue(principal, annualRatePct, years, compoundsPerYear, contribution, contribsPerYear) {
+      const p = Math.max(0, principal);
+      const r = Math.max(0, annualRatePct) / 100;
+      const t = Math.max(0, years);
+      const n = Math.max(1, compoundsPerYear);
+      const pmtAnnual = Math.max(0, contribution) * Math.max(0, contribsPerYear);
+      const periods = Math.round(n * t);
+
+      if (periods === 0) {
+        const total = p + pmtAnnual * t;
+        return { balance: total, contributed: total, interest: 0 };
+      }
+
+      const ratePer = r / n;
+      const pmtPer = pmtAnnual / n;
+      let balance = p;
+      for (let i = 0; i < periods; i++) {
+        balance = balance * (1 + ratePer) + pmtPer;
+      }
+      const contributed = p + pmtPer * periods;
+      return { balance, contributed, interest: balance - contributed };
+    }
+
+    function drawChart(schedule) {
+      const canvas = $("chart");
+      const ctx = canvas.getContext("2d");
+      const dpr = window.devicePixelRatio || 1;
+      const cssW = canvas.clientWidth || 640;
+      const cssH = 240;
+      canvas.width = Math.floor(cssW * dpr);
+      canvas.height = Math.floor(cssH * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, cssW, cssH);
+
+      const pad = { t: 16, r: 12, b: 28, l: 12 };
+      const w = cssW - pad.l - pad.r;
+      const h = cssH - pad.t - pad.b;
+      const maxY = Math.max(...schedule.map((r) => r.balance), 1);
+
+      const xAt = (i) => pad.l + (i / (schedule.length - 1 || 1)) * w;
+      const yAt = (v) => pad.t + h - (v / maxY) * h;
+
+      const area = (key, color) => {
+        ctx.beginPath();
+        schedule.forEach((row, i) => {
+          const x = xAt(i);
+          const y = yAt(row[key]);
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.lineTo(xAt(schedule.length - 1), pad.t + h);
+        ctx.lineTo(xAt(0), pad.t + h);
+        ctx.closePath();
+        ctx.fillStyle = color;
+        ctx.fill();
+      };
+
+      area("balance", "rgba(26, 122, 85, 0.28)");
+      area("contributed", "rgba(196, 163, 90, 0.35)");
+
+      const stroke = (key, color) => {
+        ctx.beginPath();
+        schedule.forEach((row, i) => {
+          const x = xAt(i);
+          const y = yAt(row[key]);
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2.25;
+        ctx.stroke();
+      };
+
+      stroke("balance", "#1a7a55");
+      stroke("contributed", "#c4a35a");
+    }
+
+    function recalculate() {
+      const principal = Number($("principal").value) || 0;
+      const rate = Number($("rate").value) || 0;
+      const years = Number($("years").value) || 1;
+      const n = Number($("compound").value) || 12;
+      const cFreq = Number($("contribFreq").value) || 0;
+      const contribution = cFreq ? Number($("contribution").value) || 0 : 0;
+
+      $("yearsLabel").textContent = String(years);
+      $("contribWrap").classList.toggle("hidden", cFreq === 0);
+
+      const final = futureValue(principal, rate, years, n, contribution, cFreq);
+      $("futureValue").textContent = money(final.balance);
+      $("totalContributed").textContent = money(final.contributed);
+      $("interestEarned").textContent = money(final.interest);
+
+      const schedule = [];
+      for (let y = 0; y <= years; y++) {
+        const row = futureValue(principal, rate, y, n, contribution, cFreq);
+        schedule.push({
+          year: y,
+          balance: row.balance,
+          contributed: row.contributed,
+          interest: row.interest,
+        });
+      }
+
+      $("scheduleBody").innerHTML = schedule
+        .map(
+          (r) =>
+            `<tr><td>${r.year}</td><td>${money(r.balance)}</td><td>${money(r.contributed)}</td><td>${money(r.interest)}</td></tr>`
+        )
+        .join("");
+
+      drawChart(schedule);
+    }
+
+    ["principal", "rate", "years", "compound", "contribFreq", "contribution"].forEach((id) => {
+      $(id).addEventListener("input", recalculate);
+      $(id).addEventListener("change", recalculate);
+    });
+
+    window.addEventListener("resize", recalculate);
+    recalculate();
+  </script>
+</body>
+</html>

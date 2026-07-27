@@ -11,9 +11,7 @@ streamlit run app.py
 
 ### Compound interest calculator
 
-```bash
-streamlit run compound_interest.py
-```
+Open `compound-interest/index.html` in a browser (no Streamlit required).
 
 Inputs: principal, annual rate, years, compounding frequency, and optional recurring contributions.
 
