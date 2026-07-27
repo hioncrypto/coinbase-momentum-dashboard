@@ -271,17 +271,10 @@
         </div>
 
         <p class="section-label">Monthly compound</p>
-        <div class="grid-2">
-          <div class="field">
-            <label for="monthlyRate">Monthly rate (%)</label>
-            <input id="monthlyRate" name="monthlyRate" type="number" min="0" step="any" value="5" />
-            <span class="hint">Multiply by (1 + rate/100) each month.</span>
-          </div>
-          <div class="field">
-            <label for="months">Number of months</label>
-            <input id="months" name="months" type="number" min="0" step="1" value="12" />
-            <span class="hint">How many monthly compounds.</span>
-          </div>
+        <div class="field">
+          <label for="monthlyRate">Monthly rate (%)</label>
+          <input id="monthlyRate" name="monthlyRate" type="number" min="0" step="any" value="5" />
+          <span class="hint">Multiply by (1 + rate/100) each month. Uses days ÷ 30 as the month count.</span>
         </div>
 
         <button class="calculate" type="submit">Calculate</button>
@@ -302,7 +295,7 @@
       </div>
 
       <div class="result-block" aria-live="polite">
-        <h3>Monthly result</h3>
+        <h3 id="monthlyResultTitle">Monthly result</h3>
         <div class="cards">
           <div class="card highlight">
             <div class="label">Final balance</div>
@@ -349,17 +342,26 @@
 
     function compound(principal, ratePct, periods) {
       const factor = 1 + ratePct / 100;
+      const wholePeriods = Math.max(0, Math.floor(periods));
       let balance = principal;
       const rows = [`<tr><td>0</td><td>—</td><td>${money(balance)}</td></tr>`];
 
-      for (let i = 1; i <= periods; i++) {
+      for (let i = 1; i <= wholePeriods; i++) {
         balance *= factor;
         rows.push(
           `<tr><td>${i}</td><td>× ${factor.toFixed(6)}</td><td>${money(balance)}</td></tr>`
         );
       }
 
-      return { balance, interest: balance - principal, rows: rows.join("") };
+      // Allow fractional periods (e.g. days/30 for months)
+      if (periods > wholePeriods) {
+        balance = principal * Math.pow(factor, periods);
+        rows.push(
+          `<tr><td>${periods.toFixed(2)}</td><td>× ${factor.toFixed(6)}</td><td>${money(balance)}</td></tr>`
+        );
+      }
+
+      return { balance, interest: balance - principal, rows: rows.join(""), periods };
     }
 
     function recalculate() {
@@ -367,7 +369,7 @@
       const dailyRate = Math.max(0, Number($("dailyRate").value) || 0);
       const days = Math.max(0, Math.floor(Number($("days").value) || 0));
       const monthlyRate = Math.max(0, Number($("monthlyRate").value) || 0);
-      const months = Math.max(0, Math.floor(Number($("months").value) || 0));
+      const months = days / 30;
 
       const daily = compound(principal, dailyRate, days);
       const monthly = compound(principal, monthlyRate, months);
@@ -379,6 +381,7 @@
       $("monthlyBalance").textContent = money(monthly.balance);
       $("monthlyInterest").textContent = money(monthly.interest);
       $("monthlySchedule").innerHTML = monthly.rows;
+      $("monthlyResultTitle").textContent = `Monthly result (${months.toFixed(2)} months)`;
     }
 
     $("calcForm").addEventListener("submit", (event) => {
