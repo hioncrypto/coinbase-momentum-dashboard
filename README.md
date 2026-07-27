@@ -11,7 +11,7 @@ streamlit run app.py
 
 ### Compound interest calculator
 
-**[Open the calculator →](https://htmlpreview.github.io/?https://github.com/hioncrypto/coinbase-momentum-dashboard/blob/cursor/compound-interest-calculator-8f72/compound-interest/index.html)**
+**[Open the calculator →](https://htmlpreview.github.io/?https://github.com/hioncrypto/coinbase-momentum-dashboard/blob/fca5d54/compound-interest/index.html)**
 
 Or open `compound-interest/index.html` locally in a browser (no Streamlit required).
 
