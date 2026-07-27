@@ -15,7 +15,8 @@ streamlit run app.py
 
 Or open `compound-interest/index.html` locally in a browser (no Streamlit required).
 
-Inputs: principal, daily rate, years, daily compounding, and optional recurring contributions.
+Simple daily compound: principal × (1 + daily rate) repeated for N days.
+Example: 1.15% daily → multiply by 1.0115 each day.
 
 Email alerts (optional): copy `.streamlit/secrets_template.toml` to `.streamlit/secrets.toml` and add SMTP credentials.
 
