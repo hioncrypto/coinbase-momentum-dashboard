@@ -11,17 +11,11 @@ streamlit run app.py
 
 ### Compound interest calculator
 
-**Open in Firefox on your computer (local file only):**
+**[Open the calculator →](https://htmlpreview.github.io/?https://github.com/hioncrypto/coinbase-momentum-dashboard/blob/0ae8020/compound-interest/index.html)**
 
-1. Pull this branch (or download `compound-interest/open-me-in-firefox.html`)
-2. In Firefox: **File → Open File…**
-3. Select `compound-interest/open-me-in-firefox.html`
+That clickable preview is how it opened before.
 
-Or from a terminal in the project folder:
-
-```bash
-firefox compound-interest/open-me-in-firefox.html
-```
+To open offline in Firefox instead: **File → Open File…** → `compound-interest/index.html`
 
 Simple daily compound: principal × (1 + daily rate) repeated for N days.
 Example: 1.15% daily → multiply by 1.0115 each day.
