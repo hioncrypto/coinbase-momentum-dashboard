@@ -11,7 +11,9 @@ streamlit run app.py
 
 ### Compound interest calculator
 
-Open `compound-interest/index.html` in a browser (no Streamlit required).
+**[Open the calculator →](https://htmlpreview.github.io/?https://github.com/hioncrypto/coinbase-momentum-dashboard/blob/cursor/compound-interest-calculator-8f72/compound-interest/index.html)**
+
+Or open `compound-interest/index.html` locally in a browser (no Streamlit required).
 
 Inputs: principal, annual rate, years, compounding frequency, and optional recurring contributions.
 
