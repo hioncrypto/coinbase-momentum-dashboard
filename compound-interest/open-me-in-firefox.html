@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Daily Compound Calculator</title>
+  <title>Compound Calculator</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Sora:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -69,6 +69,24 @@
     }
 
     .field { margin-bottom: 1rem; }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.85rem;
+    }
+
+    @media (max-width: 560px) {
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+
+    .section-label {
+      font-family: "Fraunces", Georgia, serif;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--accent-deep);
+      margin: 0.35rem 0 0.75rem;
+    }
 
     label {
       display: block;
@@ -156,6 +174,15 @@
 
     .card.highlight .value { color: var(--accent-deep); }
 
+    .result-block { margin-top: 0.85rem; }
+
+    .result-block h3 {
+      font-family: "Fraunces", Georgia, serif;
+      font-size: 1rem;
+      margin: 0 0 0.55rem;
+      color: var(--accent-deep);
+    }
+
     details {
       border: 1px solid var(--line);
       border-radius: 14px;
@@ -212,13 +239,13 @@
 <body>
   <main>
     <header class="hero">
-      <h1>Principal × Daily %</h1>
-      <p>Only two growth inputs: your starting amount, and a daily percent applied again and again.</p>
+      <h1>Principal × %</h1>
+      <p>Compound by a daily percent, a monthly percent, or both.</p>
     </header>
 
     <p class="formula">
-      Example: <strong>1.15% daily</strong> means multiply by <strong>1.0115</strong> each day:<br />
-      balance × 1.0115 × 1.0115 × 1.0115 × …
+      Daily example: <strong>1.15%</strong> → × <strong>1.0115</strong> each day.<br />
+      Monthly example: <strong>5%</strong> → × <strong>1.05</strong> each month.
     </p>
 
     <section class="panel" aria-labelledby="inputs-title">
@@ -229,41 +256,86 @@
           <span class="hint">Starting amount.</span>
         </div>
 
-        <div class="field">
-          <label for="rate">Daily rate (%)</label>
-          <input id="rate" name="rate" type="number" min="0" step="any" value="1.15" required />
-          <span class="hint">Each day multiplies the balance by (1 + rate/100). For 1.15%, that is ×1.0115.</span>
+        <p class="section-label">Daily compound</p>
+        <div class="grid-2">
+          <div class="field">
+            <label for="dailyRate">Daily rate (%)</label>
+            <input id="dailyRate" name="dailyRate" type="number" min="0" step="any" value="1.15" />
+            <span class="hint">Multiply by (1 + rate/100) each day.</span>
+          </div>
+          <div class="field">
+            <label for="days">Number of days</label>
+            <input id="days" name="days" type="number" min="0" step="1" value="30" />
+            <span class="hint">How many daily compounds.</span>
+          </div>
         </div>
 
-        <div class="field">
-          <label for="days">Number of days</label>
-          <input id="days" name="days" type="number" min="0" step="1" value="30" required />
-          <span class="hint">How many times to apply the daily compound.</span>
+        <p class="section-label">Monthly compound</p>
+        <div class="grid-2">
+          <div class="field">
+            <label for="monthlyRate">Monthly rate (%)</label>
+            <input id="monthlyRate" name="monthlyRate" type="number" min="0" step="any" value="5" />
+            <span class="hint">Multiply by (1 + rate/100) each month.</span>
+          </div>
+          <div class="field">
+            <label for="months">Number of months</label>
+            <input id="months" name="months" type="number" min="0" step="1" value="12" />
+            <span class="hint">How many monthly compounds.</span>
+          </div>
         </div>
 
         <button class="calculate" type="submit">Calculate</button>
       </form>
 
-      <div class="cards" aria-live="polite">
-        <div class="card highlight">
-          <div class="label">Final balance</div>
-          <div class="value" id="finalBalance">$0.00</div>
+      <div class="result-block" aria-live="polite">
+        <h3>Daily result</h3>
+        <div class="cards">
+          <div class="card highlight">
+            <div class="label">Final balance</div>
+            <div class="value" id="dailyBalance">$0.00</div>
+          </div>
+          <div class="card">
+            <div class="label">Interest earned</div>
+            <div class="value" id="dailyInterest">$0.00</div>
+          </div>
         </div>
-        <div class="card">
-          <div class="label">Interest earned</div>
-          <div class="value" id="interestEarned">$0.00</div>
+      </div>
+
+      <div class="result-block" aria-live="polite">
+        <h3>Monthly result</h3>
+        <div class="cards">
+          <div class="card highlight">
+            <div class="label">Final balance</div>
+            <div class="value" id="monthlyBalance">$0.00</div>
+          </div>
+          <div class="card">
+            <div class="label">Interest earned</div>
+            <div class="value" id="monthlyInterest">$0.00</div>
+          </div>
         </div>
       </div>
     </section>
 
-    <details>
+    <details open>
       <summary>Day-by-day breakdown</summary>
-      <div style="overflow-x:auto; max-height: 360px; overflow-y:auto;">
+      <div style="overflow-x:auto; max-height: 280px; overflow-y:auto;">
         <table>
           <thead>
             <tr><th>Day</th><th>Multiplier</th><th>Balance</th></tr>
           </thead>
-          <tbody id="scheduleBody"></tbody>
+          <tbody id="dailySchedule"></tbody>
+        </table>
+      </div>
+    </details>
+
+    <details>
+      <summary>Month-by-month breakdown</summary>
+      <div style="overflow-x:auto; max-height: 280px; overflow-y:auto;">
+        <table>
+          <thead>
+            <tr><th>Month</th><th>Multiplier</th><th>Balance</th></tr>
+          </thead>
+          <tbody id="monthlySchedule"></tbody>
         </table>
       </div>
     </details>
@@ -275,27 +347,38 @@
     const money = (n) =>
       n.toLocaleString(undefined, { style: "currency", currency: "USD" });
 
-    function recalculate() {
-      const principal = Math.max(0, Number($("principal").value) || 0);
-      const ratePct = Math.max(0, Number($("rate").value) || 0);
-      const days = Math.max(0, Math.floor(Number($("days").value) || 0));
+    function compound(principal, ratePct, periods) {
       const factor = 1 + ratePct / 100;
-
       let balance = principal;
-      const rows = [
-        `<tr><td>0</td><td>—</td><td>${money(balance)}</td></tr>`,
-      ];
+      const rows = [`<tr><td>0</td><td>—</td><td>${money(balance)}</td></tr>`];
 
-      for (let d = 1; d <= days; d++) {
+      for (let i = 1; i <= periods; i++) {
         balance *= factor;
         rows.push(
-          `<tr><td>${d}</td><td>× ${factor.toFixed(6)}</td><td>${money(balance)}</td></tr>`
+          `<tr><td>${i}</td><td>× ${factor.toFixed(6)}</td><td>${money(balance)}</td></tr>`
         );
       }
 
-      $("finalBalance").textContent = money(balance);
-      $("interestEarned").textContent = money(balance - principal);
-      $("scheduleBody").innerHTML = rows.join("");
+      return { balance, interest: balance - principal, rows: rows.join("") };
+    }
+
+    function recalculate() {
+      const principal = Math.max(0, Number($("principal").value) || 0);
+      const dailyRate = Math.max(0, Number($("dailyRate").value) || 0);
+      const days = Math.max(0, Math.floor(Number($("days").value) || 0));
+      const monthlyRate = Math.max(0, Number($("monthlyRate").value) || 0);
+      const months = Math.max(0, Math.floor(Number($("months").value) || 0));
+
+      const daily = compound(principal, dailyRate, days);
+      const monthly = compound(principal, monthlyRate, months);
+
+      $("dailyBalance").textContent = money(daily.balance);
+      $("dailyInterest").textContent = money(daily.interest);
+      $("dailySchedule").innerHTML = daily.rows;
+
+      $("monthlyBalance").textContent = money(monthly.balance);
+      $("monthlyInterest").textContent = money(monthly.interest);
+      $("monthlySchedule").innerHTML = monthly.rows;
     }
 
     $("calcForm").addEventListener("submit", (event) => {
