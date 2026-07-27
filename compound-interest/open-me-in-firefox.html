@@ -225,19 +225,19 @@
       <form id="calcForm">
         <div class="field">
           <label for="principal">Principal</label>
-          <input id="principal" name="principal" type="number" min="0" step="100" value="1000" required />
+          <input id="principal" name="principal" type="number" min="0" step="any" value="1000" required />
           <span class="hint">Starting amount.</span>
         </div>
 
         <div class="field">
           <label for="rate">Daily rate (%)</label>
-          <input id="rate" name="rate" type="number" min="0" max="100" step="0.01" value="1.15" required />
+          <input id="rate" name="rate" type="number" min="0" step="any" value="1.15" required />
           <span class="hint">Each day multiplies the balance by (1 + rate/100). For 1.15%, that is ×1.0115.</span>
         </div>
 
         <div class="field">
           <label for="days">Number of days</label>
-          <input id="days" name="days" type="number" min="0" max="10000" step="1" value="30" required />
+          <input id="days" name="days" type="number" min="0" step="1" value="30" required />
           <span class="hint">How many times to apply the daily compound.</span>
         </div>
 
