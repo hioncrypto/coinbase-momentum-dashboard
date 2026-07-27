@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Daily Compound Calculator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Sora:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #0f1f1a;
+      --muted: #4a6358;
+      --accent: #1a7a55;
+      --accent-deep: #0d4f38;
+      --gold: #c4a35a;
+      --line: rgba(15, 31, 26, 0.12);
+      --panel: rgba(255, 255, 255, 0.72);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      font-family: "Sora", sans-serif;
+      background:
+        radial-gradient(1200px 600px at 10% -10%, rgba(26, 122, 85, 0.18), transparent 55%),
+        radial-gradient(900px 500px at 95% 5%, rgba(196, 163, 90, 0.16), transparent 50%),
+        linear-gradient(165deg, #e8f0eb 0%, #f3f7f4 42%, #dde8e2 100%);
+    }
+
+    main {
+      width: min(720px, calc(100% - 2rem));
+      margin: 0 auto;
+      padding: 2.5rem 0 3.5rem;
+    }
+
+    .hero {
+      margin-bottom: 1.5rem;
+      animation: rise 0.7s ease-out both;
+    }
+
+    .hero h1 {
+      font-family: "Fraunces", Georgia, serif;
+      font-size: clamp(2.2rem, 5vw, 3.2rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.05;
+      color: var(--accent-deep);
+      margin: 0 0 0.55rem;
+    }
+
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 1.05rem;
+      line-height: 1.45;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 1.25rem 1.3rem 1.4rem;
+      backdrop-filter: blur(10px);
+      animation: rise 0.8s ease-out 0.08s both;
+    }
+
+    .field { margin-bottom: 1rem; }
+
+    label {
+      display: block;
+      font-size: 0.88rem;
+      font-weight: 500;
+      margin-bottom: 0.35rem;
+    }
+
+    .hint {
+      display: block;
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-top: 0.3rem;
+    }
+
+    input[type="number"] {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 0.75rem 0.85rem;
+      font: inherit;
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.9);
+      outline: none;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    input[type="number"]:focus {
+      border-color: rgba(26, 122, 85, 0.55);
+      box-shadow: 0 0 0 3px rgba(26, 122, 85, 0.12);
+    }
+
+    .formula {
+      margin: 0.25rem 0 1.15rem;
+      padding: 0.85rem 1rem;
+      border-radius: 12px;
+      background: rgba(13, 79, 56, 0.06);
+      border: 1px solid var(--line);
+      font-size: 0.92rem;
+      color: var(--muted);
+      line-height: 1.45;
+      animation: rise 0.85s ease-out 0.12s both;
+    }
+
+    .formula strong {
+      color: var(--accent-deep);
+      font-family: "Fraunces", Georgia, serif;
+      font-size: 1.05rem;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      margin-top: 0.35rem;
+      animation: rise 0.9s ease-out 0.16s both;
+    }
+
+    @media (max-width: 560px) {
+      .cards { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: linear-gradient(160deg, rgba(255,255,255,0.92), rgba(232,240,235,0.86));
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 1rem 1.05rem;
+      min-height: 92px;
+    }
+
+    .card .label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin-bottom: 0.3rem;
+    }
+
+    .card .value {
+      font-family: "Fraunces", Georgia, serif;
+      font-size: 1.55rem;
+      font-weight: 700;
+      line-height: 1.15;
+    }
+
+    .card.highlight .value { color: var(--accent-deep); }
+
+    details {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.45);
+      padding: 0.7rem 0.9rem;
+      margin-top: 1rem;
+      animation: rise 0.95s ease-out 0.2s both;
+    }
+
+    summary {
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0.75rem;
+      font-size: 0.88rem;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 0.45rem 0.35rem;
+      border-bottom: 1px solid var(--line);
+    }
+
+    th { color: var(--muted); font-weight: 500; }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(14px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="hero">
+      <h1>Principal × Daily %</h1>
+      <p>Only two growth inputs: your starting amount, and a daily percent applied again and again.</p>
+    </header>
+
+    <p class="formula">
+      Example: <strong>1.15% daily</strong> means multiply by <strong>1.0115</strong> each day:<br />
+      balance × 1.0115 × 1.0115 × 1.0115 × …
+    </p>
+
+    <section class="panel" aria-labelledby="inputs-title">
+      <div class="field">
+        <label for="principal">Principal</label>
+        <input id="principal" type="number" min="0" step="100" value="1000" />
+        <span class="hint">Starting amount.</span>
+      </div>
+
+      <div class="field">
+        <label for="rate">Daily rate (%)</label>
+        <input id="rate" type="number" min="0" max="100" step="0.01" value="1.15" />
+        <span class="hint">Each day multiplies the balance by (1 + rate/100). For 1.15%, that is ×1.0115.</span>
+      </div>
+
+      <div class="field">
+        <label for="days">Number of days</label>
+        <input id="days" type="number" min="0" max="10000" step="1" value="30" />
+        <span class="hint">How many times to apply the daily compound.</span>
+      </div>
+
+      <div class="cards" aria-live="polite">
+        <div class="card highlight">
+          <div class="label">Final balance</div>
+          <div class="value" id="finalBalance">$0.00</div>
+        </div>
+        <div class="card">
+          <div class="label">Interest earned</div>
+          <div class="value" id="interestEarned">$0.00</div>
+        </div>
+      </div>
+    </section>
+
+    <details>
+      <summary>Day-by-day breakdown</summary>
+      <div style="overflow-x:auto; max-height: 360px; overflow-y:auto;">
+        <table>
+          <thead>
+            <tr><th>Day</th><th>Multiplier</th><th>Balance</th></tr>
+          </thead>
+          <tbody id="scheduleBody"></tbody>
+        </table>
+      </div>
+    </details>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    const money = (n) =>
+      n.toLocaleString(undefined, { style: "currency", currency: "USD" });
+
+    function recalculate() {
+      const principal = Math.max(0, Number($("principal").value) || 0);
+      const ratePct = Math.max(0, Number($("rate").value) || 0);
+      const days = Math.max(0, Math.floor(Number($("days").value) || 0));
+      const factor = 1 + ratePct / 100;
+
+      let balance = principal;
+      const rows = [
+        `<tr><td>0</td><td>—</td><td>${money(balance)}</td></tr>`,
+      ];
+
+      for (let d = 1; d <= days; d++) {
+        balance *= factor;
+        rows.push(
+          `<tr><td>${d}</td><td>× ${factor.toFixed(6)}</td><td>${money(balance)}</td></tr>`
+        );
+      }
+
+      $("finalBalance").textContent = money(balance);
+      $("interestEarned").textContent = money(balance - principal);
+      $("scheduleBody").innerHTML = rows.join("");
+    }
+
+    ["principal", "rate", "days"].forEach((id) => {
+      $(id).addEventListener("input", recalculate);
+      $(id).addEventListener("change", recalculate);
+    });
+
+    recalculate();
+  </script>
+</body>
+</html>
