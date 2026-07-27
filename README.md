@@ -9,6 +9,14 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
+### Compound interest calculator
+
+```bash
+streamlit run compound_interest.py
+```
+
+Inputs: principal, annual rate, years, compounding frequency, and optional recurring contributions.
+
 Email alerts (optional): copy `.streamlit/secrets_template.toml` to `.streamlit/secrets.toml` and add SMTP credentials.
 
 ## Features
