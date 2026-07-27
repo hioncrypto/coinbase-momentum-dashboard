@@ -263,7 +263,7 @@
     <header class="hero">
       <h1>Compound Growth</h1>
       <p>See how principal, rate, time, and contributions stack into long-term wealth.</p>
-      <p class="factors">Factors: starting principal · annual rate · years · compounding frequency · recurring contributions</p>
+      <p class="factors">Factors: starting principal · daily rate · years · daily compounding · recurring contributions</p>
     </header>
 
     <div class="layout">
@@ -277,9 +277,9 @@
         </div>
 
         <div class="field">
-          <label for="rate">Annual interest rate (%)</label>
-          <input id="rate" type="number" min="0" max="100" step="0.1" value="7" />
-          <span class="hint">Nominal yearly return before compounding.</span>
+          <label for="rate">Daily interest rate (%)</label>
+          <input id="rate" type="number" min="0" max="100" step="0.001" value="0.019" />
+          <span class="hint">Interest applied each day (e.g. 0.019% daily ≈ 7% / 365).</span>
         </div>
 
         <div class="field">
@@ -292,24 +292,18 @@
         </div>
 
         <div class="field">
-          <label for="compound">Compounding frequency</label>
-          <select id="compound">
-            <option value="1">Annually (1×)</option>
-            <option value="2">Semi-annually (2×)</option>
-            <option value="4">Quarterly (4×)</option>
-            <option value="12" selected>Monthly (12×)</option>
-            <option value="365">Daily (365×)</option>
-          </select>
-          <span class="hint">How often interest is credited each year.</span>
+          <label>Compounding</label>
+          <input type="text" value="Daily (365× per year)" readonly aria-readonly="true" />
+          <span class="hint">Interest is always compounded once per day.</span>
         </div>
 
         <div class="field">
           <label for="contribFreq">Contribution frequency</label>
           <select id="contribFreq">
             <option value="0">None</option>
+            <option value="365">Daily</option>
             <option value="12" selected>Monthly</option>
             <option value="4">Quarterly</option>
-            <option value="1">Annually</option>
           </select>
         </div>
 
@@ -364,11 +358,11 @@
             </thead>
             <tbody>
               <tr><td>Principal (P)</td><td>Starting balance — the seed that compounds from day one.</td></tr>
-              <tr><td>Annual rate (r)</td><td>Yearly return before compounding (e.g. 7% → 0.07).</td></tr>
+              <tr><td>Daily rate (r)</td><td>Interest percent applied each day (e.g. 0.019% daily).</td></tr>
               <tr><td>Time (t)</td><td>Years invested. Long horizons amplify compounding most.</td></tr>
-              <tr><td>Compounding (n)</td><td>Times per year interest is credited (monthly, daily, etc.).</td></tr>
+              <tr><td>Compounding</td><td>Fixed to daily — interest is credited 365 times per year.</td></tr>
               <tr><td>Contribution (PMT)</td><td>Ongoing deposits; each one starts compounding on its own.</td></tr>
-              <tr><td>Contribution frequency</td><td>How often you add money (monthly / quarterly / annually).</td></tr>
+              <tr><td>Contribution frequency</td><td>How often you add money (daily / monthly / quarterly).</td></tr>
             </tbody>
           </table>
         </details>
@@ -382,26 +376,26 @@
     const money = (n) =>
       n.toLocaleString(undefined, { style: "currency", currency: "USD" });
 
-    function futureValue(principal, annualRatePct, years, compoundsPerYear, contribution, contribsPerYear) {
-      const p = Math.max(0, principal);
-      const r = Math.max(0, annualRatePct) / 100;
-      const t = Math.max(0, years);
-      const n = Math.max(1, compoundsPerYear);
-      const pmtAnnual = Math.max(0, contribution) * Math.max(0, contribsPerYear);
-      const periods = Math.round(n * t);
+    const DAYS_PER_YEAR = 365;
 
-      if (periods === 0) {
+    function futureValue(principal, dailyRatePct, years, contribution, contribsPerYear) {
+      const p = Math.max(0, principal);
+      const dailyRate = Math.max(0, dailyRatePct) / 100;
+      const t = Math.max(0, years);
+      const days = Math.round(DAYS_PER_YEAR * t);
+      const pmtAnnual = Math.max(0, contribution) * Math.max(0, contribsPerYear);
+
+      if (days === 0) {
         const total = p + pmtAnnual * t;
         return { balance: total, contributed: total, interest: 0 };
       }
 
-      const ratePer = r / n;
-      const pmtPer = pmtAnnual / n;
+      const pmtPerDay = pmtAnnual / DAYS_PER_YEAR;
       let balance = p;
-      for (let i = 0; i < periods; i++) {
-        balance = balance * (1 + ratePer) + pmtPer;
+      for (let i = 0; i < days; i++) {
+        balance = balance * (1 + dailyRate) + pmtPerDay;
       }
-      const contributed = p + pmtPer * periods;
+      const contributed = p + pmtPerDay * days;
       return { balance, contributed, interest: balance - contributed };
     }
 
@@ -463,21 +457,20 @@
       const principal = Number($("principal").value) || 0;
       const rate = Number($("rate").value) || 0;
       const years = Number($("years").value) || 1;
-      const n = Number($("compound").value) || 12;
       const cFreq = Number($("contribFreq").value) || 0;
       const contribution = cFreq ? Number($("contribution").value) || 0 : 0;
 
       $("yearsLabel").textContent = String(years);
       $("contribWrap").classList.toggle("hidden", cFreq === 0);
 
-      const final = futureValue(principal, rate, years, n, contribution, cFreq);
+      const final = futureValue(principal, rate, years, contribution, cFreq);
       $("futureValue").textContent = money(final.balance);
       $("totalContributed").textContent = money(final.contributed);
       $("interestEarned").textContent = money(final.interest);
 
       const schedule = [];
       for (let y = 0; y <= years; y++) {
-        const row = futureValue(principal, rate, y, n, contribution, cFreq);
+        const row = futureValue(principal, rate, y, contribution, cFreq);
         schedule.push({
           year: y,
           balance: row.balance,
@@ -496,7 +489,7 @@
       drawChart(schedule);
     }
 
-    ["principal", "rate", "years", "compound", "contribFreq", "contribution"].forEach((id) => {
+    ["principal", "rate", "years", "contribFreq", "contribution"].forEach((id) => {
       $(id).addEventListener("input", recalculate);
       $(id).addEventListener("change", recalculate);
     });
