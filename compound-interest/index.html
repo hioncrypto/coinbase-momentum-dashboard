@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <title>Compound Calculator</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -11,14 +12,11 @@
     :root {
       --ink: #0f1f1a;
       --muted: #4a6358;
-      --accent: #1a7a55;
       --accent-deep: #0d4f38;
       --line: rgba(15, 31, 26, 0.12);
       --panel: rgba(255, 255, 255, 0.72);
     }
-
     * { box-sizing: border-box; }
-
     body {
       margin: 0;
       min-height: 100vh;
@@ -29,119 +27,66 @@
         radial-gradient(900px 500px at 95% 5%, rgba(196, 163, 90, 0.16), transparent 50%),
         linear-gradient(165deg, #e8f0eb 0%, #f3f7f4 42%, #dde8e2 100%);
     }
-
     main {
       width: min(720px, calc(100% - 2rem));
       margin: 0 auto;
       padding: 2.5rem 0 3.5rem;
     }
-
-    .hero { margin-bottom: 1.5rem; animation: rise 0.7s ease-out both; }
-
     .hero h1 {
       font-family: "Fraunces", Georgia, serif;
-      font-size: clamp(2.2rem, 5vw, 3.2rem);
+      font-size: clamp(2.2rem, 5vw, 3.1rem);
       font-weight: 700;
-      letter-spacing: -0.02em;
-      line-height: 1.05;
       color: var(--accent-deep);
-      margin: 0 0 0.55rem;
+      margin: 0 0 0.5rem;
+      letter-spacing: -0.02em;
     }
-
-    .hero p {
-      margin: 0;
-      color: var(--muted);
-      font-size: 1.05rem;
-      line-height: 1.45;
-    }
-
+    .hero p { margin: 0 0 1rem; color: var(--muted); line-height: 1.45; }
     .panel {
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 18px;
       padding: 1.25rem 1.3rem 1.4rem;
       backdrop-filter: blur(10px);
-      animation: rise 0.8s ease-out 0.08s both;
     }
-
     .field { margin-bottom: 1rem; }
-
-    .grid-2 {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.85rem;
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; }
+    @media (max-width: 560px) { .grid-2 { grid-template-columns: 1fr; } }
+    .section-label {
+      font-family: "Fraunces", Georgia, serif;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--accent-deep);
+      margin: 0.2rem 0 0.7rem;
     }
-
-    @media (max-width: 560px) {
-      .grid-2 { grid-template-columns: 1fr; }
-    }
-
-    label {
-      display: block;
-      font-size: 0.88rem;
-      font-weight: 500;
-      margin-bottom: 0.35rem;
-    }
-
-    .hint {
-      display: block;
-      font-size: 0.78rem;
-      color: var(--muted);
-      margin-top: 0.3rem;
-    }
-
+    label { display: block; font-size: 0.88rem; font-weight: 500; margin-bottom: 0.35rem; }
+    .hint { display: block; font-size: 0.78rem; color: var(--muted); margin-top: 0.3rem; }
     input[type="number"] {
       width: 100%;
       border: 1px solid var(--line);
       border-radius: 12px;
       padding: 0.75rem 0.85rem;
       font: inherit;
-      color: var(--ink);
-      background: rgba(255, 255, 255, 0.9);
-      outline: none;
+      background: rgba(255,255,255,0.9);
     }
-
-    input[type="number"]:focus {
-      border-color: rgba(26, 122, 85, 0.55);
-      box-shadow: 0 0 0 3px rgba(26, 122, 85, 0.12);
-    }
-
     .formula {
-      margin: 0.25rem 0 1.15rem;
+      margin: 0 0 1rem;
       padding: 0.85rem 1rem;
       border-radius: 12px;
       background: rgba(13, 79, 56, 0.06);
       border: 1px solid var(--line);
-      font-size: 0.92rem;
       color: var(--muted);
+      font-size: 0.92rem;
       line-height: 1.45;
-      animation: rise 0.85s ease-out 0.12s both;
     }
-
-    .formula strong {
-      color: var(--accent-deep);
-      font-family: "Fraunces", Georgia, serif;
-    }
-
-    .cards {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.75rem;
-      margin-top: 0.35rem;
-    }
-
-    @media (max-width: 560px) {
-      .cards { grid-template-columns: 1fr; }
-    }
-
+    .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    @media (max-width: 560px) { .cards { grid-template-columns: 1fr; } }
     .card {
       background: linear-gradient(160deg, rgba(255,255,255,0.92), rgba(232,240,235,0.86));
       border: 1px solid var(--line);
       border-radius: 16px;
-      padding: 1rem 1.05rem;
+      padding: 1rem;
       min-height: 92px;
     }
-
     .card .label {
       font-size: 0.72rem;
       text-transform: uppercase;
@@ -149,57 +94,23 @@
       color: var(--muted);
       margin-bottom: 0.3rem;
     }
-
     .card .value {
       font-family: "Fraunces", Georgia, serif;
       font-size: 1.55rem;
       font-weight: 700;
+      color: var(--accent-deep);
       line-height: 1.15;
     }
-
-    .card.highlight .value { color: var(--accent-deep); }
-
-    .result-block { margin-top: 0.85rem; }
-
+    .result-block { margin-top: 0.9rem; }
     .result-block h3 {
       font-family: "Fraunces", Georgia, serif;
       font-size: 1rem;
       margin: 0 0 0.55rem;
       color: var(--accent-deep);
     }
-
-    details {
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      background: rgba(255, 255, 255, 0.45);
-      padding: 0.7rem 0.9rem;
-      margin-top: 1rem;
-    }
-
-    summary {
-      cursor: pointer;
-      font-weight: 600;
-      font-size: 0.95rem;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 0.75rem;
-      font-size: 0.88rem;
-    }
-
-    th, td {
-      text-align: left;
-      padding: 0.45rem 0.35rem;
-      border-bottom: 1px solid var(--line);
-    }
-
-    th { color: var(--muted); font-weight: 500; }
-
     button.calculate {
       width: 100%;
-      margin: 0.25rem 0 1rem;
+      margin: 0.2rem 0 0.9rem;
       border: none;
       border-radius: 12px;
       padding: 0.85rem 1rem;
@@ -209,25 +120,30 @@
       background: linear-gradient(160deg, #1a7a55, #0d4f38);
       cursor: pointer;
     }
-
-    button.calculate:hover { filter: brightness(1.06); }
-
-    @keyframes rise {
-      from { opacity: 0; transform: translateY(14px); }
-      to { opacity: 1; transform: translateY(0); }
+    details {
+      margin-top: 1rem;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255,255,255,0.45);
+      padding: 0.7rem 0.9rem;
     }
+    summary { cursor: pointer; font-weight: 600; }
+    table { width: 100%; border-collapse: collapse; margin-top: 0.7rem; font-size: 0.88rem; }
+    th, td { text-align: left; padding: 0.4rem 0.3rem; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-weight: 500; }
   </style>
 </head>
 <body>
   <main>
     <header class="hero">
       <h1>Principal × %</h1>
-      <p>Same idea for daily and monthly: multiply again and again.</p>
+      <p>Daily growth every day. Monthly growth once each full month — both raise the same balance.</p>
     </header>
 
     <p class="formula">
-      Daily: balance × <strong>(1 + daily%/100)</strong> × … for each day<br />
-      Monthly: balance × <strong>(1 + monthly%/100)</strong> × … for each day count too
+      Every day: × (1 + daily%/100)<br />
+      Every full month (30 days): also × (1 + monthly%/100)<br />
+      So 3 months → monthly applied 3 times; 4 months → monthly applied 4 times (higher).
     </p>
 
     <section class="panel">
@@ -238,67 +154,65 @@
           <span class="hint">Starting amount.</span>
         </div>
 
+        <p class="section-label">Daily compound</p>
         <div class="grid-2">
           <div class="field">
             <label for="dailyRate">Daily rate (%)</label>
             <input id="dailyRate" type="number" min="0" step="any" value="15" />
-            <span class="hint">e.g. 15 → ×1.15 each step</span>
+            <span class="hint">Multiply by (1 + rate/100) each day.</span>
           </div>
           <div class="field">
-            <label for="monthlyRate">Monthly rate (%)</label>
-            <input id="monthlyRate" type="number" min="0" step="any" value="6" />
-            <span class="hint">e.g. 6 → ×1.06 each step</span>
+            <label for="days">Number of days</label>
+            <input id="days" type="number" min="0" step="1" value="90" />
+            <span class="hint">90 days = 3 months, 120 days = 4 months.</span>
           </div>
         </div>
 
+        <p class="section-label">Monthly compound</p>
         <div class="field">
-          <label for="times">How many times</label>
-          <input id="times" type="number" min="0" step="1" value="30" required />
-          <span class="hint">Both daily and monthly rates are multiplied this many times.</span>
+          <label for="monthlyRate">Monthly rate (%)</label>
+          <input id="monthlyRate" type="number" min="0" step="any" value="3" />
+          <span class="hint">Applied on the grown balance after every 30 days.</span>
         </div>
 
         <button class="calculate" type="submit">Calculate</button>
       </form>
 
       <div class="result-block" aria-live="polite">
-        <h3 id="dailyTitle">Daily</h3>
+        <h3 id="finalTitle">Final balance (daily + monthly)</h3>
         <div class="cards">
-          <div class="card highlight">
+          <div class="card">
             <div class="label">Final balance</div>
-            <div class="value" id="dailyBalance">$0.00</div>
+            <div class="value" id="finalBalance">$0.00</div>
           </div>
           <div class="card">
             <div class="label">Interest earned</div>
-            <div class="value" id="dailyInterest">$0.00</div>
+            <div class="value" id="finalInterest">$0.00</div>
           </div>
         </div>
       </div>
 
       <div class="result-block" aria-live="polite">
-        <h3 id="monthlyTitle">Monthly</h3>
+        <h3>For comparison — daily only (no monthly)</h3>
         <div class="cards">
-          <div class="card highlight">
-            <div class="label">Final balance</div>
-            <div class="value" id="monthlyBalance">$0.00</div>
+          <div class="card">
+            <div class="label">Balance</div>
+            <div class="value" id="dailyOnlyBalance" style="color:#4a6358">$0.00</div>
           </div>
           <div class="card">
-            <div class="label">Interest earned</div>
-            <div class="value" id="monthlyInterest">$0.00</div>
+            <div class="label">Months applied</div>
+            <div class="value" id="monthsApplied" style="color:#4a6358">0</div>
           </div>
         </div>
       </div>
     </section>
 
     <details open>
-      <summary>Step-by-step</summary>
-      <div style="overflow-x:auto; max-height: 360px; overflow-y:auto;">
+      <summary>Day-by-day (shows each monthly bump)</summary>
+      <div style="overflow-x:auto; max-height:360px; overflow-y:auto;">
         <table>
           <thead>
-            <tr>
-              <th>Step</th>
-              <th>Daily balance</th>
-              <th>Monthly balance</th>
-            </tr>
+            <tr><th>Day</th><th>What happened</th><th>Balance</th></tr>
           </thead>
           <tbody id="scheduleBody"></tbody>
         </table>
@@ -308,48 +222,51 @@
 
   <script>
     const $ = (id) => document.getElementById(id);
-
-    const money = (n) =>
-      n.toLocaleString(undefined, { style: "currency", currency: "USD" });
+    const money = (n) => n.toLocaleString(undefined, { style: "currency", currency: "USD" });
 
     function recalculate() {
       const principal = Math.max(0, Number($("principal").value) || 0);
       const dailyRate = Math.max(0, Number($("dailyRate").value) || 0);
+      const days = Math.max(0, Math.floor(Number($("days").value) || 0));
       const monthlyRate = Math.max(0, Number($("monthlyRate").value) || 0);
-      const times = Math.max(0, Math.floor(Number($("times").value) || 0));
 
       const dailyFactor = 1 + dailyRate / 100;
       const monthlyFactor = 1 + monthlyRate / 100;
 
-      let dailyBal = principal;
-      let monthlyBal = principal;
-      const rows = [
-        `<tr><td>0</td><td>${money(dailyBal)}</td><td>${money(monthlyBal)}</td></tr>`,
-      ];
+      const dailyOnly = principal * Math.pow(dailyFactor, days);
 
-      for (let i = 1; i <= times; i++) {
-        dailyBal *= dailyFactor;
-        monthlyBal *= monthlyFactor;
-        rows.push(
-          `<tr><td>${i}</td><td>${money(dailyBal)}</td><td>${money(monthlyBal)}</td></tr>`
-        );
+      let balance = principal;
+      let monthsApplied = 0;
+      const rows = [`<tr><td>0</td><td>Start</td><td>${money(balance)}</td></tr>`];
+
+      for (let d = 1; d <= days; d++) {
+        balance *= dailyFactor;
+        let what = `Daily ×${dailyFactor.toFixed(4)}`;
+
+        // Full month completed → apply monthly on top
+        if (monthlyRate > 0 && d % 30 === 0) {
+          balance *= monthlyFactor;
+          monthsApplied += 1;
+          what += ` + Monthly #${monthsApplied} ×${monthlyFactor.toFixed(4)}`;
+        }
+
+        // Keep table readable: show every day for short runs, else milestones
+        if (days <= 120 || d % 30 === 0 || d === days || d <= 3) {
+          rows.push(`<tr><td>${d}</td><td>${what}</td><td>${money(balance)}</td></tr>`);
+        }
       }
 
-      $("dailyBalance").textContent = money(dailyBal);
-      $("dailyInterest").textContent = money(dailyBal - principal);
-      $("monthlyBalance").textContent = money(monthlyBal);
-      $("monthlyInterest").textContent = money(monthlyBal - principal);
-
-      $("dailyTitle").textContent =
-        `Daily: ${principal} × ${dailyFactor.toFixed(4)} × … (${times} times)`;
-      $("monthlyTitle").textContent =
-        `Monthly: ${principal} × ${monthlyFactor.toFixed(4)} × … (${times} times)`;
-
+      $("finalBalance").textContent = money(balance);
+      $("finalInterest").textContent = money(balance - principal);
+      $("dailyOnlyBalance").textContent = money(dailyOnly);
+      $("monthsApplied").textContent = String(monthsApplied);
+      $("finalTitle").textContent =
+        `Final balance (daily + monthly × ${monthsApplied})`;
       $("scheduleBody").innerHTML = rows.join("");
     }
 
-    $("calcForm").addEventListener("submit", (event) => {
-      event.preventDefault();
+    $("calcForm").addEventListener("submit", (e) => {
+      e.preventDefault();
       recalculate();
     });
 
