@@ -11,7 +11,7 @@ streamlit run app.py
 
 ### Compound interest calculator
 
-**[Open the calculator →](https://htmlpreview.github.io/?https://github.com/hioncrypto/coinbase-momentum-dashboard/blob/11add3d/compound-interest/index.html)**
+**[Open the calculator →](https://htmlpreview.github.io/?https://github.com/hioncrypto/coinbase-momentum-dashboard/blob/7356ecc/compound-interest/index.html)**
 
 This is a normal HTTPS preview link (not the temporary Cloudflare links that kept failing on phones).
 
