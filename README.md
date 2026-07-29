@@ -9,16 +9,6 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-### Compound interest calculator
-
-**[Open the calculator →](https://htmlpreview.github.io/?https://github.com/hioncrypto/coinbase-momentum-dashboard/blob/7356ecc/compound-interest/index.html)**
-
-This is a normal HTTPS preview link (not the temporary Cloudflare links that kept failing on phones).
-
-Or open locally: Firefox → **File → Open File…** → `compound-interest/index.html`
-
-Inputs: principal, daily rate %, monthly rate %, and number of months.
-
 Email alerts (optional): copy `.streamlit/secrets_template.toml` to `.streamlit/secrets.toml` and add SMTP credentials.
 
 ## Features
