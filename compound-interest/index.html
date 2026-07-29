@@ -205,11 +205,16 @@
     </section>
 
     <details open>
-      <summary>Month-by-month checkpoints</summary>
-      <div style="overflow-x:auto; max-height:360px; overflow-y:auto;">
+      <summary>Every-day breakdown</summary>
+      <div style="overflow-x:auto; max-height:420px; overflow-y:auto;">
         <table>
           <thead>
-            <tr><th>Month</th><th>After 30 daily steps</th><th>After monthly %</th></tr>
+            <tr>
+              <th>Day</th>
+              <th>Month</th>
+              <th>What happened</th>
+              <th>Balance</th>
+            </tr>
           </thead>
           <tbody id="scheduleBody"></tbody>
         </table>
@@ -232,17 +237,27 @@
       const monthlyFactor = 1 + monthlyRate / 100;
 
       let balance = principal;
-      const rows = [];
+      let day = 0;
+      const rows = [
+        `<tr><td>0</td><td>—</td><td>Start</td><td>${money(balance)}</td></tr>`,
+      ];
 
       for (let m = 1; m <= months; m++) {
-        for (let d = 0; d < 30; d++) {
+        for (let d = 1; d <= 30; d++) {
+          day += 1;
           balance *= dailyFactor;
+          let what = `Daily ×${dailyFactor.toFixed(4)}`;
+
+          // End of month: also apply monthly %
+          if (d === 30 && monthlyRate > 0) {
+            balance *= monthlyFactor;
+            what += ` + Monthly ×${monthlyFactor.toFixed(4)}`;
+          }
+
+          rows.push(
+            `<tr><td>${day}</td><td>${m}</td><td>${what}</td><td>${money(balance)}</td></tr>`
+          );
         }
-        const afterDaily = balance;
-        balance *= monthlyFactor;
-        rows.push(
-          `<tr><td>${m}</td><td>${money(afterDaily)}</td><td>${money(balance)}</td></tr>`
-        );
       }
 
       $("finalBalance").textContent = money(balance);
