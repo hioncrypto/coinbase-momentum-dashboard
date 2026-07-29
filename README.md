@@ -11,17 +11,11 @@ streamlit run app.py
 
 ### Compound interest calculator
 
-Local HTML file only (no temporary web links):
+**[Open the calculator →](https://htmlpreview.github.io/?https://github.com/hioncrypto/coinbase-momentum-dashboard/blob/11add3d/compound-interest/index.html)**
 
-1. Open Firefox (or any browser)
-2. **File → Open File…**
-3. Choose `compound-interest/index.html`
+This is a normal HTTPS preview link (not the temporary Cloudflare links that kept failing on phones).
 
-Or:
-
-```bash
-firefox compound-interest/index.html
-```
+Or open locally: Firefox → **File → Open File…** → `compound-interest/index.html`
 
 Inputs: principal, daily rate %, monthly rate %, and number of months.
 
