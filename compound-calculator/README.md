@@ -1,51 +1,20 @@
-# Compound Calculator (standalone)
+# Compound Calculator
 
-A **standalone** compound interest app for your computer.  
-Not part of any crypto/scanner project. No website. No browser link.
+One file. Offline. Not hosted anywhere.
 
-## What it does
+**File:** `CompoundCalculator.html`
 
-- Principal
-- Daily rate (%)
-- Monthly rate (%)
-- Number of months
-- Final balance + **every-day breakdown**
+## Load it on your phone (no website)
 
-Each month = 30 daily compounds, then one monthly compound.
+1. Download `CompoundCalculator.html` (from this folder, or from the agent Artifacts).
+2. Send that file to your phone — email it to yourself, AirDrop, Messages, USB, Google Drive / iCloud **as a file**.
+3. On the phone, open the file:
+   - **iPhone:** Files app → tap the `.html` file → it opens in Safari.
+   - **Android:** Files / Downloads → tap the `.html` file → open with Chrome.
+4. Optional: Share → Add to Home Screen so it feels like an app.
 
-## Run on computer
+That’s it. No GitHub link. No Netlify. No Streamlit. No server.
 
-```bash
-cd compound-calculator
-pip install -r requirements.txt
-python calculator.py
-```
+## Computer
 
-A normal app window opens (not a browser tab).
-
-### Windows
-
-```bat
-pip install -r requirements.txt
-python calculator.py
-```
-
-### Mac / Linux
-
-```bash
-pip3 install -r requirements.txt
-python3 calculator.py
-```
-
-## Run on phone
-
-1. Install **Pydroid 3** (Android) from the Play Store  
-2. Copy `calculator.py` onto your phone  
-3. In Pydroid: `pip install flet` then open and run `calculator.py`
-
-Or use any Python app runner that supports Flet.
-
-## Share with anyone
-
-Zip this whole `compound-calculator` folder and send it.  
-They install Python + run the two commands above. No account, no website.
+Double-click `CompoundCalculator.html`, or open it with File → Open in any browser.

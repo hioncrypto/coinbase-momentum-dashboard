@@ -1,0 +1,6 @@
+LOAD ON PHONE — NO HOSTING
+
+1. Get the file: CompoundCalculator.html
+2. Send it to your phone (email / AirDrop / Messages / USB)
+3. Tap the file on your phone to open it
+4. Done. It runs offline from that file.
