@@ -1,25 +1,27 @@
 #!/usr/bin/env python3
 """
-Mobile-friendly Kalshi BTC 15m Target chart server.
+Mobile-friendly Kalshi BTC 15m Price-to-beat chart server.
 
-Serves a PWA that works in Android Chrome (Add to Home Screen) and draws
-Kalshi's rolling KXBTC15M Target Price as a chart price line — no manual input.
+Serves a PWA for Android Chrome (Add to Home Screen). Draws Kalshi's rolling
+KXBTC15M "Price to beat" as a TARGET price line — no manual input, no Tampermonkey.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import re
 import threading
 import time
-import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
-HOST = "0.0.0.0"
-PORT = 8765
+HOST = os.environ.get("HOST", "0.0.0.0")
+PORT = int(os.environ.get("PORT", "8765"))
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 KALSHI_URL = (
@@ -28,7 +30,7 @@ KALSHI_URL = (
 )
 COINBASE_CANDLES = "https://api.exchange.coinbase.com/products/BTC-USD/candles"
 
-UA = "kalshi-btc-target/1.0 (+android-pwa)"
+UA = "kalshi-btc-target/1.1 (+android-pwa)"
 
 _cache_lock = threading.Lock()
 _target_cache: dict = {"at": 0.0, "payload": None}
@@ -47,10 +49,12 @@ def http_get_json(url: str, timeout: float = 20.0):
 
 
 def parse_target(market: dict) -> float | None:
+    """Kalshi Price to beat == floor_strike / 'Target Price: $…'."""
     floor = market.get("floor_strike")
     if isinstance(floor, (int, float)):
         return float(floor)
-    sub = market.get("yes_sub_title") or market.get("no_sub_title") or ""
+    sub = market.get("yes_sub_title") or ""
+    # Prefer yes_sub_title; no_sub can stay TBD while yes is set.
     m = re.search(r"Target\s*Price:\s*\$?\s*([0-9,]+(?:\.\d+)?)", sub, re.I)
     if not m:
         return None
@@ -58,19 +62,19 @@ def parse_target(market: dict) -> float | None:
 
 
 def format_et_close(close_iso: str | None) -> str | None:
-    """Match Kalshi mobile label style, e.g. '9:30pm ET'."""
+    """Match Kalshi mobile label style, e.g. '9:45pm ET'."""
     if not close_iso:
         return None
     try:
-        from datetime import datetime, timezone
-        from zoneinfo import ZoneInfo
-
         dt = datetime.fromisoformat(close_iso.replace("Z", "+00:00")).astimezone(
             ZoneInfo("America/New_York")
         )
-        # Kalshi-style: 9:30pm ET
-        stamp = dt.strftime("%I:%M%p ET").lstrip("0").replace("AM", "am").replace("PM", "pm")
-        return stamp
+        return (
+            dt.strftime("%I:%M%p ET")
+            .lstrip("0")
+            .replace("AM", "am")
+            .replace("PM", "pm")
+        )
     except Exception:
         return close_iso
 
@@ -80,7 +84,6 @@ def fetch_target_payload() -> dict:
     with _cache_lock:
         cached = _target_cache["payload"]
         age = now - _target_cache["at"]
-        # Don't hold a TBD/empty target — retry quickly until Kalshi publishes floor_strike.
         ttl = TARGET_TTL if cached and cached.get("price_to_beat") is not None else 1.0
         if cached and age < ttl:
             return cached
@@ -88,7 +91,6 @@ def fetch_target_payload() -> dict:
     try:
         data = http_get_json(KALSHI_URL)
         markets = data.get("markets") or []
-        # Prefer an active/open market that already has Price to beat set.
         market = next(
             (
                 m
@@ -102,6 +104,8 @@ def fetch_target_payload() -> dict:
                 (m for m in markets if m.get("status") in ("active", "open")),
                 markets[0] if markets else None,
             )
+
+        fetched_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         if not market:
             payload = {
                 "ok": True,
@@ -115,10 +119,9 @@ def fetch_target_payload() -> dict:
                 "subtitle": None,
                 "label": "Price to beat",
                 "error": "No open KXBTC15M market",
-                "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "fetched_at": fetched_at,
             }
         else:
-            # Kalshi "Price to beat" == floor_strike / Target Price on KXBTC15M
             target = parse_target(market)
             close_et = format_et_close(market.get("close_time"))
             payload = {
@@ -135,10 +138,8 @@ def fetch_target_payload() -> dict:
                 "error": None
                 if target is not None
                 else "Price to beat TBD (waiting for window open)",
-                "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "fetched_at": fetched_at,
             }
-            # If this window is still TBD, keep showing the previous known Price to beat
-            # until Kalshi publishes the new floor (usually seconds after rollover).
             if target is None:
                 with _cache_lock:
                     prev = _target_cache.get("payload") or {}
@@ -177,40 +178,40 @@ def fetch_candles(granularity: int = 60, limit: int = 300) -> dict:
         ):
             return _candles_cache["payload"]
 
-    # Coinbase returns at most ~300 candles per call for a window; request recent window.
     end = int(now)
     start = end - granularity * limit
     qs = urllib.parse.urlencode(
-        {"granularity": granularity, "start": start, "end": end}
+        {
+            "granularity": granularity,
+            "start": datetime.fromtimestamp(start, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "end": datetime.fromtimestamp(end, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
     )
     url = f"{COINBASE_CANDLES}?{qs}"
     try:
         raw = http_get_json(url)
-        # Coinbase: [time, low, high, open, close, volume], newest first
         rows = sorted(raw, key=lambda r: r[0])
-        candles = [
-            {
-                "time": int(r[0]),
-                "open": float(r[3]),
-                "high": float(r[2]),
-                "low": float(r[1]),
-                "close": float(r[4]),
-            }
-            for r in rows
-        ]
-        # Deduplicate timestamps (lightweight-charts requires unique ascending times)
-        deduped = []
+        candles = []
         seen = set()
-        for c in candles:
-            if c["time"] in seen:
+        for r in rows:
+            t = int(r[0])
+            if t in seen:
                 continue
-            seen.add(c["time"])
-            deduped.append(c)
+            seen.add(t)
+            candles.append(
+                {
+                    "time": t,
+                    "open": float(r[3]),
+                    "high": float(r[2]),
+                    "low": float(r[1]),
+                    "close": float(r[4]),
+                }
+            )
         payload = {
             "ok": True,
             "symbol": "BTC-USD",
             "granularity": granularity,
-            "candles": deduped[-limit:],
+            "candles": candles[-limit:],
             "error": None,
             "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         }
@@ -224,14 +225,14 @@ def fetch_candles(granularity: int = 60, limit: int = 300) -> dict:
         }
 
     with _cache_lock:
-        _candles_cache["at"] = now
+        _candles_cache["at"] = time.time()
         _candles_cache["key"] = key
         _candles_cache["payload"] = payload
     return payload
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "KalshiBtcTarget/1.0"
+    server_version = "KalshiBtcTarget/1.1"
 
     def log_message(self, fmt, *args):
         print(f"[kalshi-btc-target] {self.address_string()} {fmt % args}")
@@ -275,15 +276,17 @@ class Handler(BaseHTTPRequestHandler):
                 limit = int((qs.get("limit") or ["300"])[0])
             except ValueError:
                 limit = 300
-            limit = max(50, min(limit, 500))
+            limit = max(50, min(limit, 300))
             self._send_json(200, fetch_candles(gran, limit))
             return
 
         if path == "/api/health":
-            self._send_json(200, {"ok": True})
+            self._send_json(
+                200,
+                {"ok": True, "service": "kalshi-btc-target", "version": "1.1"},
+            )
             return
 
-        # Static files
         rel = "index.html" if path in ("", "/") else path.lstrip("/")
         if ".." in rel or rel.startswith("/"):
             self._send_json(400, {"ok": False, "error": "bad path"})
@@ -312,8 +315,8 @@ def main():
     if not STATIC_DIR.is_dir():
         raise SystemExit(f"Missing static dir: {STATIC_DIR}")
     httpd = ThreadingHTTPServer((HOST, PORT), Handler)
-    print(f"Kalshi BTC Target mobile app → http://{HOST}:{PORT}/")
-    print("On Android: open this URL in Chrome → Add to Home Screen")
+    print(f"Kalshi BTC Price-to-beat app → http://{HOST}:{PORT}/")
+    print("Android Chrome → open URL → Add to Home Screen")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

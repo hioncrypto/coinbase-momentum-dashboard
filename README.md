@@ -35,13 +35,17 @@ Copy `.env.example` to `.env` for local Docker tests.
 - Terms: [legal/TERMS.md](legal/TERMS.md) (review with counsel before selling)
 - Privacy: [legal/PRIVACY.md](legal/PRIVACY.md)
 
-## Kalshi BTC Target on TradingView (incl. Android)
+## Kalshi 15m Price to beat (Android chart)
 
-Auto horizontal **TARGET** line from Kalshi’s rolling **15-minute** BTC market (`KXBTC15M`):
+Finished app in [`kalshi-btc-target/`](kalshi-btc-target/):
 
-- **Android on TradingView:** Firefox + Tampermonkey userscript — see [`tradingview-kalshi-target/ANDROID.md`](tradingview-kalshi-target/ANDROID.md) (`kalshi-tv-target.user.js`). Uses the TradingView **website** (not the Play Store app).
-- **Desktop TradingView:** Chrome extension in [`tradingview-kalshi-target/`](tradingview-kalshi-target/)
-- **Standalone Android chart (not TV UI):** [`kalshi-btc-target/`](kalshi-btc-target/) PWA
+```bash
+python3 kalshi-btc-target/server.py
+```
+
+Open in Android Chrome → Add to Home Screen. Draws Kalshi’s live **Price to beat** as a TARGET line and updates each 15m window.
+
+Optional TradingView overlay (desktop / Firefox userscript): [`tradingview-kalshi-target/`](tradingview-kalshi-target/)
 
 ## Legacy files
 

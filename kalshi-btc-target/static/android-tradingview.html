@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>Android-only: Kalshi TARGET on TradingView</title>
+    <title>Kalshi Price to beat — Android</title>
     <style>
       :root {
         color-scheme: dark;
@@ -25,7 +25,7 @@
       h1 { font-size: 1.35rem; margin: 0 0 8px; }
       p { color: var(--muted); }
       ol { padding-left: 1.2rem; }
-      li { margin: 14px 0; }
+      li { margin: 12px 0; }
       a.btn {
         display: inline-block;
         margin-top: 8px;
@@ -44,61 +44,22 @@
         border-radius: 12px;
         background: rgba(12, 20, 16, .7);
       }
-      .warn { color: #ffd28a; }
-      code { color: #b6dcc7; }
     </style>
   </head>
   <body>
     <main>
-      <h1>Android only</h1>
-      <p>No computer. Auto Kalshi 15m TARGET line on TradingView in Firefox.</p>
-
+      <h1>Android · Kalshi Price to beat</h1>
+      <p>
+        Auto TARGET line from Kalshi’s 15-minute <strong>Price to beat</strong>.
+        No Tampermonkey required.
+      </p>
       <div class="card">
-        <p class="warn" style="margin-top:0">
-          Use Firefox + TradingView website — not the TradingView app.
-        </p>
         <ol>
-          <li>
-            Install Firefox
-            <br />
-            <a
-              class="btn"
-              href="https://play.google.com/store/apps/details?id=org.mozilla.firefox"
-              target="_blank"
-              rel="noopener"
-              >Google Play · Firefox</a
-            >
-          </li>
-          <li>
-            Install Tampermonkey inside Firefox
-            <br />
-            <a
-              class="btn"
-              href="https://addons.mozilla.org/firefox/addon/tampermonkey/"
-              target="_blank"
-              rel="noopener"
-              >Add Tampermonkey</a
-            >
-          </li>
-          <li>
-            In Tampermonkey: Dashboard → <strong>+</strong> → delete template → paste
-            <code>kalshi-tv-target.user.js</code> → save → Enabled
-            <br />
-            <a class="btn" href="/kalshi-tv-target.user.js">Open userscript file</a>
-          </li>
-          <li>
-            Open BTCUSD on TradingView <strong>in Firefox</strong>
-            <br />
-            <a
-              class="btn"
-              href="https://www.tradingview.com/chart/?symbol=BTCUSD"
-              target="_blank"
-              rel="noopener"
-              >Open TradingView BTCUSD</a
-            >
-          </li>
-          <li>Confirm dashed green TARGET line — it auto-updates every 15 minutes</li>
+          <li>Open the chart app in Chrome</li>
+          <li>Chrome menu → <strong>Add to Home Screen</strong></li>
+          <li>Open the icon — line updates every 15 minutes automatically</li>
         </ol>
+        <a class="btn" href="/">Open chart app</a>
       </div>
     </main>
   </body>

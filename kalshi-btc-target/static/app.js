@@ -1,7 +1,7 @@
 (() => {
-  const TARGET_POLL_MS = 10_000;
-  const CANDLE_POLL_MS = 20_000;
-  const BOUNDARY_PAD_MS = 3_000;
+  const TARGET_POLL_MS = 5_000;
+  const CANDLE_POLL_MS = 15_000;
+  const BOUNDARY_PAD_MS = 2_000;
 
   const el = {
     chart: document.getElementById("chart"),
@@ -14,15 +14,13 @@
     clock: document.getElementById("clock"),
   };
 
-  /** @type {import('lightweight-charts').IChartApi | null} */
   let chart = null;
-  /** @type {import('lightweight-charts').ISeriesApi<'Candlestick'> | null} */
   let series = null;
-  /** @type {ReturnType<import('lightweight-charts').ISeriesApi<'Candlestick'>['createPriceLine']> | null} */
   let targetLine = null;
   let lastTicker = null;
   let lastTarget = null;
   let boundaryTimer = null;
+  let fittedOnce = false;
 
   function money(n) {
     if (n == null || !Number.isFinite(n)) return "—";
@@ -64,6 +62,7 @@
       return;
     }
     el.spotValue.textContent = money(lastClose);
+    el.spotValue.dataset.last = String(lastClose);
     if (lastTarget != null && Number.isFinite(lastTarget)) {
       const delta = lastClose - lastTarget;
       const sign = delta >= 0 ? "+" : "-";
@@ -83,7 +82,7 @@
     if (!closeIso) return;
     const closeMs = Date.parse(closeIso);
     if (!Number.isFinite(closeMs)) return;
-    const wait = Math.max(5_000, closeMs + BOUNDARY_PAD_MS - Date.now());
+    const wait = Math.max(3_000, closeMs + BOUNDARY_PAD_MS - Date.now());
     boundaryTimer = setTimeout(() => {
       refreshTarget();
       refreshCandles();
@@ -97,7 +96,7 @@
       layout: {
         background: { color: "#121c18" },
         textColor: "#8fa399",
-        fontFamily: 'IBM Plex Sans, Segoe UI, sans-serif',
+        fontFamily: "IBM Plex Sans, Segoe UI, sans-serif",
       },
       grid: {
         vertLines: { color: "rgba(255,255,255,0.04)" },
@@ -119,7 +118,6 @@
       wickUpColor: "#1ac96b",
       wickDownColor: "#d45454",
     });
-    // stash for applyOptions
     ensureChart.LineStyle = LineStyle;
     resizeChart();
   }
@@ -129,7 +127,7 @@
     const rect = el.chart.getBoundingClientRect();
     chart.applyOptions({
       width: Math.max(280, Math.floor(rect.width)),
-      height: Math.max(280, Math.floor(rect.height)),
+      height: Math.max(320, Math.floor(rect.height)),
     });
   }
 
@@ -150,11 +148,8 @@
       axisLabelVisible: true,
       title: title || "TARGET",
     };
-    if (!targetLine) {
-      targetLine = series.createPriceLine(opts);
-    } else {
-      targetLine.applyOptions(opts);
-    }
+    if (!targetLine) targetLine = series.createPriceLine(opts);
+    else targetLine.applyOptions(opts);
   }
 
   async function refreshTarget() {
@@ -162,9 +157,8 @@
       const res = await fetch("/api/target", { cache: "no-store" });
       const data = await res.json();
       const beat = data.price_to_beat ?? data.target;
-      if (el.targetLabel) {
-        el.targetLabel.textContent = data.label || "Price to beat";
-      }
+      if (el.targetLabel) el.targetLabel.textContent = data.label || "Price to beat";
+
       if (!data.ok && beat == null) {
         setStatus("warn", data.error || "Kalshi error");
         el.targetValue.textContent = "—";
@@ -177,18 +171,23 @@
         el.targetValue.textContent = "TBD";
         el.targetMeta.textContent = data.error || "Waiting for next 15m window";
         applyTargetLine(null);
-        updateSpot(null);
       } else {
         const rolled = lastTicker && data.ticker && lastTicker !== data.ticker;
         lastTicker = data.ticker;
-        setStatus("ok", rolled ? "New 15m price to beat" : "Live · KXBTC15M");
+        setStatus(
+          "ok",
+          data.stale_previous
+            ? "Rolling…"
+            : rolled
+              ? "New 15m price to beat"
+              : "Live · KXBTC15M"
+        );
         el.targetValue.textContent = money(beat);
         const win = formatWindow(data.close_time, data.close_et);
         el.targetMeta.textContent = win
           ? `Kalshi 15m · settles ${win}`
           : "Kalshi 15m";
         applyTargetLine(beat, "TARGET");
-        // refresh delta if we already have a spot
         if (el.spotValue && el.spotValue.dataset.last) {
           updateSpot(Number(el.spotValue.dataset.last));
         }
@@ -216,9 +215,13 @@
       series.setData(candles);
       if (lastTarget != null) applyTargetLine(lastTarget, "TARGET");
       const last = candles.length ? candles[candles.length - 1].close : null;
-      if (el.spotValue && last != null) el.spotValue.dataset.last = String(last);
       updateSpot(last);
-      chart.timeScale().scrollToRealTime();
+      if (!fittedOnce && candles.length) {
+        chart.timeScale().fitContent();
+        fittedOnce = true;
+      } else {
+        chart.timeScale().scrollToRealTime();
+      }
     } catch (err) {
       setStatus("warn", "Candle fetch failed");
     }
@@ -247,7 +250,6 @@
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", boot);
   } else {
-    // lightweight-charts is deferred; wait a tick for it
     window.addEventListener("load", boot);
   }
 })();

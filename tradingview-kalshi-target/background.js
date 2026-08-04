@@ -57,15 +57,16 @@ function windowLabelFromMarket(market) {
   const close = market.close_time ? new Date(market.close_time) : null;
   if (!close || Number.isNaN(close.getTime())) return null;
   try {
-    return (
-      close.toLocaleString("en-US", {
+    const stamp = close
+      .toLocaleString("en-US", {
         timeZone: "America/New_York",
         hour: "numeric",
         minute: "2-digit",
         hour12: true,
-        timeZoneName: "short",
-      }) + " close"
-    );
+      })
+      .replace(" AM", "am")
+      .replace(" PM", "pm");
+    return `Price to beat • ${stamp} ET`;
   } catch {
     return close.toISOString();
   }
@@ -81,8 +82,15 @@ async function fetchActiveTarget() {
   }
   const data = await res.json();
   const markets = Array.isArray(data.markets) ? data.markets : [];
+  const withBeat = markets.find(
+    (m) =>
+      (m.status === "active" || m.status === "open") &&
+      parseTargetFromMarket(m) != null
+  );
   const market =
-    markets.find((m) => m.status === "active" || m.status === "open") || markets[0];
+    withBeat ||
+    markets.find((m) => m.status === "active" || m.status === "open") ||
+    markets[0];
 
   if (!market) {
     return {
@@ -98,6 +106,18 @@ async function fetchActiveTarget() {
 
   const target = parseTargetFromMarket(market);
   if (target == null) {
+    const prev = await getState();
+    if (prev.target != null) {
+      return {
+        target: prev.target,
+        ticker: market.ticker || prev.ticker,
+        eventTicker: market.event_ticker || prev.eventTicker,
+        windowLabel: windowLabelFromMarket(market) || prev.windowLabel,
+        openTime: market.open_time || prev.openTime,
+        closeTime: market.close_time || prev.closeTime,
+        error: "Waiting for new 15m Price to beat…",
+      };
+    }
     return {
       target: null,
       ticker: market.ticker || null,
@@ -105,7 +125,7 @@ async function fetchActiveTarget() {
       windowLabel: windowLabelFromMarket(market),
       openTime: market.open_time || null,
       closeTime: market.close_time || null,
-      error: "Target price TBD (waiting for window open)",
+      error: "Price to beat TBD (waiting for window open)",
     };
   }
 
