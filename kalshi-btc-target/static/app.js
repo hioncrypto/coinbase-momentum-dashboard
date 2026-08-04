@@ -8,6 +8,8 @@
   const TF_KEY = "kalshiChartTf";
   const CHIME_KEY = "kalshiChimeEnabled";
   const BG_ARMED_KEY = "kalshiBgAlertsArmed";
+  const DEMO_KEY = "kalshiDemoState";
+  const DEMO_DEFAULT_START = 1000;
 
   const TF_LABELS = {
     "1m": "1m candles",
@@ -55,6 +57,21 @@
     settleTitle: document.getElementById("settle-title"),
     settleAvg: document.getElementById("settle-avg"),
     settleMeta: document.getElementById("settle-meta"),
+    menuBtn: document.getElementById("menu-btn"),
+    optionsBackdrop: document.getElementById("options-backdrop"),
+    optionsSheet: document.getElementById("options-sheet"),
+    optionsClose: document.getElementById("options-close"),
+    demoToggle: document.getElementById("demo-toggle"),
+    demoAccount: document.getElementById("demo-account"),
+    demoBalance: document.getElementById("demo-balance"),
+    demoPl: document.getElementById("demo-pl"),
+    demoStart: document.getElementById("demo-start"),
+    demoReset: document.getElementById("demo-reset"),
+    demoPosition: document.getElementById("demo-position"),
+    demoBuyBest: document.getElementById("demo-buy-best"),
+    demoBuyAbove: document.getElementById("demo-buy-above"),
+    demoBuyBelow: document.getElementById("demo-buy-below"),
+    demoLast: document.getElementById("demo-last"),
     kalshiLink: null,
   };
 
@@ -75,6 +92,10 @@
   let closeTimeIso = null;
   let lastBestSideKey = null;
   let bestSideFlashTimer = null;
+  let lastBestPick = null; // { side } | null when clear edge
+  let settleHintByTicker = {};
+  let optionsOpen = false;
+  let demo = loadDemoState();
   let boundaryTimer = null;
   let rolloverTimer = null;
   let rolloverUntil = 0;
@@ -95,6 +116,230 @@
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
+  }
+
+  function loadDemoState() {
+    const fallback = {
+      on: false,
+      start: DEMO_DEFAULT_START,
+      balance: DEMO_DEFAULT_START,
+      realizedPl: 0,
+      position: null,
+      lastResult: null,
+    };
+    try {
+      const raw = localStorage.getItem(DEMO_KEY);
+      if (!raw) return fallback;
+      const parsed = JSON.parse(raw);
+      return {
+        on: !!parsed.on,
+        start:
+          Number.isFinite(parsed.start) && parsed.start > 0
+            ? parsed.start
+            : DEMO_DEFAULT_START,
+        balance: Number.isFinite(parsed.balance) ? parsed.balance : DEMO_DEFAULT_START,
+        realizedPl: Number.isFinite(parsed.realizedPl) ? parsed.realizedPl : 0,
+        position: parsed.position && typeof parsed.position === "object" ? parsed.position : null,
+        lastResult:
+          parsed.lastResult && typeof parsed.lastResult === "object"
+            ? parsed.lastResult
+            : null,
+      };
+    } catch {
+      return fallback;
+    }
+  }
+
+  function saveDemoState() {
+    try {
+      localStorage.setItem(DEMO_KEY, JSON.stringify(demo));
+    } catch {
+      // ignore quota
+    }
+  }
+
+  function openOptions() {
+    optionsOpen = true;
+    if (el.optionsSheet) el.optionsSheet.hidden = false;
+    if (el.optionsBackdrop) el.optionsBackdrop.hidden = false;
+    if (el.menuBtn) el.menuBtn.setAttribute("aria-expanded", "true");
+    renderDemoUi();
+  }
+
+  function closeOptions() {
+    optionsOpen = false;
+    if (el.optionsSheet) el.optionsSheet.hidden = true;
+    if (el.optionsBackdrop) el.optionsBackdrop.hidden = true;
+    if (el.menuBtn) el.menuBtn.setAttribute("aria-expanded", "false");
+  }
+
+  function toggleOptions() {
+    if (optionsOpen) closeOptions();
+    else openOptions();
+  }
+
+  function renderDemoUi() {
+    if (el.menuBtn) el.menuBtn.classList.toggle("is-demo", !!demo.on);
+    if (el.demoToggle) el.demoToggle.checked = !!demo.on;
+    if (el.demoAccount) el.demoAccount.hidden = !demo.on;
+    if (el.demoStart && document.activeElement !== el.demoStart) {
+      el.demoStart.value = String(Math.round(demo.start));
+    }
+    if (el.demoBalance) el.demoBalance.textContent = money(demo.balance);
+    if (el.demoPl) {
+      const pl = demo.realizedPl;
+      const sign = pl > 0 ? "+" : pl < 0 ? "" : "";
+      el.demoPl.textContent = `Session P/L ${sign}${money(pl)}`;
+      el.demoPl.classList.toggle("is-up", pl > 0);
+      el.demoPl.classList.toggle("is-down", pl < 0);
+    }
+    if (el.demoPosition) {
+      const p = demo.position;
+      if (!p) {
+        el.demoPosition.textContent = "Flat";
+      } else {
+        const side = p.side === "above" ? "Above" : "Below";
+        el.demoPosition.textContent =
+          `Buy ${side} · ${p.contracts} cts @ ${p.askCents}¢ · risk ${money(p.total)}`;
+      }
+    }
+    if (el.demoLast) {
+      const r = demo.lastResult;
+      el.demoLast.classList.remove("is-win", "is-loss");
+      if (!r) {
+        el.demoLast.textContent = "No trades yet";
+      } else {
+        el.demoLast.textContent = r.text;
+        el.demoLast.classList.toggle("is-win", !!r.won);
+        el.demoLast.classList.toggle("is-loss", !r.won);
+      }
+    }
+    const busy = !!demo.position;
+    if (el.demoBuyBest) el.demoBuyBest.disabled = !demo.on || busy || tradeStake <= 0;
+    if (el.demoBuyAbove) el.demoBuyAbove.disabled = !demo.on || busy || tradeStake <= 0;
+    if (el.demoBuyBelow) el.demoBuyBelow.disabled = !demo.on || busy || tradeStake <= 0;
+  }
+
+  function setDemoOn(on) {
+    demo.on = !!on;
+    saveDemoState();
+    renderDemoUi();
+    setStatus("ok", demo.on ? "Demo on" : "Demo off");
+  }
+
+  function resetDemoAccount() {
+    let start = Number(el.demoStart && el.demoStart.value);
+    if (!Number.isFinite(start) || start < 10) start = DEMO_DEFAULT_START;
+    start = Math.min(100000, Math.round(start));
+    demo.start = start;
+    demo.balance = start;
+    demo.realizedPl = 0;
+    demo.position = null;
+    demo.lastResult = null;
+    saveDemoState();
+    renderDemoUi();
+    setStatus("ok", `Demo reset · ${money(start)}`);
+  }
+
+  function demoBuy(side) {
+    if (!demo.on) {
+      setStatus("warn", "Turn on Demo in Options");
+      openOptions();
+      return;
+    }
+    if (demo.position) {
+      setStatus("warn", "Already in a demo position");
+      return;
+    }
+    if (!(tradeStake > 0)) {
+      setStatus("warn", "Set trade size first");
+      return;
+    }
+    if (!lastTicker || lastTarget == null) {
+      setStatus("warn", "Wait for a live window");
+      return;
+    }
+    const ask = side === "above" ? lastRoiAsks.above : lastRoiAsks.below;
+    const sized = roiForStake(ask, tradeStake);
+    if (!sized || sized.empty) {
+      setStatus("warn", "Need a live ask");
+      return;
+    }
+    if (sized.total > demo.balance + 1e-9) {
+      setStatus("warn", "Not enough demo balance");
+      return;
+    }
+    demo.balance = Math.round((demo.balance - sized.total) * 100) / 100;
+    demo.position = {
+      ticker: lastTicker,
+      side,
+      askCents: sized.askCents,
+      contracts: sized.contracts,
+      cost: sized.cost,
+      fee: sized.fee,
+      total: sized.total,
+      beat: lastTarget,
+      openedAt: Date.now(),
+    };
+    saveDemoState();
+    renderDemoUi();
+    setStatus(
+      "ok",
+      `Demo bought ${side === "above" ? "Above" : "Below"} · ${sized.contracts} cts`
+    );
+  }
+
+  function demoBuyBest() {
+    if (!lastBestPick || !lastBestPick.side) {
+      setStatus("warn", "No clear Best Side yet");
+      return;
+    }
+    demoBuy(lastBestPick.side);
+  }
+
+  function resolveOutcomeForTicker(ticker, beatHint) {
+    const hinted = settleHintByTicker[ticker];
+    if (hinted === "above" || hinted === "below") return hinted;
+    if (lastSettlementSide === "above" || lastSettlementSide === "below") {
+      if (!ticker || ticker === lastTicker) return lastSettlementSide;
+    }
+    const spotRaw = el.spotValue && el.spotValue.dataset.last;
+    const spot = spotRaw != null ? Number(spotRaw) : null;
+    const beat =
+      beatHint != null && Number.isFinite(beatHint)
+        ? beatHint
+        : lastTarget;
+    if (spot != null && Number.isFinite(spot) && beat != null && Number.isFinite(beat)) {
+      return spot >= beat ? "above" : "below";
+    }
+    return null;
+  }
+
+  function settleDemoPosition(tickerJustClosed) {
+    const pos = demo.position;
+    if (!demo.on || !pos) return;
+    if (tickerJustClosed && pos.ticker && pos.ticker !== tickerJustClosed) return;
+    const outcome = resolveOutcomeForTicker(pos.ticker, pos.beat);
+    if (!outcome) return;
+    const won = outcome === pos.side;
+    const payout = won ? pos.contracts * 1 : 0;
+    const pl = Math.round((payout - pos.total) * 100) / 100;
+    demo.balance = Math.round((demo.balance + payout) * 100) / 100;
+    demo.realizedPl = Math.round((demo.realizedPl + pl) * 100) / 100;
+    const sideLabel = pos.side === "above" ? "Above" : "Below";
+    demo.lastResult = {
+      won,
+      pl,
+      side: pos.side,
+      ticker: pos.ticker,
+      text: won
+        ? `WIN ${sideLabel} · ${money(pl)} · bal ${money(demo.balance)}`
+        : `LOSS ${sideLabel} · ${money(pl)} · bal ${money(demo.balance)}`,
+    };
+    demo.position = null;
+    saveDemoState();
+    renderDemoUi();
+    setStatus(won ? "ok" : "warn", demo.lastResult.text);
   }
 
   function ensureAudio() {
@@ -590,6 +835,7 @@
       el.bestSide.hidden = true;
       setRoiCardBest(null);
       lastBestSideKey = null;
+      lastBestPick = null;
       return;
     }
 
@@ -602,6 +848,7 @@
     if (!scored.length) {
       el.bestSide.hidden = true;
       setRoiCardBest(null);
+      lastBestPick = null;
       return;
     }
 
@@ -634,6 +881,7 @@
           ).padStart(2, "0")} left · wait for better ask`;
       }
       setRoiCardBest(null);
+      lastBestPick = null;
       const noneKey = "none";
       if (lastBestSideKey !== noneKey) {
         lastBestSideKey = noneKey;
@@ -642,6 +890,7 @@
       return;
     }
 
+    lastBestPick = { side: best.side, askCents: best.askCents, pWin: best.pWin };
     const label = best.side === "above" ? "BUY ABOVE" : "BUY BELOW";
     if (el.bestSideLabel) el.bestSideLabel.textContent = label;
     if (el.bestSideAmount) {
@@ -739,6 +988,7 @@
     );
     el.roiPanel.hidden = !(okA || okB);
     refreshBestSide();
+    renderDemoUi();
   }
 
   function setTradeStake(n) {
@@ -832,6 +1082,12 @@
     const mode = !!(data && data.settlement_mode);
     lastSettlementMode = mode;
     lastSettlementSide = (data && data.settlement_side) || null;
+    if (
+      lastTicker &&
+      (lastSettlementSide === "above" || lastSettlementSide === "below")
+    ) {
+      settleHintByTicker[lastTicker] = lastSettlementSide;
+    }
     if (!mode) {
       el.settleBanner.hidden = true;
       el.settleBanner.classList.remove("is-above", "is-below");
@@ -1166,6 +1422,25 @@
         !!data.stale_previous ||
         !!data.waiting_next;
 
+      if (prevTicker && data.ticker && prevTicker !== data.ticker) {
+        if (
+          data.settlement_side === "above" ||
+          data.settlement_side === "below"
+        ) {
+          // Rare: payload already carries prior outcome.
+          settleHintByTicker[prevTicker] = data.settlement_side;
+        }
+        settleDemoPosition(prevTicker);
+      } else if (
+        demo.position &&
+        data.settlement_mode &&
+        (data.settlement_side === "above" || data.settlement_side === "below") &&
+        demo.position.ticker === data.ticker
+      ) {
+        settleHintByTicker[data.ticker] = data.settlement_side;
+        // Hold until window actually rolls so late fills aren't cut mid-settle.
+      }
+
       if (rolled && (data.odds_fresh || data.stale_previous || data.yes_pct == null)) {
         updateOdds({
           yes_pct: data.yes_pct != null && !data.stale_previous ? data.yes_pct : 50,
@@ -1187,6 +1462,8 @@
       }
 
       if ((!data.ok && beat == null) || data.waiting_next) {
+        if (prevTicker) settleDemoPosition(prevTicker);
+        else if (demo.position) settleDemoPosition(demo.position.ticker);
         setStatus("warn", data.error || "Waiting for next window");
         el.targetValue.textContent = beat != null ? money(beat) : "—";
         el.targetMeta.textContent = data.error || "Next Kalshi 15m opening…";
@@ -1441,6 +1718,41 @@
       el.stakeSlider.addEventListener("input", onStake);
       el.stakeSlider.addEventListener("change", onStake);
     }
+    if (el.menuBtn) {
+      el.menuBtn.addEventListener("click", () => {
+        ensurePortraitLock(true);
+        toggleOptions();
+      });
+    }
+    if (el.optionsClose) {
+      el.optionsClose.addEventListener("click", closeOptions);
+    }
+    if (el.optionsBackdrop) {
+      el.optionsBackdrop.addEventListener("click", closeOptions);
+    }
+    if (el.demoToggle) {
+      el.demoToggle.addEventListener("change", () => {
+        setDemoOn(el.demoToggle.checked);
+      });
+    }
+    if (el.demoReset) {
+      el.demoReset.addEventListener("click", () => {
+        resetDemoAccount();
+      });
+    }
+    if (el.demoBuyBest) {
+      el.demoBuyBest.addEventListener("click", () => demoBuyBest());
+    }
+    if (el.demoBuyAbove) {
+      el.demoBuyAbove.addEventListener("click", () => demoBuy("above"));
+    }
+    if (el.demoBuyBelow) {
+      el.demoBuyBelow.addEventListener("click", () => demoBuy("below"));
+    }
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape" && optionsOpen) closeOptions();
+    });
+    renderDemoUi();
     syncAlertsUi();
     const unlock = () => {
       ensureAudio();

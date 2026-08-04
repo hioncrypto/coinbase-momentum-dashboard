@@ -20,12 +20,12 @@
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
     <link rel="icon" href="/icons/icon-192.png" sizes="192x192" type="image/png" />
     <title>Kalshi BTC · Above or Below</title>
-    <link rel="stylesheet" href="/styles.css?v=3.2" />
+    <link rel="stylesheet" href="/styles.css?v=3.3" />
     <script
       src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"
       defer
     ></script>
-    <script src="/app.js?v=3.2" defer></script>
+    <script src="/app.js?v=3.3" defer></script>
   </head>
   <body class="portrait-app">
     <div id="rotate-gate" class="rotate-gate" hidden>
@@ -83,9 +83,85 @@
           </svg>
           <span class="push-badge-dot" aria-hidden="true"></span>
         </button>
+        <button
+          type="button"
+          id="menu-btn"
+          class="menu-btn"
+          title="Options"
+          aria-label="Open options"
+          aria-haspopup="dialog"
+          aria-expanded="false"
+          aria-controls="options-sheet"
+        >
+          <span class="menu-dots" aria-hidden="true"></span>
+        </button>
         <div id="status" class="status" data-state="loading">Connecting…</div>
       </div>
     </header>
+
+    <div id="options-backdrop" class="options-backdrop" hidden></div>
+    <aside
+      id="options-sheet"
+      class="options-sheet"
+      hidden
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="options-title"
+    >
+      <div class="options-head">
+        <h2 id="options-title">Options</h2>
+        <button type="button" id="options-close" class="options-close" aria-label="Close options">
+          ✕
+        </button>
+      </div>
+
+      <label class="options-row toggle-row" for="demo-toggle">
+        <span>
+          <strong>Demo mode</strong>
+          <em>Paper trade with live Kalshi factors</em>
+        </span>
+        <input id="demo-toggle" type="checkbox" />
+      </label>
+
+      <div id="demo-account" class="demo-account" hidden>
+        <div class="demo-balance-block">
+          <div class="demo-label">Account</div>
+          <div id="demo-balance" class="demo-balance">$1,000.00</div>
+          <div id="demo-pl" class="demo-pl">Session P/L $0.00</div>
+        </div>
+
+        <div class="demo-start-row">
+          <label for="demo-start">Starting bankroll</label>
+          <div class="demo-start-controls">
+            <input
+              id="demo-start"
+              type="number"
+              min="10"
+              max="100000"
+              step="10"
+              value="1000"
+              inputmode="decimal"
+            />
+            <button type="button" id="demo-reset" class="demo-btn ghost">Reset</button>
+          </div>
+        </div>
+
+        <div class="demo-pos-block">
+          <div class="demo-label">Open position</div>
+          <div id="demo-position" class="demo-position">Flat</div>
+        </div>
+
+        <div class="demo-actions">
+          <button type="button" id="demo-buy-best" class="demo-btn primary">Buy Best</button>
+          <button type="button" id="demo-buy-above" class="demo-btn above">Buy Above</button>
+          <button type="button" id="demo-buy-below" class="demo-btn below">Buy Below</button>
+        </div>
+        <p class="demo-hint">
+          Uses your trade-size slider + live ask/fees. Settles when the 15m window rolls.
+        </p>
+        <div id="demo-last" class="demo-last">No trades yet</div>
+      </div>
+    </aside>
 
     <section class="summary-panel" aria-live="polite">
       <div class="hero-beat">
