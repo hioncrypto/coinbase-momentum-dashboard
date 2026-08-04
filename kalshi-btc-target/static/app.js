@@ -120,7 +120,7 @@
   async function ensureServiceWorker() {
     if (!("serviceWorker" in navigator)) return null;
     try {
-      const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+      const reg = await navigator.serviceWorker.register("/sw.js?v=1.9", { scope: "/" });
       await navigator.serviceWorker.ready;
       return reg;
     } catch (err) {
@@ -526,11 +526,13 @@
   }
 
   function resizeChart() {
-    if (!chart) return;
-    const rect = el.chart.getBoundingClientRect();
+    if (!chart || !el.chart) return;
+    // Prefer layout size — getBoundingClientRect is wrong under CSS portrait lock.
+    const width = el.chart.clientWidth || el.chart.offsetWidth;
+    const height = el.chart.clientHeight || el.chart.offsetHeight;
     chart.applyOptions({
-      width: Math.max(280, Math.floor(rect.width)),
-      height: Math.max(320, Math.floor(rect.height)),
+      width: Math.max(280, Math.floor(width || 280)),
+      height: Math.max(320, Math.floor(height || 320)),
     });
   }
 
