@@ -39,21 +39,24 @@ TIMEFRAMES = {
         "label": "1 minute",
         "granularity": 60,
         "window_sec": 60,
-        "candle_limit": 300,
+        # ~6h of 1m bars (CF BRTI alone only covers ~60m).
+        "candle_limit": 360,
         "kalshi_series": ["KXBTC1M", "KXBTC15M"],
     },
     "5m": {
         "label": "5 minutes",
         "granularity": 300,
         "window_sec": 300,
-        "candle_limit": 300,
+        # ~24h of 5m bars.
+        "candle_limit": 288,
         "kalshi_series": ["KXBTC5M", "KXBTC15M"],
     },
     "15m": {
         "label": "15 minutes",
         "granularity": 900,
         "window_sec": 900,
-        "candle_limit": 300,
+        # ~48h of 15m bars.
+        "candle_limit": 192,
         "kalshi_series": ["KXBTC15M"],
     },
 }
@@ -403,6 +406,63 @@ def brti_to_candles(ticks: list[dict], granularity: int, limit: int) -> list[dic
     return candles[-limit:]
 
 
+def fetch_coinbase_candles(granularity: int, limit: int) -> list[dict]:
+    """Paginate Coinbase BTC-USD candles (API returns ≤300 bars per request)."""
+    if limit <= 0:
+        return []
+    per_page = 300
+    pages = max(1, (limit + per_page - 1) // per_page)
+    by_time: dict[int, dict] = {}
+    t_end = int(time.time())
+    for _ in range(pages):
+        t_start = t_end - granularity * per_page
+        qs = urllib.parse.urlencode(
+            {
+                "granularity": granularity,
+                "start": datetime.fromtimestamp(t_start, tz=timezone.utc).strftime(
+                    "%Y-%m-%dT%H:%M:%SZ"
+                ),
+                "end": datetime.fromtimestamp(t_end, tz=timezone.utc).strftime(
+                    "%Y-%m-%dT%H:%M:%SZ"
+                ),
+            }
+        )
+        raw = http_get_json(f"{COINBASE_CANDLES}?{qs}")
+        if not isinstance(raw, list) or not raw:
+            break
+        oldest = None
+        for r in raw:
+            try:
+                t = int(r[0])
+                by_time[t] = {
+                    "time": t,
+                    "open": float(r[3]),
+                    "high": float(r[2]),
+                    "low": float(r[1]),
+                    "close": float(r[4]),
+                }
+                if oldest is None or t < oldest:
+                    oldest = t
+            except (TypeError, ValueError, IndexError):
+                continue
+        if oldest is None:
+            break
+        t_end = oldest
+        if len(by_time) >= limit:
+            break
+    return [by_time[t] for t in sorted(by_time)][-limit:]
+
+
+def merge_candle_history(
+    history: list[dict], tip: list[dict], limit: int
+) -> list[dict]:
+    """Stitch longer exchange history with recent BRTI tip (BRTI wins on overlap)."""
+    by_time: dict[int, dict] = {int(c["time"]): c for c in history}
+    for c in tip:
+        by_time[int(c["time"])] = c
+    return [by_time[t] for t in sorted(by_time)][-limit:]
+
+
 def parse_target(market: dict) -> float | None:
     floor = market.get("floor_strike")
     if isinstance(floor, (int, float)):
@@ -694,9 +754,13 @@ def fetch_spot() -> dict:
 
 
 def fetch_candles(granularity: int = 60, limit: int = 300) -> dict:
-    """Chart candles from CF BRTI (Kalshi's index), not a single exchange."""
+    """Chart candles: Coinbase history + CF BRTI tip (Kalshi's index).
+
+    CF BRTI values only cover ~60 minutes. Coinbase fills older bars so the
+    chart shows multi-hour (or multi-day) price history; recent bars prefer BRTI.
+    """
     now = time.time()
-    key = (granularity, limit, "brti")
+    key = (granularity, limit, "brti+coinbase")
     with _cache_lock:
         if (
             _candles_cache["payload"]
@@ -705,75 +769,72 @@ def fetch_candles(granularity: int = 60, limit: int = 300) -> dict:
         ):
             return _candles_cache["payload"]
 
+    brti_candles: list[dict] = []
+    brti_err: Exception | None = None
     try:
         ticks = fetch_brti_ticks()
-        candles = brti_to_candles(ticks, granularity, limit)
-        if not candles:
+        brti_candles = brti_to_candles(ticks, granularity, limit)
+        if not brti_candles:
             raise RuntimeError("No BRTI candles")
+    except Exception as exc:
+        brti_err = exc
+
+    cb_candles: list[dict] = []
+    cb_err: Exception | None = None
+    try:
+        cb_candles = fetch_coinbase_candles(granularity, limit)
+        if not cb_candles:
+            raise RuntimeError("No Coinbase candles")
+    except Exception as exc:
+        cb_err = exc
+
+    fetched_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    if brti_candles and cb_candles:
+        candles = merge_candle_history(cb_candles, brti_candles, limit)
+        payload = {
+            "ok": True,
+            "symbol": "BRTI",
+            "source": "cf_benchmarks+coinbase",
+            "label": "BRTI tip + Coinbase history",
+            "granularity": granularity,
+            "candles": candles,
+            "brti_bars": len(brti_candles),
+            "history_bars": len(cb_candles),
+            "error": None,
+            "fetched_at": fetched_at,
+        }
+    elif brti_candles:
         payload = {
             "ok": True,
             "symbol": "BRTI",
             "source": "cf_benchmarks",
             "label": "CF BRTI (Kalshi)",
             "granularity": granularity,
-            "candles": candles,
-            "error": None,
-            "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "candles": brti_candles[-limit:],
+            "error": f"Coinbase history unavailable: {cb_err}" if cb_err else None,
+            "fetched_at": fetched_at,
         }
-    except Exception as exc:
-        # Fallback to Coinbase only if BRTI fails.
-        try:
-            end = int(time.time())
-            start = end - granularity * limit
-            qs = urllib.parse.urlencode(
-                {
-                    "granularity": granularity,
-                    "start": datetime.fromtimestamp(start, tz=timezone.utc).strftime(
-                        "%Y-%m-%dT%H:%M:%SZ"
-                    ),
-                    "end": datetime.fromtimestamp(end, tz=timezone.utc).strftime(
-                        "%Y-%m-%dT%H:%M:%SZ"
-                    ),
-                }
-            )
-            raw = http_get_json(f"{COINBASE_CANDLES}?{qs}")
-            rows = sorted(raw, key=lambda r: r[0])
-            candles = []
-            seen = set()
-            for r in rows:
-                t = int(r[0])
-                if t in seen:
-                    continue
-                seen.add(t)
-                candles.append(
-                    {
-                        "time": t,
-                        "open": float(r[3]),
-                        "high": float(r[2]),
-                        "low": float(r[1]),
-                        "close": float(r[4]),
-                    }
-                )
-            payload = {
-                "ok": True,
-                "symbol": "BTC-USD",
-                "source": "coinbase_fallback",
-                "label": "Coinbase (BRTI unavailable)",
-                "granularity": granularity,
-                "candles": candles[-limit:],
-                "error": f"BRTI fallback: {exc}",
-                "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            }
-        except Exception as exc2:
-            payload = {
-                "ok": False,
-                "symbol": "BRTI",
-                "source": None,
-                "granularity": granularity,
-                "candles": [],
-                "error": f"BRTI: {exc}; Coinbase: {exc2}",
-                "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            }
+    elif cb_candles:
+        payload = {
+            "ok": True,
+            "symbol": "BTC-USD",
+            "source": "coinbase_fallback",
+            "label": "Coinbase (BRTI unavailable)",
+            "granularity": granularity,
+            "candles": cb_candles[-limit:],
+            "error": f"BRTI fallback: {brti_err}",
+            "fetched_at": fetched_at,
+        }
+    else:
+        payload = {
+            "ok": False,
+            "symbol": "BRTI",
+            "source": None,
+            "granularity": granularity,
+            "candles": [],
+            "error": f"BRTI: {brti_err}; Coinbase: {cb_err}",
+            "fetched_at": fetched_at,
+        }
 
     with _cache_lock:
         _candles_cache["at"] = time.time()

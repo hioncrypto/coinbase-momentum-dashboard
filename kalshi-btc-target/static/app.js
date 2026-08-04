@@ -193,6 +193,7 @@
   let rolloverTimer = null;
   let rolloverUntil = 0;
   let fittedOnce = false;
+  let lastCandleCount = 0;
   let prevSpot = null;
   let audioCtx = null;
   // Chart candle size only — Price to beat is always Kalshi 15m.
@@ -2111,6 +2112,10 @@
         borderColor: "rgba(255,255,255,0.08)",
         timeVisible: true,
         secondsVisible: false,
+        // Pack more history into the first viewport; user can still pinch-zoom.
+        barSpacing: 3.25,
+        minBarSpacing: 1.25,
+        rightOffset: 4,
       },
       handleScroll: {
         mouseWheel: true,
@@ -2480,6 +2485,9 @@
       if (!series) return;
       const candles = data.candles || [];
       const keepTarget = lastTarget;
+      const grew =
+        candles.length > lastCandleCount + 20 ||
+        (lastCandleCount > 0 && candles.length < lastCandleCount - 20);
       series.setData(candles);
       if (keepTarget != null && Number.isFinite(keepTarget)) {
         applyTargetLine(keepTarget, "TARGET");
@@ -2491,9 +2499,11 @@
         updateSpot(candles[candles.length - 1].close);
       }
       resizeChart();
-      if (!fittedOnce) {
+      // Re-fit when history depth jumps (e.g. BRTI-only → merged Coinbase history).
+      if (!fittedOnce || grew) {
         chart.timeScale().fitContent();
         fittedOnce = true;
+        lastCandleCount = candles.length;
       }
     } catch (err) {
       setStatus("warn", "Candle fetch failed");
@@ -2516,6 +2526,7 @@
     currentTf = tf;
     localStorage.setItem(TF_KEY, currentTf);
     fittedOnce = false;
+    lastCandleCount = 0;
     syncTfButtons();
     setTfLabel();
     setStatus("loading", `Loading ${currentTf} chart…`);
