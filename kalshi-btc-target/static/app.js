@@ -783,7 +783,10 @@
         horzLines: { color: "rgba(255,255,255,0.04)" },
       },
       crosshair: { mode: CrosshairMode.Normal },
-      rightPriceScale: { borderColor: "rgba(255,255,255,0.08)" },
+      rightPriceScale: {
+        borderColor: "rgba(255,255,255,0.08)",
+        scaleMargins: { top: 0.12, bottom: 0.12 },
+      },
       timeScale: {
         borderColor: "rgba(255,255,255,0.08)",
         timeVisible: true,
@@ -797,6 +800,29 @@
       borderVisible: false,
       wickUpColor: "#1ac96b",
       wickDownColor: "#d45454",
+      // Keep Price to beat (and settle avg) inside the visible scale.
+      autoscaleInfoProvider: (original) => {
+        const res = original();
+        if (!res) return res;
+        const extras = [lastTarget, lastSettlementAvg].filter(
+          (v) => v != null && Number.isFinite(v)
+        );
+        if (!extras.length) return res;
+        let min = res.priceRange ? res.priceRange.minValue : extras[0];
+        let max = res.priceRange ? res.priceRange.maxValue : extras[0];
+        for (const v of extras) {
+          min = Math.min(min, v);
+          max = Math.max(max, v);
+        }
+        const pad = Math.max((max - min) * 0.1, 25);
+        return {
+          ...res,
+          priceRange: {
+            minValue: min - pad,
+            maxValue: max + pad,
+          },
+        };
+      },
     });
     ensureChart.LineStyle = LineStyle;
     resizeChart();
@@ -804,12 +830,11 @@
 
   function resizeChart() {
     if (!chart || !el.chart) return;
-    // Prefer layout size — getBoundingClientRect is wrong under CSS portrait lock.
     const width = el.chart.clientWidth || el.chart.offsetWidth;
     const height = el.chart.clientHeight || el.chart.offsetHeight;
     chart.applyOptions({
-      width: Math.max(280, Math.floor(width || 280)),
-      height: Math.max(320, Math.floor(height || 320)),
+      width: Math.max(240, Math.floor(width || 280)),
+      height: Math.max(180, Math.floor(height || 240)),
     });
   }
 
@@ -837,6 +862,7 @@
 
   function applyTargetLine(target, title) {
     lastTarget = target;
+    ensureChart();
     if (!series || target == null || !Number.isFinite(target)) {
       clearTargetLine();
       return;
@@ -844,16 +870,23 @@
     const opts = {
       price: target,
       color: "#ffffff",
-      lineWidth: 2,
+      lineWidth: 3,
       lineStyle: (ensureChart.LineStyle && ensureChart.LineStyle.Dashed) || 2,
       axisLabelVisible: true,
-      title: title || "BEAT",
+      title: title || "TARGET",
     };
     clearTargetLine();
     targetLine = series.createPriceLine(opts);
+    // Nudge autoscale so the TARGET line is on-screen.
+    try {
+      series.applyOptions({});
+    } catch {
+      // ignore
+    }
   }
 
   function applySettleLine(avg) {
+    ensureChart();
     if (!series || avg == null || !Number.isFinite(avg)) {
       clearSettleLine();
       return;
@@ -868,6 +901,11 @@
     };
     clearSettleLine();
     settleLine = series.createPriceLine(opts);
+    try {
+      series.applyOptions({});
+    } catch {
+      // ignore
+    }
   }
 
   async function refreshTarget(opts = {}) {
@@ -950,12 +988,17 @@
         el.targetMeta.textContent = win
           ? `This window settles ${win}`
           : "Kalshi 15-minute market";
-        applyTargetLine(beat, "BEAT");
+        applyTargetLine(beat, "TARGET");
         maybeChimeNewFifteenTarget(beat, data.ticker, data.source, data.close_et);
         if (el.spotValue && el.spotValue.dataset.last) {
           updateSpot(Number(el.spotValue.dataset.last));
         }
-        if (rolled || forceCandles || data.settlement_mode) refreshCandles();
+        if (rolled || forceCandles || data.settlement_mode) {
+          refreshCandles().then(() => applyTargetLine(beat, "TARGET"));
+        } else {
+          // Keep TARGET line visible even when candles aren't refreshed.
+          applyTargetLine(beat, "TARGET");
+        }
         if (rolled || data.settlement_mode) startRolloverBurst();
         if (
           rolled &&
@@ -998,13 +1041,18 @@
       ensureChart();
       if (!series) return;
       const candles = data.candles || [];
-      clearTargetLine();
-      series.setData([]);
+      const keepTarget = lastTarget;
       series.setData(candles);
-      if (lastTarget != null) applyTargetLine(lastTarget, "TARGET");
+      if (keepTarget != null && Number.isFinite(keepTarget)) {
+        applyTargetLine(keepTarget, "TARGET");
+      }
+      if (lastSettlementAvg != null && Number.isFinite(lastSettlementAvg)) {
+        applySettleLine(lastSettlementAvg);
+      }
       if (!el.spotValue?.dataset.last && candles.length) {
         updateSpot(candles[candles.length - 1].close);
       }
+      resizeChart();
       if (!fittedOnce) {
         chart.timeScale().fitContent();
         fittedOnce = true;
@@ -1189,24 +1237,10 @@
     setTfLabel();
     ensureChart();
     resizeChart();
-    ensureServiceWorker().then(async (reg) => {
-      swReg = reg;
-      postToSW({ type: "set-chime", enabled: chimeOn });
-      if (chimeOn) {
-        // Don't block UI; request permission on first gesture via Test/toggle too.
-        subscribePush().catch(() => {});
-      }
-      if (reg && "periodicSync" in reg) {
-        try {
-          await reg.periodicSync.register("kalshi-15m-check", {
-            minInterval: 15 * 60 * 1000,
-          });
-        } catch {
-          // unsupported / not granted
-        }
-      }
-    });
-    refreshCandles().then(refreshTarget).then(refreshSpot);
+    // Target first so Price-to-beat line exists when candles paint.
+    refreshTarget()
+      .then(() => refreshCandles())
+      .then(refreshSpot);
     setInterval(refreshTarget, TARGET_POLL_MS);
     setInterval(refreshCandles, CANDLE_POLL_MS);
     setInterval(refreshSpot, SPOT_POLL_MS);
