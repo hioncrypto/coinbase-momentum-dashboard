@@ -485,9 +485,10 @@ h1 {
 }
 
 .trade-history {
-  margin-top: 14px;
-  padding-top: 12px;
+  margin: 12px 0 4px;
+  padding: 12px 0;
   border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
 }
 
 .trade-history-head {
@@ -496,6 +497,12 @@ h1 {
   justify-content: space-between;
   gap: 10px;
   margin-bottom: 8px;
+}
+
+.trade-history .demo-label {
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  color: #d7ffe8;
 }
 
 .trade-history-summary {

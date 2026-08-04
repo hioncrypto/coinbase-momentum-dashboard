@@ -849,6 +849,27 @@
     setStatus("ok", `Demo reset · ${money(start)}`);
   }
 
+  const BUY_AMOUNT_MIN = 1;
+  const BUY_AMOUNT_MAX = 100;
+
+  function buyAmountCap() {
+    const hard = BUY_AMOUNT_MAX;
+    if (demo.on) {
+      return Math.max(
+        BUY_AMOUNT_MIN,
+        Math.min(hard, Math.floor(demo.balance) || BUY_AMOUNT_MIN)
+      );
+    }
+    return hard;
+  }
+
+  function clampBuyAmount(n) {
+    const cap = buyAmountCap();
+    let v = Number(n);
+    if (!Number.isFinite(v)) v = buySheetAmount;
+    return Math.max(BUY_AMOUNT_MIN, Math.min(cap, Math.round(v)));
+  }
+
   /** Same-side adds are always allowed; only opposite side is locked. */
   function canBuySide(side) {
     const pos = demo.position;
@@ -982,24 +1003,6 @@
           }`
     );
     return true;
-  }
-
-  const BUY_AMOUNT_MIN = 1;
-  const BUY_AMOUNT_MAX = 100;
-
-  function buyAmountCap() {
-    const hard = BUY_AMOUNT_MAX;
-    if (demo.on) {
-      return Math.max(BUY_AMOUNT_MIN, Math.min(hard, Math.floor(demo.balance) || BUY_AMOUNT_MIN));
-    }
-    return hard;
-  }
-
-  function clampBuyAmount(n) {
-    const cap = buyAmountCap();
-    let v = Number(n);
-    if (!Number.isFinite(v)) v = buySheetAmount;
-    return Math.max(BUY_AMOUNT_MIN, Math.min(cap, Math.round(v)));
   }
 
   function readBuyAmount() {
