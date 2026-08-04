@@ -156,8 +156,26 @@ h1 {
   margin-bottom: 6px;
 }
 
+.bg-setup {
+  overflow: hidden;
+  max-height: 120px;
+  opacity: 1;
+  transform: translateY(0);
+  transition: max-height 0.35s ease, opacity 0.3s ease, margin 0.3s ease,
+    transform 0.3s ease;
+  margin-bottom: 10px;
+}
+
+.bg-setup.is-hidden {
+  max-height: 0;
+  opacity: 0;
+  margin-bottom: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+}
+
 .sound-hint {
-  margin: 0 0 12px;
+  margin: 0;
   font-size: 0.72rem;
   color: var(--muted);
   line-height: 1.35;

@@ -51,19 +51,20 @@
       </div>
 
       <div class="sound-row">
-        <label class="sound-toggle">
+        <label class="sound-toggle" id="chime-toggle-label" title="Long-press to test chime">
           <input type="checkbox" id="chime-enabled" checked />
           Chime on new 15m target
         </label>
-        <button type="button" id="chime-test" class="chip-btn">Test chime</button>
       </div>
-      <button type="button" id="enable-bg" class="bg-btn">
-        Enable background alerts
-      </button>
-      <p id="bg-status" class="sound-hint">
-        Background alerts need Notifications permission. Tap the button above,
-        allow Notifications, then leave the app installed.
-      </p>
+      <div id="bg-setup" class="bg-setup">
+        <button type="button" id="enable-bg" class="bg-btn">
+          Enable background alerts
+        </button>
+        <p id="bg-status" class="sound-hint">
+          One-time setup. After it’s on, this section hides. Long-press the chime
+          checkbox anytime to test sound.
+        </p>
+      </div>
 
       <div class="metrics">
         <div class="metric">
@@ -112,7 +113,8 @@
         <li>Tap the <strong>⋮</strong> menu (top right)</li>
         <li>Tap <strong>Add to Home screen</strong> / <strong>Install app</strong></li>
         <li>Tap <strong>Add</strong></li>
-        <li>Open the app → tap <strong>Test chime</strong> → allow <strong>Notifications</strong></li>
+        <li>Open the app → tap <strong>Enable background alerts</strong> → allow Notifications</li>
+        <li>Long-press the chime checkbox anytime to test sound</li>
         <li>Background alerts use notifications (phone sound), not in-app audio</li>
       </ol>
     </details>
