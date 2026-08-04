@@ -48,6 +48,7 @@
   let fittedOnce = false;
   let prevSpot = null;
   let audioCtx = null;
+  // Chart candle size only — Price to beat is always Kalshi 15m.
   let currentTf = localStorage.getItem(TF_KEY) || "15m";
   if (!["1m", "5m", "15m"].includes(currentTf)) currentTf = "15m";
   let chimeOn = localStorage.getItem(CHIME_KEY);
@@ -119,7 +120,6 @@
       lastFifteenTarget != null &&
       Math.abs(lastFifteenTarget - beat) > 0.005;
 
-    // Ring when the 15m contract rolls or Price to beat changes.
     if (tickerChanged || beatChanged) {
       playChime();
       setStatus("ok", "New 15m target · chime");
@@ -204,7 +204,7 @@
     if (!closeTimeIso) {
       el.countdown.textContent = "—:—";
       el.countdown.classList.remove("urgent");
-      if (el.countdownMeta) el.countdownMeta.textContent = `Until ${currentTf} window ends`;
+      if (el.countdownMeta) el.countdownMeta.textContent = "Until Kalshi 15m window ends";
       return;
     }
     const end = Date.parse(closeTimeIso);
@@ -227,9 +227,8 @@
     el.countdown.classList.toggle("urgent", totalSec <= 60);
     if (el.countdownMeta) {
       el.countdownMeta.textContent =
-        totalSec <= 60 ? "Under 1 minute left" : `Until ${currentTf} window ends`;
+        totalSec <= 60 ? "Under 1 minute left" : "Until Kalshi 15m window ends";
     }
-    // Speed up polling in the last 20s before close.
     if (totalSec <= 20) startRolloverBurst();
   }
 
@@ -322,7 +321,7 @@
       try {
         series.removePriceLine(targetLine);
       } catch {
-        // line may already be gone after series reset
+        // ignore
       }
     }
     targetLine = null;
@@ -349,17 +348,19 @@
   async function refreshTarget(opts = {}) {
     const forceCandles = !!opts.forceCandles;
     try {
-      const res = await fetch(
-        `/api/target?tf=${encodeURIComponent(currentTf)}&_=${Date.now()}`,
-        { cache: "no-store" }
-      );
+      // Always Kalshi 15m — never switch target with chart buttons.
+      const res = await fetch(`/api/target?tf=15m&_=${Date.now()}`, {
+        cache: "no-store",
+      });
       const data = await res.json();
       const beat = data.price_to_beat ?? data.target;
       const prevClose = closeTimeIso;
       closeTimeIso = data.close_time || null;
       updateCountdown();
       updateOdds(data);
-      if (el.targetLabel) el.targetLabel.textContent = data.label || "Price to beat";
+      if (el.targetLabel) {
+        el.targetLabel.textContent = data.label || "Price to beat · Kalshi 15m";
+      }
 
       if (!data.ok && beat == null) {
         setStatus("warn", data.error || "Kalshi error");
@@ -371,12 +372,9 @@
       if (beat == null) {
         setStatus("warn", "Price to beat TBD");
         el.targetValue.textContent = "TBD";
-        el.targetMeta.textContent = data.error || `Waiting for ${currentTf} window`;
+        el.targetMeta.textContent = data.error || "Waiting for Kalshi 15m window";
         applyTargetLine(null);
-        // Still track ticker changes during TBD so chime can fire.
-        if (currentTf === "15m") {
-          maybeChimeNewFifteenTarget(null, data.ticker, data.source);
-        }
+        maybeChimeNewFifteenTarget(null, data.ticker, data.source);
         startRolloverBurst();
       } else {
         const rolled =
@@ -388,24 +386,20 @@
           data.stale_previous
             ? "Rolling…"
             : rolled
-              ? `New ${currentTf} price to beat`
-              : `Live · ${currentTf}`
+              ? "New 15m price to beat"
+              : "Live · Kalshi 15m"
         );
         el.targetValue.textContent = money(beat);
         const win = formatWindow(data.close_time, data.close_et);
-        const src = data.source === "kalshi" ? "Kalshi" : "Window";
-        el.targetMeta.textContent = win ? `${src} · settles ${win}` : src;
+        el.targetMeta.textContent = win
+          ? `Kalshi 15m · settles ${win}`
+          : "Kalshi 15m";
         applyTargetLine(beat, "TARGET");
-        if (currentTf === "15m") {
-          maybeChimeNewFifteenTarget(beat, data.ticker, data.source);
-        }
+        maybeChimeNewFifteenTarget(beat, data.ticker, data.source);
         if (el.spotValue && el.spotValue.dataset.last) {
           updateSpot(Number(el.spotValue.dataset.last));
         }
-        if (rolled || forceCandles) {
-          refreshCandles();
-        }
-        // Stop burst once we have a fresh in-window target.
+        if (rolled || forceCandles) refreshCandles();
         if (
           rolled &&
           !data.stale_previous &&
@@ -479,33 +473,11 @@
     currentTf = tf;
     localStorage.setItem(TF_KEY, currentTf);
     fittedOnce = false;
-    lastTicker = null;
-    lastTarget = null;
-    closeTimeIso = null;
-    clearRolloverBurst();
     syncTfButtons();
     setTfLabel();
-    setStatus("loading", `Loading ${currentTf}…`);
-    if (el.countdownMeta) {
-      el.countdownMeta.textContent = `Until ${currentTf} window ends`;
-    }
-    if (currentTf !== "15m") updateOdds(null);
-    Promise.all([refreshCandles(), refreshTarget(), refreshSpot()]);
-  }
-
-  async function pollFifteenChime() {
-    // Keep chime + odds working even if user is viewing 1m/5m chart.
-    try {
-      const res = await fetch(`/api/target?tf=15m&_=${Date.now()}`, {
-        cache: "no-store",
-      });
-      const data = await res.json();
-      const beat = data.price_to_beat ?? data.target;
-      maybeChimeNewFifteenTarget(beat, data.ticker, data.source);
-      if (currentTf !== "15m") updateOdds(data);
-    } catch {
-      // ignore
-    }
+    setStatus("loading", `Loading ${currentTf} chart…`);
+    // Only candles change — keep Kalshi 15m target/odds/countdown.
+    refreshCandles();
   }
 
   function tickClock() {
@@ -560,7 +532,6 @@
     setInterval(refreshTarget, TARGET_POLL_MS);
     setInterval(refreshCandles, CANDLE_POLL_MS);
     setInterval(refreshSpot, SPOT_POLL_MS);
-    setInterval(pollFifteenChime, TARGET_POLL_MS);
     setInterval(tickClock, 250);
     tickClock();
     window.addEventListener("resize", resizeChart);

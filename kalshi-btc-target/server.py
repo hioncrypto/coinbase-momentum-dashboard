@@ -2,10 +2,8 @@
 """
 Kalshi BTC Price-to-beat chart server (Android PWA).
 
-- Dropdown: 1m / 5m / 15m chart candles
-- Price to beat + countdown follow the selected timeframe window
-- 15m uses live Kalshi KXBTC15M; 1m/5m use matching wall-clock windows
-  (Kalshi public API currently exposes BTC up/down as KXBTC15M only)
+- Chart buttons: 1m / 5m / 15m Coinbase candles
+- Price to beat, countdown, Yes/No %: always live Kalshi KXBTC15M
 """
 
 from __future__ import annotations
@@ -295,12 +293,19 @@ def fetch_window_target(tf: str, cfg: dict) -> dict:
 
 
 def fetch_target_payload(tf: str = "15m") -> dict:
-    if tf not in TIMEFRAMES:
-        tf = "15m"
-    cfg = TIMEFRAMES[tf]
+    """
+    Price to beat is ALWAYS the live Kalshi KXBTC15M market.
+
+    Chart timeframe (1m/5m/15m) only affects candles on the client — never the
+    Kalshi target, countdown, or Yes/No odds. The `tf` query arg is accepted for
+    compatibility but ignored for target selection.
+    """
+    _ = tf  # chart TF is separate; target is always 15m Kalshi
+    cache_key = "15m"
+    cfg = TIMEFRAMES["15m"]
     now = time.time()
     with _cache_lock:
-        cached = _target_cache.get(tf)
+        cached = _target_cache.get(cache_key)
         if cached:
             payload = cached["payload"] or {}
             close_ms = parse_close_ms(payload.get("close_time"))
@@ -314,30 +319,19 @@ def fetch_target_payload(tf: str = "15m") -> dict:
             if not expired and age < ttl:
                 return payload
 
-    payload = None
-    # Prefer a live Kalshi series for this TF when it exists.
-    for series in cfg["kalshi_series"]:
-        # For 1m/5m only accept exact series match; don't silently fall back to 15m
-        # unless this IS the 15m timeframe.
-        if tf != "15m" and series == "KXBTC15M":
-            continue
-        payload = fetch_kalshi_series_target(series)
-        if payload and payload.get("price_to_beat") is not None:
-            payload["timeframe"] = tf
-            break
-        # Keep TBD kalshi payload briefly so client can roll / chime on ticker.
-        if payload and tf == "15m":
-            payload["timeframe"] = tf
-            break
-        payload = None
-
-    if payload is None:
-        payload = fetch_window_target(tf, cfg)
+    payload = fetch_kalshi_series_target("KXBTC15M")
+    if payload:
+        payload["timeframe"] = "15m"
+        payload["chart_tf_hint"] = "candles only — target is always Kalshi 15m"
+    else:
+        # Last-resort window fallback if Kalshi is unreachable.
+        payload = fetch_window_target("15m", cfg)
         payload["yes_pct"] = None
         payload["no_pct"] = None
+        payload["error"] = payload.get("error") or "Kalshi unreachable — using 15m window open"
 
     with _cache_lock:
-        _target_cache[tf] = {"at": time.time(), "payload": payload}
+        _target_cache[cache_key] = {"at": time.time(), "payload": payload}
     return payload
 
 
