@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
-Mobile-friendly Kalshi BTC 15m Price-to-beat chart server.
+Kalshi BTC Price-to-beat chart server (Android PWA).
 
-Serves a PWA for Android Chrome (Add to Home Screen). Draws Kalshi's rolling
-KXBTC15M "Price to beat" as a TARGET price line — no manual input, no Tampermonkey.
+- Dropdown: 1m / 5m / 15m chart candles
+- Price to beat + countdown follow the selected timeframe window
+- 15m uses live Kalshi KXBTC15M; 1m/5m use matching wall-clock windows
+  (Kalshi public API currently exposes BTC up/down as KXBTC15M only)
 """
 
 from __future__ import annotations
@@ -24,42 +26,44 @@ HOST = os.environ.get("HOST", "0.0.0.0")
 PORT = int(os.environ.get("PORT", "8765"))
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
+# Chart candle size + settlement window length (seconds) per TF.
 TIMEFRAMES = {
     "1m": {
         "label": "1 minute",
         "granularity": 60,
+        "window_sec": 60,
         "candle_limit": 300,
-        "series": "KXBTC15M",  # Kalshi BTC up/down markets are 15m only
+        "kalshi_series": ["KXBTC1M", "KXBTC15M"],
     },
     "5m": {
         "label": "5 minutes",
         "granularity": 300,
+        "window_sec": 300,
         "candle_limit": 300,
-        "series": "KXBTC15M",
+        "kalshi_series": ["KXBTC5M", "KXBTC15M"],
     },
     "15m": {
         "label": "15 minutes",
         "granularity": 900,
+        "window_sec": 900,
         "candle_limit": 300,
-        "series": "KXBTC15M",
+        "kalshi_series": ["KXBTC15M"],
     },
 }
 
-KALSHI_SERIES = "KXBTC15M"
-KALSHI_URL = (
-    "https://api.elections.kalshi.com/trade-api/v2/markets"
-    f"?limit=5&status=open&series_ticker={KALSHI_SERIES}"
-)
 COINBASE_CANDLES = "https://api.exchange.coinbase.com/products/BTC-USD/candles"
 COINBASE_TICKER = "https://api.exchange.coinbase.com/products/BTC-USD/ticker"
+KALSHI_MARKETS = "https://api.elections.kalshi.com/trade-api/v2/markets"
 
-UA = "kalshi-btc-target/1.1 (+android-pwa)"
+UA = "kalshi-btc-target/1.3 (+android-pwa)"
 
 _cache_lock = threading.Lock()
-_target_cache: dict = {"at": 0.0, "payload": None}
+_target_cache: dict = {}  # key -> {at, payload}
 _candles_cache: dict = {"at": 0.0, "key": None, "payload": None}
+_spot_cache: dict = {"at": 0.0, "payload": None}
 TARGET_TTL = 3.0
-CANDLES_TTL = 10.0
+CANDLES_TTL = 8.0
+SPOT_TTL = 1.5
 
 
 def http_get_json(url: str, timeout: float = 20.0):
@@ -72,26 +76,23 @@ def http_get_json(url: str, timeout: float = 20.0):
 
 
 def parse_target(market: dict) -> float | None:
-    """Kalshi Price to beat == floor_strike / 'Target Price: $…'."""
     floor = market.get("floor_strike")
     if isinstance(floor, (int, float)):
         return float(floor)
     sub = market.get("yes_sub_title") or ""
-    # Prefer yes_sub_title; no_sub can stay TBD while yes is set.
     m = re.search(r"Target\s*Price:\s*\$?\s*([0-9,]+(?:\.\d+)?)", sub, re.I)
     if not m:
         return None
     return float(m.group(1).replace(",", ""))
 
 
-def format_et_close(close_iso: str | None) -> str | None:
-    """Match Kalshi mobile label style, e.g. '9:45pm ET'."""
-    if not close_iso:
-        return None
+def format_et(ts_iso_or_unix) -> str | None:
     try:
-        dt = datetime.fromisoformat(close_iso.replace("Z", "+00:00")).astimezone(
-            ZoneInfo("America/New_York")
-        )
+        if isinstance(ts_iso_or_unix, (int, float)):
+            dt = datetime.fromtimestamp(ts_iso_or_unix, tz=timezone.utc)
+        else:
+            dt = datetime.fromisoformat(str(ts_iso_or_unix).replace("Z", "+00:00"))
+        dt = dt.astimezone(ZoneInfo("America/New_York"))
         return (
             dt.strftime("%I:%M%p ET")
             .lstrip("0")
@@ -99,102 +100,156 @@ def format_et_close(close_iso: str | None) -> str | None:
             .replace("PM", "pm")
         )
     except Exception:
-        return close_iso
+        return None
 
 
-def fetch_target_payload() -> dict:
+def fetch_kalshi_series_target(series: str) -> dict | None:
+    url = (
+        f"{KALSHI_MARKETS}?limit=5&status=open&series_ticker="
+        + urllib.parse.quote(series)
+    )
+    try:
+        data = http_get_json(url)
+    except Exception:
+        return None
+    markets = data.get("markets") or []
+    market = next(
+        (
+            m
+            for m in markets
+            if m.get("status") in ("active", "open") and parse_target(m) is not None
+        ),
+        None,
+    )
+    if market is None:
+        market = next(
+            (m for m in markets if m.get("status") in ("active", "open")),
+            markets[0] if markets else None,
+        )
+    if not market:
+        return None
+    target = parse_target(market)
+    close_et = format_et(market.get("close_time"))
+    return {
+        "ok": True,
+        "source": "kalshi",
+        "series": series,
+        "target": target,
+        "price_to_beat": target,
+        "ticker": market.get("ticker"),
+        "event_ticker": market.get("event_ticker"),
+        "open_time": market.get("open_time"),
+        "close_time": market.get("close_time"),
+        "close_et": close_et,
+        "subtitle": market.get("yes_sub_title"),
+        "label": f"Price to beat • {close_et}" if close_et else "Price to beat",
+        "error": None
+        if target is not None
+        else "Price to beat TBD (waiting for window open)",
+        "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+
+
+def fetch_window_target(tf: str, cfg: dict) -> dict:
+    """Price to beat = open of the current 1m/5m/15m wall-clock window (Coinbase)."""
+    window = int(cfg["window_sec"])
+    now = int(time.time())
+    open_ts = now - (now % window)
+    close_ts = open_ts + window
+    # Fetch a short candle window around open_ts
+    start = open_ts - window
+    end = min(now + window, close_ts)
+    qs = urllib.parse.urlencode(
+        {
+            "granularity": cfg["granularity"],
+            "start": datetime.fromtimestamp(start, tz=timezone.utc).strftime(
+                "%Y-%m-%dT%H:%M:%SZ"
+            ),
+            "end": datetime.fromtimestamp(end, tz=timezone.utc).strftime(
+                "%Y-%m-%dT%H:%M:%SZ"
+            ),
+        }
+    )
+    target = None
+    try:
+        raw = http_get_json(f"{COINBASE_CANDLES}?{qs}")
+        # Coinbase rows: [time, low, high, open, close, volume]
+        rows = sorted(raw, key=lambda r: r[0])
+        for r in rows:
+            if int(r[0]) == open_ts:
+                target = float(r[3])  # open
+                break
+        if target is None and rows:
+            # nearest at-or-before open
+            prior = [r for r in rows if int(r[0]) <= open_ts]
+            if prior:
+                target = float(prior[-1][3])
+    except Exception:
+        spot = fetch_spot()
+        target = spot.get("price")
+
+    close_iso = datetime.fromtimestamp(close_ts, tz=timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    open_iso = datetime.fromtimestamp(open_ts, tz=timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    close_et = format_et(close_ts)
+    return {
+        "ok": True,
+        "source": "window",
+        "series": None,
+        "timeframe": tf,
+        "target": target,
+        "price_to_beat": target,
+        "ticker": f"WINDOW-{tf.upper()}",
+        "event_ticker": None,
+        "open_time": open_iso,
+        "close_time": close_iso,
+        "close_et": close_et,
+        "subtitle": f"Window open @ {format_et(open_ts)}" if target else None,
+        "label": f"Price to beat • {close_et}" if close_et else "Price to beat",
+        "error": None if target is not None else "Waiting for window open price",
+        "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+
+
+def fetch_target_payload(tf: str = "15m") -> dict:
+    if tf not in TIMEFRAMES:
+        tf = "15m"
+    cfg = TIMEFRAMES[tf]
     now = time.time()
     with _cache_lock:
-        cached = _target_cache["payload"]
-        age = now - _target_cache["at"]
-        ttl = TARGET_TTL if cached and cached.get("price_to_beat") is not None else 1.0
-        if cached and age < ttl:
-            return cached
-
-    try:
-        data = http_get_json(KALSHI_URL)
-        markets = data.get("markets") or []
-        market = next(
-            (
-                m
-                for m in markets
-                if m.get("status") in ("active", "open") and parse_target(m) is not None
-            ),
-            None,
-        )
-        if market is None:
-            market = next(
-                (m for m in markets if m.get("status") in ("active", "open")),
-                markets[0] if markets else None,
+        cached = _target_cache.get(tf)
+        if cached:
+            age = now - cached["at"]
+            ttl = (
+                TARGET_TTL
+                if cached["payload"].get("price_to_beat") is not None
+                else 1.0
             )
+            if age < ttl:
+                return cached["payload"]
 
-        fetched_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        if not market:
-            payload = {
-                "ok": True,
-                "target": None,
-                "price_to_beat": None,
-                "ticker": None,
-                "event_ticker": None,
-                "open_time": None,
-                "close_time": None,
-                "close_et": None,
-                "subtitle": None,
-                "label": "Price to beat",
-                "error": "No open KXBTC15M market",
-                "fetched_at": fetched_at,
-            }
-        else:
-            target = parse_target(market)
-            close_et = format_et_close(market.get("close_time"))
-            payload = {
-                "ok": True,
-                "target": target,
-                "price_to_beat": target,
-                "ticker": market.get("ticker"),
-                "event_ticker": market.get("event_ticker"),
-                "open_time": market.get("open_time"),
-                "close_time": market.get("close_time"),
-                "close_et": close_et,
-                "subtitle": market.get("yes_sub_title"),
-                "label": f"Price to beat • {close_et}" if close_et else "Price to beat",
-                "error": None
-                if target is not None
-                else "Price to beat TBD (waiting for window open)",
-                "fetched_at": fetched_at,
-            }
-            if target is None:
-                with _cache_lock:
-                    prev = _target_cache.get("payload") or {}
-                if prev.get("price_to_beat") is not None:
-                    payload = {
-                        **payload,
-                        "target": prev["price_to_beat"],
-                        "price_to_beat": prev["price_to_beat"],
-                        "error": "Waiting for new 15m Price to beat…",
-                        "stale_previous": True,
-                        "previous_ticker": prev.get("ticker"),
-                    }
-    except Exception as exc:
-        payload = {
-            "ok": False,
-            "target": None,
-            "price_to_beat": None,
-            "error": str(exc),
-            "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        }
+    payload = None
+    # Prefer a live Kalshi series for this TF when it exists.
+    for series in cfg["kalshi_series"]:
+        # For 1m/5m only accept exact series match; don't silently fall back to 15m
+        # unless this IS the 15m timeframe.
+        if tf != "15m" and series == "KXBTC15M":
+            continue
+        payload = fetch_kalshi_series_target(series)
+        if payload and payload.get("price_to_beat") is not None:
+            payload["timeframe"] = tf
+            break
+        payload = None
+
+    if payload is None:
+        payload = fetch_window_target(tf, cfg)
 
     with _cache_lock:
-        _target_cache["at"] = time.time()
-        _target_cache["payload"] = payload
+        _target_cache[tf] = {"at": time.time(), "payload": payload}
     return payload
-
-
-_candles_cache: dict = {"at": 0.0, "key": None, "payload": None}
-_spot_cache: dict = {"at": 0.0, "payload": None}
-TARGET_TTL = 3.0
-CANDLES_TTL = 10.0
-SPOT_TTL = 1.5
 
 
 def fetch_spot() -> dict:
@@ -245,13 +300,16 @@ def fetch_candles(granularity: int = 60, limit: int = 300) -> dict:
     qs = urllib.parse.urlencode(
         {
             "granularity": granularity,
-            "start": datetime.fromtimestamp(start, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "end": datetime.fromtimestamp(end, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "start": datetime.fromtimestamp(start, tz=timezone.utc).strftime(
+                "%Y-%m-%dT%H:%M:%SZ"
+            ),
+            "end": datetime.fromtimestamp(end, tz=timezone.utc).strftime(
+                "%Y-%m-%dT%H:%M:%SZ"
+            ),
         }
     )
-    url = f"{COINBASE_CANDLES}?{qs}"
     try:
-        raw = http_get_json(url)
+        raw = http_get_json(f"{COINBASE_CANDLES}?{qs}")
         rows = sorted(raw, key=lambda r: r[0])
         candles = []
         seen = set()
@@ -281,6 +339,7 @@ def fetch_candles(granularity: int = 60, limit: int = 300) -> dict:
         payload = {
             "ok": False,
             "symbol": "BTC-USD",
+            "granularity": granularity,
             "candles": [],
             "error": str(exc),
             "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -294,7 +353,7 @@ def fetch_candles(granularity: int = 60, limit: int = 300) -> dict:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "KalshiBtcTarget/1.2"
+    server_version = "KalshiBtcTarget/1.3"
 
     def log_message(self, fmt, *args):
         print(f"[kalshi-btc-target] {self.address_string()} {fmt % args}")
@@ -334,7 +393,7 @@ class Handler(BaseHTTPRequestHandler):
                             "id": key,
                             "label": cfg["label"],
                             "granularity": cfg["granularity"],
-                            "note": "Chart candles; Kalshi Price to beat is always KXBTC15M",
+                            "window_sec": cfg["window_sec"],
                         }
                         for key, cfg in TIMEFRAMES.items()
                     ],
@@ -343,7 +402,8 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path in ("/api/target", "/api/kalshi/target"):
-            self._send_json(200, fetch_target_payload())
+            tf = (qs.get("tf") or qs.get("timeframe") or ["15m"])[0].strip().lower()
+            self._send_json(200, fetch_target_payload(tf))
             return
 
         if path in ("/api/spot", "/api/btc/spot", "/api/price"):
@@ -376,7 +436,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/health":
             self._send_json(
                 200,
-                {"ok": True, "service": "kalshi-btc-target", "version": "1.2"},
+                {"ok": True, "service": "kalshi-btc-target", "version": "1.3"},
             )
             return
 

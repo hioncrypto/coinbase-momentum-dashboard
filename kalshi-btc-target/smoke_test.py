@@ -45,6 +45,10 @@ def main() -> int:
         assert c.get("ok"), (tf, c)
         assert len(c.get("candles") or []) >= 20, (tf, len(c.get("candles") or []))
         print("tf", tf, "candles", len(c["candles"]), "gran", c.get("granularity"))
+        t = get(f"/api/target?tf={tf}")
+        assert t.get("ok") is not False, (tf, t)
+        assert t.get("price_to_beat") is not None, (tf, t)
+        print("  beat", t.get("price_to_beat"), t.get("label"), t.get("source"), t.get("close_time"))
     print("OK")
     return 0
 

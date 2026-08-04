@@ -108,7 +108,7 @@
     if (!closeTimeIso) {
       el.countdown.textContent = "—:—";
       el.countdown.classList.remove("urgent");
-      if (el.countdownMeta) el.countdownMeta.textContent = "Until Kalshi 15m window ends";
+      if (el.countdownMeta) el.countdownMeta.textContent = `Until ${currentTf} window ends`;
       return;
     }
     const end = Date.parse(closeTimeIso);
@@ -130,7 +130,7 @@
     el.countdown.classList.toggle("urgent", totalSec <= 60);
     if (el.countdownMeta) {
       el.countdownMeta.textContent =
-        totalSec <= 60 ? "Under 1 minute left" : "Until Kalshi 15m window ends";
+        totalSec <= 60 ? "Under 1 minute left" : `Until ${currentTf} window ends`;
     }
   }
 
@@ -215,7 +215,10 @@
 
   async function refreshTarget() {
     try {
-      const res = await fetch("/api/target", { cache: "no-store" });
+      const res = await fetch(
+        `/api/target?tf=${encodeURIComponent(currentTf)}`,
+        { cache: "no-store" }
+      );
       const data = await res.json();
       const beat = data.price_to_beat ?? data.target;
       closeTimeIso = data.close_time || null;
@@ -232,7 +235,7 @@
       if (beat == null) {
         setStatus("warn", "Price to beat TBD");
         el.targetValue.textContent = "TBD";
-        el.targetMeta.textContent = data.error || "Waiting for next 15m window";
+        el.targetMeta.textContent = data.error || `Waiting for ${currentTf} window`;
         applyTargetLine(null);
       } else {
         const rolled = lastTicker && data.ticker && lastTicker !== data.ticker;
@@ -242,12 +245,13 @@
           data.stale_previous
             ? "Rolling…"
             : rolled
-              ? "New 15m price to beat"
-              : "Live · KXBTC15M"
+              ? `New ${currentTf} price to beat`
+              : `Live · ${currentTf}`
         );
         el.targetValue.textContent = money(beat);
         const win = formatWindow(data.close_time, data.close_et);
-        el.targetMeta.textContent = win ? `Settles ${win}` : "Kalshi 15m";
+        const src = data.source === "kalshi" ? "Kalshi" : "Window";
+        el.targetMeta.textContent = win ? `${src} · settles ${win}` : src;
         applyTargetLine(beat, "TARGET");
         if (el.spotValue && el.spotValue.dataset.last) {
           updateSpot(Number(el.spotValue.dataset.last));
@@ -284,16 +288,16 @@
       ensureChart();
       if (!series) return;
       const candles = data.candles || [];
+      // Hard reset so timeframe switches are obvious
+      series.setData([]);
       series.setData(candles);
+      targetLine = null;
       if (lastTarget != null) applyTargetLine(lastTarget, "TARGET");
       if (!el.spotValue?.dataset.last && candles.length) {
         updateSpot(candles[candles.length - 1].close);
       }
-      // Always refit when timeframe changes / first load
-      if (!fittedOnce || candles.length) {
-        chart.timeScale().fitContent();
-        fittedOnce = true;
-      }
+      chart.timeScale().fitContent();
+      fittedOnce = true;
     } catch (err) {
       setStatus("warn", "Candle fetch failed");
     }
@@ -303,9 +307,15 @@
     currentTf = el.timeframe.value;
     localStorage.setItem(TF_KEY, currentTf);
     fittedOnce = false;
+    lastTicker = null;
+    lastTarget = null;
+    closeTimeIso = null;
     setTfLabel();
-    setStatus("loading", `Loading ${currentTf} chart…`);
-    refreshCandles();
+    setStatus("loading", `Loading ${currentTf}…`);
+    if (el.countdownMeta) {
+      el.countdownMeta.textContent = `Until ${currentTf} window ends`;
+    }
+    Promise.all([refreshCandles(), refreshTarget(), refreshSpot()]);
   }
 
   function tickClock() {
