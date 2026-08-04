@@ -51,6 +51,21 @@ body {
   flex-shrink: 0;
 }
 
+.clock {
+  font-size: 0.98rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(26, 201, 107, 0.28);
+  background: rgba(8, 14, 11, 0.55);
+  min-width: 5.6rem;
+  text-align: center;
+  line-height: 1;
+}
+
 .brand {
   display: flex;
   gap: 10px;
