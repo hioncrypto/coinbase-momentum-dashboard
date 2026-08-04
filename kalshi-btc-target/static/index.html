@@ -22,12 +22,12 @@
     <link rel="apple-touch-icon" href="/icons/icon-192.png?v=2.6" />
     <link rel="icon" href="/icons/icon-192.png?v=2.6" sizes="192x192" type="image/png" />
     <title>BeatLine</title>
-    <link rel="stylesheet" href="/styles.css?v=6.5" />
+    <link rel="stylesheet" href="/styles.css?v=6.6" />
     <script
       src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"
       defer
     ></script>
-    <script src="/app.js?v=6.5" defer></script>
+    <script src="/app.js?v=6.6" defer></script>
   </head>
   <body class="portrait-app">
     <div id="rotate-gate" class="rotate-gate" hidden>
@@ -353,6 +353,21 @@
         </p>
         <div id="demo-last" class="demo-last">No trades yet</div>
       </div>
+
+      <section class="trade-history" aria-label="Trade history">
+        <div class="trade-history-head">
+          <div>
+            <div class="demo-label">Trade history</div>
+            <div id="trade-history-summary" class="trade-history-summary">No closed trades yet</div>
+          </div>
+          <button type="button" id="trade-history-clear" class="demo-btn ghost trade-history-clear">
+            Clear
+          </button>
+        </div>
+        <div id="trade-history-list" class="trade-history-list">
+          <div class="trade-history-empty">Closed and settled trades show up here.</div>
+        </div>
+      </section>
     </aside>
     <div id="buy-backdrop" class="buy-backdrop" hidden></div>
     <div

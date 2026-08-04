@@ -119,6 +119,9 @@
     demoBuyAbove: document.getElementById("demo-buy-above"),
     demoBuyBelow: document.getElementById("demo-buy-below"),
     demoLast: document.getElementById("demo-last"),
+    tradeHistoryList: document.getElementById("trade-history-list"),
+    tradeHistorySummary: document.getElementById("trade-history-summary"),
+    tradeHistoryClear: document.getElementById("trade-history-clear"),
     demoMark: document.getElementById("demo-mark"),
     demoMarkPl: document.getElementById("demo-mark-pl"),
     demoMarkMeta: document.getElementById("demo-mark-meta"),
@@ -218,6 +221,8 @@
     });
   }
 
+  const HISTORY_LIMIT = 40;
+
   function loadDemoState() {
     const fallback = {
       on: false,
@@ -226,11 +231,15 @@
       realizedPl: 0,
       position: null,
       lastResult: null,
+      history: [],
     };
     try {
       const raw = localStorage.getItem(DEMO_KEY);
       if (!raw) return fallback;
       const parsed = JSON.parse(raw);
+      const history = Array.isArray(parsed.history)
+        ? parsed.history.filter((h) => h && typeof h === "object").slice(0, HISTORY_LIMIT)
+        : [];
       return {
         on: !!parsed.on,
         start:
@@ -244,6 +253,7 @@
           parsed.lastResult && typeof parsed.lastResult === "object"
             ? parsed.lastResult
             : null,
+        history,
       };
     } catch {
       return fallback;
@@ -252,10 +262,91 @@
 
   function saveDemoState() {
     try {
+      if (!Array.isArray(demo.history)) demo.history = [];
       localStorage.setItem(DEMO_KEY, JSON.stringify(demo));
     } catch {
       // ignore quota
     }
+  }
+
+  function pushTradeHistory(entry) {
+    if (!entry || typeof entry !== "object") return;
+    if (!Array.isArray(demo.history)) demo.history = [];
+    demo.history.unshift(entry);
+    if (demo.history.length > HISTORY_LIMIT) {
+      demo.history = demo.history.slice(0, HISTORY_LIMIT);
+    }
+  }
+
+  function clearTradeHistory() {
+    demo.history = [];
+    saveDemoState();
+    renderTradeHistory();
+    setStatus("ok", "Trade history cleared");
+  }
+
+  function formatHistoryTime(ts) {
+    if (!ts) return "";
+    try {
+      return new Date(ts).toLocaleString([], {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+    } catch {
+      return "";
+    }
+  }
+
+  function renderTradeHistory() {
+    const list = Array.isArray(demo.history) ? demo.history : [];
+    if (el.tradeHistorySummary) {
+      if (!list.length) {
+        el.tradeHistorySummary.textContent = "No closed trades yet";
+      } else {
+        const wins = list.filter((t) => t.won).length;
+        const totalPl = list.reduce(
+          (sum, t) => sum + (Number.isFinite(t.pl) ? t.pl : 0),
+          0
+        );
+        el.tradeHistorySummary.textContent = `${list.length} trade${
+          list.length === 1 ? "" : "s"
+        } · ${wins}W-${list.length - wins}L · ${formatPl(totalPl)}`;
+        el.tradeHistorySummary.classList.toggle("is-up", totalPl > 0);
+        el.tradeHistorySummary.classList.toggle("is-down", totalPl < 0);
+      }
+    }
+    if (!el.tradeHistoryList) return;
+    if (!list.length) {
+      el.tradeHistoryList.innerHTML =
+        '<div class="trade-history-empty">Closed and settled trades show up here.</div>';
+      return;
+    }
+    el.tradeHistoryList.innerHTML = list
+      .map((t) => {
+        const side = t.side === "above" ? "Above" : "Below";
+        const kind = t.kind === "settle" ? (t.won ? "WIN" : "LOSS") : "CLOSED";
+        const plClass = t.won ? "is-win" : "is-loss";
+        const fills = t.fills > 1 ? ` · ${t.fills} fills` : "";
+        const exit =
+          t.exitCents != null ? ` @ ${t.exitCents}¢` : "";
+        const mode = t.accounted ? "" : " · paper";
+        return (
+          `<article class="trade-history-item ${plClass}">` +
+          `<div class="trade-history-top">` +
+          `<span class="trade-history-kind">${kind} ${side}${exit}</span>` +
+          `<span class="trade-history-pl">${formatPl(t.pl)}</span>` +
+          `</div>` +
+          `<div class="trade-history-meta">${formatHistoryTime(t.at)} · ${
+            t.contracts || "—"
+          } cts @ avg ${t.askCents != null ? t.askCents + "¢" : "—"}${fills} · paid ${
+            t.total != null ? money(t.total) : "—"
+          }${mode}</div>` +
+          `</article>`
+        );
+      })
+      .join("");
   }
 
   function openOptions() {
@@ -674,6 +765,7 @@
         el.demoLast.classList.toggle("is-loss", !r.won);
       }
     }
+    renderTradeHistory();
     const busyAbove = !!demo.position && !canBuySide("above");
     const busyBelow = !!demo.position && !canBuySide("below");
     if (el.demoBuyBest) {
@@ -714,6 +806,21 @@
           )}`
         : `CLOSED ${sideLabel} @ ${mark.bidCents}¢ · ${formatPl(pl)} · paper`,
     };
+    pushTradeHistory({
+      id: `${Date.now()}-${pos.ticker || "x"}`,
+      at: Date.now(),
+      kind: "close",
+      side: pos.side,
+      ticker: pos.ticker || null,
+      contracts: pos.contracts,
+      askCents: pos.askCents,
+      total: pos.total,
+      fills: pos.fills || 1,
+      exitCents: mark.bidCents,
+      pl,
+      won,
+      accounted: !!accounted,
+    });
     demo.position = null;
     saveDemoState();
     renderDemoUi();
@@ -736,6 +843,7 @@
     demo.realizedPl = 0;
     demo.position = null;
     demo.lastResult = null;
+    demo.history = [];
     saveDemoState();
     renderDemoUi();
     setStatus("ok", `Demo reset · ${money(start)}`);
@@ -1163,6 +1271,22 @@
           ? `WIN ${sideLabel} · ${money(pl)} · paper`
           : `LOSS ${sideLabel} · ${money(pl)} · paper`,
     };
+    pushTradeHistory({
+      id: `${Date.now()}-${pos.ticker || "x"}`,
+      at: Date.now(),
+      kind: "settle",
+      side: pos.side,
+      ticker: pos.ticker || null,
+      contracts: pos.contracts,
+      askCents: pos.askCents,
+      total: pos.total,
+      fills: pos.fills || 1,
+      exitCents: null,
+      pl,
+      won,
+      accounted: !!accounted,
+      outcome,
+    });
     demo.position = null;
     saveDemoState();
     renderDemoUi();
