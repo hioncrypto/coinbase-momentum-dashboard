@@ -135,6 +135,7 @@
     openPlSide: document.getElementById("open-pl-side"),
     openPlValue: document.getElementById("open-pl-value"),
     openPlSub: document.getElementById("open-pl-sub"),
+    openPlAdd: document.getElementById("open-pl-add"),
     openPlClose: document.getElementById("open-pl-close"),
     openPlToggle: document.getElementById("open-pl-toggle"),
     openPlPeek: document.getElementById("open-pl-peek"),
@@ -585,6 +586,11 @@
         ? "Close at bid · post P/L"
         : "Close at bid · clear mark";
     }
+    if (el.openPlAdd) {
+      const side = pos.side === "above" ? "Above" : "Below";
+      el.openPlAdd.disabled = !canBuySide(pos.side);
+      el.openPlAdd.textContent = `Add ${side}`;
+    }
   }
 
   function renderOpenPositionUi() {
@@ -735,12 +741,11 @@
     setStatus("ok", `Demo reset · ${money(start)}`);
   }
 
-  /** Same-window same-side adds are allowed; opposite side / other ticker are not. */
+  /** Same-side adds are always allowed; only opposite side is locked. */
   function canBuySide(side) {
     const pos = demo.position;
     if (!pos) return true;
     if (side !== "above" && side !== "below") return false;
-    if (pos.ticker && lastTicker && pos.ticker !== lastTicker) return false;
     return pos.side === side;
   }
 
@@ -755,18 +760,12 @@
 
   function demoBuy(side, amountUsd) {
     const existing = demo.position;
-    if (existing) {
-      if (existing.ticker && lastTicker && existing.ticker !== lastTicker) {
-        setStatus("warn", "Open position is on the previous window — close or wait for settle");
-        return false;
-      }
-      if (existing.side !== side) {
-        setStatus(
-          "warn",
-          `Already long ${existing.side === "above" ? "Above" : "Below"} — close first to flip`
-        );
-        return false;
-      }
+    if (existing && existing.side !== side) {
+      setStatus(
+        "warn",
+        `Already long ${existing.side === "above" ? "Above" : "Below"} — close first to flip`
+      );
+      return false;
     }
     const stake = amountUsd != null ? Number(amountUsd) : tradeStake;
     if (!(stake > 0)) {
@@ -827,6 +826,7 @@
       }
       demo.position = {
         ...existing,
+        ticker: lastTicker || existing.ticker,
         askCents: avgAsk,
         contracts: nextContracts,
         cost: nextCost,
@@ -973,14 +973,10 @@
   function openBuySheet(side) {
     if (side !== "above" && side !== "below") return;
     if (demo.position && !canBuySide(side)) {
-      if (demo.position.side && demo.position.side !== side) {
-        setStatus(
-          "warn",
-          `Already long ${demo.position.side === "above" ? "Above" : "Below"} — close first to flip`
-        );
-      } else {
-        setStatus("warn", "Can't add on this window right now");
-      }
+      setStatus(
+        "warn",
+        `Already long ${demo.position.side === "above" ? "Above" : "Below"} — close first to flip`
+      );
       return;
     }
     const ask = side === "above" ? lastRoiAsks.above : lastRoiAsks.below;
@@ -991,10 +987,10 @@
     closeOptions();
     buySheetSide = side;
     buySheetOpen = true;
-    const adding = !!demo.position;
+    const adding = !!(demo.position && demo.position.side === side);
     const cap = demo.on
       ? Math.max(1, Math.floor(demo.balance) || 50)
-      : 100;
+      : 100000;
     buySheetAmount = Math.max(
       1,
       Math.min(cap, tradeStake > 0 ? tradeStake : 50)
@@ -1970,7 +1966,9 @@
         lastRoiAsks.below != null ? `${Math.round(lastRoiAsks.below)}¢` : "—";
     }
     if (el.dockBuyAbove) {
+      // Same-side add must stay tappable while a position is open.
       el.dockBuyAbove.disabled = !canAbove;
+      el.dockBuyAbove.setAttribute("aria-disabled", canAbove ? "false" : "true");
       const label = el.dockBuyAbove.querySelector(".dock-label");
       if (label) {
         label.textContent =
@@ -1979,6 +1977,7 @@
     }
     if (el.dockBuyBelow) {
       el.dockBuyBelow.disabled = !canBelow;
+      el.dockBuyBelow.setAttribute("aria-disabled", canBelow ? "false" : "true");
       const label = el.dockBuyBelow.querySelector(".dock-label");
       if (label) {
         label.textContent =
@@ -1987,7 +1986,8 @@
     }
     if (el.dockBuyBest) {
       const bestSide = lastBestPick && lastBestPick.side;
-      el.dockBuyBest.disabled = !bestSide || !canBuySide(bestSide);
+      const canBest = !!(bestSide && canBuySide(bestSide));
+      el.dockBuyBest.disabled = !canBest;
       const label = el.dockBuyBest.querySelector(".dock-label");
       if (label) {
         label.textContent =
