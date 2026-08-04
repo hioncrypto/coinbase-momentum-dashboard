@@ -29,6 +29,7 @@ KALSHI_URL = (
     "?limit=5&status=open&series_ticker=KXBTC15M"
 )
 COINBASE_CANDLES = "https://api.exchange.coinbase.com/products/BTC-USD/candles"
+COINBASE_TICKER = "https://api.exchange.coinbase.com/products/BTC-USD/ticker"
 
 UA = "kalshi-btc-target/1.1 (+android-pwa)"
 
@@ -167,6 +168,45 @@ def fetch_target_payload() -> dict:
     return payload
 
 
+_candles_cache: dict = {"at": 0.0, "key": None, "payload": None}
+_spot_cache: dict = {"at": 0.0, "payload": None}
+TARGET_TTL = 3.0
+CANDLES_TTL = 10.0
+SPOT_TTL = 1.5
+
+
+def fetch_spot() -> dict:
+    now = time.time()
+    with _cache_lock:
+        if _spot_cache["payload"] and now - _spot_cache["at"] < SPOT_TTL:
+            return _spot_cache["payload"]
+    try:
+        data = http_get_json(COINBASE_TICKER)
+        price = float(data.get("price"))
+        payload = {
+            "ok": True,
+            "symbol": "BTC-USD",
+            "price": price,
+            "bid": float(data["bid"]) if data.get("bid") is not None else None,
+            "ask": float(data["ask"]) if data.get("ask") is not None else None,
+            "time": data.get("time"),
+            "error": None,
+            "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+    except Exception as exc:
+        payload = {
+            "ok": False,
+            "symbol": "BTC-USD",
+            "price": None,
+            "error": str(exc),
+            "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+    with _cache_lock:
+        _spot_cache["at"] = time.time()
+        _spot_cache["payload"] = payload
+    return payload
+
+
 def fetch_candles(granularity: int = 60, limit: int = 300) -> dict:
     now = time.time()
     key = (granularity, limit)
@@ -263,6 +303,10 @@ class Handler(BaseHTTPRequestHandler):
 
         if path in ("/api/target", "/api/kalshi/target"):
             self._send_json(200, fetch_target_payload())
+            return
+
+        if path in ("/api/spot", "/api/btc/spot", "/api/price"):
+            self._send_json(200, fetch_spot())
             return
 
         if path in ("/api/candles", "/api/btc/candles"):

@@ -106,42 +106,53 @@ h1 {
   color: var(--muted);
 }
 
-.target-panel .value {
+.metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.metric .value {
   margin-top: 4px;
-  font-size: clamp(1.6rem, 6vw, 2.1rem);
+  font-size: clamp(1.35rem, 5.2vw, 1.9rem);
   font-weight: 700;
-  color: var(--accent);
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
+}
+
+.metric .value.beat {
+  color: #ffffff;
+}
+
+.metric .value.spot {
+  color: var(--accent);
 }
 
 .target-panel .meta {
   margin-top: 4px;
   font-size: 0.78rem;
   color: var(--muted);
+  min-height: 1.1em;
 }
 
-.spot-row {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin-top: 10px;
-  padding-top: 10px;
+.countdown-block {
+  margin-top: 12px;
+  padding-top: 12px;
   border-top: 1px solid var(--border);
+  text-align: center;
+}
+
+.countdown {
+  margin-top: 2px;
+  font-size: clamp(1.8rem, 7vw, 2.4rem);
+  font-weight: 700;
+  letter-spacing: 0.04em;
   font-variant-numeric: tabular-nums;
+  color: var(--warn);
 }
 
-.spot-label {
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-}
-
-.spot-value {
-  font-size: 1.05rem;
-  font-weight: 650;
-  color: var(--fg);
+.countdown.urgent {
+  color: #ff7a7a;
 }
 
 .spot-delta {

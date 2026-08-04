@@ -30,6 +30,11 @@ def main() -> int:
     rows = candles.get("candles") or []
     assert len(rows) >= 50, len(rows)
     print("candles", len(rows), "last", rows[-1])
+
+    spot = get("/api/spot")
+    assert spot.get("ok"), spot
+    assert spot.get("price") is not None, spot
+    print("spot", spot.get("price"))
     print("OK")
     return 0
 

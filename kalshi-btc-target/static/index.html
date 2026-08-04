@@ -11,7 +11,7 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta
       name="description"
-      content="Kalshi 15-minute BTC Target Price drawn live on a BTC-USD chart."
+      content="Kalshi 15-minute BTC Price to beat with live moving price and countdown."
     />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
@@ -29,20 +29,32 @@
         <span class="mark" aria-hidden="true"></span>
         <div>
           <h1>Kalshi BTC Target</h1>
-          <p class="sub">KXBTC15M · auto TARGET each 15m · no Tampermonkey</p>
+          <p class="sub">KXBTC15M · live price · countdown</p>
         </div>
       </div>
       <div id="status" class="status" data-state="loading">Connecting…</div>
     </header>
 
     <section class="target-panel" aria-live="polite">
-      <div id="target-label" class="label">Price to beat</div>
-      <div id="target-value" class="value">—</div>
-      <div id="target-meta" class="meta">Waiting for Kalshi 15m…</div>
-      <div class="spot-row">
-        <span class="spot-label">Current</span>
-        <span id="spot-value" class="spot-value">—</span>
-        <span id="spot-delta" class="spot-delta"></span>
+      <div class="metrics">
+        <div class="metric">
+          <div id="target-label" class="label">Price to beat</div>
+          <div id="target-value" class="value beat">—</div>
+          <div id="target-meta" class="meta">Waiting for Kalshi 15m…</div>
+        </div>
+        <div class="metric">
+          <div class="label">Moving price</div>
+          <div id="spot-value" class="value spot">—</div>
+          <div class="meta">
+            <span id="spot-delta" class="spot-delta"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="countdown-block">
+        <div class="label">Time left</div>
+        <div id="countdown" class="countdown">—:—</div>
+        <div id="countdown-meta" class="meta">Until 15m window ends</div>
       </div>
     </section>
 

@@ -1,6 +1,7 @@
 (() => {
   const TARGET_POLL_MS = 5_000;
   const CANDLE_POLL_MS = 15_000;
+  const SPOT_POLL_MS = 2_000;
   const BOUNDARY_PAD_MS = 2_000;
 
   const el = {
@@ -10,6 +11,8 @@
     targetMeta: document.getElementById("target-meta"),
     spotValue: document.getElementById("spot-value"),
     spotDelta: document.getElementById("spot-delta"),
+    countdown: document.getElementById("countdown"),
+    countdownMeta: document.getElementById("countdown-meta"),
     status: document.getElementById("status"),
     clock: document.getElementById("clock"),
   };
@@ -19,8 +22,10 @@
   let targetLine = null;
   let lastTicker = null;
   let lastTarget = null;
+  let closeTimeIso = null;
   let boundaryTimer = null;
   let fittedOnce = false;
+  let prevSpot = null;
 
   function money(n) {
     if (n == null || !Number.isFinite(n)) return "—";
@@ -63,14 +68,53 @@
     }
     el.spotValue.textContent = money(lastClose);
     el.spotValue.dataset.last = String(lastClose);
+
+    // Flash direction vs previous tick
+    if (prevSpot != null && Number.isFinite(prevSpot)) {
+      if (lastClose > prevSpot) el.spotValue.style.color = "#1ac96b";
+      else if (lastClose < prevSpot) el.spotValue.style.color = "#d45454";
+    }
+    prevSpot = lastClose;
+
     if (lastTarget != null && Number.isFinite(lastTarget)) {
       const delta = lastClose - lastTarget;
       const sign = delta >= 0 ? "+" : "-";
-      el.spotDelta.textContent = `${sign}$${Math.abs(delta).toFixed(2)}`;
+      el.spotDelta.textContent = `${sign}$${Math.abs(delta).toFixed(2)} vs beat`;
       el.spotDelta.className = "spot-delta " + (delta >= 0 ? "up" : "down");
     } else {
       el.spotDelta.textContent = "";
       el.spotDelta.className = "spot-delta";
+    }
+  }
+
+  function updateCountdown() {
+    if (!el.countdown) return;
+    if (!closeTimeIso) {
+      el.countdown.textContent = "—:—";
+      el.countdown.classList.remove("urgent");
+      if (el.countdownMeta) el.countdownMeta.textContent = "Until 15m window ends";
+      return;
+    }
+    const end = Date.parse(closeTimeIso);
+    if (!Number.isFinite(end)) {
+      el.countdown.textContent = "—:—";
+      return;
+    }
+    let ms = end - Date.now();
+    if (ms <= 0) {
+      el.countdown.textContent = "0:00";
+      el.countdown.classList.add("urgent");
+      if (el.countdownMeta) el.countdownMeta.textContent = "Window rolling…";
+      return;
+    }
+    const totalSec = Math.floor(ms / 1000);
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    el.countdown.textContent = `${m}:${String(s).padStart(2, "0")}`;
+    el.countdown.classList.toggle("urgent", totalSec <= 60);
+    if (el.countdownMeta) {
+      el.countdownMeta.textContent =
+        totalSec <= 60 ? "Under 1 minute left" : "Until 15m window ends";
     }
   }
 
@@ -86,6 +130,7 @@
     boundaryTimer = setTimeout(() => {
       refreshTarget();
       refreshCandles();
+      refreshSpot();
     }, wait);
   }
 
@@ -157,6 +202,8 @@
       const res = await fetch("/api/target", { cache: "no-store" });
       const data = await res.json();
       const beat = data.price_to_beat ?? data.target;
+      closeTimeIso = data.close_time || null;
+      updateCountdown();
       if (el.targetLabel) el.targetLabel.textContent = data.label || "Price to beat";
 
       if (!data.ok && beat == null) {
@@ -185,7 +232,7 @@
         el.targetValue.textContent = money(beat);
         const win = formatWindow(data.close_time, data.close_et);
         el.targetMeta.textContent = win
-          ? `Kalshi 15m · settles ${win}`
+          ? `Settles ${win}`
           : "Kalshi 15m";
         applyTargetLine(beat, "TARGET");
         if (el.spotValue && el.spotValue.dataset.last) {
@@ -196,6 +243,17 @@
     } catch (err) {
       setStatus("warn", "Target fetch failed");
       el.targetMeta.textContent = String(err.message || err);
+    }
+  }
+
+  async function refreshSpot() {
+    try {
+      const res = await fetch("/api/spot", { cache: "no-store" });
+      const data = await res.json();
+      if (!data.ok || data.price == null) return;
+      updateSpot(Number(data.price));
+    } catch {
+      // keep last spot
     }
   }
 
@@ -214,8 +272,9 @@
       const candles = data.candles || [];
       series.setData(candles);
       if (lastTarget != null) applyTargetLine(lastTarget, "TARGET");
-      const last = candles.length ? candles[candles.length - 1].close : null;
-      updateSpot(last);
+      if (!el.spotValue?.dataset.last && candles.length) {
+        updateSpot(candles[candles.length - 1].close);
+      }
       if (!fittedOnce && candles.length) {
         chart.timeScale().fitContent();
         fittedOnce = true;
@@ -229,6 +288,7 @@
 
   function tickClock() {
     el.clock.textContent = new Date().toLocaleTimeString();
+    updateCountdown();
   }
 
   function boot() {
@@ -238,10 +298,11 @@
     }
     ensureChart();
     resizeChart();
-    refreshCandles().then(refreshTarget);
+    refreshCandles().then(refreshTarget).then(refreshSpot);
     setInterval(refreshTarget, TARGET_POLL_MS);
     setInterval(refreshCandles, CANDLE_POLL_MS);
-    setInterval(tickClock, 1000);
+    setInterval(refreshSpot, SPOT_POLL_MS);
+    setInterval(tickClock, 250);
     tickClock();
     window.addEventListener("resize", resizeChart);
     window.addEventListener("orientationchange", () => setTimeout(resizeChart, 250));
