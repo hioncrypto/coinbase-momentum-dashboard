@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Kalshi BTC 15m Target → TradingView
-// @namespace    https://github.com/hioncrypto/coinbase-momentum-dashboard
+// @namespace    kalshi-btc-target
 // @version      1.1.0
 // @description  Auto-draws Kalshi KXBTC15M Target Price as a horizontal line on TradingView BTCUSD (works on Android via Firefox + Tampermonkey)
 // @author       hioncrypto

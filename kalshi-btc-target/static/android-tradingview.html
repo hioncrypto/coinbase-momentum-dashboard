@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>Install Kalshi TARGET on TradingView (Android)</title>
+    <title>Android-only: Kalshi TARGET on TradingView</title>
     <style>
       :root {
         color-scheme: dark;
@@ -25,10 +25,10 @@
       h1 { font-size: 1.35rem; margin: 0 0 8px; }
       p { color: var(--muted); }
       ol { padding-left: 1.2rem; }
-      li { margin: 12px 0; }
+      li { margin: 14px 0; }
       a.btn {
         display: inline-block;
-        margin-top: 6px;
+        margin-top: 8px;
         padding: 10px 14px;
         border-radius: 10px;
         background: #163526;
@@ -37,8 +37,6 @@
         border: 1px solid rgba(26, 201, 107, 0.45);
         font-weight: 600;
       }
-      a.btn:hover { border-color: var(--accent); }
-      a.inline { color: var(--accent); }
       .card {
         margin-top: 16px;
         padding: 14px;
@@ -47,50 +45,49 @@
         background: rgba(12, 20, 16, .7);
       }
       .warn { color: #ffd28a; }
+      code { color: #b6dcc7; }
     </style>
   </head>
   <body>
     <main>
-      <h1>TradingView + Kalshi TARGET on Android</h1>
-      <p>
-        Auto horizontal line for Kalshi’s <strong>15-minute Target Price</strong> on a
-        BTCUSD TradingView chart. No GitHub required once this page is open.
-      </p>
+      <h1>Android only</h1>
+      <p>No computer. Auto Kalshi 15m TARGET line on TradingView in Firefox.</p>
 
       <div class="card">
         <p class="warn" style="margin-top:0">
-          Use the TradingView <strong>website</strong> in Firefox — not the Play Store TradingView app.
+          Use Firefox + TradingView website — not the TradingView app.
         </p>
         <ol>
           <li>
-            Install Firefox for Android
+            Install Firefox
             <br />
             <a
               class="btn"
               href="https://play.google.com/store/apps/details?id=org.mozilla.firefox"
               target="_blank"
               rel="noopener"
-              >Open Firefox on Google Play</a
+              >Google Play · Firefox</a
             >
           </li>
           <li>
-            In Firefox, install Tampermonkey
+            Install Tampermonkey inside Firefox
             <br />
             <a
               class="btn"
               href="https://addons.mozilla.org/firefox/addon/tampermonkey/"
               target="_blank"
               rel="noopener"
-              >Open Tampermonkey add-on</a
+              >Add Tampermonkey</a
             >
           </li>
           <li>
-            Install the Kalshi TARGET userscript
+            In Tampermonkey: Dashboard → <strong>+</strong> → delete template → paste
+            <code>kalshi-tv-target.user.js</code> → save → Enabled
             <br />
-            <a class="btn" href="/kalshi-tv-target.user.js">Install userscript</a>
+            <a class="btn" href="/kalshi-tv-target.user.js">Open userscript file</a>
           </li>
           <li>
-            Open TradingView in Firefox and load a BTCUSD chart
+            Open BTCUSD on TradingView <strong>in Firefox</strong>
             <br />
             <a
               class="btn"
@@ -100,15 +97,8 @@
               >Open TradingView BTCUSD</a
             >
           </li>
-          <li>TARGET line updates automatically each Kalshi 15m window</li>
+          <li>Confirm dashed green TARGET line — it auto-updates every 15 minutes</li>
         </ol>
-      </div>
-
-      <div class="card">
-        <p style="margin:0">
-          Prefer a dedicated phone chart (not TradingView’s UI)?
-          <a class="inline" href="/">Open the Kalshi BTC Target chart</a>
-        </p>
       </div>
     </main>
   </body>
