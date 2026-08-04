@@ -1742,3 +1742,95 @@ body.portrait-app {
 .buy-dock {
   z-index: 5;
 }
+
+/* Tutorial */
+.tutorial-open-btn {
+  width: 100%;
+  min-height: 44px;
+  margin: 0 0 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(26, 201, 107, 0.35);
+  background: rgba(26, 201, 107, 0.12);
+  color: #b8f0d0;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.tutorial-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(0, 0, 0, 0.62);
+}
+
+.tutorial {
+  position: fixed;
+  z-index: 90;
+  left: 12px;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 18px 16px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(180deg, #1a2a22 0%, #0e1713 55%),
+    var(--bg);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+}
+
+.tutorial-progress {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.tutorial-title {
+  margin: 8px 0 0;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.tutorial-body {
+  margin: 10px 0 0;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: #cfe6d9;
+}
+
+.tutorial-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.tutorial-btn {
+  flex: 1;
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(8, 14, 11, 0.65);
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.tutorial-btn.primary {
+  border-color: rgba(26, 201, 107, 0.45);
+  background: rgba(26, 201, 107, 0.18);
+  color: #b8f0d0;
+}
+
+.tutorial-btn.ghost {
+  color: var(--muted);
+}
