@@ -12,6 +12,7 @@
   const TRADE_HISTORY_KEY = "beatlineTradeHistory";
   const HISTORY_LIMIT = 40;
   const DEMO_DEFAULT_START = 1000;
+  const APP_VERSION = "7.8";
   const TUTORIAL_KEY = "beatlineTutorialSeen";
   const OPEN_PL_COLLAPSE_KEY = "beatlineOpenPlCollapsed";
 
@@ -113,6 +114,8 @@
     tutorialNext: document.getElementById("tutorial-next"),
     tutorialSkip: document.getElementById("tutorial-skip"),
     tutorialOpen: document.getElementById("tutorial-open"),
+    appVersionLine: document.getElementById("app-version-line"),
+    appUpdate: document.getElementById("app-update"),
     demoToggle: document.getElementById("demo-toggle"),
     demoAccount: document.getElementById("demo-account"),
     demoBalance: document.getElementById("demo-balance"),
@@ -2415,6 +2418,58 @@
     }, 1200);
   }
 
+  async function refreshVersionLine() {
+    if (!el.appVersionLine) return;
+    let server = null;
+    try {
+      const res = await fetch("/api/health", { cache: "no-store" });
+      const data = await res.json();
+      server = data && data.version;
+    } catch {
+      // offline — show what we have
+    }
+    el.appVersionLine.textContent = server
+      ? `App ${APP_VERSION} · server ${server}`
+      : `App ${APP_VERSION}`;
+  }
+
+  /**
+   * Drop the service worker + caches and hard-reload, so a home-screen PWA
+   * picks up new code without digging through Android settings.
+   * Saved balance/history live in localStorage + the server, so they survive.
+   */
+  async function forceAppUpdate() {
+    if (el.appUpdate) {
+      el.appUpdate.disabled = true;
+      el.appUpdate.textContent = "Updating…";
+    }
+    setStatus("ok", "Fetching latest BeatLine…");
+    try {
+      await pushDemoStateToServer();
+    } catch {
+      // keep going; local copy still intact
+    }
+    try {
+      if ("caches" in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+    } catch {
+      // ignore
+    }
+    try {
+      if (navigator.serviceWorker) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister()));
+      }
+    } catch {
+      // ignore
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.set("fresh", String(Date.now()));
+    window.location.replace(url.toString());
+  }
+
   function bankPctText(pct) {
     if (pct == null || !Number.isFinite(pct)) return null;
     if (pct > 0 && pct < 1) return "<1%";
@@ -3737,6 +3792,10 @@
       el.buySuggestUse.addEventListener("click", () => {
         if (buySuggestStake != null) setBuyAmountUi(buySuggestStake, true);
       });
+    }
+    if (el.appUpdate) {
+      el.appUpdate.addEventListener("click", () => forceAppUpdate());
+      refreshVersionLine();
     }
     if (el.accountExport) {
       el.accountExport.addEventListener("click", () => exportAccountBackup());

@@ -540,6 +540,39 @@ h1 {
   font-size: 0.75rem;
 }
 
+.options-update {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 10px 0 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.options-update-text strong {
+  display: block;
+  font-size: 0.88rem;
+}
+
+.options-update-text em {
+  display: block;
+  margin-top: 2px;
+  font-style: normal;
+  font-size: 0.74rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.options-update .demo-btn {
+  flex-shrink: 0;
+  min-height: 38px;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+}
+
 .options-deploy {
   display: block;
   margin: 14px 0 4px;
