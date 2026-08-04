@@ -59,7 +59,7 @@ async function writeState(state) {
 }
 
 async function showTargetNotification(payload) {
-  const title = "New Kalshi 15m target";
+  const title = "BeatLine · new 15m target";
   const body =
     payload && payload.beat != null
       ? `Price to beat $${Number(payload.beat).toLocaleString("en-US", {

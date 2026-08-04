@@ -1120,7 +1120,7 @@ def main():
     watcher = threading.Thread(target=push_watcher_loop, name="push-watcher", daemon=True)
     watcher.start()
     httpd = ThreadingHTTPServer((HOST, PORT), Handler)
-    print(f"Kalshi BTC Price-to-beat app → http://{HOST}:{PORT}/")
+    print(f"BeatLine → http://{HOST}:{PORT}/")
     print("Android Chrome → open URL → Add to Home Screen")
     print("Background chime → allow Notifications when prompted")
     try:

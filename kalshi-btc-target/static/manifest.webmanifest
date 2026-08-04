@@ -1,15 +1,16 @@
 {
-  "name": "Kalshi BTC Target",
-  "short_name": "Kalshi Target",
-  "id": "/?app=kalshi-btc-target-v21",
-  "description": "Kalshi 15-minute BTC Price to beat with BRTI chart, Above/Below %, and alerts.",
-  "start_url": "/?source=homescreen&v=21",
+  "name": "BeatLine",
+  "short_name": "BeatLine",
+  "id": "/?app=beatline-v24",
+  "description": "BeatLine — 15-minute BTC Price to beat with live chart, Above/Below odds, Best Side, and demo trading.",
+  "start_url": "/?source=homescreen&v=24",
   "scope": "/",
   "display": "fullscreen",
   "display_override": ["fullscreen", "standalone"],
   "background_color": "#0b1210",
   "theme_color": "#0b1210",
   "orientation": "portrait-primary",
+  "categories": ["finance", "utilities"],
   "icons": [
     {
       "src": "/icons/icon-192.png",
