@@ -1038,7 +1038,13 @@
   }
 
   function tickClock() {
-    el.clock.textContent = new Date().toLocaleTimeString();
+    if (el.clock) {
+      el.clock.textContent = new Date().toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+    }
     updateCountdown();
   }
 
