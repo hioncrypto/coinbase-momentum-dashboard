@@ -130,6 +130,10 @@
     demoLiveFactors: document.getElementById("demo-live-factors"),
     demoLiveMeta: document.getElementById("demo-live-meta"),
     demoLiveClose: document.getElementById("demo-live-close"),
+    openPlBar: document.getElementById("open-pl-bar"),
+    openPlSide: document.getElementById("open-pl-side"),
+    openPlValue: document.getElementById("open-pl-value"),
+    openPlSub: document.getElementById("open-pl-sub"),
     buyBackdrop: document.getElementById("buy-backdrop"),
     buySheet: document.getElementById("buy-sheet"),
     buySheetTitle: document.getElementById("buy-sheet-title"),
@@ -341,6 +345,13 @@
     const pWin =
       modelP == null ? null : pos.side === "above" ? modelP : 1 - modelP;
 
+    const heldPlIfWin = Math.round((pos.contracts * 1 - pos.total) * 100) / 100;
+    const heldPlIfLose = Math.round((0 - pos.total) * 100) / 100;
+    const modelEvPl =
+      pWin != null && Number.isFinite(pWin)
+        ? Math.round((pWin * heldPlIfWin + (1 - pWin) * heldPlIfLose) * 100) / 100
+        : null;
+
     if (bidCents == null) {
       return {
         bidCents: null,
@@ -357,9 +368,10 @@
         marketPct,
         settleNowWin,
         pWin,
+        modelEvPl,
         heldWinPayout: pos.contracts * 1,
-        heldPlIfWin: Math.round((pos.contracts * 1 - pos.total) * 100) / 100,
-        heldPlIfLose: Math.round((0 - pos.total) * 100) / 100,
+        heldPlIfWin,
+        heldPlIfLose,
       };
     }
     const P = bidCents / 100;
@@ -384,9 +396,10 @@
       marketPct,
       settleNowWin,
       pWin,
+      modelEvPl,
       heldWinPayout: pos.contracts * 1,
-      heldPlIfWin: Math.round((pos.contracts * 1 - pos.total) * 100) / 100,
-      heldPlIfLose: Math.round((0 - pos.total) * 100) / 100,
+      heldPlIfWin,
+      heldPlIfLose,
     };
   }
 
@@ -408,9 +421,75 @@
     );
   }
 
+  function sessionPlBreakdown(mark) {
+    const realized = Number(demo.realizedPl) || 0;
+    const open =
+      mark && mark.unrealized != null && Number.isFinite(mark.unrealized)
+        ? mark.unrealized
+        : 0;
+    const total = Math.round((realized + open) * 100) / 100;
+    return { realized, open, total, hasOpen: !!(demo.position && mark) };
+  }
+
+  function renderOpenPlBar(pos, mark) {
+    if (!el.openPlBar) return;
+    if (!pos) {
+      el.openPlBar.hidden = true;
+      document.body.classList.remove("has-open-pl");
+      return;
+    }
+    el.openPlBar.hidden = false;
+    document.body.classList.add("has-open-pl");
+    const side = pos.side === "above" ? "Above" : "Below";
+    const sess = sessionPlBreakdown(mark);
+    if (el.openPlSide) {
+      el.openPlSide.textContent = `Buy ${side} · ${pos.contracts} cts @ ${pos.askCents}¢`;
+      el.openPlSide.classList.toggle("is-up", pos.side === "above");
+      el.openPlSide.classList.toggle("is-down", pos.side === "below");
+    }
+    if (el.openPlValue) {
+      el.openPlValue.textContent =
+        mark && mark.unrealized != null ? formatPl(mark.unrealized) : "—";
+      el.openPlValue.classList.toggle(
+        "is-up",
+        !!(mark && mark.unrealized > 0)
+      );
+      el.openPlValue.classList.toggle(
+        "is-down",
+        !!(mark && mark.unrealized < 0)
+      );
+    }
+    if (el.openPlSub) {
+      const bits = [];
+      if (mark && mark.unrealizedPct != null) {
+        const sign = mark.unrealizedPct > 0 ? "+" : "";
+        bits.push(`${sign}${mark.unrealizedPct.toFixed(1)}% vs entry`);
+      }
+      if (mark && mark.modelEvPl != null) {
+        bits.push(`model EV ${formatPl(mark.modelEvPl)}`);
+      }
+      if (mark && mark.pWin != null) {
+        bits.push(`${Math.round(mark.pWin * 100)}% win`);
+      }
+      if (mark && mark.delta != null) {
+        bits.push(
+          `live ${mark.delta >= 0 ? "+" : ""}$${mark.delta.toFixed(0)} vs beat`
+        );
+      }
+      if (mark && mark.secs != null) {
+        bits.push(
+          `${Math.floor(mark.secs / 60)}:${String(mark.secs % 60).padStart(2, "0")} left`
+        );
+      }
+      bits.push(`session ${formatPl(sess.total)}`);
+      el.openPlSub.textContent = bits.join(" · ");
+    }
+  }
+
   function renderOpenPositionUi() {
     const pos = demo.position;
     const mark = markOpenPosition(pos);
+    renderOpenPlBar(pos, mark);
     if (!el.demoLive) return mark;
 
     if (!pos) {
@@ -421,6 +500,7 @@
     el.demoLive.hidden = false;
     const side = pos.side === "above" ? "Above" : "Below";
     const accounted = pos.accounted !== false && demo.on;
+    const sess = sessionPlBreakdown(mark);
     if (el.demoLiveKicker) {
       el.demoLiveKicker.textContent = accounted
         ? "Open · demo account"
@@ -438,12 +518,17 @@
       el.demoLivePl.classList.toggle("is-down", !!(mark && mark.unrealized < 0));
     }
     if (el.demoLivePct) {
+      const parts = [];
       if (mark && mark.unrealizedPct != null) {
         const sign = mark.unrealizedPct > 0 ? "+" : "";
-        el.demoLivePct.textContent = `${sign}${mark.unrealizedPct.toFixed(1)}% vs entry`;
+        parts.push(`${sign}${mark.unrealizedPct.toFixed(1)}% vs entry`);
       } else {
-        el.demoLivePct.textContent = "Marking to live bid…";
+        parts.push("Marking to live bid…");
       }
+      if (mark && mark.modelEvPl != null) {
+        parts.push(`model EV ${formatPl(mark.modelEvPl)}`);
+      }
+      el.demoLivePct.textContent = parts.join(" · ");
       el.demoLivePct.classList.toggle(
         "is-up",
         !!(mark && mark.unrealizedPct > 0)
@@ -494,18 +579,17 @@
           "Exit value",
           mark.proceeds != null ? money(mark.proceeds) : "—"
         ),
-        factorCell("Open P/L", formatPl(mark.unrealized)),
+        factorCell("Exit-now P/L", formatPl(mark.unrealized)),
+        factorCell("Model EV P/L", formatPl(mark.modelEvPl)),
         factorCell("Live vs beat", deltaTxt),
         factorCell("Time left", timeTxt),
         factorCell("Side chance", chanceTxt),
         factorCell("Model win%", modelTxt),
-        factorCell(
-          "If hold & win",
-          formatPl(mark.heldPlIfWin),
-          false
-        ),
+        factorCell("If hold & win", formatPl(mark.heldPlIfWin)),
         factorCell("If hold & lose", formatPl(mark.heldPlIfLose)),
-        factorCell("Settle lean", settleTxt, true),
+        factorCell("Settle lean", settleTxt),
+        factorCell("Session realized", formatPl(sess.realized)),
+        factorCell("Session + open", formatPl(sess.total), true),
       ].join("");
     }
 
@@ -527,10 +611,18 @@
     }
     if (el.demoBalance) el.demoBalance.textContent = money(demo.balance);
     if (el.demoPl) {
-      const pl = demo.realizedPl;
-      el.demoPl.textContent = `Session P/L ${formatPl(pl)}`;
-      el.demoPl.classList.toggle("is-up", pl > 0);
-      el.demoPl.classList.toggle("is-down", pl < 0);
+      const markPreview = markOpenPosition(demo.position);
+      const sess = sessionPlBreakdown(markPreview);
+      if (sess.hasOpen) {
+        el.demoPl.textContent =
+          `Session ${formatPl(sess.total)} · realized ${formatPl(
+            sess.realized
+          )} · open ${formatPl(sess.open)}`;
+      } else {
+        el.demoPl.textContent = `Session P/L ${formatPl(sess.realized)}`;
+      }
+      el.demoPl.classList.toggle("is-up", sess.total > 0);
+      el.demoPl.classList.toggle("is-down", sess.total < 0);
     }
 
     const pos = demo.position;
