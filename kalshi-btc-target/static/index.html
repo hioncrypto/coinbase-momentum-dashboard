@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0b1210" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta
+      name="description"
+      content="Kalshi 15-minute BTC Target Price drawn live on a BTC-USD chart."
+    />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
+    <title>Kalshi BTC Target</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script
+      src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"
+      defer
+    ></script>
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <header class="top">
+      <div class="brand">
+        <span class="mark" aria-hidden="true"></span>
+        <div>
+          <h1>Kalshi BTC Target</h1>
+          <p class="sub">KXBTC15M · auto line each 15m window</p>
+        </div>
+      </div>
+      <div id="status" class="status" data-state="loading">Connecting…</div>
+    </header>
+
+    <section class="target-panel" aria-live="polite">
+      <div class="label">Target price</div>
+      <div id="target-value" class="value">—</div>
+      <div id="target-meta" class="meta">Waiting for Kalshi…</div>
+    </section>
+
+    <main id="chart" role="img" aria-label="BTC-USD chart with Kalshi target line"></main>
+
+    <footer class="foot">
+      <span>BTC-USD · Coinbase</span>
+      <span id="clock"></span>
+    </footer>
+  </body>
+</html>

@@ -35,9 +35,10 @@ Copy `.env.example` to `.env` for local Docker tests.
 - Terms: [legal/TERMS.md](legal/TERMS.md) (review with counsel before selling)
 - Privacy: [legal/PRIVACY.md](legal/PRIVACY.md)
 
-## Kalshi → TradingView (Chrome extension)
+## Kalshi BTC Target (Android + desktop)
 
-`tradingview-kalshi-target/` — overlays Kalshi’s rolling 15-minute BTC **Target Price** (`KXBTC15M`) as a horizontal line on TradingView BTCUSD charts. See that folder’s README to load unpacked in Chrome.
+- **Android phone (auto target line):** [`kalshi-btc-target/`](kalshi-btc-target/) — mobile web chart that pulls Kalshi’s rolling 15m Target Price and draws it automatically. Open in Chrome → Add to Home Screen.
+- **Desktop TradingView website (optional):** [`tradingview-kalshi-target/`](tradingview-kalshi-target/) — Chrome extension overlay. Does **not** work inside TradingView’s phone app.
 
 ## Legacy files
 

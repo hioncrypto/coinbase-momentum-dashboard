@@ -1,10 +1,12 @@
-# Kalshi BTC Target → TradingView
+# Kalshi BTC Target → TradingView (desktop only)
 
-Chrome extension that draws Kalshi's rolling **15-minute BTC Target Price** (`KXBTC15M`) as a dashed horizontal **TARGET** line on TradingView **BTCUSD** charts.
+Chrome extension that draws Kalshi's rolling **15-minute BTC Target Price** (`KXBTC15M`) as a dashed horizontal **TARGET** line on TradingView **BTCUSD** charts in a **desktop** Chromium browser.
+
+> **Android / iPhone:** browser extensions do not run inside the TradingView mobile app. Use the mobile web app in [`../kalshi-btc-target/`](../kalshi-btc-target/) instead — it auto-draws the same Kalshi target on a phone-friendly chart.
 
 A new target is published every 15 minutes. The extension polls Kalshi on an ongoing basis and redraws the line when the window rolls.
 
-## Install (Chrome / Edge / Brave)
+## Install (Chrome / Edge / Brave — desktop)
 
 1. Open `chrome://extensions`
 2. Enable **Developer mode**

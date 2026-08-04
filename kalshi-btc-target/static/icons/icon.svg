@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img">
+  <rect width="128" height="128" rx="24" fill="#0b1210"/>
+  <rect x="18" y="60" width="92" height="6" rx="2" fill="#1ac96b"/>
+  <rect x="86" y="48" width="24" height="30" rx="4" fill="#163526" stroke="#1ac96b" stroke-width="3"/>
+  <text x="98" y="68" text-anchor="middle" font-size="14" font-family="Segoe UI, sans-serif" fill="#1ac96b">T</text>
+</svg>
