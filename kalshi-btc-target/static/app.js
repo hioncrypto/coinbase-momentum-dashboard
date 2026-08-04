@@ -508,6 +508,12 @@
     const beSpot = modelBreakevenSpot(pos, mark && mark.secs);
     lastBreakevenPrice = beSpot;
     applyBreakevenLines(pos.beat, pos.entrySpot, beSpot, pos.side);
+    // Price to beat must stay visible while a trade is open.
+    const beatKeep =
+      pos.beat != null && Number.isFinite(pos.beat) ? pos.beat : lastTarget;
+    if (beatKeep != null && Number.isFinite(beatKeep)) {
+      applyTargetLine(beatKeep, "TARGET");
+    }
 
     if (el.openPlSide) {
       const fills = pos.fills > 1 ? ` · ${pos.fills} fills` : "";
@@ -2377,20 +2383,9 @@
     clearBreakevenLines();
     if (!series || !demo.position) return;
 
+    // Price to beat stays on TARGET — only add trade-specific model / entry lines.
     const winAt = beat != null && Number.isFinite(beat) ? beat : null;
-    if (winAt != null) {
-      const label =
-        side === "below" ? "B/E · WIN BELOW" : "B/E · WIN ABOVE";
-      breakevenLine = series.createPriceLine({
-        price: winAt,
-        color: side === "below" ? "#f0a0a0" : "#7dffa8",
-        lineWidth: 2,
-        lineStyle: (ensureChart.LineStyle && ensureChart.LineStyle.Solid) || 0,
-        axisLabelVisible: true,
-        title: label,
-      });
-      lastBreakevenPrice = winAt;
-    }
+    lastBreakevenPrice = winAt;
 
     if (
       modelBe != null &&
@@ -2428,11 +2423,6 @@
     lastTarget = target;
     ensureChart();
     if (!series || target == null || !Number.isFinite(target)) {
-      clearTargetLine();
-      return;
-    }
-    // Open trade uses the B/E line on the beat — don't stack TARGET on top.
-    if (demo.position) {
       clearTargetLine();
       return;
     }
