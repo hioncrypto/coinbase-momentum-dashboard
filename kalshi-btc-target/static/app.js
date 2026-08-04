@@ -39,8 +39,12 @@
     oddsHint: document.getElementById("odds-hint"),
     edgeLine: document.getElementById("edge-line"),
     roiPanel: document.getElementById("roi-panel"),
+    stakeSlider: document.getElementById("stake-slider"),
+    stakeValue: document.getElementById("stake-value"),
+    roiAbovePrice: document.getElementById("roi-above-price"),
     roiAboveSummary: document.getElementById("roi-above-summary"),
     roiAboveDetail: document.getElementById("roi-above-detail"),
+    roiBelowPrice: document.getElementById("roi-below-price"),
     roiBelowSummary: document.getElementById("roi-below-summary"),
     roiBelowDetail: document.getElementById("roi-below-detail"),
     settleBanner: document.getElementById("settle-banner"),
@@ -400,6 +404,12 @@
     return `ask ${ask}¢`;
   }
 
+  let lastRoiAsks = { above: null, below: null };
+  const STAKE_KEY = "kalshiTradeStake";
+  let tradeStake = Number(localStorage.getItem(STAKE_KEY));
+  if (!Number.isFinite(tradeStake)) tradeStake = 50;
+  tradeStake = Math.max(0, Math.min(100, Math.round(tradeStake)));
+
   function dollars(n) {
     if (n == null || !Number.isFinite(n)) return "—";
     return n.toLocaleString("en-US", {
@@ -419,13 +429,26 @@
   }
 
   /**
-   * Example: spend about $100 buying this side at the ask (taker).
+   * Spend about `stakeUsd` buying this side at the ask (taker).
    * Returns null if we can't price it.
    */
-  function roiForStake(askCents, stakeUsd = 100) {
+  function roiForStake(askCents, stakeUsd) {
     if (askCents == null || !Number.isFinite(askCents)) return null;
     const P = askCents / 100;
     if (!(P > 0 && P < 1)) return null;
+    if (!(stakeUsd > 0)) {
+      return {
+        askCents: Math.round(askCents),
+        contracts: 0,
+        cost: 0,
+        fee: 0,
+        total: 0,
+        winPayout: 0,
+        profitIfWin: 0,
+        roiIfWin: null,
+        empty: true,
+      };
+    }
     const contracts = Math.max(1, Math.floor(stakeUsd / P));
     const cost = contracts * P;
     const fee = kalshiTakerFee(contracts, P);
@@ -442,52 +465,91 @@
       winPayout,
       profitIfWin,
       roiIfWin,
-      lossIfWrong: -total,
+      empty: false,
     };
   }
 
-  function fillRoiCard(summaryEl, detailEl, sideLabel, askCents) {
-    const r = roiForStake(askCents, 100);
+  function fillRoiCard(priceEl, summaryEl, detailEl, askCents, stakeUsd) {
+    if (priceEl) {
+      priceEl.textContent =
+        askCents != null && Number.isFinite(askCents)
+          ? `Ask ${Math.round(askCents)}¢`
+          : "Ask —";
+    }
+    const r = roiForStake(askCents, stakeUsd);
     if (!r) {
       if (summaryEl) summaryEl.textContent = "—";
-      if (detailEl) detailEl.textContent = "Need a live ask price";
+      if (detailEl) detailEl.textContent = "Need a live ask";
       return false;
+    }
+    if (r.empty) {
+      if (summaryEl) summaryEl.textContent = "Slide to size a trade";
+      if (detailEl) detailEl.textContent = "Set a dollar amount above";
+      return true;
     }
     const roiTxt =
       r.roiIfWin != null
-        ? `${r.roiIfWin >= 0 ? "+" : ""}${r.roiIfWin.toFixed(0)}% ROI`
+        ? `${r.roiIfWin >= 0 ? "+" : ""}${r.roiIfWin.toFixed(0)}%`
         : "—";
     if (summaryEl) {
       summaryEl.textContent = `Win ${dollars(r.profitIfWin)} · ${roiTxt}`;
     }
     if (detailEl) {
       detailEl.innerHTML =
-        `Buy ~${r.contracts} @ ${r.askCents}¢<br>` +
-        `Cost ${dollars(r.cost)} + fee ${dollars(r.fee)} = ${dollars(r.total)}<br>` +
-        `If right → get ${dollars(r.winPayout)} · profit ${dollars(r.profitIfWin)}<br>` +
-        `If wrong → lose ${dollars(r.total)}`;
+        `${r.contracts} contracts<br>` +
+        `Cost ${dollars(r.cost)} + fee ${dollars(r.fee)}<br>` +
+        `Total ${dollars(r.total)} · lose = ${dollars(r.total)}`;
     }
     return true;
   }
 
-  function updateRoi(data) {
+  function syncStakeUi() {
+    if (el.stakeSlider) {
+      el.stakeSlider.value = String(tradeStake);
+      el.stakeSlider.setAttribute("aria-valuenow", String(tradeStake));
+    }
+    if (el.stakeValue) el.stakeValue.textContent = `$${tradeStake}`;
+  }
+
+  function renderRoi() {
     if (!el.roiPanel) return;
-    // Prefer live ask; fall back to displayed mid %.
+    syncStakeUi();
+    const okA = fillRoiCard(
+      el.roiAbovePrice,
+      el.roiAboveSummary,
+      el.roiAboveDetail,
+      lastRoiAsks.above,
+      tradeStake
+    );
+    const okB = fillRoiCard(
+      el.roiBelowPrice,
+      el.roiBelowSummary,
+      el.roiBelowDetail,
+      lastRoiAsks.below,
+      tradeStake
+    );
+    el.roiPanel.hidden = !(okA || okB);
+  }
+
+  function setTradeStake(n) {
+    tradeStake = Math.max(0, Math.min(100, Math.round(Number(n) || 0)));
+    localStorage.setItem(STAKE_KEY, String(tradeStake));
+    renderRoi();
+  }
+
+  function updateRoi(data) {
     let aboveAsk = data && data.yes_ask_pct;
     let belowAsk = data && data.no_ask_pct;
     if (aboveAsk == null && data && data.yes_pct != null) aboveAsk = data.yes_pct;
     if (belowAsk == null && data && data.no_pct != null) belowAsk = data.no_pct;
-    // If only Yes book exists, infer No ask ≈ 100 − Yes bid.
     if (belowAsk == null && data && data.yes_bid_pct != null) {
       belowAsk = Math.max(1, 100 - data.yes_bid_pct);
     }
     if (aboveAsk == null && data && data.no_bid_pct != null) {
       aboveAsk = Math.max(1, 100 - data.no_bid_pct);
     }
-
-    const okA = fillRoiCard(el.roiAboveSummary, el.roiAboveDetail, "Above", aboveAsk);
-    const okB = fillRoiCard(el.roiBelowSummary, el.roiBelowDetail, "Below", belowAsk);
-    el.roiPanel.hidden = !(okA || okB);
+    lastRoiAsks = { above: aboveAsk, below: belowAsk };
+    renderRoi();
   }
 
   function updateOdds(data) {
@@ -1085,6 +1147,12 @@
       el.rotateGate.addEventListener("click", () => {
         ensurePortraitLock(true);
       });
+    }
+    if (el.stakeSlider) {
+      syncStakeUi();
+      const onStake = () => setTradeStake(el.stakeSlider.value);
+      el.stakeSlider.addEventListener("input", onStake);
+      el.stakeSlider.addEventListener("change", onStake);
     }
     syncAlertsUi();
     const unlock = () => {

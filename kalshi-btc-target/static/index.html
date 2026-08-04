@@ -20,12 +20,12 @@
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
     <link rel="icon" href="/icons/icon-192.png" sizes="192x192" type="image/png" />
     <title>Kalshi BTC · Above or Below</title>
-    <link rel="stylesheet" href="/styles.css?v=2.5" />
+    <link rel="stylesheet" href="/styles.css?v=2.6" />
     <script
       src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"
       defer
     ></script>
-    <script src="/app.js?v=2.5" defer></script>
+    <script src="/app.js?v=2.6" defer></script>
   </head>
   <body class="portrait-app">
     <div id="rotate-gate" class="rotate-gate" hidden>
@@ -135,24 +135,44 @@
         </div>
         <div id="roi-panel" class="roi-panel" hidden>
           <div class="roi-heading">
-            <span>If you put in $100</span>
-            <span class="roi-hint">Buy now · Kalshi taker fee est.</span>
+            <span>Trade size</span>
+            <span id="stake-value" class="stake-value">$50</span>
           </div>
+          <label class="stake-slider-wrap" for="stake-slider">
+            <input
+              id="stake-slider"
+              class="stake-slider"
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value="50"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow="50"
+              aria-label="Trade size in dollars"
+            />
+            <div class="stake-ends">
+              <span>$0</span>
+              <span>$100</span>
+            </div>
+          </label>
           <div class="roi-grid">
             <div class="roi-card above">
-              <div class="roi-side">Above wins</div>
+              <div class="roi-side">Buy Above</div>
+              <div id="roi-above-price" class="roi-price">—</div>
               <div id="roi-above-summary" class="roi-summary">—</div>
               <div id="roi-above-detail" class="roi-detail">—</div>
             </div>
             <div class="roi-card below">
-              <div class="roi-side">Below wins</div>
+              <div class="roi-side">Buy Below</div>
+              <div id="roi-below-price" class="roi-price">—</div>
               <div id="roi-below-summary" class="roi-summary">—</div>
               <div id="roi-below-detail" class="roi-detail">—</div>
             </div>
           </div>
-          <p id="roi-note" class="roi-note">
-            Pays $1 per contract if correct, $0 if wrong. Fees use Kalshi’s
-            formula · round_up(0.07 × contracts × price × (1 − price)).
+          <p class="roi-note">
+            Est. Kalshi taker fee included. Win pays $1/contract · lose = $0.
           </p>
         </div>
         <p id="edge-line" class="edge-line" hidden></p>

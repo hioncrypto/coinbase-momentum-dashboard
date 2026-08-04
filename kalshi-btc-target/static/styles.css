@@ -388,7 +388,7 @@ h1 {
   justify-content: space-between;
   gap: 8px;
   align-items: baseline;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.07em;
@@ -396,10 +396,74 @@ h1 {
   font-weight: 600;
 }
 
-.roi-hint {
+.stake-value {
+  font-size: 1.15rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: var(--fg);
   text-transform: none;
-  letter-spacing: 0;
-  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.stake-slider-wrap {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.stake-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 28px;
+  background: transparent;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.stake-slider:focus {
+  outline: none;
+}
+
+.stake-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #163526, #1ac96b);
+}
+
+.stake-slider::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #163526, #1ac96b);
+}
+
+.stake-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -8px;
+  border-radius: 50%;
+  background: #e7f6ee;
+  border: 2px solid #1ac96b;
+  box-shadow: 0 0 0 3px rgba(26, 201, 107, 0.2);
+}
+
+.stake-slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #e7f6ee;
+  border: 2px solid #1ac96b;
+  box-shadow: 0 0 0 3px rgba(26, 201, 107, 0.2);
+}
+
+.stake-ends {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 2px;
+  font-size: 0.68rem;
+  color: var(--muted);
 }
 
 .roi-grid {
@@ -431,12 +495,20 @@ h1 {
   font-weight: 600;
 }
 
+.roi-price {
+  margin-top: 2px;
+  font-size: 0.78rem;
+  color: #cfe6d9;
+  font-variant-numeric: tabular-nums;
+}
+
 .roi-summary {
-  margin-top: 4px;
-  font-size: 1.05rem;
+  margin-top: 6px;
+  font-size: 1rem;
   font-weight: 750;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
+  line-height: 1.2;
 }
 
 .roi-card.above .roi-summary {
@@ -449,7 +521,7 @@ h1 {
 
 .roi-detail {
   margin-top: 6px;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   line-height: 1.4;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
