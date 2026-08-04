@@ -1,20 +1,26 @@
 # Draw Kalshi 15m TARGET on TradingView — Android
 
 TradingView’s **Play Store app cannot** run extensions or custom drawings from Kalshi.  
-To get an auto horizontal **TARGET** line on TradingView on Android, use the **TradingView website** inside a browser that can run a userscript/extension.
+To get an auto horizontal **TARGET** line on TradingView on Android, use the **TradingView website** inside Firefox + Tampermonkey.
 
-## Recommended: Firefox + Tampermonkey (Android)
+## Links (no GitHub)
 
-1. Install **Firefox** from the Play Store  
-2. In Firefox, install **Tampermonkey**  
-   - Menu → Add-ons → find Tampermonkey (or open the Firefox add-ons site)  
-3. Open this userscript file from the repo and install it in Tampermonkey:  
-   - `tradingview-kalshi-target/kalshi-tv-target.user.js`  
-   - Or after you push/host it, open the raw file URL → Tampermonkey will prompt **Install**  
-4. In **Firefox** (not the TradingView app), go to:  
-   - https://www.tradingview.com/  
-5. Open a **BTCUSD** chart  
-6. You should see a dashed green **TARGET** line at Kalshi’s live `KXBTC15M` Target Price  
+1. [Firefox for Android (Google Play)](https://play.google.com/store/apps/details?id=org.mozilla.firefox)
+2. [Tampermonkey for Firefox](https://addons.mozilla.org/firefox/addon/tampermonkey/)
+3. Install userscript from your running app server:  
+   `http://YOUR-PHONE-REACHABLE-HOST:8765/kalshi-tv-target.user.js`  
+   (same file as `tradingview-kalshi-target/kalshi-tv-target.user.js`)
+4. [TradingView BTCUSD chart](https://www.tradingview.com/chart/?symbol=BTCUSD)
+5. Install steps page on the app server:  
+   `http://YOUR-PHONE-REACHABLE-HOST:8765/android-tradingview.html`
+
+## Setup
+
+```bash
+python3 kalshi-btc-target/server.py
+```
+
+On your phone (same Wi‑Fi / deployed host), open the install page above and tap the buttons in order.
 
 The script:
 - Pulls Kalshi’s **15-minute** target automatically  
@@ -23,21 +29,21 @@ The script:
 
 ### Optional proxy
 
-If direct Kalshi calls fail on your network, run `kalshi-btc-target/server.py`, deploy it, then set `PROXY_BASE` at the top of the userscript to that origin (e.g. `https://your-server`).
+If direct Kalshi calls fail, set `PROXY_BASE` at the top of the userscript to your server origin (the same host running `kalshi-btc-target`).
 
 ## Alternative: Kiwi Browser + Chrome extension
 
-1. Install **Kiwi Browser** (supports Chrome extensions on Android)  
-2. Load the unpacked extension folder `tradingview-kalshi-target/` (Kiwi developer mode), or pack/install the extension  
-3. Open https://www.tradingview.com/ → BTCUSD  
+1. Install Kiwi Browser  
+2. Load the unpacked extension folder `tradingview-kalshi-target/`  
+3. Open [TradingView](https://www.tradingview.com/) → BTCUSD  
 
 ## What will not work
 
 | Approach | Android TradingView app |
 |---|---|
 | Chrome extension | No |
-| Pine Script auto-from-Kalshi | No (Pine can’t call Kalshi) |
-| This userscript **inside the TV app** | No |
+| Pine Script auto-from-Kalshi | No |
+| Userscript inside the TV app | No |
 
 | Approach | TradingView **website** on Android browser |
 |---|---|
@@ -46,4 +52,4 @@ If direct Kalshi calls fail on your network, run `kalshi-btc-target/server.py`, 
 
 ## Standalone chart (not TradingView UI)
 
-If you only need the line on a BTC chart (not TradingView’s UI), use `kalshi-btc-target/` — Add to Home Screen in Chrome.
+If you only need the line on a BTC chart (not TradingView’s UI), open the PWA root: `http://YOUR-HOST:8765/`
