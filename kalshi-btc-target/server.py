@@ -55,15 +55,97 @@ COINBASE_CANDLES = "https://api.exchange.coinbase.com/products/BTC-USD/candles"
 COINBASE_TICKER = "https://api.exchange.coinbase.com/products/BTC-USD/ticker"
 KALSHI_MARKETS = "https://api.elections.kalshi.com/trade-api/v2/markets"
 
-UA = "kalshi-btc-target/1.3 (+android-pwa)"
+UA = "kalshi-btc-target/1.4 (+android-pwa)"
 
 _cache_lock = threading.Lock()
 _target_cache: dict = {}  # key -> {at, payload}
 _candles_cache: dict = {"at": 0.0, "key": None, "payload": None}
 _spot_cache: dict = {"at": 0.0, "payload": None}
-TARGET_TTL = 3.0
+TARGET_TTL = 2.0
 CANDLES_TTL = 8.0
 SPOT_TTL = 1.5
+
+
+def _parse_dollars(value) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def market_odds(market: dict) -> dict:
+    """Kalshi Yes/No % from last trade or mid of bid/ask (dollars fields)."""
+    last = _parse_dollars(market.get("last_price_dollars"))
+    yes_bid = _parse_dollars(market.get("yes_bid_dollars"))
+    yes_ask = _parse_dollars(market.get("yes_ask_dollars"))
+    no_bid = _parse_dollars(market.get("no_bid_dollars"))
+    no_ask = _parse_dollars(market.get("no_ask_dollars"))
+
+    yes = last
+    if yes is None and yes_bid is not None and yes_ask is not None:
+        yes = (yes_bid + yes_ask) / 2.0
+    elif yes is None and yes_ask is not None:
+        yes = yes_ask
+    elif yes is None and yes_bid is not None:
+        yes = yes_bid
+
+    if yes is None:
+        return {
+            "yes_pct": None,
+            "no_pct": None,
+            "yes_bid_pct": None,
+            "yes_ask_pct": None,
+            "last_pct": None,
+        }
+
+    yes = max(0.0, min(1.0, yes))
+    no = 1.0 - yes
+    return {
+        "yes_pct": round(yes * 100),
+        "no_pct": round(no * 100),
+        "yes_bid_pct": round(yes_bid * 100) if yes_bid is not None else None,
+        "yes_ask_pct": round(yes_ask * 100) if yes_ask is not None else None,
+        "last_pct": round(last * 100) if last is not None else None,
+        "no_bid_pct": round(no_bid * 100) if no_bid is not None else None,
+        "no_ask_pct": round(no_ask * 100) if no_ask is not None else None,
+    }
+
+
+def parse_close_ms(close_time) -> float | None:
+    if not close_time:
+        return None
+    try:
+        if isinstance(close_time, (int, float)):
+            return float(close_time) * (1000 if close_time < 1e12 else 1)
+        dt = datetime.fromisoformat(str(close_time).replace("Z", "+00:00"))
+        return dt.timestamp() * 1000.0
+    except Exception:
+        return None
+
+
+def pick_current_market(markets: list) -> dict | None:
+    """Prefer the open market whose close is soonest but still in the future."""
+    now_ms = time.time() * 1000.0
+    openish = [
+        m
+        for m in markets
+        if m.get("status") in ("active", "open", "initialized")
+    ] or list(markets)
+    future = []
+    for m in openish:
+        close_ms = parse_close_ms(m.get("close_time"))
+        if close_ms is None:
+            continue
+        if close_ms > now_ms - 5_000:  # allow tiny clock skew
+            future.append((close_ms, m))
+    if future:
+        future.sort(key=lambda x: x[0])
+        # Prefer a market that already has a Price to beat when possible.
+        with_target = [pair for pair in future if parse_target(pair[1]) is not None]
+        return (with_target or future)[0][1]
+    return openish[0] if openish else None
 
 
 def http_get_json(url: str, timeout: float = 20.0):
@@ -105,7 +187,7 @@ def format_et(ts_iso_or_unix) -> str | None:
 
 def fetch_kalshi_series_target(series: str) -> dict | None:
     url = (
-        f"{KALSHI_MARKETS}?limit=5&status=open&series_ticker="
+        f"{KALSHI_MARKETS}?limit=20&status=open&series_ticker="
         + urllib.parse.quote(series)
     )
     try:
@@ -113,23 +195,14 @@ def fetch_kalshi_series_target(series: str) -> dict | None:
     except Exception:
         return None
     markets = data.get("markets") or []
-    market = next(
-        (
-            m
-            for m in markets
-            if m.get("status") in ("active", "open") and parse_target(m) is not None
-        ),
-        None,
-    )
-    if market is None:
-        market = next(
-            (m for m in markets if m.get("status") in ("active", "open")),
-            markets[0] if markets else None,
-        )
+    market = pick_current_market(markets)
     if not market:
         return None
     target = parse_target(market)
     close_et = format_et(market.get("close_time"))
+    odds = market_odds(market)
+    close_ms = parse_close_ms(market.get("close_time"))
+    stale_previous = bool(close_ms is not None and close_ms <= time.time() * 1000.0)
     return {
         "ok": True,
         "source": "kalshi",
@@ -142,7 +215,14 @@ def fetch_kalshi_series_target(series: str) -> dict | None:
         "close_time": market.get("close_time"),
         "close_et": close_et,
         "subtitle": market.get("yes_sub_title"),
+        "title": market.get("title"),
         "label": f"Price to beat • {close_et}" if close_et else "Price to beat",
+        "yes_pct": odds["yes_pct"],
+        "no_pct": odds["no_pct"],
+        "yes_bid_pct": odds.get("yes_bid_pct"),
+        "yes_ask_pct": odds.get("yes_ask_pct"),
+        "last_pct": odds.get("last_pct"),
+        "stale_previous": stale_previous,
         "error": None
         if target is not None
         else "Price to beat TBD (waiting for window open)",
@@ -222,14 +302,17 @@ def fetch_target_payload(tf: str = "15m") -> dict:
     with _cache_lock:
         cached = _target_cache.get(tf)
         if cached:
+            payload = cached["payload"] or {}
+            close_ms = parse_close_ms(payload.get("close_time"))
+            expired = close_ms is not None and close_ms <= now * 1000.0
             age = now - cached["at"]
             ttl = (
-                TARGET_TTL
-                if cached["payload"].get("price_to_beat") is not None
-                else 1.0
+                0.4
+                if expired or payload.get("price_to_beat") is None
+                else TARGET_TTL
             )
-            if age < ttl:
-                return cached["payload"]
+            if not expired and age < ttl:
+                return payload
 
     payload = None
     # Prefer a live Kalshi series for this TF when it exists.
@@ -242,10 +325,16 @@ def fetch_target_payload(tf: str = "15m") -> dict:
         if payload and payload.get("price_to_beat") is not None:
             payload["timeframe"] = tf
             break
+        # Keep TBD kalshi payload briefly so client can roll / chime on ticker.
+        if payload and tf == "15m":
+            payload["timeframe"] = tf
+            break
         payload = None
 
     if payload is None:
         payload = fetch_window_target(tf, cfg)
+        payload["yes_pct"] = None
+        payload["no_pct"] = None
 
     with _cache_lock:
         _target_cache[tf] = {"at": time.time(), "payload": payload}
@@ -353,7 +442,7 @@ def fetch_candles(granularity: int = 60, limit: int = 300) -> dict:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "KalshiBtcTarget/1.3"
+    server_version = "KalshiBtcTarget/1.4"
 
     def log_message(self, fmt, *args):
         print(f"[kalshi-btc-target] {self.address_string()} {fmt % args}")
@@ -436,7 +525,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/health":
             self._send_json(
                 200,
-                {"ok": True, "service": "kalshi-btc-target", "version": "1.3"},
+                {"ok": True, "service": "kalshi-btc-target", "version": "1.4"},
             )
             return
 

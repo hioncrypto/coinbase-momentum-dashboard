@@ -1,8 +1,10 @@
 (() => {
-  const TARGET_POLL_MS = 5_000;
-  const CANDLE_POLL_MS = 15_000;
+  const TARGET_POLL_MS = 2_000;
+  const CANDLE_POLL_MS = 10_000;
   const SPOT_POLL_MS = 2_000;
-  const BOUNDARY_PAD_MS = 2_000;
+  const BOUNDARY_PAD_MS = 500;
+  const ROLLOVER_BURST_MS = 45_000;
+  const ROLLOVER_TICK_MS = 1_000;
   const TF_KEY = "kalshiChartTf";
   const CHIME_KEY = "kalshiChimeEnabled";
 
@@ -27,6 +29,9 @@
     clock: document.getElementById("clock"),
     chimeEnabled: document.getElementById("chime-enabled"),
     chimeTest: document.getElementById("chime-test"),
+    oddsRow: document.getElementById("odds-row"),
+    yesPct: document.getElementById("yes-pct"),
+    noPct: document.getElementById("no-pct"),
   };
 
   let chart = null;
@@ -38,10 +43,11 @@
   let lastFifteenTicker = null;
   let closeTimeIso = null;
   let boundaryTimer = null;
+  let rolloverTimer = null;
+  let rolloverUntil = 0;
   let fittedOnce = false;
   let prevSpot = null;
   let audioCtx = null;
-  let chimeReady = false;
   let currentTf = localStorage.getItem(TF_KEY) || "15m";
   if (!["1m", "5m", "15m"].includes(currentTf)) currentTf = "15m";
   let chimeOn = localStorage.getItem(CHIME_KEY);
@@ -66,7 +72,6 @@
     if (audioCtx.state === "suspended") {
       audioCtx.resume().catch(() => {});
     }
-    chimeReady = true;
     return audioCtx;
   }
 
@@ -75,7 +80,6 @@
     const ctx = ensureAudio();
     if (!ctx) return;
     const now = ctx.currentTime;
-    // Two-tone soft chime
     const tones = [
       { f: 880, t: 0.0, d: 0.18 },
       { f: 1174.7, t: 0.14, d: 0.28 },
@@ -103,22 +107,26 @@
   }
 
   function maybeChimeNewFifteenTarget(beat, ticker, source) {
-    // Fire only for the real Kalshi 15m target rollover.
     const isFifteen =
       source === "kalshi" || (ticker && String(ticker).includes("KXBTC15M"));
-    if (!isFifteen || beat == null || !Number.isFinite(beat)) return;
+    if (!isFifteen) return;
 
-    const changed =
+    const tickerChanged =
+      lastFifteenTicker && ticker && lastFifteenTicker !== ticker;
+    const beatReady = beat != null && Number.isFinite(beat);
+    const beatChanged =
+      beatReady &&
       lastFifteenTarget != null &&
-      (Math.abs(lastFifteenTarget - beat) > 0.005 ||
-        (lastFifteenTicker && ticker && lastFifteenTicker !== ticker));
+      Math.abs(lastFifteenTarget - beat) > 0.005;
 
-    if (changed) {
+    // Ring when the 15m contract rolls or Price to beat changes.
+    if (tickerChanged || beatChanged) {
       playChime();
       setStatus("ok", "New 15m target · chime");
     }
-    lastFifteenTarget = beat;
+
     if (ticker) lastFifteenTicker = ticker;
+    if (beatReady) lastFifteenTarget = beat;
   }
 
   function setStatus(state, text) {
@@ -146,6 +154,21 @@
     } catch {
       return closeIso;
     }
+  }
+
+  function updateOdds(data) {
+    if (!el.oddsRow || !el.yesPct || !el.noPct) return;
+    const yes = data && data.yes_pct;
+    const no = data && data.no_pct;
+    if (yes == null || no == null || !Number.isFinite(yes) || !Number.isFinite(no)) {
+      el.oddsRow.hidden = true;
+      el.yesPct.textContent = "—";
+      el.noPct.textContent = "—";
+      return;
+    }
+    el.oddsRow.hidden = false;
+    el.yesPct.textContent = `${Math.round(yes)}%`;
+    el.noPct.textContent = `${Math.round(no)}%`;
   }
 
   function updateSpot(lastClose) {
@@ -194,6 +217,7 @@
       el.countdown.textContent = "0:00";
       el.countdown.classList.add("urgent");
       if (el.countdownMeta) el.countdownMeta.textContent = "Window rolling…";
+      startRolloverBurst();
       return;
     }
     const totalSec = Math.floor(ms / 1000);
@@ -205,6 +229,36 @@
       el.countdownMeta.textContent =
         totalSec <= 60 ? "Under 1 minute left" : `Until ${currentTf} window ends`;
     }
+    // Speed up polling in the last 20s before close.
+    if (totalSec <= 20) startRolloverBurst();
+  }
+
+  function clearRolloverBurst() {
+    if (rolloverTimer) {
+      clearInterval(rolloverTimer);
+      rolloverTimer = null;
+    }
+    rolloverUntil = 0;
+  }
+
+  function startRolloverBurst() {
+    const until = Date.now() + ROLLOVER_BURST_MS;
+    if (rolloverUntil > Date.now() && until - rolloverUntil < 5_000) {
+      rolloverUntil = Math.max(rolloverUntil, until);
+      return;
+    }
+    rolloverUntil = until;
+    if (rolloverTimer) return;
+    const tick = () => {
+      if (Date.now() > rolloverUntil) {
+        clearRolloverBurst();
+        return;
+      }
+      refreshTarget({ forceCandles: true });
+      refreshSpot();
+    };
+    tick();
+    rolloverTimer = setInterval(tick, ROLLOVER_TICK_MS);
   }
 
   function scheduleBoundaryRefresh(closeIso) {
@@ -215,11 +269,9 @@
     if (!closeIso) return;
     const closeMs = Date.parse(closeIso);
     if (!Number.isFinite(closeMs)) return;
-    const wait = Math.max(3_000, closeMs + BOUNDARY_PAD_MS - Date.now());
+    const wait = Math.max(250, closeMs + BOUNDARY_PAD_MS - Date.now());
     boundaryTimer = setTimeout(() => {
-      refreshTarget();
-      refreshCandles();
-      refreshSpot();
+      startRolloverBurst();
     }, wait);
   }
 
@@ -290,21 +342,23 @@
       axisLabelVisible: true,
       title: title || "TARGET",
     };
-    // Always replace so stale lines never stack after candle refreshes.
     clearTargetLine();
     targetLine = series.createPriceLine(opts);
   }
 
-  async function refreshTarget() {
+  async function refreshTarget(opts = {}) {
+    const forceCandles = !!opts.forceCandles;
     try {
       const res = await fetch(
-        `/api/target?tf=${encodeURIComponent(currentTf)}`,
+        `/api/target?tf=${encodeURIComponent(currentTf)}&_=${Date.now()}`,
         { cache: "no-store" }
       );
       const data = await res.json();
       const beat = data.price_to_beat ?? data.target;
+      const prevClose = closeTimeIso;
       closeTimeIso = data.close_time || null;
       updateCountdown();
+      updateOdds(data);
       if (el.targetLabel) el.targetLabel.textContent = data.label || "Price to beat";
 
       if (!data.ok && beat == null) {
@@ -319,8 +373,15 @@
         el.targetValue.textContent = "TBD";
         el.targetMeta.textContent = data.error || `Waiting for ${currentTf} window`;
         applyTargetLine(null);
+        // Still track ticker changes during TBD so chime can fire.
+        if (currentTf === "15m") {
+          maybeChimeNewFifteenTarget(null, data.ticker, data.source);
+        }
+        startRolloverBurst();
       } else {
-        const rolled = lastTicker && data.ticker && lastTicker !== data.ticker;
+        const rolled =
+          (lastTicker && data.ticker && lastTicker !== data.ticker) ||
+          (prevClose && closeTimeIso && prevClose !== closeTimeIso);
         lastTicker = data.ticker;
         setStatus(
           "ok",
@@ -335,12 +396,23 @@
         const src = data.source === "kalshi" ? "Kalshi" : "Window";
         el.targetMeta.textContent = win ? `${src} · settles ${win}` : src;
         applyTargetLine(beat, "TARGET");
-        // Always watch the 15m Kalshi mark for chimes (poll 15m target too).
         if (currentTf === "15m") {
           maybeChimeNewFifteenTarget(beat, data.ticker, data.source);
         }
         if (el.spotValue && el.spotValue.dataset.last) {
           updateSpot(Number(el.spotValue.dataset.last));
+        }
+        if (rolled || forceCandles) {
+          refreshCandles();
+        }
+        // Stop burst once we have a fresh in-window target.
+        if (
+          rolled &&
+          !data.stale_previous &&
+          closeTimeIso &&
+          Date.parse(closeTimeIso) > Date.now() + 5_000
+        ) {
+          clearRolloverBurst();
         }
       }
       scheduleBoundaryRefresh(data.close_time);
@@ -352,7 +424,7 @@
 
   async function refreshSpot() {
     try {
-      const res = await fetch("/api/spot", { cache: "no-store" });
+      const res = await fetch(`/api/spot?_=${Date.now()}`, { cache: "no-store" });
       const data = await res.json();
       if (!data.ok || data.price == null) return;
       updateSpot(Number(data.price));
@@ -363,9 +435,10 @@
 
   async function refreshCandles() {
     try {
-      const res = await fetch(`/api/candles?tf=${encodeURIComponent(currentTf)}`, {
-        cache: "no-store",
-      });
+      const res = await fetch(
+        `/api/candles?tf=${encodeURIComponent(currentTf)}&_=${Date.now()}`,
+        { cache: "no-store" }
+      );
       const data = await res.json();
       if (!data.ok) {
         setStatus("warn", data.error || "Candles error");
@@ -374,7 +447,6 @@
       ensureChart();
       if (!series) return;
       const candles = data.candles || [];
-      // Remove TARGET line before resetting candles so old lines don't stack.
       clearTargetLine();
       series.setData([]);
       series.setData(candles);
@@ -382,8 +454,10 @@
       if (!el.spotValue?.dataset.last && candles.length) {
         updateSpot(candles[candles.length - 1].close);
       }
-      chart.timeScale().fitContent();
-      fittedOnce = true;
+      if (!fittedOnce) {
+        chart.timeScale().fitContent();
+        fittedOnce = true;
+      }
     } catch (err) {
       setStatus("warn", "Candle fetch failed");
     }
@@ -408,23 +482,27 @@
     lastTicker = null;
     lastTarget = null;
     closeTimeIso = null;
+    clearRolloverBurst();
     syncTfButtons();
     setTfLabel();
     setStatus("loading", `Loading ${currentTf}…`);
     if (el.countdownMeta) {
       el.countdownMeta.textContent = `Until ${currentTf} window ends`;
     }
+    if (currentTf !== "15m") updateOdds(null);
     Promise.all([refreshCandles(), refreshTarget(), refreshSpot()]);
   }
 
   async function pollFifteenChime() {
-    // Keep chime working even if user is viewing 1m/5m chart.
-    if (currentTf === "15m") return;
+    // Keep chime + odds working even if user is viewing 1m/5m chart.
     try {
-      const res = await fetch("/api/target?tf=15m", { cache: "no-store" });
+      const res = await fetch(`/api/target?tf=15m&_=${Date.now()}`, {
+        cache: "no-store",
+      });
       const data = await res.json();
       const beat = data.price_to_beat ?? data.target;
       maybeChimeNewFifteenTarget(beat, data.ticker, data.source);
+      if (currentTf !== "15m") updateOdds(data);
     } catch {
       // ignore
     }
@@ -446,6 +524,7 @@
         const btn = ev.target.closest(".tf-btn");
         if (!btn || !el.timeframe.contains(btn)) return;
         setTimeframe(btn.dataset.tf);
+        ensureAudio();
       });
     }
     if (el.chimeEnabled) {
@@ -454,6 +533,7 @@
         chimeOn = el.chimeEnabled.checked;
         localStorage.setItem(CHIME_KEY, chimeOn ? "1" : "0");
         ensureAudio();
+        if (chimeOn) playChime(true);
       });
     }
     if (el.chimeTest) {
@@ -462,14 +542,16 @@
         playChime(true);
       });
     }
-    // Unlock audio after first user gesture anywhere
-    const unlock = () => {
-      ensureAudio();
-      window.removeEventListener("pointerdown", unlock);
-      window.removeEventListener("keydown", unlock);
-    };
-    window.addEventListener("pointerdown", unlock, { once: true });
-    window.addEventListener("keydown", unlock, { once: true });
+    const unlock = () => ensureAudio();
+    window.addEventListener("pointerdown", unlock, { passive: true });
+    window.addEventListener("touchstart", unlock, { passive: true });
+    window.addEventListener("keydown", unlock);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        ensureAudio();
+        startRolloverBurst();
+      }
+    });
 
     setTfLabel();
     ensureChart();
