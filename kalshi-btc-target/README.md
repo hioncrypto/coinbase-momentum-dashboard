@@ -36,9 +36,10 @@ docker run --rm -p 8765:8765 beatline
 2. Menu → **Add to Home Screen**
 3. Launch the BeatLine icon
 
-## Hosting (stop trycloudflare from going stale)
+## Hosting (stop the link from expiring)
 
-Quick Cloudflare tunnels change hostnames and die. Use a real host:
+Cursor cloud agents + quick tunnels **go offline when the agent expires**.
+That is why BeatLine keeps dying. Fix it once:
 
 - **Render (free, recommended):** open  
   https://render.com/deploy?repo=https://github.com/hioncrypto/coinbase-momentum-dashboard  
@@ -49,7 +50,9 @@ GitHub Pages cannot run BeatLine’s Python backend.
 
 ### Temporary tunnel (dev only)
 
-`./tunnel_watchdog.sh` keeps a quick Cloudflare tunnel alive and writes the current URL to `/tmp/beatline-tunnel-url.txt`. Restarts still produce a **new hostname** — that's a limitation of free quick tunnels, which is why a real host is better.
+`./tunnel_watchdog.sh` keeps **https://beatline15m.loca.lt** (fixed subdomain)
+plus a Cloudflare fallback. The URL still dies when the host process dies —
+use Render for anything you care about.
 
 ## Demo account & trade history
 

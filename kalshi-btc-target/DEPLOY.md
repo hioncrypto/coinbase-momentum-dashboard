@@ -1,7 +1,8 @@
 # Deploy BeatLine (stable hosting)
 
-Temporary `*.trycloudflare.com` links die and change hostnames. That wipes
-browser-only data on your phone and breaks Add-to-Home-Screen. Use a real host.
+Temporary Cursor tunnels (`*.loca.lt`, `*.trycloudflare.com`) **die when the
+cloud agent expires**. That is why the link keeps dying. A real host is the
+only permanent fix.
 
 ## Option A — Render (recommended, free, ~2 minutes)
 
@@ -9,13 +10,17 @@ browser-only data on your phone and breaks Add-to-Home-Screen. Use a real host.
 
    **https://render.com/deploy?repo=https://github.com/hioncrypto/coinbase-momentum-dashboard**
 
-2. Create / sign in to Render → confirm the **beatline** web service (free).
-3. Wait for the first deploy. Your permanent URL looks like:
+2. If Render asks for a branch, pick the BeatLine branch
+   (`cursor/beatline-standalone-7903` or the latest BeatLine PR branch).
+3. Create / sign in to Render → confirm the **beatline** web service (free).
+4. Wait for the first deploy. Your permanent URL looks like:
 
    `https://beatline.onrender.com`
 
-4. On Android Chrome: open that URL → Add to Home Screen.
-5. After a few trades: ⋮ Options → **Export backup** (safety copy of P/L).
+5. On Android Chrome: open that URL → Add to Home Screen.
+6. ⋮ Options → **Import backup** if you have an export from the old tunnel,
+   or wait for the server to restore your synced account.
+7. After a few trades: ⋮ Options → **Export backup** (safety copy of P/L).
 
 ### Notes
 
@@ -37,6 +42,9 @@ fly deploy
 
 Volume mount `/app/data` stores demo balance + trade history on the server.
 
+Optional: add a GitHub Actions secret `FLY_API_TOKEN` so
+`.github/workflows/beatline-fly.yml` can redeploy on push.
+
 ## Option C — Any VPS / Docker
 
 ```bash
@@ -47,6 +55,15 @@ docker run -d --restart unless-stopped -p 8765:8765 \
 ```
 
 Put a reverse proxy or a **named** Cloudflare Tunnel (not quick trycloudflare) in front.
+
+## Interim (dev only) — fixed localtunnel name
+
+While a Cursor agent is running, the watchdog keeps:
+
+`https://beatline15m.loca.lt`
+
+Same hostname across agent restarts **when** someone brings the server back up.
+It still goes offline whenever the agent VM dies. Prefer Render.
 
 ## Why not GitHub Pages?
 

@@ -622,6 +622,76 @@ h1 {
   font-size: 0.8rem;
 }
 
+.ephemeral-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  padding-top: max(10px, env(safe-area-inset-top));
+  background: linear-gradient(180deg, #3a2208 0%, #24160a 100%);
+  border-bottom: 1px solid rgba(255, 176, 64, 0.45);
+  color: #ffe7c2;
+  z-index: 40;
+}
+
+.ephemeral-banner-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.ephemeral-banner-text strong {
+  display: block;
+  font-size: 0.86rem;
+  color: #ffd089;
+}
+
+.ephemeral-banner-text span {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: rgba(255, 231, 194, 0.85);
+}
+
+.ephemeral-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.ephemeral-deploy,
+.ephemeral-export,
+.ephemeral-dismiss {
+  appearance: none;
+  border: 0;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 650;
+  cursor: pointer;
+  text-decoration: none;
+  padding: 7px 10px;
+  line-height: 1;
+}
+
+.ephemeral-deploy {
+  background: #ffb040;
+  color: #1a1005;
+}
+
+.ephemeral-export {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffe7c2;
+  border: 1px solid rgba(255, 176, 64, 0.35);
+}
+
+.ephemeral-dismiss {
+  background: transparent;
+  color: rgba(255, 231, 194, 0.7);
+  padding: 7px 8px;
+}
+
 .options-deploy {
   display: block;
   margin: 14px 0 4px;

@@ -1,7 +1,10 @@
 /* BeatLine service worker — background 15m target + clear-edge alerts */
-const SW_VERSION = "2.9-link";
+const SW_VERSION = "3.0-link";
 const TARGET_URL = "/api/target?tf=15m";
 const STATE_KEY = "kalshiFifteenState";
+const STABLE_APP_URL = "https://beatline15m.loca.lt";
+const RENDER_DEPLOY_URL =
+  "https://render.com/deploy?repo=https://github.com/hioncrypto/coinbase-momentum-dashboard";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -28,7 +31,16 @@ self.addEventListener("fetch", (event) => {
     fetch(req).catch(() => {
       if (req.mode === "navigate") {
         return new Response(
-          "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><body style='font-family:sans-serif;background:#0b1210;color:#e7f6ee;padding:24px'><h1>Link expired</h1><p>This home-screen shortcut points at an old Cloudflare tunnel.</p><p>Open the latest app URL in Chrome, then Add to Home screen again.</p></body>",
+          `<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>
+<body style='font-family:system-ui,sans-serif;background:#0b1210;color:#e7f6ee;padding:24px;line-height:1.45'>
+<h1 style='margin:0 0 12px;font-size:1.4rem'>BeatLine link expired</h1>
+<p>This home-screen shortcut points at a dead tunnel (Cursor agent / quick tunnel went offline).</p>
+<p><strong>Same temp link (when an agent is running):</strong><br>
+<a style='color:#7dffb3' href='${STABLE_APP_URL}'>${STABLE_APP_URL}</a></p>
+<p>On open: tap Continue if loca.lt asks, then ⋮ → <strong>Import backup</strong> if balance looks wrong.</p>
+<p><strong>Permanent fix (stops this forever):</strong><br>
+<a style='color:#ffd089' href='${RENDER_DEPLOY_URL}'>Deploy free on Render</a> → Add that new URL to Home Screen.</p>
+</body>`,
           { headers: { "Content-Type": "text/html; charset=utf-8" } }
         );
       }

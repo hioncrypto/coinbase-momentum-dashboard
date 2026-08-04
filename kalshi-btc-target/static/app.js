@@ -12,9 +12,10 @@
   const TRADE_HISTORY_KEY = "beatlineTradeHistory";
   const HISTORY_LIMIT = 40;
   const DEMO_DEFAULT_START = 1000;
-  const APP_VERSION = "7.9";
+  const APP_VERSION = "8.0";
   const TUTORIAL_KEY = "beatlineTutorialSeen";
   const OPEN_PL_COLLAPSE_KEY = "beatlineOpenPlCollapsed";
+  const EPHEMERAL_DISMISS_KEY = "beatlineEphemeralDismissedAt";
 
   const TUTORIAL_STEPS = [
     {
@@ -135,6 +136,9 @@
     accountExport: document.getElementById("account-export"),
     accountImport: document.getElementById("account-import"),
     accountImportFile: document.getElementById("account-import-file"),
+    ephemeralBanner: document.getElementById("ephemeral-banner"),
+    ephemeralExport: document.getElementById("ephemeral-export"),
+    ephemeralDismiss: document.getElementById("ephemeral-dismiss"),
     demoMark: document.getElementById("demo-mark"),
     demoMarkPl: document.getElementById("demo-mark-pl"),
     demoMarkMeta: document.getElementById("demo-mark-meta"),
@@ -348,6 +352,41 @@
     }
   }
 
+  function isEphemeralHost() {
+    const host = (location.hostname || "").toLowerCase();
+    return (
+      host.endsWith(".loca.lt") ||
+      host.endsWith(".trycloudflare.com") ||
+      host.endsWith(".lhr.life") ||
+      host.endsWith(".localhost.run")
+    );
+  }
+
+  function setupEphemeralBanner() {
+    if (!el.ephemeralBanner || !isEphemeralHost()) return;
+    try {
+      const dismissedAt = Number(localStorage.getItem(EPHEMERAL_DISMISS_KEY) || 0);
+      // Re-show every 6h so the permanent-host reminder stays visible.
+      if (dismissedAt && Date.now() - dismissedAt < 6 * 60 * 60 * 1000) return;
+    } catch {
+      // ignore
+    }
+    el.ephemeralBanner.hidden = false;
+    if (el.ephemeralExport) {
+      el.ephemeralExport.addEventListener("click", () => exportAccountBackup());
+    }
+    if (el.ephemeralDismiss) {
+      el.ephemeralDismiss.addEventListener("click", () => {
+        el.ephemeralBanner.hidden = true;
+        try {
+          localStorage.setItem(EPHEMERAL_DISMISS_KEY, String(Date.now()));
+        } catch {
+          // ignore
+        }
+      });
+    }
+  }
+
   async function hydrateDemoFromServer() {
     try {
       const res = await fetch("/api/demo-account", { cache: "no-store" });
@@ -358,6 +397,7 @@
         const localFresh = demoLooksFresh(demo);
         const remoteAt = Number(remote.updatedAt) || 0;
         const localAt = Number(demo.updatedAt) || 0;
+        // Empty local always loses to a server account with real history/P/L.
         const preferRemote =
           (localFresh && !remoteFresh) ||
           (!remoteFresh && remoteAt >= localAt) ||
@@ -1827,7 +1867,7 @@
   async function ensureServiceWorker() {
     if (!("serviceWorker" in navigator)) return null;
     try {
-      const reg = await navigator.serviceWorker.register("/sw.js?v=2.9", { scope: "/" });
+      const reg = await navigator.serviceWorker.register("/sw.js?v=3.0", { scope: "/" });
       await navigator.serviceWorker.ready;
       return reg;
     } catch (err) {
@@ -4128,6 +4168,7 @@
       }
     });
     // Target first so Price-to-beat line exists when candles paint.
+    setupEphemeralBanner();
     hydrateDemoFromServer().finally(() => {
       refreshTarget()
         .then(() => refreshCandles())

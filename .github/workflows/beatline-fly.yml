@@ -1,0 +1,32 @@
+# Redeploy BeatLine to Fly.io when FLY_API_TOKEN is set.
+# One-time setup:
+#   1. fly auth login && fly apps create … && fly volumes create … (see kalshi-btc-target/DEPLOY.md)
+#   2. GitHub → Settings → Secrets → Actions → add FLY_API_TOKEN
+# After that, pushes to BeatLine paths auto-deploy — no more dying Cursor tunnels.
+
+name: Deploy BeatLine (Fly)
+
+on:
+  push:
+    branches:
+      - main
+      - "cursor/beatline-**"
+    paths:
+      - "kalshi-btc-target/**"
+      - ".github/workflows/beatline-fly.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    if: ${{ secrets.FLY_API_TOKEN != '' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: kalshi-btc-target
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy --remote-only

@@ -22,17 +22,42 @@
     <link rel="apple-touch-icon" href="/icons/icon-192.png?v=2.6" />
     <link rel="icon" href="/icons/icon-192.png?v=2.6" sizes="192x192" type="image/png" />
     <title>BeatLine</title>
-    <link rel="stylesheet" href="/styles.css?v=7.9" />
+    <link rel="stylesheet" href="/styles.css?v=8.0" />
     <script
       src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"
       defer
     ></script>
-    <script src="/app.js?v=7.9" defer></script>
+    <script src="/app.js?v=8.0" defer></script>
   </head>
   <body class="portrait-app">
     <div id="rotate-gate" class="rotate-gate" hidden>
       <strong>Portrait only</strong>
       <span>Keep the phone upright. Tap here to lock.</span>
+    </div>
+
+    <div id="ephemeral-banner" class="ephemeral-banner" hidden>
+      <div class="ephemeral-banner-text">
+        <strong>Temp link — will die again</strong>
+        <span
+          >This tunnel dies when the Cursor agent expires. Deploy once on Render
+          for a permanent URL, and Export backup now.</span
+        >
+      </div>
+      <div class="ephemeral-banner-actions">
+        <a
+          class="ephemeral-deploy"
+          href="https://render.com/deploy?repo=https://github.com/hioncrypto/coinbase-momentum-dashboard"
+          target="_blank"
+          rel="noopener noreferrer"
+          >Deploy free</a
+        >
+        <button type="button" id="ephemeral-export" class="ephemeral-export">
+          Export
+        </button>
+        <button type="button" id="ephemeral-dismiss" class="ephemeral-dismiss" aria-label="Dismiss">
+          ✕
+        </button>
+      </div>
     </div>
 
     <div class="app-shell">
@@ -343,8 +368,8 @@
         target="_blank"
         rel="noopener noreferrer"
       >
-        <strong>Get a stable host</strong>
-        <em>Deploy free on Render — stops trycloudflare from going stale</em>
+        <strong>Stop the link from expiring</strong>
+        <em>Deploy free on Render — permanent URL (not a Cursor tunnel)</em>
       </a>
 
       <label class="options-row toggle-row" for="demo-toggle">
