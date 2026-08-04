@@ -89,6 +89,7 @@
     dockBuyBest: document.getElementById("dock-buy-best"),
     dockAbovePct: document.getElementById("dock-above-pct"),
     dockBelowPct: document.getElementById("dock-below-pct"),
+    dockBestDetail: document.getElementById("dock-best-detail"),
     settleBanner: document.getElementById("settle-banner"),
     settleTitle: document.getElementById("settle-title"),
     settleAvg: document.getElementById("settle-avg"),
@@ -1433,6 +1434,15 @@
     if (below) below.classList.toggle("is-best", side === "below");
   }
 
+  function setDockBestDetail(text, side) {
+    if (el.dockBestDetail) el.dockBestDetail.textContent = text || "—";
+    if (el.dockBuyBest) {
+      el.dockBuyBest.classList.toggle("is-above", side === "above");
+      el.dockBuyBest.classList.toggle("is-below", side === "below");
+      el.dockBuyBest.classList.toggle("is-none", !side);
+    }
+  }
+
   function refreshBestSide() {
     if (!el.bestSide) return;
     const spotRaw = el.spotValue && el.spotValue.dataset.last;
@@ -1452,6 +1462,7 @@
     ) {
       el.bestSide.hidden = true;
       setRoiCardBest(null);
+      setDockBestDetail("—", null);
       lastBestSideKey = null;
       lastBestPick = null;
       return;
@@ -1466,6 +1477,7 @@
     if (!scored.length) {
       el.bestSide.hidden = true;
       setRoiCardBest(null);
+      setDockBestDetail("—", null);
       lastBestPick = null;
       return;
     }
@@ -1493,12 +1505,14 @@
       }
       if (el.bestSideMeta) {
         const lead = spot - beat;
+        const mAbove = modelP != null ? Math.round(modelP * 100) : null;
         el.bestSideMeta.textContent =
-          `Live ${lead >= 0 ? "+" : ""}$${lead.toFixed(0)} · ${Math.floor(secs / 60)}:${String(
-            secs % 60
-          ).padStart(2, "0")} left · wait for better ask`;
+          `Live ${lead >= 0 ? "+" : ""}$${lead.toFixed(0)} · model Above ${
+            mAbove != null ? mAbove + "%" : "—"
+          } · ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")} left · wait for better ask`;
       }
       setRoiCardBest(null);
+      setDockBestDetail("Wait", null);
       lastBestPick = null;
       const noneKey = "none";
       if (lastBestSideKey !== noneKey) {
@@ -1528,13 +1542,17 @@
       const conf = Math.round(best.pWin * 100);
       const m = Math.floor(secs / 60);
       const s = secs % 60;
+      const lead = spot - beat;
       el.bestSideMeta.textContent =
-        `${conf}% model · ask ${best.askCents}¢ · ${roiTxt} · ${m}:${String(s).padStart(
-          2,
-          "0"
-        )} left`;
+        `${conf}% model · ask ${best.askCents}¢ · ${roiTxt} · live ${
+          lead >= 0 ? "+" : ""
+        }$${lead.toFixed(0)} · ${m}:${String(s).padStart(2, "0")} left`;
     }
     setRoiCardBest(best.side);
+    setDockBestDetail(
+      `${best.side === "above" ? "Above" : "Below"} ${best.askCents}¢`,
+      best.side
+    );
 
     const key = clear
       ? `${best.side}:${tradeStake}:${best.contracts}`

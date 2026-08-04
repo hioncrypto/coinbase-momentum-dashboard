@@ -22,12 +22,12 @@
     <link rel="apple-touch-icon" href="/icons/icon-192.png?v=2.6" />
     <link rel="icon" href="/icons/icon-192.png?v=2.6" sizes="192x192" type="image/png" />
     <title>BeatLine</title>
-    <link rel="stylesheet" href="/styles.css?v=5.1" />
+    <link rel="stylesheet" href="/styles.css?v=5.2" />
     <script
       src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"
       defer
     ></script>
-    <script src="/app.js?v=5.1" defer></script>
+    <script src="/app.js?v=5.2" defer></script>
   </head>
   <body class="portrait-app">
     <div id="rotate-gate" class="rotate-gate" hidden>
@@ -222,13 +222,13 @@
             <span id="no-book" class="odd-book">—</span>
           </div>
         </div>
+        <div id="best-side" class="best-side" hidden aria-live="polite">
+          <div class="best-side-kicker">Best side</div>
+          <div id="best-side-label" class="best-side-label">—</div>
+          <div id="best-side-amount" class="best-side-amount">—</div>
+          <div id="best-side-meta" class="best-side-meta">—</div>
+        </div>
         <div id="roi-panel" class="roi-panel" hidden>
-          <div id="best-side" class="best-side" hidden aria-live="polite">
-            <div class="best-side-kicker">Best side</div>
-            <div id="best-side-label" class="best-side-label">—</div>
-            <div id="best-side-amount" class="best-side-amount">—</div>
-            <div id="best-side-meta" class="best-side-meta">—</div>
-          </div>
           <div class="roi-heading">
             <span>Trade size</span>
             <span id="stake-value" class="stake-value">$50</span>
@@ -278,7 +278,8 @@
         <span id="dock-above-pct" class="dock-pct">—</span>
       </button>
       <button type="button" id="dock-buy-best" class="dock-btn best" title="Buy Best Side">
-        Best
+        <span class="dock-label">Best</span>
+        <span id="dock-best-detail" class="dock-pct">—</span>
       </button>
       <button type="button" id="dock-buy-below" class="dock-btn below">
         <span class="dock-label">Buy Below</span>
