@@ -28,11 +28,11 @@
     },
     {
       title: "Set size, then buy",
-      body: "Use the Trade size slider ($0–$100). Then tap Buy Above, Best, or Buy Below at the bottom. Enter dollars if needed and slide to confirm — release early to cancel.",
+      body: "Use the Trade size slider ($0–$100). Then tap Buy Above, Best, or Buy Below at the bottom. Enter dollars if needed and slide to confirm — release early to cancel. After a fill, tap the same side again to add size (averages into the open position).",
     },
     {
       title: "Rolling P/L",
-      body: "After a buy, an Open trade card tracks live P/L as price and odds move: entry, bid, fees, vs beat, time left, and hold outcomes. Close at bid anytime, or hold to window settle.",
+      body: "After a buy, an Open trade card tracks live P/L as price and odds move: entry, bid, fees, vs beat, time left, and hold outcomes. Add more on the same side anytime. Close at bid anytime, or hold to window settle.",
     },
     {
       title: "Demo & alerts",
@@ -510,7 +510,8 @@
     applyBreakevenLines(pos.beat, pos.entrySpot, beSpot, pos.side);
 
     if (el.openPlSide) {
-      el.openPlSide.textContent = `Buy ${side} · ${pos.contracts} cts @ ${pos.askCents}¢`;
+      const fills = pos.fills > 1 ? ` · ${pos.fills} fills` : "";
+      el.openPlSide.textContent = `Buy ${side} · ${pos.contracts} cts @ avg ${pos.askCents}¢${fills}`;
       el.openPlSide.classList.toggle("is-up", pos.side === "above");
       el.openPlSide.classList.toggle("is-down", pos.side === "below");
     }
@@ -612,9 +613,7 @@
       if (!pos) {
         el.demoPosition.textContent = "Flat";
       } else {
-        const side = pos.side === "above" ? "Above" : "Below";
-        el.demoPosition.textContent =
-          `Buy ${side} · ${pos.contracts} cts @ ${pos.askCents}¢ · paid ${money(pos.total)}`;
+        el.demoPosition.textContent = formatPositionSummary(pos);
       }
     }
 
@@ -656,10 +655,15 @@
         el.demoLast.classList.toggle("is-loss", !r.won);
       }
     }
-    const busy = !!demo.position;
-    if (el.demoBuyBest) el.demoBuyBest.disabled = busy;
-    if (el.demoBuyAbove) el.demoBuyAbove.disabled = !demo.on || busy;
-    if (el.demoBuyBelow) el.demoBuyBelow.disabled = !demo.on || busy;
+    const busyAbove = !!demo.position && !canBuySide("above");
+    const busyBelow = !!demo.position && !canBuySide("below");
+    if (el.demoBuyBest) {
+      const bestSide = lastBestPick && lastBestPick.side;
+      el.demoBuyBest.disabled =
+        !bestSide || (demo.position ? !canBuySide(bestSide) : false);
+    }
+    if (el.demoBuyAbove) el.demoBuyAbove.disabled = !demo.on || busyAbove;
+    if (el.demoBuyBelow) el.demoBuyBelow.disabled = !demo.on || busyBelow;
     if (el.demoClose) el.demoClose.disabled = !pos || !mark || mark.bidCents == null;
     syncBuyDock();
   }
@@ -718,10 +722,38 @@
     setStatus("ok", `Demo reset · ${money(start)}`);
   }
 
+  /** Same-window same-side adds are allowed; opposite side / other ticker are not. */
+  function canBuySide(side) {
+    const pos = demo.position;
+    if (!pos) return true;
+    if (side !== "above" && side !== "below") return false;
+    if (pos.ticker && lastTicker && pos.ticker !== lastTicker) return false;
+    return pos.side === side;
+  }
+
+  function formatPositionSummary(pos) {
+    if (!pos) return "Flat";
+    const side = pos.side === "above" ? "Above" : "Below";
+    const fills = pos.fills > 1 ? ` · ${pos.fills} fills` : "";
+    return `Buy ${side} · ${pos.contracts} cts @ avg ${pos.askCents}¢ · paid ${money(
+      pos.total
+    )}${fills}`;
+  }
+
   function demoBuy(side, amountUsd) {
-    if (demo.position) {
-      setStatus("warn", "Already in an open position");
-      return false;
+    const existing = demo.position;
+    if (existing) {
+      if (existing.ticker && lastTicker && existing.ticker !== lastTicker) {
+        setStatus("warn", "Open position is on the previous window — close or wait for settle");
+        return false;
+      }
+      if (existing.side !== side) {
+        setStatus(
+          "warn",
+          `Already long ${existing.side === "above" ? "Above" : "Below"} — close first to flip`
+        );
+        return false;
+      }
     }
     const stake = amountUsd != null ? Number(amountUsd) : tradeStake;
     if (!(stake > 0)) {
@@ -738,7 +770,9 @@
       setStatus("warn", "Need a live ask");
       return false;
     }
-    const accounted = !!demo.on;
+    const accounted = existing
+      ? existing.accounted !== false && demo.on
+      : !!demo.on;
     if (accounted && sized.total > demo.balance + 1e-9) {
       setStatus("warn", "Not enough demo balance");
       return false;
@@ -746,32 +780,82 @@
     if (accounted) {
       demo.balance = Math.round((demo.balance - sized.total) * 100) / 100;
     }
-    demo.position = {
-      ticker: lastTicker,
-      side,
-      askCents: sized.askCents,
-      contracts: sized.contracts,
-      cost: sized.cost,
-      fee: sized.fee,
-      total: sized.total,
-      beat: lastTarget,
-      entrySpot: (() => {
-        const raw = el.spotValue && el.spotValue.dataset.last;
-        const n = raw != null ? Number(raw) : null;
-        return n != null && Number.isFinite(n) ? n : null;
-      })(),
-      openedAt: Date.now(),
-      accounted,
-    };
+    const spotRaw = el.spotValue && el.spotValue.dataset.last;
+    const spotN = spotRaw != null ? Number(spotRaw) : null;
+    const entrySpot =
+      spotN != null && Number.isFinite(spotN) ? spotN : null;
+
+    if (existing) {
+      const nextContracts = existing.contracts + sized.contracts;
+      const nextCost = Math.round((existing.cost + sized.cost) * 100) / 100;
+      const nextFee = Math.round((existing.fee + sized.fee) * 100) / 100;
+      const nextTotal = Math.round((existing.total + sized.total) * 100) / 100;
+      const avgAsk =
+        nextContracts > 0
+          ? Math.round(
+              (existing.askCents * existing.contracts +
+                sized.askCents * sized.contracts) /
+                nextContracts
+            )
+          : sized.askCents;
+      let nextEntry = existing.entrySpot;
+      if (entrySpot != null && Number.isFinite(entrySpot)) {
+        if (existing.entrySpot != null && Number.isFinite(existing.entrySpot)) {
+          nextEntry =
+            Math.round(
+              ((existing.entrySpot * existing.contracts +
+                entrySpot * sized.contracts) /
+                nextContracts) *
+                100
+            ) / 100;
+        } else {
+          nextEntry = entrySpot;
+        }
+      }
+      demo.position = {
+        ...existing,
+        askCents: avgAsk,
+        contracts: nextContracts,
+        cost: nextCost,
+        fee: nextFee,
+        total: nextTotal,
+        beat: lastTarget != null ? lastTarget : existing.beat,
+        entrySpot: nextEntry,
+        fills: (existing.fills || 1) + 1,
+        lastAddedAt: Date.now(),
+        accounted: existing.accounted !== false ? accounted : false,
+      };
+    } else {
+      demo.position = {
+        ticker: lastTicker,
+        side,
+        askCents: sized.askCents,
+        contracts: sized.contracts,
+        cost: sized.cost,
+        fee: sized.fee,
+        total: sized.total,
+        beat: lastTarget,
+        entrySpot,
+        openedAt: Date.now(),
+        fills: 1,
+        accounted,
+      };
+    }
     // Keep main trade-size slider in sync for Best Side sizing.
     if (stake <= 100) setTradeStake(Math.round(stake));
     saveDemoState();
     renderDemoUi();
+    const sideLabel = side === "above" ? "Above" : "Below";
+    const added = !!existing;
     setStatus(
       "ok",
       accounted
-        ? `Demo bought ${side === "above" ? "Above" : "Below"} · ${sized.contracts} cts`
-        : `Paper bought ${side === "above" ? "Above" : "Below"} · rolling P/L on`
+        ? `${added ? "Added to" : "Demo bought"} ${sideLabel} · ${sized.contracts} cts${
+            added ? ` · now ${demo.position.contracts}` : ""
+          }`
+        : `${added ? "Added to" : "Paper bought"} ${sideLabel} · ${sized.contracts} cts${
+            added ? ` · now ${demo.position.contracts}` : ""
+          }`
     );
     return true;
   }
@@ -800,13 +884,21 @@
     }
     if (el.buySheetMeta) {
       const askTxt = ask != null ? `${Math.round(ask)}¢ ask` : "ask —";
-      el.buySheetMeta.textContent =
-        `${side === "above" ? "Above" : "Below"} · ${askTxt} · live Kalshi book`;
+      const adding = !!(demo.position && demo.position.side === side);
+      el.buySheetMeta.textContent = adding
+        ? `Add ${side === "above" ? "Above" : "Below"} · ${askTxt} · now ${
+            demo.position.contracts
+          } cts @ avg ${demo.position.askCents}¢`
+        : `${side === "above" ? "Above" : "Below"} · ${askTxt} · live Kalshi book`;
     }
     if (el.buyPreview) {
       if (!sized || sized.empty) {
         el.buyPreview.textContent = "Enter an amount to preview contracts + fees";
       } else {
+        const adding = !!(demo.position && demo.position.side === side);
+        const afterCts = adding
+          ? demo.position.contracts + sized.contracts
+          : sized.contracts;
         el.buyPreview.textContent =
           `${sized.contracts} contracts · cost ${money(sized.cost)} + fee ${money(
             sized.fee
@@ -814,11 +906,18 @@
             sized.roiIfWin != null
               ? `${sized.roiIfWin >= 0 ? "+" : ""}${sized.roiIfWin.toFixed(0)}%`
               : "—"
-          })`;
+          })${adding ? ` · position → ${afterCts} cts` : ""}`;
       }
     }
     if (el.buySlideLabel && !buyConfirming) {
-      const label = side === "above" ? "Slide to buy Above" : "Slide to buy Below";
+      const adding = !!(demo.position && demo.position.side === side);
+      const label = adding
+        ? side === "above"
+          ? "Slide to add Above"
+          : "Slide to add Below"
+        : side === "above"
+          ? "Slide to buy Above"
+          : "Slide to buy Below";
       el.buySlideLabel.textContent = label;
     }
   }
@@ -858,11 +957,18 @@
   }
 
   function openBuySheet(side) {
-    if (demo.position) {
-      setStatus("warn", "Already in an open position");
+    if (side !== "above" && side !== "below") return;
+    if (demo.position && !canBuySide(side)) {
+      if (demo.position.side && demo.position.side !== side) {
+        setStatus(
+          "warn",
+          `Already long ${demo.position.side === "above" ? "Above" : "Below"} — close first to flip`
+        );
+      } else {
+        setStatus("warn", "Can't add on this window right now");
+      }
       return;
     }
-    if (side !== "above" && side !== "below") return;
     const ask = side === "above" ? lastRoiAsks.above : lastRoiAsks.below;
     if (ask == null || !(ask >= 1 && ask <= 99)) {
       setStatus("warn", "Need a live ask");
@@ -871,6 +977,7 @@
     closeOptions();
     buySheetSide = side;
     buySheetOpen = true;
+    const adding = !!demo.position;
     const cap = demo.on
       ? Math.max(1, Math.floor(demo.balance) || 50)
       : 100;
@@ -886,11 +993,23 @@
     }
     if (el.buyBackdrop) el.buyBackdrop.hidden = false;
     if (el.buySheetTitle) {
-      el.buySheetTitle.textContent = side === "above" ? "Buy Above" : "Buy Below";
+      el.buySheetTitle.textContent = adding
+        ? side === "above"
+          ? "Add to Above"
+          : "Add to Below"
+        : side === "above"
+          ? "Buy Above"
+          : "Buy Below";
     }
     const kicker = document.querySelector(".buy-sheet-kicker");
     if (kicker) {
-      kicker.textContent = demo.on ? "Demo order" : "Paper order · rolling P/L";
+      kicker.textContent = adding
+        ? demo.on
+          ? "Demo add · averages into open position"
+          : "Paper add · averages into open position"
+        : demo.on
+          ? "Demo order"
+          : "Paper order · rolling P/L";
     }
     resetBuySlide();
     requestAnimationFrame(() => {
@@ -924,7 +1043,10 @@
     if (buyConfirming || !buySheetSide) return;
     buyConfirming = true;
     if (el.buySlide) el.buySlide.classList.add("is-complete");
-    if (el.buySlideLabel) el.buySlideLabel.textContent = "Bought";
+    if (el.buySlideLabel) {
+      el.buySlideLabel.textContent =
+        demo.position && demo.position.side === buySheetSide ? "Added" : "Bought";
+    }
     setBuySlideProgress(1);
     const ok = demoBuy(buySheetSide, readBuyAmount());
     if (!ok) {
@@ -1788,7 +1910,9 @@
   }
 
   function syncBuyDock() {
-    const busy = !!demo.position;
+    const pos = demo.position;
+    const canAbove = canBuySide("above");
+    const canBelow = canBuySide("below");
     if (el.dockAbovePct) {
       el.dockAbovePct.textContent =
         lastRoiAsks.above != null ? `${Math.round(lastRoiAsks.above)}¢` : "—";
@@ -1797,9 +1921,31 @@
       el.dockBelowPct.textContent =
         lastRoiAsks.below != null ? `${Math.round(lastRoiAsks.below)}¢` : "—";
     }
-    if (el.dockBuyAbove) el.dockBuyAbove.disabled = busy;
-    if (el.dockBuyBelow) el.dockBuyBelow.disabled = busy;
-    if (el.dockBuyBest) el.dockBuyBest.disabled = busy;
+    if (el.dockBuyAbove) {
+      el.dockBuyAbove.disabled = !canAbove;
+      const label = el.dockBuyAbove.querySelector(".dock-label");
+      if (label) {
+        label.textContent =
+          pos && pos.side === "above" ? "Add Above" : "Buy Above";
+      }
+    }
+    if (el.dockBuyBelow) {
+      el.dockBuyBelow.disabled = !canBelow;
+      const label = el.dockBuyBelow.querySelector(".dock-label");
+      if (label) {
+        label.textContent =
+          pos && pos.side === "below" ? "Add Below" : "Buy Below";
+      }
+    }
+    if (el.dockBuyBest) {
+      const bestSide = lastBestPick && lastBestPick.side;
+      el.dockBuyBest.disabled = !bestSide || !canBuySide(bestSide);
+      const label = el.dockBuyBest.querySelector(".dock-label");
+      if (label) {
+        label.textContent =
+          pos && bestSide && pos.side === bestSide ? "Add Best" : "Best";
+      }
+    }
   }
 
   function setTradeStake(n) {
