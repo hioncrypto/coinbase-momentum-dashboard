@@ -1,5 +1,5 @@
 /* Kalshi BTC Target service worker — background 15m target alerts */
-const SW_VERSION = "1.7-chime";
+const SW_VERSION = "1.8-homescreen";
 const TARGET_URL = "/api/target?tf=15m";
 const STATE_KEY = "kalshiFifteenState";
 
@@ -16,6 +16,24 @@ self.addEventListener("activate", (event) => {
       await self.clients.claim();
       startPollLoop();
     })()
+  );
+});
+
+// Never break page loads — always go to network for navigations.
+self.addEventListener("fetch", (event) => {
+  const req = event.request;
+  if (req.method !== "GET") return;
+  // Pass-through; do not serve a broken offline shell.
+  event.respondWith(
+    fetch(req).catch(() => {
+      if (req.mode === "navigate") {
+        return new Response(
+          "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><body style='font-family:sans-serif;background:#0b1210;color:#e7f6ee;padding:24px'><h1>Link expired</h1><p>This home-screen shortcut points at an old Cloudflare tunnel.</p><p>Open the latest app URL in Chrome, then Add to Home screen again.</p></body>",
+          { headers: { "Content-Type": "text/html; charset=utf-8" } }
+        );
+      }
+      return Response.error();
+    })
   );
 });
 

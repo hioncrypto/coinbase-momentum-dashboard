@@ -844,6 +844,11 @@
         }
       }
     });
+    const liveUrl = document.getElementById("live-url");
+    if (liveUrl) {
+      liveUrl.href = window.location.origin + "/";
+      liveUrl.textContent = window.location.origin + "/";
+    }
     refreshCandles().then(refreshTarget).then(refreshSpot);
     setInterval(refreshTarget, TARGET_POLL_MS);
     setInterval(refreshCandles, CANDLE_POLL_MS);
