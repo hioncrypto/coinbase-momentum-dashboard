@@ -163,6 +163,32 @@ h1 {
   line-height: 1.35;
 }
 
+.bg-btn {
+  width: 100%;
+  margin: 0 0 8px;
+  min-height: 44px;
+  border: 1px solid rgba(26, 201, 107, 0.45);
+  border-radius: 10px;
+  background: #163526;
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.bg-btn:active {
+  transform: scale(0.99);
+}
+
+.sound-hint.ok {
+  color: var(--accent);
+}
+
+.sound-hint.warn {
+  color: var(--warn);
+}
+
 .sound-toggle {
   display: flex;
   align-items: center;

@@ -29,6 +29,8 @@
     clock: document.getElementById("clock"),
     chimeEnabled: document.getElementById("chime-enabled"),
     chimeTest: document.getElementById("chime-test"),
+    enableBg: document.getElementById("enable-bg"),
+    bgStatus: document.getElementById("bg-status"),
     oddsRow: document.getElementById("odds-row"),
     yesPct: document.getElementById("yes-pct"),
     noPct: document.getElementById("no-pct"),
@@ -134,12 +136,64 @@
     else if (swReg && swReg.active) swReg.active.postMessage(msg);
   }
 
+  function setBgStatus(ok, text) {
+    if (!el.bgStatus) return;
+    el.bgStatus.textContent = text;
+    el.bgStatus.classList.toggle("ok", !!ok);
+    el.bgStatus.classList.toggle("warn", !ok);
+  }
+
   async function ensureNotificationPermission() {
     if (!("Notification" in window)) return false;
     if (Notification.permission === "granted") return true;
     if (Notification.permission === "denied") return false;
     const res = await Notification.requestPermission();
     return res === "granted";
+  }
+
+  async function enableBackgroundAlerts() {
+    ensureAudio();
+    chimeOn = true;
+    localStorage.setItem(CHIME_KEY, "1");
+    if (el.chimeEnabled) el.chimeEnabled.checked = true;
+    setBgStatus(false, "Requesting notification permission…");
+    const allowed = await ensureNotificationPermission();
+    if (!allowed) {
+      setBgStatus(
+        false,
+        "Notifications blocked. Chrome → site settings → Notifications → Allow, then try again."
+      );
+      setStatus("warn", "Notifications blocked");
+      return false;
+    }
+    const ok = await subscribePush();
+    playChime(true);
+    postToSW({
+      type: "test-notify",
+      beat: lastFifteenTarget,
+      ticker: lastFifteenTicker || "TEST",
+      closeEt: closeTimeIso,
+    });
+    try {
+      await fetch("/api/push/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          beat: lastFifteenTarget,
+          close_et: closeTimeIso,
+        }),
+      });
+    } catch {
+      // ignore
+    }
+    if (ok) {
+      setBgStatus(true, "Background alerts ON. You can leave the app; new 15m targets will notify.");
+      setStatus("ok", "Background alerts on");
+    } else {
+      setBgStatus(false, "Could not subscribe to push. Stay on HTTPS / installed app and retry.");
+      setStatus("warn", "Push subscribe failed");
+    }
+    return ok;
   }
 
   async function subscribePush() {
@@ -665,6 +719,11 @@
         } catch {
           // ignore
         }
+      });
+    }
+    if (el.enableBg) {
+      el.enableBg.addEventListener("click", () => {
+        enableBackgroundAlerts();
       });
     }
     const unlock = () => ensureAudio();
