@@ -1,5 +1,5 @@
 /* Kalshi BTC Target service worker — background 15m target alerts */
-const SW_VERSION = "1.9-portrait";
+const SW_VERSION = "2.1-portrait";
 const TARGET_URL = "/api/target?tf=15m";
 const STATE_KEY = "kalshiFifteenState";
 

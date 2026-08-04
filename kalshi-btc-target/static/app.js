@@ -121,7 +121,7 @@
   async function ensureServiceWorker() {
     if (!("serviceWorker" in navigator)) return null;
     try {
-      const reg = await navigator.serviceWorker.register("/sw.js?v=1.9", { scope: "/" });
+      const reg = await navigator.serviceWorker.register("/sw.js?v=2.1", { scope: "/" });
       await navigator.serviceWorker.ready;
       return reg;
     } catch (err) {
@@ -804,6 +804,7 @@
       setStatus("warn", "Chart library failed to load");
       return;
     }
+    syncRotateGate();
     tryLockPortrait();
     if (el.timeframe) {
       syncTfButtons();
@@ -812,19 +813,24 @@
         if (!btn || !el.timeframe.contains(btn)) return;
         setTimeframe(btn.dataset.tf);
         ensureAudio();
-        tryLockPortrait();
+        ensurePortraitLock(true);
       });
     }
     if (el.pushBadge) {
       el.pushBadge.addEventListener("click", () => {
-        tryLockPortrait();
+        ensurePortraitLock(true);
         toggleAlerts();
+      });
+    }
+    if (el.rotateGate) {
+      el.rotateGate.addEventListener("click", () => {
+        ensurePortraitLock(true);
       });
     }
     syncAlertsUi();
     const unlock = () => {
       ensureAudio();
-      tryLockPortrait();
+      ensurePortraitLock(true);
     };
     window.addEventListener("pointerdown", unlock, { passive: true });
     window.addEventListener("touchstart", unlock, { passive: true });
@@ -832,8 +838,9 @@
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") {
         ensureAudio();
-        tryLockPortrait();
+        ensurePortraitLock(true);
         startRolloverBurst();
+        refreshTarget({ forceCandles: true });
       } else {
         // Page hidden — rely on SW poll + server Web Push.
         postToSW({ type: "check-now" });
@@ -871,8 +878,14 @@
     setInterval(refreshCandles, CANDLE_POLL_MS);
     setInterval(refreshSpot, SPOT_POLL_MS);
     setInterval(tickClock, 250);
+    // Keep fighting landscape — Android can ignore a single lock call.
+    setInterval(() => {
+      syncRotateGate();
+      if (isLandscapeNow()) ensurePortraitLock(false);
+    }, 700);
     tickClock();
     window.addEventListener("resize", () => {
+      syncRotateGate();
       tryLockPortrait();
       resizeChart();
     });
