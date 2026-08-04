@@ -37,12 +37,17 @@
 
     <section class="target-panel" aria-live="polite">
       <div class="tf-row">
-        <label class="tf-label" for="timeframe">Chart timeframe</label>
-        <select id="timeframe" class="tf-select" aria-label="Chart timeframe">
-          <option value="1m">1 minute</option>
-          <option value="5m">5 minutes</option>
-          <option value="15m" selected>15 minutes</option>
-        </select>
+        <span class="tf-label" id="tf-label">Chart</span>
+        <div
+          id="timeframe"
+          class="tf-btns"
+          role="group"
+          aria-labelledby="tf-label"
+        >
+          <button type="button" class="tf-btn" data-tf="1m" aria-pressed="false">1m</button>
+          <button type="button" class="tf-btn" data-tf="5m" aria-pressed="false">5m</button>
+          <button type="button" class="tf-btn" data-tf="15m" aria-pressed="true">15m</button>
+        </div>
       </div>
 
       <div class="sound-row">

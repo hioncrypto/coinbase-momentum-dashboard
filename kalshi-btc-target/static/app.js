@@ -389,13 +389,26 @@
     }
   }
 
-  function onTimeframeChange() {
-    currentTf = el.timeframe.value;
+  function syncTfButtons() {
+    if (!el.timeframe) return;
+    el.timeframe.querySelectorAll(".tf-btn").forEach((btn) => {
+      const on = btn.dataset.tf === currentTf;
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+  }
+
+  function setTimeframe(tf) {
+    if (!["1m", "5m", "15m"].includes(tf) || tf === currentTf) {
+      syncTfButtons();
+      return;
+    }
+    currentTf = tf;
     localStorage.setItem(TF_KEY, currentTf);
     fittedOnce = false;
     lastTicker = null;
     lastTarget = null;
     closeTimeIso = null;
+    syncTfButtons();
     setTfLabel();
     setStatus("loading", `Loading ${currentTf}…`);
     if (el.countdownMeta) {
@@ -428,8 +441,12 @@
       return;
     }
     if (el.timeframe) {
-      el.timeframe.value = currentTf;
-      el.timeframe.addEventListener("change", onTimeframeChange);
+      syncTfButtons();
+      el.timeframe.addEventListener("click", (ev) => {
+        const btn = ev.target.closest(".tf-btn");
+        if (!btn || !el.timeframe.contains(btn)) return;
+        setTimeframe(btn.dataset.tf);
+      });
     }
     if (el.chimeEnabled) {
       el.chimeEnabled.checked = chimeOn;
