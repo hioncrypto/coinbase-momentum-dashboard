@@ -69,8 +69,8 @@ async function showTargetNotification(payload) {
       : "A new 15-minute window just opened";
   const opts = {
     body,
-    icon: "/icons/icon.svg",
-    badge: "/icons/icon.svg",
+    icon: "/icons/icon-192.png?v=2.5",
+    badge: "/icons/icon-192.png?v=2.5",
     vibrate: [80, 40, 80, 40, 160],
     tag: "kalshi-15m-target",
     renotify: true,
