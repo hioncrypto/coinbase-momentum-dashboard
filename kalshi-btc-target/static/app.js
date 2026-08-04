@@ -156,10 +156,12 @@
 
   let chart = null;
   let series = null;
+  let targetSeries = null;
   let targetLine = null;
   let settleLine = null;
   let breakevenLine = null;
   let entryLine = null;
+  let lastCandleData = [];
   let lastTicker = null;
   let lastTarget = null;
   let lastFifteenTarget = null;
@@ -496,7 +498,7 @@
       document.body.classList.remove("has-open-pl");
       document.body.classList.remove("open-pl-collapsed");
       clearBreakevenLines();
-      if (lastTarget != null) applyTargetLine(lastTarget, "TARGET");
+      if (lastTarget != null) applyTargetLine(lastTarget, "TO BEAT");
       return;
     }
     el.openPlBar.hidden = false;
@@ -510,9 +512,11 @@
     applyBreakevenLines(pos.beat, pos.entrySpot, beSpot, pos.side);
     // Price to beat must stay visible while a trade is open.
     const beatKeep =
-      pos.beat != null && Number.isFinite(pos.beat) ? pos.beat : lastTarget;
+      pos.beat != null && Number.isFinite(Number(pos.beat))
+        ? Number(pos.beat)
+        : lastTarget;
     if (beatKeep != null && Number.isFinite(beatKeep)) {
-      applyTargetLine(beatKeep, "TARGET");
+      applyTargetLine(beatKeep, "TO BEAT");
     }
 
     if (el.openPlSide) {
@@ -850,8 +854,8 @@
     // Keep main trade-size slider in sync for Best Side sizing.
     if (stake <= 100) setTradeStake(Math.round(stake));
     saveDemoState();
-    renderDemoUi();
     refreshBestSide();
+    renderDemoUi();
     const sideLabel = side === "above" ? "Above" : "Below";
     const added = !!existing;
     setStatus(
@@ -2375,6 +2379,17 @@
     targetLine = null;
   }
 
+  function clearTargetSeries() {
+    if (targetSeries && chart) {
+      try {
+        chart.removeSeries(targetSeries);
+      } catch {
+        // ignore
+      }
+    }
+    targetSeries = null;
+  }
+
   function clearSettleLine() {
     if (settleLine && series) {
       try {
@@ -2406,13 +2421,25 @@
     lastBreakevenPrice = null;
   }
 
+  function buildFlatLineData(price) {
+    if (!Number.isFinite(price) || !lastCandleData.length) return [];
+    const t0 = lastCandleData[0].time;
+    const t1 = lastCandleData[lastCandleData.length - 1].time;
+    if (t0 == null || t1 == null) return [];
+    if (t0 === t1) return [{ time: t0, value: price }];
+    return [
+      { time: t0, value: price },
+      { time: t1, value: price },
+    ];
+  }
+
   function applyBreakevenLines(beat, entrySpot, modelBe, side) {
     ensureChart();
     clearBreakevenLines();
     if (!series || !demo.position) return;
 
     // Price to beat stays on TARGET — only add trade-specific model / entry lines.
-    const winAt = beat != null && Number.isFinite(beat) ? beat : null;
+    const winAt = beat != null && Number.isFinite(Number(beat)) ? Number(beat) : null;
     lastBreakevenPrice = winAt;
 
     if (
@@ -2448,26 +2475,90 @@
   }
 
   function applyTargetLine(target, title) {
-    lastTarget = target;
+    const price = target == null || target === "" ? NaN : Number(target);
+    lastTarget = Number.isFinite(price) ? price : null;
     ensureChart();
-    if (!series || target == null || !Number.isFinite(target)) {
+    if (!chart) return;
+
+    if (lastTarget == null) {
       clearTargetLine();
+      if (targetSeries) {
+        try {
+          targetSeries.setData([]);
+        } catch {
+          // ignore
+        }
+      }
       return;
     }
-    const opts = {
-      price: target,
-      color: "#ffffff",
-      lineWidth: 3,
-      lineStyle: (ensureChart.LineStyle && ensureChart.LineStyle.Dashed) || 2,
-      axisLabelVisible: true,
-      title: title || "TARGET",
-    };
-    clearTargetLine();
-    targetLine = series.createPriceLine(opts);
+
+    const label = title || "TO BEAT";
+    const dash =
+      (ensureChart.LineStyle && ensureChart.LineStyle.Dashed) || 2;
+
+    // Axis label on the candle series (price line).
+    if (series) {
+      clearTargetLine();
+      targetLine = series.createPriceLine({
+        price: lastTarget,
+        color: "#f4fff8",
+        lineWidth: 2,
+        lineStyle: dash,
+        axisLabelVisible: true,
+        title: label,
+      });
+    }
+
+    // Full-width line series — stays visible across candle setData refreshes.
+    if (!targetSeries) {
+      targetSeries = chart.addLineSeries({
+        color: "#f4fff8",
+        lineWidth: 2,
+        lineStyle: dash,
+        crosshairMarkerVisible: false,
+        lastValueVisible: true,
+        priceLineVisible: false,
+        title: label,
+      });
+    }
+    const flat = buildFlatLineData(lastTarget);
+    if (flat.length) {
+      try {
+        targetSeries.setData(flat);
+      } catch {
+        // ignore
+      }
+    }
+
     try {
-      series.applyOptions({});
+      if (series) series.applyOptions({});
     } catch {
       // ignore
+    }
+  }
+
+  function reapplyChartOverlays() {
+    if (lastTarget != null && Number.isFinite(lastTarget)) {
+      applyTargetLine(lastTarget, "TO BEAT");
+    }
+    if (lastSettlementAvg != null && Number.isFinite(lastSettlementAvg)) {
+      applySettleLine(lastSettlementAvg);
+    }
+    if (demo.position) {
+      const beSpot = modelBreakevenSpot(demo.position, secondsLeft());
+      applyBreakevenLines(
+        demo.position.beat,
+        demo.position.entrySpot,
+        beSpot,
+        demo.position.side
+      );
+      const beatKeep =
+        demo.position.beat != null && Number.isFinite(Number(demo.position.beat))
+          ? Number(demo.position.beat)
+          : lastTarget;
+      if (beatKeep != null && Number.isFinite(beatKeep)) {
+        applyTargetLine(beatKeep, "TO BEAT");
+      }
     }
   }
 
@@ -2501,7 +2592,10 @@
         cache: "no-store",
       });
       const data = await res.json();
-      const beat = data.price_to_beat ?? data.target;
+      const beatRaw = data.price_to_beat ?? data.target;
+      const beat =
+        beatRaw == null || beatRaw === "" ? null : Number(beatRaw);
+      const beatOk = beat != null && Number.isFinite(beat) ? beat : null;
       const prevClose = closeTimeIso;
       const prevTicker = lastTicker;
       closeTimeIso = data.close_time || null;
@@ -2558,19 +2652,20 @@
         el.targetLabel.textContent = "Price to beat";
       }
 
-      if ((!data.ok && beat == null) || data.waiting_next) {
+      if ((!data.ok && beatOk == null) || data.waiting_next) {
         if (prevTicker) settleDemoPosition(prevTicker);
         else if (demo.position) settleDemoPosition(demo.position.ticker);
         setStatus("warn", data.error || "Waiting for next window");
-        el.targetValue.textContent = beat != null ? money(beat) : "—";
+        el.targetValue.textContent = beatOk != null ? money(beatOk) : "—";
         el.targetMeta.textContent = data.error || "Next Kalshi 15m opening…";
-        if (beat == null) applyTargetLine(null);
+        if (beatOk == null) applyTargetLine(null);
+        else applyTargetLine(beatOk, "TO BEAT");
         startRolloverBurst();
         scheduleBoundaryRefresh(data.close_time);
         return;
       }
 
-      if (beat == null) {
+      if (beatOk == null) {
         setStatus("warn", "Price to beat TBD");
         el.targetValue.textContent = "TBD";
         el.targetMeta.textContent = data.error || "Waiting for Kalshi to post the beat";
@@ -2590,21 +2685,20 @@
                 ? "New 15m window"
                 : "Live"
         );
-        el.targetValue.textContent = money(beat);
+        el.targetValue.textContent = money(beatOk);
         const win = formatWindow(data.close_time, data.close_et);
         el.targetMeta.textContent = win
           ? `This window settles ${win}`
           : "Kalshi 15-minute market";
-        applyTargetLine(beat, "TARGET");
-        maybeChimeNewFifteenTarget(beat, data.ticker, data.source, data.close_et);
+        applyTargetLine(beatOk, "TO BEAT");
+        maybeChimeNewFifteenTarget(beatOk, data.ticker, data.source, data.close_et);
         if (el.spotValue && el.spotValue.dataset.last) {
           updateSpot(Number(el.spotValue.dataset.last));
         }
         if (rolled || forceCandles || data.settlement_mode) {
-          refreshCandles().then(() => applyTargetLine(beat, "TARGET"));
+          refreshCandles().then(() => applyTargetLine(beatOk, "TO BEAT"));
         } else {
-          // Keep TARGET line visible even when candles aren't refreshed.
-          applyTargetLine(beat, "TARGET");
+          applyTargetLine(beatOk, "TO BEAT");
         }
         if (rolled || data.settlement_mode) startRolloverBurst();
         if (
@@ -2648,17 +2742,13 @@
       ensureChart();
       if (!series) return;
       const candles = data.candles || [];
-      const keepTarget = lastTarget;
+      lastCandleData = candles;
       const grew =
         candles.length > lastCandleCount + 20 ||
         (lastCandleCount > 0 && candles.length < lastCandleCount - 20);
       series.setData(candles);
-      if (keepTarget != null && Number.isFinite(keepTarget)) {
-        applyTargetLine(keepTarget, "TARGET");
-      }
-      if (lastSettlementAvg != null && Number.isFinite(lastSettlementAvg)) {
-        applySettleLine(lastSettlementAvg);
-      }
+      // Price lines can drop on setData — always redraw beat / overlays.
+      reapplyChartOverlays();
       if (!el.spotValue?.dataset.last && candles.length) {
         updateSpot(candles[candles.length - 1].close);
       }
@@ -2668,6 +2758,8 @@
         chart.timeScale().fitContent();
         fittedOnce = true;
         lastCandleCount = candles.length;
+        // Fit can run before overlays paint; redraw beat once more.
+        reapplyChartOverlays();
       }
     } catch (err) {
       setStatus("warn", "Candle fetch failed");
