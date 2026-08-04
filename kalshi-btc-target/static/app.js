@@ -2973,6 +2973,16 @@
     if (el.openPlClose) {
       el.openPlClose.addEventListener("click", () => closeDemoPosition());
     }
+    if (el.openPlAdd) {
+      el.openPlAdd.addEventListener("click", () => {
+        const pos = demo.position;
+        if (!pos || !pos.side) {
+          setStatus("warn", "No open position to add to");
+          return;
+        }
+        openBuySheet(pos.side);
+      });
+    }
     if (el.openPlToggle) {
       el.openPlToggle.addEventListener("click", () => {
         setOpenPlCollapsed(!openPlCollapsed);

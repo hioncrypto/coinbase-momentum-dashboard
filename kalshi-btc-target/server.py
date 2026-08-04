@@ -82,6 +82,8 @@ _push_lock = threading.Lock()
 _push_subs: list[dict] = []
 _last_push_ticker: str | None = None
 _last_edge_key: str | None = None
+_last_edge_at: float = 0.0
+_last_edge_gone_at: float = 0.0
 _vapid_app_server_key: str | None = None
 _vapid_private_path: str | None = None
 TARGET_TTL = 0.75
@@ -89,6 +91,8 @@ CANDLES_TTL = 5.0
 SPOT_TTL = 1.0
 BRTI_TTL = 1.0
 PUSH_POLL_SEC = 2.0
+EDGE_PUSH_COOLDOWN_SEC = 120.0
+EDGE_GONE_RESET_SEC = 60.0
 SETTLE_WINDOW_SEC = 60.0
 KALSHI_SERIES_URL = "https://kalshi.com/markets/kxbtc15m"
 
