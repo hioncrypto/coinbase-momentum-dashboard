@@ -1747,37 +1747,30 @@ body.portrait-app {
 }
 
 body.has-open-pl .app-shell {
-  padding-bottom: calc(118px + var(--safe-bottom));
+  padding-bottom: calc(148px + var(--safe-bottom));
 }
 
-.app-shell > .top,
-.app-shell > .summary-panel,
-.app-shell > .trade-panel {
-  flex: 0 0 auto;
+body.has-open-pl .summary-panel {
+  max-height: min(22dvh, 160px);
 }
 
-.app-shell > .chart-wrap {
-  flex: 1 1 0 !important;
-  min-height: 0 !important;
-  display: flex !important;
-  flex-direction: column;
-  overflow: hidden;
-  margin: 2px 8px;
+body.has-open-pl .trade-panel {
+  max-height: min(20dvh, 160px);
 }
 
-.top {
-  padding: 6px 12px 2px;
+body.has-open-pl .app-shell > .chart-wrap {
+  flex: 1 1 auto !important;
+  min-height: 38dvh !important;
 }
 
-.clock {
-  font-size: 0.92rem;
-  padding: 5px 8px;
-  min-width: 5.2rem;
+body.has-open-pl .best-side,
+body.has-open-pl .roi-panel {
+  display: none !important;
 }
 
 /* Compact summary */
 .summary-panel {
-  max-height: min(34dvh, 280px);
+  max-height: min(26dvh, 200px);
   margin: 0 8px 2px;
   padding: 4px 8px 4px;
   overflow: auto;

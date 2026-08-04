@@ -134,6 +134,7 @@
     openPlSide: document.getElementById("open-pl-side"),
     openPlValue: document.getElementById("open-pl-value"),
     openPlSub: document.getElementById("open-pl-sub"),
+    openPlClose: document.getElementById("open-pl-close"),
     buyBackdrop: document.getElementById("buy-backdrop"),
     buySheet: document.getElementById("buy-sheet"),
     buySheetTitle: document.getElementById("buy-sheet-title"),
@@ -443,6 +444,7 @@
     el.openPlBar.hidden = false;
     document.body.classList.add("has-open-pl");
     const side = pos.side === "above" ? "Above" : "Below";
+    const accounted = pos.accounted !== false && demo.on;
     const sess = sessionPlBreakdown(mark);
     if (el.openPlSide) {
       el.openPlSide.textContent = `Buy ${side} · ${pos.contracts} cts @ ${pos.askCents}¢`;
@@ -463,19 +465,20 @@
     }
     if (el.openPlSub) {
       const bits = [];
+      if (mark && mark.bidCents != null) bits.push(`bid ${mark.bidCents}¢`);
       if (mark && mark.unrealizedPct != null) {
         const sign = mark.unrealizedPct > 0 ? "+" : "";
-        bits.push(`${sign}${mark.unrealizedPct.toFixed(1)}% vs entry`);
+        bits.push(`${sign}${mark.unrealizedPct.toFixed(1)}%`);
       }
       if (mark && mark.modelEvPl != null) {
-        bits.push(`model EV ${formatPl(mark.modelEvPl)}`);
+        bits.push(`EV ${formatPl(mark.modelEvPl)}`);
       }
       if (mark && mark.pWin != null) {
         bits.push(`${Math.round(mark.pWin * 100)}% win`);
       }
       if (mark && mark.delta != null) {
         bits.push(
-          `live ${mark.delta >= 0 ? "+" : ""}$${mark.delta.toFixed(0)} vs beat`
+          `${mark.delta >= 0 ? "+" : ""}$${mark.delta.toFixed(0)} vs beat`
         );
       }
       if (mark && mark.secs != null) {
@@ -483,8 +486,17 @@
           `${Math.floor(mark.secs / 60)}:${String(mark.secs % 60).padStart(2, "0")} left`
         );
       }
+      if (mark && mark.settleNowWin != null) {
+        bits.push(mark.settleNowWin ? "winning now" : "losing now");
+      }
       bits.push(`session ${formatPl(sess.total)}`);
       el.openPlSub.textContent = bits.join(" · ");
+    }
+    if (el.openPlClose) {
+      el.openPlClose.disabled = !mark || mark.bidCents == null;
+      el.openPlClose.textContent = accounted
+        ? "Close at bid · post P/L"
+        : "Close at bid · clear mark";
     }
   }
 
@@ -492,115 +504,8 @@
     const pos = demo.position;
     const mark = markOpenPosition(pos);
     renderOpenPlBar(pos, mark);
-    if (!el.demoLive) return mark;
-
-    if (!pos) {
-      el.demoLive.hidden = true;
-      return mark;
-    }
-
-    el.demoLive.hidden = false;
-    const side = pos.side === "above" ? "Above" : "Below";
-    const accounted = pos.accounted !== false && demo.on;
-    const sess = sessionPlBreakdown(mark);
-    if (el.demoLiveKicker) {
-      el.demoLiveKicker.textContent = accounted
-        ? "Open · demo account"
-        : "Open · paper mark";
-    }
-    if (el.demoLiveSide) {
-      el.demoLiveSide.textContent = `Buy ${side}`;
-      el.demoLiveSide.classList.toggle("is-up", pos.side === "above");
-      el.demoLiveSide.classList.toggle("is-down", pos.side === "below");
-    }
-    if (el.demoLivePl) {
-      el.demoLivePl.textContent =
-        mark && mark.unrealized != null ? formatPl(mark.unrealized) : "—";
-      el.demoLivePl.classList.toggle("is-up", !!(mark && mark.unrealized > 0));
-      el.demoLivePl.classList.toggle("is-down", !!(mark && mark.unrealized < 0));
-    }
-    if (el.demoLivePct) {
-      const parts = [];
-      if (mark && mark.unrealizedPct != null) {
-        const sign = mark.unrealizedPct > 0 ? "+" : "";
-        parts.push(`${sign}${mark.unrealizedPct.toFixed(1)}% vs entry`);
-      } else {
-        parts.push("Marking to live bid…");
-      }
-      if (mark && mark.modelEvPl != null) {
-        parts.push(`model EV ${formatPl(mark.modelEvPl)}`);
-      }
-      el.demoLivePct.textContent = parts.join(" · ");
-      el.demoLivePct.classList.toggle(
-        "is-up",
-        !!(mark && mark.unrealizedPct > 0)
-      );
-      el.demoLivePct.classList.toggle(
-        "is-down",
-        !!(mark && mark.unrealizedPct < 0)
-      );
-    }
-
-    if (el.demoLiveFactors && mark) {
-      const timeTxt =
-        mark.secs != null
-          ? `${Math.floor(mark.secs / 60)}:${String(mark.secs % 60).padStart(2, "0")}`
-          : "—";
-      const deltaTxt =
-        mark.delta != null
-          ? `${mark.delta >= 0 ? "+" : "-"}$${Math.abs(mark.delta).toFixed(2)}`
-          : "—";
-      const settleTxt =
-        mark.delta == null
-          ? "—"
-          : mark.settleNowWin
-            ? `Winning if settle now`
-            : `Losing if settle now`;
-      const modelTxt =
-        mark.pWin != null ? `${Math.round(mark.pWin * 100)}% model` : "—";
-      const chanceTxt =
-        mark.marketPct != null
-          ? `${Math.round(mark.marketPct)}% mkt`
-          : mark.marketAsk != null
-            ? `ask ${Math.round(mark.marketAsk)}¢`
-            : "—";
-      el.demoLiveFactors.innerHTML = [
-        factorCell("Contracts", String(pos.contracts)),
-        factorCell("Entry ask", `${pos.askCents}¢`),
-        factorCell("Paid (cost+fee)", money(pos.total)),
-        factorCell("Entry fee", money(pos.fee)),
-        factorCell(
-          "Live bid",
-          mark.bidCents != null ? `${mark.bidCents}¢` : "—"
-        ),
-        factorCell(
-          "Exit fee est.",
-          mark.bidCents != null ? money(mark.exitFee) : "—"
-        ),
-        factorCell(
-          "Exit value",
-          mark.proceeds != null ? money(mark.proceeds) : "—"
-        ),
-        factorCell("Exit-now P/L", formatPl(mark.unrealized)),
-        factorCell("Model EV P/L", formatPl(mark.modelEvPl)),
-        factorCell("Live vs beat", deltaTxt),
-        factorCell("Time left", timeTxt),
-        factorCell("Side chance", chanceTxt),
-        factorCell("Model win%", modelTxt),
-        factorCell("If hold & win", formatPl(mark.heldPlIfWin)),
-        factorCell("If hold & lose", formatPl(mark.heldPlIfLose)),
-        factorCell("Settle lean", settleTxt),
-        factorCell("Session realized", formatPl(sess.realized)),
-        factorCell("Session + open", formatPl(sess.total), true),
-      ].join("");
-    }
-
-    if (el.demoLiveClose) {
-      el.demoLiveClose.disabled = !mark || mark.bidCents == null;
-      el.demoLiveClose.textContent = accounted
-        ? "Close at bid · post P/L"
-        : "Close at bid · clear mark";
-    }
+    // Keep the chart clear: factor card lives in Options / bottom strip, not summary.
+    if (el.demoLive) el.demoLive.hidden = true;
     return mark;
   }
 
