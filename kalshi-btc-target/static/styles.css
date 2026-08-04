@@ -554,9 +554,13 @@ h1 {
   background: rgba(255, 255, 255, 0.03);
 }
 
-.trade-history-item.is-win {
-  border-color: rgba(26, 201, 107, 0.28);
-  background: rgba(26, 201, 107, 0.08);
+.trade-history-item.is-open {
+  border-color: rgba(255, 210, 138, 0.4);
+  background: rgba(255, 210, 138, 0.1);
+}
+
+.trade-history-item.is-open .trade-history-kind {
+  color: var(--warn);
 }
 
 .trade-history-item.is-loss {
