@@ -528,6 +528,18 @@ h1 {
   font-size: 0.75rem;
 }
 
+.trade-history-backup {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+
+.trade-history-backup .demo-btn {
+  min-height: 34px;
+  font-size: 0.75rem;
+}
+
 .trade-history-list {
   display: flex;
   flex-direction: column;

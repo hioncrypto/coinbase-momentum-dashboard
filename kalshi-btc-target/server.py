@@ -28,9 +28,12 @@ PORT = int(os.environ.get("PORT", "8765"))
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 DATA_DIR = Path(__file__).resolve().parent / "data"
 PUSH_SUBS_FILE = DATA_DIR / "push_subscriptions.json"
+DEMO_ACCOUNT_FILE = DATA_DIR / "demo_account.json"
 VAPID_PRIVATE = DATA_DIR / "vapid_private.pem"
 VAPID_PUBLIC_RAW = DATA_DIR / "vapid_public_raw.txt"
 VAPID_SUBJECT = os.environ.get("VAPID_SUBJECT", "mailto:kalshi-btc-target@localhost")
+DEMO_HISTORY_LIMIT = 80
+_demo_lock = threading.Lock()
 
 
 # Chart candle size + settlement window length (seconds) per TF.
@@ -893,6 +896,78 @@ def load_push_subs() -> None:
         _push_subs = []
 
 
+def _normalize_demo_account(raw: dict | None) -> dict | None:
+    """Single-user BeatLine demo account (survives tunnel URL changes)."""
+    if not isinstance(raw, dict):
+        return None
+    history = raw.get("history")
+    if not isinstance(history, list):
+        history = []
+    history = [h for h in history if isinstance(h, dict)][:DEMO_HISTORY_LIMIT]
+    start = raw.get("start")
+    balance = raw.get("balance")
+    realized = raw.get("realizedPl")
+    try:
+        start_n = float(start) if start is not None else 1000.0
+    except (TypeError, ValueError):
+        start_n = 1000.0
+    try:
+        balance_n = float(balance) if balance is not None else start_n
+    except (TypeError, ValueError):
+        balance_n = start_n
+    try:
+        realized_n = float(realized) if realized is not None else 0.0
+    except (TypeError, ValueError):
+        realized_n = 0.0
+    updated = raw.get("updatedAt")
+    try:
+        updated_n = int(updated) if updated is not None else int(time.time() * 1000)
+    except (TypeError, ValueError):
+        updated_n = int(time.time() * 1000)
+    position = raw.get("position")
+    if not isinstance(position, dict):
+        position = None
+    last_result = raw.get("lastResult")
+    if not isinstance(last_result, dict):
+        last_result = None
+    return {
+        "on": bool(raw.get("on")),
+        "start": start_n,
+        "balance": balance_n,
+        "realizedPl": realized_n,
+        "position": position,
+        "lastResult": last_result,
+        "history": history,
+        "updatedAt": updated_n,
+    }
+
+
+def load_demo_account() -> dict | None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    if not DEMO_ACCOUNT_FILE.is_file():
+        return None
+    try:
+        with _demo_lock:
+            raw = json.loads(DEMO_ACCOUNT_FILE.read_text())
+        return _normalize_demo_account(raw if isinstance(raw, dict) else None)
+    except Exception:
+        return None
+
+
+def save_demo_account(raw: dict) -> dict | None:
+    normalized = _normalize_demo_account(raw)
+    if not normalized:
+        return None
+    if not normalized.get("updatedAt"):
+        normalized["updatedAt"] = int(time.time() * 1000)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    with _demo_lock:
+        tmp = DEMO_ACCOUNT_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(normalized, indent=2))
+        tmp.replace(DEMO_ACCOUNT_FILE)
+    return normalized
+
+
 def save_push_subs() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     with _push_lock:
@@ -1236,6 +1311,15 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(200, {"ok": True, "pushed": n})
             return
 
+        if path in ("/api/demo-account", "/api/account"):
+            state = body.get("state") if isinstance(body.get("state"), dict) else body
+            saved = save_demo_account(state)
+            if not saved:
+                self._send_json(400, {"ok": False, "error": "invalid demo account"})
+                return
+            self._send_json(200, {"ok": True, "state": saved})
+            return
+
         self._send_json(404, {"ok": False, "error": "not found"})
 
     def do_GET(self):
@@ -1306,15 +1390,28 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
 
+        if path in ("/api/demo-account", "/api/account"):
+            state = load_demo_account()
+            self._send_json(
+                200,
+                {
+                    "ok": True,
+                    "state": state,
+                    "has_state": state is not None,
+                },
+            )
+            return
+
         if path == "/api/health":
             self._send_json(
                 200,
                 {
                     "ok": True,
                     "service": "kalshi-btc-target",
-                    "version": "2.0.1",
+                    "version": "2.1.0",
                     "push": bool(_vapid_app_server_key or VAPID_PUBLIC_RAW.is_file()),
                     "subscribers": len(_push_subs),
+                    "demo_account": DEMO_ACCOUNT_FILE.is_file(),
                 },
             )
             return

@@ -36,6 +36,23 @@ docker run --rm -p 8765:8765 beatline
 2. Menu → **Add to Home Screen**
 3. Launch the BeatLine icon
 
+## Demo account & trade history
+
+Balance, open position, P/L, and trade history sync to the **BeatLine server** (`data/demo_account.json`), not only the browser.
+
+That way a new Cloudflare tunnel URL still restores the same account when it hits the same server. Clearing history in Options still clears the server copy.
+
+> Temporary `*.trycloudflare.com` links can still go down. The account survives **URL** changes; it does not survive wiping the server disk / rebuilding a fresh host with no `data/` volume.
+
+## Hosting notes
+
+**GitHub Pages alone cannot host BeatLine.** Pages only serves static files; this app needs `server.py` for Kalshi/BRTI APIs and account persistence.
+
+For a stable public URL + durable P/L:
+
+1. Deploy `kalshi-btc-target` on a small always-on host (Fly.io, Railway, Render, a VPS) with a persistent disk for `data/`.
+2. Or run `python3 server.py` on a machine you control and put a **named** Cloudflare Tunnel / custom domain in front of it (not a quick `trycloudflare` link).
+
 ## API
 
 | Endpoint | Purpose |
@@ -43,6 +60,8 @@ docker run --rm -p 8765:8765 beatline
 | `GET /api/target?tf=15m` | Live Kalshi Price to beat |
 | `GET /api/candles?tf=1m\|5m\|15m` | Chart candles (BRTI tip + Coinbase history) |
 | `GET /api/spot` | Live BRTI (Coinbase fallback) |
+| `GET /api/demo-account` | Saved demo balance / history |
+| `POST /api/demo-account` | Persist demo balance / history |
 | `GET /api/health` | Health check |
 
 ## Test

@@ -124,6 +124,9 @@
     tradeHistoryList: document.getElementById("trade-history-list"),
     tradeHistorySummary: document.getElementById("trade-history-summary"),
     tradeHistoryClear: document.getElementById("trade-history-clear"),
+    accountExport: document.getElementById("account-export"),
+    accountImport: document.getElementById("account-import"),
+    accountImportFile: document.getElementById("account-import-file"),
     demoMark: document.getElementById("demo-mark"),
     demoMarkPl: document.getElementById("demo-mark-pl"),
     demoMarkMeta: document.getElementById("demo-mark-meta"),
@@ -248,6 +251,126 @@
     }
   }
 
+  function demoLooksFresh(state) {
+    if (!state) return true;
+    const hist = Array.isArray(state.history) ? state.history : [];
+    const realized = Number(state.realizedPl) || 0;
+    const start = Number(state.start) || DEMO_DEFAULT_START;
+    const bal = Number(state.balance);
+    return (
+      !state.position &&
+      hist.length === 0 &&
+      realized === 0 &&
+      Number.isFinite(bal) &&
+      Math.abs(bal - start) < 0.01
+    );
+  }
+
+  function applyDemoState(next, { syncServer } = {}) {
+    if (!next || typeof next !== "object") return;
+    demo = {
+      on: !!next.on,
+      start:
+        Number.isFinite(next.start) && next.start > 0
+          ? next.start
+          : DEMO_DEFAULT_START,
+      balance: Number.isFinite(next.balance) ? next.balance : DEMO_DEFAULT_START,
+      realizedPl: Number.isFinite(next.realizedPl) ? next.realizedPl : 0,
+      position:
+        next.position && typeof next.position === "object" ? next.position : null,
+      lastResult:
+        next.lastResult && typeof next.lastResult === "object"
+          ? next.lastResult
+          : null,
+      history: Array.isArray(next.history)
+        ? next.history.filter((h) => h && typeof h === "object").slice(0, HISTORY_LIMIT)
+        : [],
+      updatedAt: Number(next.updatedAt) || Date.now(),
+    };
+    persistTradeHistory(demo.history);
+    try {
+      localStorage.setItem(DEMO_KEY, JSON.stringify(demo));
+    } catch {
+      // ignore
+    }
+    if (syncServer) queueServerDemoSave();
+    renderDemoUi();
+    renderTradeHistory();
+  }
+
+  let serverSaveTimer = null;
+  let serverSaveInFlight = false;
+
+  function queueServerDemoSave() {
+    if (serverSaveTimer) clearTimeout(serverSaveTimer);
+    serverSaveTimer = setTimeout(() => {
+      serverSaveTimer = null;
+      pushDemoStateToServer().catch(() => {});
+    }, 250);
+  }
+
+  async function pushDemoStateToServer() {
+    if (serverSaveInFlight) {
+      queueServerDemoSave();
+      return;
+    }
+    serverSaveInFlight = true;
+    try {
+      const payload = {
+        ...demo,
+        history: Array.isArray(demo.history) ? demo.history : [],
+        updatedAt: Date.now(),
+      };
+      demo.updatedAt = payload.updatedAt;
+      await fetch("/api/demo-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ state: payload }),
+        cache: "no-store",
+      });
+    } catch {
+      // keep local; retry on next save
+    } finally {
+      serverSaveInFlight = false;
+    }
+  }
+
+  async function hydrateDemoFromServer() {
+    try {
+      const res = await fetch("/api/demo-account", { cache: "no-store" });
+      const data = await res.json();
+      const remote = data && data.state;
+      if (remote && typeof remote === "object") {
+        const remoteFresh = demoLooksFresh(remote);
+        const localFresh = demoLooksFresh(demo);
+        const remoteAt = Number(remote.updatedAt) || 0;
+        const localAt = Number(demo.updatedAt) || 0;
+        const preferRemote =
+          (localFresh && !remoteFresh) ||
+          (!remoteFresh && remoteAt >= localAt) ||
+          (remoteFresh && localFresh && remoteAt > localAt);
+        if (preferRemote) {
+          applyDemoState(remote, { syncServer: false });
+          setStatus(
+            "ok",
+            `Account restored · ${money(demo.balance)}${
+              demo.history && demo.history.length
+                ? ` · ${demo.history.length} trades`
+                : ""
+            }`
+          );
+          return;
+        }
+      }
+      // Seed server from this browser if it has anything useful.
+      if (!demoLooksFresh(demo) || !remote) {
+        await pushDemoStateToServer();
+      }
+    } catch {
+      // offline / tunnel blip — keep localStorage
+    }
+  }
+
   function loadDemoState() {
     const fallback = {
       on: false,
@@ -257,6 +380,7 @@
       position: null,
       lastResult: null,
       history: loadTradeHistory(),
+      updatedAt: 0,
     };
     try {
       const raw = localStorage.getItem(DEMO_KEY);
@@ -311,6 +435,7 @@
             ? parsed.lastResult
             : null,
         history,
+        updatedAt: Number(parsed.updatedAt) || 0,
       };
     } catch {
       return fallback;
@@ -320,11 +445,13 @@
   function saveDemoState() {
     try {
       if (!Array.isArray(demo.history)) demo.history = [];
+      demo.updatedAt = Date.now();
       persistTradeHistory(demo.history);
       localStorage.setItem(DEMO_KEY, JSON.stringify(demo));
     } catch {
       // ignore quota
     }
+    queueServerDemoSave();
   }
 
   function pushTradeHistory(entry) {
@@ -347,6 +474,81 @@
     saveDemoState();
     renderTradeHistory();
     setStatus("ok", "Trade history cleared");
+  }
+
+  function exportAccountBackup() {
+    const payload = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      state: {
+        on: !!demo.on,
+        start: demo.start,
+        balance: demo.balance,
+        realizedPl: demo.realizedPl,
+        position: demo.position,
+        lastResult: demo.lastResult,
+        history: Array.isArray(demo.history) ? demo.history : [],
+        updatedAt: Date.now(),
+      },
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    a.href = url;
+    a.download = `beatline-account-${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+    setStatus("ok", "Account backup downloaded");
+  }
+
+  function importAccountBackupFile(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result || "{}"));
+        const state =
+          parsed && parsed.state && typeof parsed.state === "object"
+            ? parsed.state
+            : parsed;
+        if (!state || typeof state !== "object") {
+          throw new Error("Invalid backup file");
+        }
+        if (
+          !window.confirm(
+            "Replace current demo account, open trade, and history with this backup?"
+          )
+        ) {
+          return;
+        }
+        applyDemoState(
+          {
+            on: state.on !== false,
+            start: state.start,
+            balance: state.balance,
+            realizedPl: state.realizedPl,
+            position: state.position,
+            lastResult: state.lastResult,
+            history: state.history,
+            updatedAt: Date.now(),
+          },
+          { syncServer: true }
+        );
+        setStatus(
+          "ok",
+          `Backup restored · ${money(demo.balance)} · ${(demo.history || []).length} trades`
+        );
+      } catch (err) {
+        setStatus("warn", `Import failed: ${err.message || err}`);
+      }
+    };
+    reader.onerror = () => setStatus("warn", "Could not read backup file");
+    reader.readAsText(file);
   }
 
   function formatHistoryTime(ts) {
@@ -3252,6 +3454,17 @@
     if (el.tradeHistoryClear) {
       el.tradeHistoryClear.addEventListener("click", () => clearTradeHistory());
     }
+    if (el.accountExport) {
+      el.accountExport.addEventListener("click", () => exportAccountBackup());
+    }
+    if (el.accountImport && el.accountImportFile) {
+      el.accountImport.addEventListener("click", () => el.accountImportFile.click());
+      el.accountImportFile.addEventListener("change", () => {
+        const file = el.accountImportFile.files && el.accountImportFile.files[0];
+        importAccountBackupFile(file);
+        el.accountImportFile.value = "";
+      });
+    }
     if (el.demoBuyBest) {
       el.demoBuyBest.addEventListener("click", () => demoBuyBest());
     }
@@ -3470,9 +3683,11 @@
       }
     });
     // Target first so Price-to-beat line exists when candles paint.
-    refreshTarget()
-      .then(() => refreshCandles())
-      .then(refreshSpot);
+    hydrateDemoFromServer().finally(() => {
+      refreshTarget()
+        .then(() => refreshCandles())
+        .then(refreshSpot);
+    });
     setInterval(refreshTarget, TARGET_POLL_MS);
     setInterval(refreshCandles, CANDLE_POLL_MS);
     setInterval(refreshSpot, SPOT_POLL_MS);
