@@ -1099,11 +1099,26 @@
     if (stake >= BUY_AMOUNT_MIN && stake <= BUY_AMOUNT_MAX) {
       setTradeStake(Math.round(stake));
     }
+    const added = !!existing;
+    pushTradeHistory({
+      id: `${Date.now()}-${added ? "add" : "buy"}-${lastTicker || "x"}`,
+      at: Date.now(),
+      kind: added ? "add" : "buy",
+      side,
+      ticker: lastTicker || null,
+      contracts: sized.contracts,
+      askCents: sized.askCents,
+      total: sized.total,
+      fills: 1,
+      exitCents: null,
+      pl: null,
+      won: null,
+      accounted: !!accounted,
+    });
     saveDemoState();
     refreshBestSide();
     renderDemoUi();
     const sideLabel = side === "above" ? "Above" : "Below";
-    const added = !!existing;
     setStatus(
       "ok",
       accounted
