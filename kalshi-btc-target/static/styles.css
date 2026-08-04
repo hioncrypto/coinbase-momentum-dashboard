@@ -29,8 +29,8 @@ body {
 }
 
 body {
-  display: grid;
-  grid-template-rows: auto auto minmax(280px, 1fr) auto auto auto;
+  display: flex;
+  flex-direction: column;
   height: 100dvh;
   max-height: 100dvh;
   overflow: hidden;
@@ -39,39 +39,55 @@ body {
 }
 
 .top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "brand clock actions"
+    "status status status";
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 4px;
   padding: 10px 14px 4px;
+  min-width: 0;
 }
 
-.top-right {
+.top-right,
+.top-actions {
+  grid-area: actions;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
 }
 
 .clock {
-  font-size: 0.98rem;
+  grid-area: clock;
+  font-size: 0.95rem;
   font-weight: 750;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
   color: var(--fg);
-  padding: 6px 10px;
+  padding: 6px 9px;
   border-radius: 8px;
   border: 1px solid rgba(26, 201, 107, 0.28);
   background: rgba(8, 14, 11, 0.55);
-  min-width: 5.6rem;
+  min-width: 5.4rem;
   text-align: center;
   line-height: 1;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .brand {
+  grid-area: brand;
   display: flex;
   gap: 10px;
   align-items: center;
+  min-width: 0;
+}
+
+.brand > div {
+  min-width: 0;
 }
 
 .mark {
@@ -93,16 +109,25 @@ h1 {
   margin: 2px 0 0;
   color: var(--muted);
   font-size: 0.78rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .status {
-  font-size: 0.72rem;
-  padding: 5px 8px;
+  grid-area: status;
+  justify-self: start;
+  font-size: 0.68rem;
+  padding: 3px 8px;
   border-radius: 999px;
   border: 1px solid var(--border);
   background: rgba(0, 0, 0, 0.25);
   color: var(--muted);
   white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .status[data-state="ok"] {
@@ -1069,15 +1094,15 @@ h1 {
 .chart-wrap {
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  flex: 1 1 auto;
   min-height: 0;
   margin: 4px 8px;
   overflow: hidden;
 }
 
 #chart {
-  flex: 1;
-  min-height: 200px;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .tf-btns {
@@ -1638,13 +1663,14 @@ h1 {
 .chart-wrap {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
   min-height: 0;
   margin: 0 8px;
 }
 
 #chart {
-  flex: 1;
-  min-height: 240px;
+  flex: 1 1 auto;
+  min-height: 0;
   border: 1px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
@@ -1703,53 +1729,162 @@ h1 {
 
 /* —— Fit one phone screen (final overrides) —— */
 body.portrait-app {
+  display: block;
   height: 100dvh;
   max-height: 100dvh;
   overflow: hidden;
-  /* header | summary | chart (flex) | trade | buy-dock | status */
-  grid-template-rows: auto auto minmax(42dvh, 1fr) auto auto auto;
+  margin: 0;
 }
 
-.summary-panel {
-  max-height: 26dvh;
-  margin: 0 8px 2px;
-  padding: 6px 10px 4px;
-  overflow: hidden;
-}
-
-.hero-beat {
-  margin-bottom: 4px;
-}
-
-.hero-beat .value.beat {
-  font-size: 1.4rem;
-}
-
-.live-row {
-  margin-bottom: 4px;
-}
-
-.countdown {
-  font-size: 1.4rem;
-}
-
-.trade-panel {
-  max-height: 24dvh;
-}
-
-.chart-wrap {
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  max-height: 100dvh;
   overflow: hidden;
   min-height: 0;
+}
+
+.app-shell > .top,
+.app-shell > .summary-panel,
+.app-shell > .trade-panel,
+.app-shell > .buy-dock {
+  flex: 0 0 auto;
+}
+
+.app-shell > .chart-wrap {
+  flex: 1 1 auto !important;
+  min-height: 48dvh !important;
+  display: flex !important;
+  flex-direction: column;
+  overflow: hidden;
   margin: 2px 8px;
 }
 
-#chart {
-  flex: 1;
-  min-height: 280px;
+.top {
+  padding: 6px 12px 2px;
+}
+
+.clock {
+  font-size: 0.92rem;
+  padding: 5px 8px;
+  min-width: 5.2rem;
+}
+
+/* Compact summary */
+.summary-panel {
+  max-height: none;
+  margin: 0 8px 2px;
+  padding: 4px 8px 4px;
+  overflow: visible;
+}
+
+.hero-beat {
+  margin-bottom: 2px;
+}
+
+.hero-beat .value.beat {
+  font-size: 1.2rem;
+}
+
+.hero-beat .meta {
+  font-size: 0.65rem;
+}
+
+body.portrait-app .live-row {
+  grid-template-columns: 1.1fr 1fr 0.9fr !important;
+  gap: 4px;
+  margin-bottom: 0;
+}
+
+body.portrait-app .live-block.live-time,
+body.portrait-app .live-time {
+  grid-column: auto !important;
+}
+
+.live-block {
+  padding: 4px 6px;
+}
+
+.live-block .value.spot,
+.spot-delta {
+  font-size: 0.92rem;
+}
+
+.countdown {
+  font-size: 1.1rem;
+}
+
+.countdown-meta,
+.edge-line {
+  display: none !important;
+}
+
+.tf-btns {
+  margin: 0 0 2px;
+  flex: 0 0 auto;
+}
+
+.app-shell > .chart-wrap > #chart,
+body.portrait-app #chart {
+  flex: 1 1 auto !important;
+  min-height: 44dvh !important;
+  height: auto !important;
+}
+
+/*
+  Trade strip: compact odds only.
+  Best Side / stake / ROI live in the buy sheet + Best dock button.
+*/
+.trade-panel {
+  max-height: none;
+  margin: 2px 8px 0;
+  padding: 4px 8px 4px;
+  overflow: visible;
+}
+
+.odds-heading {
+  margin-bottom: 4px;
+}
+
+.odds-hint {
+  display: none !important;
+}
+
+.odds-row {
+  gap: 6px;
+}
+
+.odd {
+  padding: 5px 8px;
+}
+
+.odd-pct {
+  font-size: 1.15rem;
+}
+
+.odd-book {
+  font-size: 0.65rem;
+}
+
+.roi-panel,
+.roi-heading,
+.stake-slider-wrap,
+.roi-grid,
+.roi-note,
+.best-side {
+  display: none !important;
 }
 
 .buy-dock {
   z-index: 5;
+  margin: 0;
+  top: 0;
+  padding: 8px 10px calc(8px + var(--safe-bottom));
+}
+
+.dock-btn {
+  min-height: 48px;
 }
 
 /* Tutorial */

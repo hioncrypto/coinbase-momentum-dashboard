@@ -1985,12 +1985,18 @@
 
   function resizeChart() {
     if (!chart || !el.chart) return;
-    const width = el.chart.clientWidth || el.chart.offsetWidth;
-    const height = el.chart.clientHeight || el.chart.offsetHeight;
-    chart.applyOptions({
-      width: Math.max(240, Math.floor(width || 280)),
-      height: Math.max(260, Math.floor(height || 320)),
-    });
+    const wrap = el.chart.parentElement;
+    const width = el.chart.clientWidth || (wrap && wrap.clientWidth) || 0;
+    let height = el.chart.clientHeight || 0;
+    if ((height < 120 || width < 40) && wrap) {
+      const tf = wrap.querySelector(".tf-btns");
+      const tfH = tf ? tf.offsetHeight : 0;
+      height = Math.max(height, wrap.clientHeight - tfH - 2);
+    }
+    const w = Math.max(1, Math.floor(width || 1));
+    const h = Math.max(1, Math.floor(height || 1));
+    if (w < 40 || h < 80) return;
+    chart.applyOptions({ width: w, height: h });
   }
 
   function clearTargetLine() {
@@ -2578,6 +2584,11 @@
       tryLockPortrait();
       resizeChart();
     });
+    if (typeof ResizeObserver === "function" && el.chart) {
+      const ro = new ResizeObserver(() => resizeChart());
+      ro.observe(el.chart);
+      if (el.chart.parentElement) ro.observe(el.chart.parentElement);
+    }
     window.addEventListener("orientationchange", afterOrientationSettle);
     if (screen.orientation && typeof screen.orientation.addEventListener === "function") {
       screen.orientation.addEventListener("change", afterOrientationSettle);

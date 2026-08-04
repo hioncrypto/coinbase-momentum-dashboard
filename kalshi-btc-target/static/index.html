@@ -22,12 +22,12 @@
     <link rel="apple-touch-icon" href="/icons/icon-192.png?v=2.6" />
     <link rel="icon" href="/icons/icon-192.png?v=2.6" sizes="192x192" type="image/png" />
     <title>BeatLine</title>
-    <link rel="stylesheet" href="/styles.css?v=4.2" />
+    <link rel="stylesheet" href="/styles.css?v=5.0" />
     <script
       src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"
       defer
     ></script>
-    <script src="/app.js?v=4.2" defer></script>
+    <script src="/app.js?v=5.0" defer></script>
   </head>
   <body class="portrait-app">
     <div id="rotate-gate" class="rotate-gate" hidden>
@@ -35,7 +35,8 @@
       <span>Keep the phone upright. Tap here to lock.</span>
     </div>
 
-    <header class="top">
+    <div class="app-shell">
+      <header class="top">
       <div class="brand">
         <span class="mark" aria-hidden="true"></span>
         <div>
@@ -43,8 +44,48 @@
           <p class="sub">15-minute BTC · Price to beat</p>
         </div>
       </div>
-      <div class="top-right">
-        <div id="clock" class="clock" aria-live="off">—:—:—</div>
+      <div id="clock" class="clock" aria-live="off">—:—:—</div>
+      <div class="top-actions">
+        <button
+          type="button"
+          id="push-badge"
+          class="push-badge"
+          title="Alerts off"
+          aria-label="Toggle alerts"
+          aria-pressed="false"
+        >
+          <svg class="bell-off" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <path
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.9"
+              stroke-linejoin="round"
+              stroke-linecap="round"
+              d="M12 3.4a5.8 5.8 0 0 0-5.8 5.8v3.2L4.4 15.2V17h15.2v-1.8l-1.8-2.8V9.2A5.8 5.8 0 0 0 12 3.4Z"
+            />
+            <path
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.9"
+              stroke-linecap="round"
+              d="M9.7 17.1a2.3 2.3 0 0 0 4.6 0"
+            />
+            <path
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.1"
+              stroke-linecap="round"
+              d="M4.2 4.2l15.6 15.6"
+            />
+          </svg>
+          <svg class="bell-on" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M12 22a2.2 2.2 0 0 0 2.2-2.2h-4.4A2.2 2.2 0 0 0 12 22Zm7-6.2V11a7 7 0 1 0-14 0v4.8L3 17.8V19h18v-1.2l-2-1.8Z"
+            />
+          </svg>
+          <span class="push-badge-dot" aria-hidden="true"></span>
+        </button>
         <button
           type="button"
           id="push-badge"
@@ -97,9 +138,154 @@
         >
           <span class="menu-dots" aria-hidden="true"></span>
         </button>
-        <div id="status" class="status" data-state="loading">Connecting…</div>
       </div>
+      <div id="status" class="status" data-state="loading">Connecting…</div>
     </header>
+      <section class="summary-panel" aria-live="polite">
+      <div class="hero-beat">
+        <div class="label" id="target-label">Price to beat</div>
+        <div id="target-value" class="value beat">—</div>
+        <div id="target-meta" class="meta">Waiting for Kalshi…</div>
+      </div>
+
+      <div class="live-row">
+        <div class="live-block">
+          <div class="label">Live now</div>
+          <div id="spot-value" class="value spot">—</div>
+        </div>
+        <div class="live-block live-delta">
+          <div class="label">vs beat</div>
+          <div id="spot-delta" class="spot-delta">—</div>
+        </div>
+        <div class="live-block live-time">
+          <div class="label">Time left</div>
+          <div id="countdown" class="countdown">—:—</div>
+        </div>
+      </div>
+
+      <div id="settle-banner" class="settle-banner" hidden>
+        <div class="settle-title" id="settle-title">Last minute · settling</div>
+        <div class="settle-avg" id="settle-avg">—</div>
+        <div class="settle-meta" id="settle-meta">
+          Kalshi averages the last 60 seconds — not just the final tick.
+        </div>
+      </div>
+
+      <p id="countdown-meta" class="countdown-meta">Until this 15m window ends</p>
+      <p id="bg-status" class="sound-hint" hidden></p>
+      <p id="edge-line" class="edge-line" hidden></p>
+
+      <div id="demo-live" class="demo-live" hidden aria-live="polite">
+        <div class="demo-live-top">
+          <div>
+            <div id="demo-live-kicker" class="demo-live-kicker">Open trade</div>
+            <div id="demo-live-side" class="demo-live-side">—</div>
+          </div>
+          <div id="demo-live-pl" class="demo-live-pl">—</div>
+        </div>
+        <div id="demo-live-pct" class="demo-live-pct">—</div>
+        <button type="button" id="demo-live-close" class="demo-live-close">
+          Close at bid
+        </button>
+        <div id="demo-live-factors" class="demo-live-factors"></div>
+        <div id="demo-live-meta" class="demo-live-meta" hidden>—</div>
+      </div>
+    </section>
+      <section class="chart-wrap">
+      <div
+        id="timeframe"
+        class="tf-btns"
+        role="group"
+        aria-label="Chart candle size"
+      >
+        <button type="button" class="tf-btn" data-tf="15m" aria-pressed="true">15m</button>
+        <button type="button" class="tf-btn" data-tf="5m" aria-pressed="false">5m</button>
+        <button type="button" class="tf-btn" data-tf="1m" aria-pressed="false">1m</button>
+      </div>
+      <main id="chart" role="img" aria-label="Bitcoin chart with Price to beat line"></main>
+    </section>
+      <section class="trade-panel">
+      <div class="odds-block">
+        <div class="odds-heading">
+          <span>Market chance</span>
+          <span id="odds-hint" class="odds-hint">What traders are pricing</span>
+        </div>
+        <div class="odds-row" id="odds-row" hidden>
+          <div class="odd yes">
+            <span class="odd-label">Above</span>
+            <span id="yes-pct" class="odd-pct">—</span>
+            <span id="yes-book" class="odd-book">—</span>
+          </div>
+          <div class="odd no">
+            <span class="odd-label">Below</span>
+            <span id="no-pct" class="odd-pct">—</span>
+            <span id="no-book" class="odd-book">—</span>
+          </div>
+        </div>
+        <div id="roi-panel" class="roi-panel" hidden>
+          <div id="best-side" class="best-side" hidden aria-live="polite">
+            <div class="best-side-kicker">Best side</div>
+            <div id="best-side-label" class="best-side-label">—</div>
+            <div id="best-side-amount" class="best-side-amount">—</div>
+            <div id="best-side-meta" class="best-side-meta">—</div>
+          </div>
+          <div class="roi-heading">
+            <span>Trade size</span>
+            <span id="stake-value" class="stake-value">$50</span>
+          </div>
+          <label class="stake-slider-wrap" for="stake-slider">
+            <input
+              id="stake-slider"
+              class="stake-slider"
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value="50"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow="50"
+              aria-label="Trade size in dollars"
+            />
+            <div class="stake-ends">
+              <span>$0</span>
+              <span>$100</span>
+            </div>
+          </label>
+          <div class="roi-grid">
+            <div class="roi-card above">
+              <div class="roi-side">Buy Above</div>
+              <div id="roi-above-price" class="roi-price">—</div>
+              <div id="roi-above-summary" class="roi-summary">—</div>
+              <div id="roi-above-detail" class="roi-detail">—</div>
+            </div>
+            <div class="roi-card below">
+              <div class="roi-side">Buy Below</div>
+              <div id="roi-below-price" class="roi-price">—</div>
+              <div id="roi-below-summary" class="roi-summary">—</div>
+              <div id="roi-below-detail" class="roi-detail">—</div>
+            </div>
+          </div>
+          <p class="roi-note">
+            Est. Kalshi taker fee included. Win pays $1/contract · lose = $0.
+          </p>
+        </div>
+      </div>
+    </section>
+      <section class="buy-dock" aria-label="Buy">
+      <button type="button" id="dock-buy-above" class="dock-btn above">
+        <span class="dock-label">Buy Above</span>
+        <span id="dock-above-pct" class="dock-pct">—</span>
+      </button>
+      <button type="button" id="dock-buy-best" class="dock-btn best" title="Buy Best Side">
+        Best
+      </button>
+      <button type="button" id="dock-buy-below" class="dock-btn below">
+        <span class="dock-label">Buy Below</span>
+        <span id="dock-below-pct" class="dock-pct">—</span>
+      </button>
+    </section>
+    </div>
 
     <div id="options-backdrop" class="options-backdrop" hidden></div>
     <aside
@@ -175,7 +361,6 @@
         <div id="demo-last" class="demo-last">No trades yet</div>
       </div>
     </aside>
-
     <div id="buy-backdrop" class="buy-backdrop" hidden></div>
     <div
       id="buy-sheet"
@@ -238,7 +423,6 @@
         <div id="buy-slide-thumb" class="buy-slide-thumb" aria-hidden="true">››</div>
       </div>
     </div>
-
     <div id="tutorial-backdrop" class="tutorial-backdrop" hidden></div>
     <div
       id="tutorial"
@@ -258,157 +442,8 @@
         <button type="button" id="tutorial-next" class="tutorial-btn primary">Next</button>
       </div>
     </div>
-
-    <section class="summary-panel" aria-live="polite">
-      <div class="hero-beat">
-        <div class="label" id="target-label">Price to beat</div>
-        <div id="target-value" class="value beat">—</div>
-        <div id="target-meta" class="meta">Waiting for Kalshi…</div>
-      </div>
-
-      <div class="live-row">
-        <div class="live-block">
-          <div class="label">Live now</div>
-          <div id="spot-value" class="value spot">—</div>
-        </div>
-        <div class="live-block live-delta">
-          <div class="label">vs beat</div>
-          <div id="spot-delta" class="spot-delta">—</div>
-        </div>
-        <div class="live-block live-time">
-          <div class="label">Time left</div>
-          <div id="countdown" class="countdown">—:—</div>
-        </div>
-      </div>
-
-      <div id="settle-banner" class="settle-banner" hidden>
-        <div class="settle-title" id="settle-title">Last minute · settling</div>
-        <div class="settle-avg" id="settle-avg">—</div>
-        <div class="settle-meta" id="settle-meta">
-          Kalshi averages the last 60 seconds — not just the final tick.
-        </div>
-      </div>
-
-      <p id="countdown-meta" class="countdown-meta">Until this 15m window ends</p>
-      <p id="bg-status" class="sound-hint" hidden></p>
-      <p id="edge-line" class="edge-line" hidden></p>
-
-      <div id="demo-live" class="demo-live" hidden aria-live="polite">
-        <div class="demo-live-top">
-          <div>
-            <div id="demo-live-kicker" class="demo-live-kicker">Open trade</div>
-            <div id="demo-live-side" class="demo-live-side">—</div>
-          </div>
-          <div id="demo-live-pl" class="demo-live-pl">—</div>
-        </div>
-        <div id="demo-live-pct" class="demo-live-pct">—</div>
-        <button type="button" id="demo-live-close" class="demo-live-close">
-          Close at bid
-        </button>
-        <div id="demo-live-factors" class="demo-live-factors"></div>
-        <div id="demo-live-meta" class="demo-live-meta" hidden>—</div>
-      </div>
-    </section>
-
-    <section class="chart-wrap">
-      <div
-        id="timeframe"
-        class="tf-btns"
-        role="group"
-        aria-label="Chart candle size"
-      >
-        <button type="button" class="tf-btn" data-tf="15m" aria-pressed="true">15m</button>
-        <button type="button" class="tf-btn" data-tf="5m" aria-pressed="false">5m</button>
-        <button type="button" class="tf-btn" data-tf="1m" aria-pressed="false">1m</button>
-      </div>
-      <main id="chart" role="img" aria-label="Bitcoin chart with Price to beat line"></main>
-    </section>
-
-    <section class="trade-panel">
-      <div class="odds-block">
-        <div class="odds-heading">
-          <span>Market chance</span>
-          <span id="odds-hint" class="odds-hint">What traders are pricing</span>
-        </div>
-        <div class="odds-row" id="odds-row" hidden>
-          <div class="odd yes">
-            <span class="odd-label">Above</span>
-            <span id="yes-pct" class="odd-pct">—</span>
-            <span id="yes-book" class="odd-book">—</span>
-          </div>
-          <div class="odd no">
-            <span class="odd-label">Below</span>
-            <span id="no-pct" class="odd-pct">—</span>
-            <span id="no-book" class="odd-book">—</span>
-          </div>
-        </div>
-        <div id="roi-panel" class="roi-panel" hidden>
-          <div id="best-side" class="best-side" hidden aria-live="polite">
-            <div class="best-side-kicker">Best side</div>
-            <div id="best-side-label" class="best-side-label">—</div>
-            <div id="best-side-amount" class="best-side-amount">—</div>
-            <div id="best-side-meta" class="best-side-meta">—</div>
-          </div>
-          <div class="roi-heading">
-            <span>Trade size</span>
-            <span id="stake-value" class="stake-value">$50</span>
-          </div>
-          <label class="stake-slider-wrap" for="stake-slider">
-            <input
-              id="stake-slider"
-              class="stake-slider"
-              type="range"
-              min="0"
-              max="100"
-              step="1"
-              value="50"
-              aria-valuemin="0"
-              aria-valuemax="100"
-              aria-valuenow="50"
-              aria-label="Trade size in dollars"
-            />
-            <div class="stake-ends">
-              <span>$0</span>
-              <span>$100</span>
-            </div>
-          </label>
-          <div class="roi-grid">
-            <div class="roi-card above">
-              <div class="roi-side">Buy Above</div>
-              <div id="roi-above-price" class="roi-price">—</div>
-              <div id="roi-above-summary" class="roi-summary">—</div>
-              <div id="roi-above-detail" class="roi-detail">—</div>
-            </div>
-            <div class="roi-card below">
-              <div class="roi-side">Buy Below</div>
-              <div id="roi-below-price" class="roi-price">—</div>
-              <div id="roi-below-summary" class="roi-summary">—</div>
-              <div id="roi-below-detail" class="roi-detail">—</div>
-            </div>
-          </div>
-          <p class="roi-note">
-            Est. Kalshi taker fee included. Win pays $1/contract · lose = $0.
-          </p>
-        </div>
-      </div>
-    </section>
-
-    <section class="buy-dock" aria-label="Buy">
-      <button type="button" id="dock-buy-above" class="dock-btn above">
-        <span class="dock-label">Buy Above</span>
-        <span id="dock-above-pct" class="dock-pct">—</span>
-      </button>
-      <button type="button" id="dock-buy-best" class="dock-btn best" title="Buy Best Side">
-        Best
-      </button>
-      <button type="button" id="dock-buy-below" class="dock-btn below">
-        <span class="dock-label">Buy Below</span>
-        <span id="dock-below-pct" class="dock-pct">—</span>
-      </button>
-    </section>
-
     <footer class="foot">
       <span id="chart-tf-label">Chart · live Kalshi index</span>
     </footer>
-  </body>
+</body>
 </html>
