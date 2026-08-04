@@ -792,7 +792,18 @@
         timeVisible: true,
         secondsVisible: false,
       },
-      handleScroll: { vertTouchDrag: false },
+      handleScroll: {
+        mouseWheel: true,
+        pressedMouseMove: true,
+        horzTouchDrag: true,
+        vertTouchDrag: true,
+      },
+      handleScale: {
+        axisPressedMouseMove: true,
+        axisDoubleClickReset: true,
+        mouseWheel: true,
+        pinch: true,
+      },
     });
     series = chart.addCandlestickSeries({
       upColor: "#1ac96b",
