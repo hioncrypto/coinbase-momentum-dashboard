@@ -1644,7 +1644,7 @@ h1 {
 
 #chart {
   flex: 1;
-  min-height: 120px;
+  min-height: 240px;
   border: 1px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
@@ -1706,13 +1706,15 @@ body.portrait-app {
   height: 100dvh;
   max-height: 100dvh;
   overflow: hidden;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  /* header | summary | chart (flex) | trade | buy-dock | status */
+  grid-template-rows: auto auto minmax(42dvh, 1fr) auto auto auto;
 }
 
 .summary-panel {
-  max-height: 38dvh;
+  max-height: 26dvh;
   margin: 0 8px 2px;
-  padding: 6px 10px 6px;
+  padding: 6px 10px 4px;
+  overflow: hidden;
 }
 
 .hero-beat {
@@ -1731,12 +1733,19 @@ body.portrait-app {
   font-size: 1.4rem;
 }
 
+.trade-panel {
+  max-height: 24dvh;
+}
+
 .chart-wrap {
   overflow: hidden;
+  min-height: 0;
+  margin: 2px 8px;
 }
 
 #chart {
-  min-height: 100px;
+  flex: 1;
+  min-height: 280px;
 }
 
 .buy-dock {
