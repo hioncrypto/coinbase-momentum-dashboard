@@ -38,6 +38,11 @@
     noBook: document.getElementById("no-book"),
     oddsHint: document.getElementById("odds-hint"),
     edgeLine: document.getElementById("edge-line"),
+    roiPanel: document.getElementById("roi-panel"),
+    roiAboveSummary: document.getElementById("roi-above-summary"),
+    roiAboveDetail: document.getElementById("roi-above-detail"),
+    roiBelowSummary: document.getElementById("roi-below-summary"),
+    roiBelowDetail: document.getElementById("roi-below-detail"),
     settleBanner: document.getElementById("settle-banner"),
     settleTitle: document.getElementById("settle-title"),
     settleAvg: document.getElementById("settle-avg"),
@@ -395,6 +400,96 @@
     return `ask ${ask}¢`;
   }
 
+  function dollars(n) {
+    if (n == null || !Number.isFinite(n)) return "—";
+    return n.toLocaleString("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }
+
+  /** Kalshi taker fee ≈ round_up(0.07 × C × P × (1 − P)) to the next cent. */
+  function kalshiTakerFee(contracts, priceDollars) {
+    const C = Math.max(0, contracts);
+    const P = Math.min(0.99, Math.max(0.01, priceDollars));
+    const raw = 0.07 * C * P * (1 - P);
+    return Math.ceil(raw * 100 - 1e-9) / 100;
+  }
+
+  /**
+   * Example: spend about $100 buying this side at the ask (taker).
+   * Returns null if we can't price it.
+   */
+  function roiForStake(askCents, stakeUsd = 100) {
+    if (askCents == null || !Number.isFinite(askCents)) return null;
+    const P = askCents / 100;
+    if (!(P > 0 && P < 1)) return null;
+    const contracts = Math.max(1, Math.floor(stakeUsd / P));
+    const cost = contracts * P;
+    const fee = kalshiTakerFee(contracts, P);
+    const total = cost + fee;
+    const winPayout = contracts * 1;
+    const profitIfWin = winPayout - total;
+    const roiIfWin = total > 0 ? (profitIfWin / total) * 100 : null;
+    return {
+      askCents: Math.round(askCents),
+      contracts,
+      cost,
+      fee,
+      total,
+      winPayout,
+      profitIfWin,
+      roiIfWin,
+      lossIfWrong: -total,
+    };
+  }
+
+  function fillRoiCard(summaryEl, detailEl, sideLabel, askCents) {
+    const r = roiForStake(askCents, 100);
+    if (!r) {
+      if (summaryEl) summaryEl.textContent = "—";
+      if (detailEl) detailEl.textContent = "Need a live ask price";
+      return false;
+    }
+    const roiTxt =
+      r.roiIfWin != null
+        ? `${r.roiIfWin >= 0 ? "+" : ""}${r.roiIfWin.toFixed(0)}% ROI`
+        : "—";
+    if (summaryEl) {
+      summaryEl.textContent = `Win ${dollars(r.profitIfWin)} · ${roiTxt}`;
+    }
+    if (detailEl) {
+      detailEl.innerHTML =
+        `Buy ~${r.contracts} @ ${r.askCents}¢<br>` +
+        `Cost ${dollars(r.cost)} + fee ${dollars(r.fee)} = ${dollars(r.total)}<br>` +
+        `If right → get ${dollars(r.winPayout)} · profit ${dollars(r.profitIfWin)}<br>` +
+        `If wrong → lose ${dollars(r.total)}`;
+    }
+    return true;
+  }
+
+  function updateRoi(data) {
+    if (!el.roiPanel) return;
+    // Prefer live ask; fall back to displayed mid %.
+    let aboveAsk = data && data.yes_ask_pct;
+    let belowAsk = data && data.no_ask_pct;
+    if (aboveAsk == null && data && data.yes_pct != null) aboveAsk = data.yes_pct;
+    if (belowAsk == null && data && data.no_pct != null) belowAsk = data.no_pct;
+    // If only Yes book exists, infer No ask ≈ 100 − Yes bid.
+    if (belowAsk == null && data && data.yes_bid_pct != null) {
+      belowAsk = Math.max(1, 100 - data.yes_bid_pct);
+    }
+    if (aboveAsk == null && data && data.no_bid_pct != null) {
+      aboveAsk = Math.max(1, 100 - data.no_bid_pct);
+    }
+
+    const okA = fillRoiCard(el.roiAboveSummary, el.roiAboveDetail, "Above", aboveAsk);
+    const okB = fillRoiCard(el.roiBelowSummary, el.roiBelowDetail, "Below", belowAsk);
+    el.roiPanel.hidden = !(okA || okB);
+  }
+
   function updateOdds(data) {
     if (!el.oddsRow || !el.yesPct || !el.noPct) return;
     const yes = data && data.yes_pct;
@@ -406,6 +501,7 @@
       if (el.yesBook) el.yesBook.textContent = "—";
       if (el.noBook) el.noBook.textContent = "—";
       lastYesPct = null;
+      if (el.roiPanel) el.roiPanel.hidden = true;
       return;
     }
     el.oddsRow.hidden = false;
@@ -425,6 +521,7 @@
         el.oddsHint.textContent = `Spread ${data.spread_cents}¢`;
       } else el.oddsHint.textContent = "What traders are pricing";
     }
+    updateRoi(data);
   }
 
   function updateEdgeLine(spot) {

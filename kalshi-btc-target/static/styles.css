@@ -377,6 +377,91 @@ h1 {
   color: #cfe6d9;
 }
 
+.roi-panel {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.roi-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: baseline;
+  margin-bottom: 6px;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.roi-hint {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+}
+
+.roi-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.roi-card {
+  padding: 10px 11px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(8, 14, 11, 0.45);
+}
+
+.roi-card.above {
+  border-color: rgba(26, 201, 107, 0.3);
+}
+
+.roi-card.below {
+  border-color: rgba(212, 84, 84, 0.3);
+}
+
+.roi-side {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.roi-summary {
+  margin-top: 4px;
+  font-size: 1.05rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.roi-card.above .roi-summary {
+  color: var(--accent);
+}
+
+.roi-card.below .roi-summary {
+  color: var(--down);
+}
+
+.roi-detail {
+  margin-top: 6px;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.roi-note {
+  margin: 8px 0 0;
+  font-size: 0.7rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
 .countdown-meta {
   margin-top: 8px;
 }
