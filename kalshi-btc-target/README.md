@@ -36,22 +36,24 @@ docker run --rm -p 8765:8765 beatline
 2. Menu → **Add to Home Screen**
 3. Launch the BeatLine icon
 
+## Hosting (stop trycloudflare from going stale)
+
+Quick Cloudflare tunnels change hostnames and die. Use a real host:
+
+- **Render (free, recommended):** open  
+  https://render.com/deploy?repo=https://github.com/hioncrypto/coinbase-momentum-dashboard  
+  → permanent `*.onrender.com` URL. Full steps: [`DEPLOY.md`](./DEPLOY.md)
+- **Fly.io / Docker / VPS:** see [`DEPLOY.md`](./DEPLOY.md)
+
+GitHub Pages cannot run BeatLine’s Python backend.
+
 ## Demo account & trade history
 
 Balance, open position, P/L, and trade history sync to the **BeatLine server** (`data/demo_account.json`), not only the browser.
 
-That way a new Cloudflare tunnel URL still restores the same account when it hits the same server. Clearing history in Options still clears the server copy.
+On a **stable host URL**, your phone also keeps the same account in browser storage. Use ⋮ Options → **Export backup** for an offline P/L copy.
 
-> Temporary `*.trycloudflare.com` links can still go down. The account survives **URL** changes; it does not survive wiping the server disk / rebuilding a fresh host with no `data/` volume.
-
-## Hosting notes
-
-**GitHub Pages alone cannot host BeatLine.** Pages only serves static files; this app needs `server.py` for Kalshi/BRTI APIs and account persistence.
-
-For a stable public URL + durable P/L:
-
-1. Deploy `kalshi-btc-target` on a small always-on host (Fly.io, Railway, Render, a VPS) with a persistent disk for `data/`.
-2. Or run `python3 server.py` on a machine you control and put a **named** Cloudflare Tunnel / custom domain in front of it (not a quick `trycloudflare` link).
+> Temporary `*.trycloudflare.com` links can still go down. Prefer Render/Fly from [`DEPLOY.md`](./DEPLOY.md).
 
 ## API
 

@@ -1,0 +1,23 @@
+# BeatLine — Deploy to Render (stable public URL)
+# Open: https://render.com/deploy?repo=https://github.com/hioncrypto/coinbase-momentum-dashboard
+#
+# Free plan: URL stays the same (no more trycloudflare hostname churn).
+# Note: Free instances sleep after ~15m idle and wake on next visit (~30–60s).
+# Phone localStorage keeps P/L on that stable URL; Export backup for an offline copy.
+
+services:
+  - type: web
+    name: beatline
+    runtime: python
+    plan: free
+    region: oregon
+    rootDir: kalshi-btc-target
+    buildCommand: pip install -r requirements.txt
+    startCommand: python3 server.py
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: PYTHONUNBUFFERED
+        value: "1"

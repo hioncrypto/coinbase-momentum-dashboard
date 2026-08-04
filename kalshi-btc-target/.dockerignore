@@ -1,0 +1,10 @@
+__pycache__
+*.pyc
+data
+.git
+.gitignore
+demo_smoke.mjs
+smoke_test.py
+README.md
+DEPLOY.md
+fly.toml

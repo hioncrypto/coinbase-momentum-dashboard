@@ -540,6 +540,32 @@ h1 {
   font-size: 0.75rem;
 }
 
+.options-deploy {
+  display: block;
+  margin: 14px 0 4px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(26, 201, 107, 0.35);
+  background: rgba(26, 201, 107, 0.1);
+  color: inherit;
+  text-decoration: none;
+}
+
+.options-deploy strong {
+  display: block;
+  font-size: 0.92rem;
+  color: #d7ffe8;
+}
+
+.options-deploy em {
+  display: block;
+  margin-top: 4px;
+  font-style: normal;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
 .trade-history-list {
   display: flex;
   flex-direction: column;
