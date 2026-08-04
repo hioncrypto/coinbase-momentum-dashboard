@@ -20,12 +20,12 @@
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
     <link rel="icon" href="/icons/icon-192.png" sizes="192x192" type="image/png" />
     <title>Kalshi BTC · Above or Below</title>
-    <link rel="stylesheet" href="/styles.css?v=3.3" />
+    <link rel="stylesheet" href="/styles.css?v=3.4" />
     <script
       src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"
       defer
     ></script>
-    <script src="/app.js?v=3.3" defer></script>
+    <script src="/app.js?v=3.4" defer></script>
   </head>
   <body class="portrait-app">
     <div id="rotate-gate" class="rotate-gate" hidden>
@@ -149,6 +149,13 @@
         <div class="demo-pos-block">
           <div class="demo-label">Open position</div>
           <div id="demo-position" class="demo-position">Flat</div>
+          <div id="demo-mark" class="demo-mark" hidden>
+            <div id="demo-mark-pl" class="demo-mark-pl">—</div>
+            <div id="demo-mark-meta" class="demo-mark-meta">—</div>
+          </div>
+          <button type="button" id="demo-close" class="demo-btn close-trade" hidden>
+            Close trade at bid
+          </button>
         </div>
 
         <div class="demo-actions">
@@ -157,7 +164,7 @@
           <button type="button" id="demo-buy-below" class="demo-btn below">Buy Below</button>
         </div>
         <p class="demo-hint">
-          Uses your trade-size slider + live ask/fees. Settles when the 15m window rolls.
+          Uses your trade-size slider + live ask/fees. Rolling mark updates while open — close early at the bid, or hold to window settle.
         </p>
         <div id="demo-last" class="demo-last">No trades yet</div>
       </div>
@@ -196,6 +203,20 @@
       <p id="countdown-meta" class="countdown-meta">Until this 15m window ends</p>
       <p id="bg-status" class="sound-hint" hidden></p>
       <p id="edge-line" class="edge-line" hidden></p>
+
+      <div id="demo-live" class="demo-live" hidden aria-live="polite">
+        <div class="demo-live-top">
+          <div>
+            <div class="demo-live-kicker">Demo position</div>
+            <div id="demo-live-side" class="demo-live-side">—</div>
+          </div>
+          <div id="demo-live-pl" class="demo-live-pl">—</div>
+        </div>
+        <div id="demo-live-meta" class="demo-live-meta">—</div>
+        <button type="button" id="demo-live-close" class="demo-live-close">
+          Close at bid
+        </button>
+      </div>
     </section>
 
     <section class="chart-wrap">

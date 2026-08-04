@@ -457,6 +457,119 @@ h1 {
   color: var(--down);
 }
 
+.demo-mark {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.demo-mark-pl {
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.demo-mark-pl.is-up {
+  color: var(--accent);
+}
+
+.demo-mark-pl.is-down {
+  color: var(--down);
+}
+
+.demo-mark-meta {
+  margin-top: 4px;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.demo-btn.close-trade {
+  width: 100%;
+  margin-top: 8px;
+  border-color: rgba(255, 210, 138, 0.4);
+  background: rgba(255, 210, 138, 0.12);
+  color: var(--warn);
+}
+
+.demo-live {
+  margin-top: 10px;
+  padding: 12px 12px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 210, 138, 0.35);
+  background:
+    linear-gradient(135deg, rgba(255, 210, 138, 0.1), rgba(8, 14, 11, 0.35)),
+    rgba(8, 14, 11, 0.72);
+}
+
+.demo-live-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.demo-live-kicker {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.demo-live-side {
+  margin-top: 2px;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.demo-live-pl {
+  font-size: 1.45rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  text-align: right;
+}
+
+.demo-live-pl.is-up,
+.demo-live-side.is-up {
+  color: var(--accent);
+}
+
+.demo-live-pl.is-down,
+.demo-live-side.is-down {
+  color: var(--down);
+}
+
+.demo-live-meta {
+  margin-top: 6px;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: #cfe6d9;
+  font-variant-numeric: tabular-nums;
+}
+
+.demo-live-close {
+  width: 100%;
+  margin-top: 10px;
+  min-height: 40px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 210, 138, 0.45);
+  background: rgba(255, 210, 138, 0.14);
+  color: var(--warn);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 750;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
 .summary-panel,
 .trade-panel {
   margin: 0 10px 4px;

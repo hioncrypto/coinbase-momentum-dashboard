@@ -72,6 +72,15 @@
     demoBuyAbove: document.getElementById("demo-buy-above"),
     demoBuyBelow: document.getElementById("demo-buy-below"),
     demoLast: document.getElementById("demo-last"),
+    demoMark: document.getElementById("demo-mark"),
+    demoMarkPl: document.getElementById("demo-mark-pl"),
+    demoMarkMeta: document.getElementById("demo-mark-meta"),
+    demoClose: document.getElementById("demo-close"),
+    demoLive: document.getElementById("demo-live"),
+    demoLiveSide: document.getElementById("demo-live-side"),
+    demoLivePl: document.getElementById("demo-live-pl"),
+    demoLiveMeta: document.getElementById("demo-live-meta"),
+    demoLiveClose: document.getElementById("demo-live-close"),
     kalshiLink: null,
   };
 
@@ -178,6 +187,43 @@
     else openOptions();
   }
 
+  function getPositionBidCents(pos) {
+    if (!pos) return null;
+    const bid = pos.side === "above" ? lastRoiBids.above : lastRoiBids.below;
+    if (bid != null && Number.isFinite(bid)) return Math.round(bid);
+    // Fall back to mid/ask if book is one-sided.
+    const ask = pos.side === "above" ? lastRoiAsks.above : lastRoiAsks.below;
+    if (ask != null && Number.isFinite(ask)) return Math.round(ask);
+    return null;
+  }
+
+  function markDemoPosition() {
+    const pos = demo.position;
+    if (!pos) return null;
+    const bidCents = getPositionBidCents(pos);
+    if (bidCents == null) {
+      return {
+        bidCents: null,
+        markValue: null,
+        unrealized: null,
+        exitFee: 0,
+        proceeds: null,
+      };
+    }
+    const P = bidCents / 100;
+    const gross = pos.contracts * P;
+    const exitFee = kalshiTakerFee(pos.contracts, Math.min(0.99, Math.max(0.01, P)));
+    const proceeds = Math.max(0, Math.round((gross - exitFee) * 100) / 100);
+    const unrealized = Math.round((proceeds - pos.total) * 100) / 100;
+    return { bidCents, markValue: gross, unrealized, exitFee, proceeds };
+  }
+
+  function formatPl(n) {
+    if (n == null || !Number.isFinite(n)) return "—";
+    const sign = n > 0 ? "+" : "";
+    return `${sign}${money(n)}`;
+  }
+
   function renderDemoUi() {
     if (el.menuBtn) el.menuBtn.classList.toggle("is-demo", !!demo.on);
     if (el.demoToggle) el.demoToggle.checked = !!demo.on;
@@ -188,21 +234,98 @@
     if (el.demoBalance) el.demoBalance.textContent = money(demo.balance);
     if (el.demoPl) {
       const pl = demo.realizedPl;
-      const sign = pl > 0 ? "+" : pl < 0 ? "" : "";
-      el.demoPl.textContent = `Session P/L ${sign}${money(pl)}`;
+      el.demoPl.textContent = `Session P/L ${formatPl(pl)}`;
       el.demoPl.classList.toggle("is-up", pl > 0);
       el.demoPl.classList.toggle("is-down", pl < 0);
     }
+
+    const pos = demo.position;
+    const mark = markDemoPosition();
+    const secs = secondsLeft();
+    const spotRaw = el.spotValue && el.spotValue.dataset.last;
+    const spot = spotRaw != null ? Number(spotRaw) : null;
+
     if (el.demoPosition) {
-      const p = demo.position;
-      if (!p) {
+      if (!pos) {
         el.demoPosition.textContent = "Flat";
       } else {
-        const side = p.side === "above" ? "Above" : "Below";
+        const side = pos.side === "above" ? "Above" : "Below";
         el.demoPosition.textContent =
-          `Buy ${side} · ${p.contracts} cts @ ${p.askCents}¢ · risk ${money(p.total)}`;
+          `Buy ${side} · ${pos.contracts} cts @ ${pos.askCents}¢ · paid ${money(pos.total)}`;
       }
     }
+
+    if (el.demoMark) el.demoMark.hidden = !pos;
+    if (el.demoClose) el.demoClose.hidden = !pos;
+    if (pos && mark) {
+      if (el.demoMarkPl) {
+        el.demoMarkPl.textContent =
+          mark.unrealized == null
+            ? "Mark —"
+            : `Open P/L ${formatPl(mark.unrealized)}`;
+        el.demoMarkPl.classList.toggle("is-up", mark.unrealized > 0);
+        el.demoMarkPl.classList.toggle("is-down", mark.unrealized < 0);
+      }
+      if (el.demoMarkMeta) {
+        const timeTxt =
+          secs != null
+            ? `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")} left`
+            : "— left";
+        const deltaTxt =
+          spot != null && Number.isFinite(spot) && pos.beat != null
+            ? `live ${spot >= pos.beat ? "+" : ""}$${(spot - pos.beat).toFixed(0)} vs beat`
+            : "live —";
+        el.demoMarkMeta.textContent =
+          mark.bidCents == null
+            ? `Waiting for bid · ${deltaTxt} · ${timeTxt}`
+            : `Bid ${mark.bidCents}¢ · exit ~${money(mark.proceeds)} · ${deltaTxt} · ${timeTxt}`;
+      }
+    }
+
+    // Main-screen rolling strip (visible without opening ⋮).
+    if (el.demoLive) {
+      const showLive = !!(demo.on && pos);
+      el.demoLive.hidden = !showLive;
+      if (showLive) {
+        const side = pos.side === "above" ? "Above" : "Below";
+        if (el.demoLiveSide) {
+          el.demoLiveSide.textContent = `Buy ${side}`;
+          el.demoLiveSide.classList.toggle("is-up", pos.side === "above");
+          el.demoLiveSide.classList.toggle("is-down", pos.side === "below");
+        }
+        if (el.demoLivePl) {
+          el.demoLivePl.textContent =
+            mark && mark.unrealized != null ? formatPl(mark.unrealized) : "—";
+          el.demoLivePl.classList.toggle(
+            "is-up",
+            !!(mark && mark.unrealized > 0)
+          );
+          el.demoLivePl.classList.toggle(
+            "is-down",
+            !!(mark && mark.unrealized < 0)
+          );
+        }
+        if (el.demoLiveMeta) {
+          const timeTxt =
+            secs != null
+              ? `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")} left`
+              : "—";
+          const deltaTxt =
+            spot != null && Number.isFinite(spot) && pos.beat != null
+              ? `${spot >= pos.beat ? "+" : ""}$${Math.abs(spot - pos.beat).toFixed(0)} ${
+                  spot >= pos.beat ? "above" : "below"
+                } beat`
+              : "vs beat —";
+          el.demoLiveMeta.textContent =
+            mark && mark.bidCents != null
+              ? `${pos.contracts} cts · entry ${pos.askCents}¢ → bid ${mark.bidCents}¢ · exit ~${money(
+                  mark.proceeds
+                )} · ${deltaTxt} · ${timeTxt}`
+              : `${pos.contracts} cts @ ${pos.askCents}¢ · waiting for bid · ${deltaTxt} · ${timeTxt}`;
+        }
+      }
+    }
+
     if (el.demoLast) {
       const r = demo.lastResult;
       el.demoLast.classList.remove("is-win", "is-loss");
@@ -218,6 +341,38 @@
     if (el.demoBuyBest) el.demoBuyBest.disabled = !demo.on || busy || tradeStake <= 0;
     if (el.demoBuyAbove) el.demoBuyAbove.disabled = !demo.on || busy || tradeStake <= 0;
     if (el.demoBuyBelow) el.demoBuyBelow.disabled = !demo.on || busy || tradeStake <= 0;
+    if (el.demoClose) el.demoClose.disabled = !pos || !mark || mark.bidCents == null;
+    if (el.demoLiveClose) {
+      el.demoLiveClose.disabled = !pos || !mark || mark.bidCents == null;
+    }
+  }
+
+  function closeDemoPosition() {
+    const pos = demo.position;
+    if (!demo.on || !pos) return;
+    const mark = markDemoPosition();
+    if (!mark || mark.bidCents == null || mark.proceeds == null) {
+      setStatus("warn", "No live bid to close against");
+      return;
+    }
+    const pl = mark.unrealized;
+    demo.balance = Math.round((demo.balance + mark.proceeds) * 100) / 100;
+    demo.realizedPl = Math.round((demo.realizedPl + pl) * 100) / 100;
+    const sideLabel = pos.side === "above" ? "Above" : "Below";
+    const won = pl >= 0;
+    demo.lastResult = {
+      won,
+      pl,
+      side: pos.side,
+      ticker: pos.ticker,
+      text: `CLOSED ${sideLabel} @ ${mark.bidCents}¢ · ${formatPl(pl)} · bal ${money(
+        demo.balance
+      )}`,
+    };
+    demo.position = null;
+    saveDemoState();
+    renderDemoUi();
+    setStatus(won ? "ok" : "warn", demo.lastResult.text);
   }
 
   function setDemoOn(on) {
@@ -659,6 +814,7 @@
   }
 
   let lastRoiAsks = { above: null, below: null };
+  let lastRoiBids = { above: null, below: null };
   const STAKE_KEY = "kalshiTradeStake";
   let tradeStake = Number(localStorage.getItem(STAKE_KEY));
   if (!Number.isFinite(tradeStake)) tradeStake = 50;
@@ -1000,6 +1156,8 @@
   function updateRoi(data) {
     let aboveAsk = data && data.yes_ask_pct;
     let belowAsk = data && data.no_ask_pct;
+    let aboveBid = data && data.yes_bid_pct;
+    let belowBid = data && data.no_bid_pct;
     if (aboveAsk == null && data && data.yes_pct != null) aboveAsk = data.yes_pct;
     if (belowAsk == null && data && data.no_pct != null) belowAsk = data.no_pct;
     if (belowAsk == null && data && data.yes_bid_pct != null) {
@@ -1008,7 +1166,20 @@
     if (aboveAsk == null && data && data.no_bid_pct != null) {
       aboveAsk = Math.max(1, 100 - data.no_bid_pct);
     }
+    if (aboveBid == null && data && data.yes_pct != null) {
+      aboveBid = Math.max(1, Math.round(data.yes_pct) - 1);
+    }
+    if (belowBid == null && data && data.no_pct != null) {
+      belowBid = Math.max(1, Math.round(data.no_pct) - 1);
+    }
+    if (belowBid == null && aboveAsk != null) {
+      belowBid = Math.max(1, 100 - aboveAsk);
+    }
+    if (aboveBid == null && belowAsk != null) {
+      aboveBid = Math.max(1, 100 - belowAsk);
+    }
     lastRoiAsks = { above: aboveAsk, below: belowAsk };
+    lastRoiBids = { above: aboveBid, below: belowBid };
     renderRoi();
   }
 
@@ -1162,6 +1333,7 @@
     }
     updateEdgeLine(lastClose);
     refreshBestSide();
+    if (demo.position) renderDemoUi();
   }
 
   function updateCountdown() {
@@ -1203,6 +1375,7 @@
     }
     if (totalSec <= 25) startRolloverBurst();
     refreshBestSide();
+    if (demo.position) renderDemoUi();
   }
 
   function clearRolloverBurst() {
@@ -1748,6 +1921,12 @@
     }
     if (el.demoBuyBelow) {
       el.demoBuyBelow.addEventListener("click", () => demoBuy("below"));
+    }
+    if (el.demoClose) {
+      el.demoClose.addEventListener("click", () => closeDemoPosition());
+    }
+    if (el.demoLiveClose) {
+      el.demoLiveClose.addEventListener("click", () => closeDemoPosition());
     }
     document.addEventListener("keydown", (ev) => {
       if (ev.key === "Escape" && optionsOpen) closeOptions();
