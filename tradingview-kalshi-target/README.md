@@ -1,32 +1,35 @@
-# Kalshi BTC Target → TradingView (desktop only)
+# Kalshi BTC Target → TradingView (desktop + Android browser)
 
-Chrome extension that draws Kalshi's rolling **15-minute BTC Target Price** (`KXBTC15M`) as a dashed horizontal **TARGET** line on TradingView **BTCUSD** charts in a **desktop** Chromium browser.
+Auto-draws Kalshi's rolling **15-minute BTC Target Price** (`KXBTC15M`) as a dashed horizontal **TARGET** line on TradingView **BTCUSD** charts.
 
-> **Android / iPhone:** browser extensions do not run inside the TradingView mobile app. Use the mobile web app in [`../kalshi-btc-target/`](../kalshi-btc-target/) instead — it auto-draws the same Kalshi target on a phone-friendly chart.
+> **Android:** The TradingView Play Store app cannot run overlays. Use the **TradingView website** in Firefox + Tampermonkey — see **[ANDROID.md](ANDROID.md)**. Userscript: `kalshi-tv-target.user.js`.
 
-A new target is published every 15 minutes. The extension polls Kalshi on an ongoing basis and redraws the line when the window rolls.
+## Android (TradingView website)
 
-## Install (Chrome / Edge / Brave — desktop)
+1. Firefox → Tampermonkey → install `kalshi-tv-target.user.js`
+2. Open https://www.tradingview.com/ → BTCUSD
+3. TARGET line updates each Kalshi 15m window automatically
+
+Full steps: [ANDROID.md](ANDROID.md)
+
+## Desktop Chrome extension
 
 1. Open `chrome://extensions`
 2. Enable **Developer mode**
 3. **Load unpacked** → select this folder (`tradingview-kalshi-target`)
 4. Open [TradingView](https://www.tradingview.com/) on a **BTCUSD** chart
 
-Use the extension popup to see the live target, force a refresh, or disable the overlay.
-
 ## How it works
 
 | Piece | Role |
 |---|---|
-| `background.js` | Fetches open `KXBTC15M` markets from Kalshi; stores `floor_strike` / `Target Price` |
-| Alarms | Polls about every minute + schedules a refresh a few seconds after each window `close_time` |
-| `content.js` | Maps target price → Y pixel via TradingView's price axis and draws the line |
-| `popup` | Status / enable toggle / manual refresh |
+| `kalshi-tv-target.user.js` | Android-capable Tampermonkey script (TradingView website) |
+| `background.js` | Desktop extension: fetches open `KXBTC15M` Target Price |
+| `content.js` | Desktop overlay on TradingView page |
+| Alarms / poll | Refresh ongoing + at each 15m window boundary |
 
 ## Notes
 
-- Desktop Chromium only (TradingView's mobile apps don't support extensions).
-- Overlay activates on pages that look like a BTCUSD chart (title/URL heuristics).
-- If the axis hasn't rendered yet, the badge shows the target while the line waits for scale labels.
-- Not affiliated with Kalshi or TradingView. Settlement uses CF Benchmarks BRTI per Kalshi rules.
+- Not inside the TradingView mobile **app** (platform limitation).
+- Standalone phone chart alternative: [`../kalshi-btc-target/`](../kalshi-btc-target/)
+- Not affiliated with Kalshi or TradingView.

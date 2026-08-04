@@ -252,6 +252,7 @@ class Handler(BaseHTTPRequestHandler):
         ctype = {
             ".html": "text/html; charset=utf-8",
             ".js": "application/javascript; charset=utf-8",
+            ".user.js": "text/javascript; charset=utf-8",
             ".css": "text/css; charset=utf-8",
             ".webmanifest": "application/manifest+json",
             ".json": "application/json; charset=utf-8",

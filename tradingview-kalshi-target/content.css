@@ -9,7 +9,7 @@
 #kalshi-tv-target-line {
   position: fixed;
   left: 0;
-  right: 72px;
+  right: 56px;
   height: 0;
   border-top: 1.5px dashed #1ac96b;
   transform: translateY(-0.5px);
@@ -19,7 +19,7 @@
 
 #kalshi-tv-target-label {
   position: fixed;
-  right: 78px;
+  right: 60px;
   transform: translateY(-50%);
   background: rgba(10, 18, 14, 0.88);
   color: #1ac96b;
@@ -31,12 +31,15 @@
   white-space: nowrap;
   border-radius: 2px;
   line-height: 1.35;
+  max-width: min(70vw, 280px);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 #kalshi-tv-target-badge,
 .kalshi-tv-badge {
   position: fixed;
-  top: 10px;
+  top: max(10px, env(safe-area-inset-top));
   left: 50%;
   transform: translateX(-50%);
   background: rgba(10, 18, 14, 0.9);
@@ -46,7 +49,7 @@
   font-size: 11px;
   font-weight: 500;
   border-radius: 4px;
-  max-width: min(90vw, 520px);
+  max-width: min(92vw, 520px);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
