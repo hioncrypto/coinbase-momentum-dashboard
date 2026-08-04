@@ -36,9 +36,14 @@
     </header>
 
     <section class="target-panel" aria-live="polite">
-      <div class="label">Target price</div>
+      <div id="target-label" class="label">Price to beat</div>
       <div id="target-value" class="value">—</div>
-      <div id="target-meta" class="meta">Waiting for Kalshi…</div>
+      <div id="target-meta" class="meta">Waiting for Kalshi 15m…</div>
+      <div class="spot-row">
+        <span class="spot-label">Current</span>
+        <span id="spot-value" class="spot-value">—</span>
+        <span id="spot-delta" class="spot-delta"></span>
+      </div>
     </section>
 
     <main id="chart" role="img" aria-label="BTC-USD chart with Kalshi target line"></main>

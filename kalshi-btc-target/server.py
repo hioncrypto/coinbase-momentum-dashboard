@@ -33,8 +33,8 @@ UA = "kalshi-btc-target/1.0 (+android-pwa)"
 _cache_lock = threading.Lock()
 _target_cache: dict = {"at": 0.0, "payload": None}
 _candles_cache: dict = {"at": 0.0, "key": None, "payload": None}
-TARGET_TTL = 10.0
-CANDLES_TTL = 20.0
+TARGET_TTL = 3.0
+CANDLES_TTL = 10.0
 
 
 def http_get_json(url: str, timeout: float = 20.0):
@@ -57,12 +57,20 @@ def parse_target(market: dict) -> float | None:
     return float(m.group(1).replace(",", ""))
 
 
-def window_label(close_iso: str | None) -> str | None:
+def format_et_close(close_iso: str | None) -> str | None:
+    """Match Kalshi mobile label style, e.g. '9:30pm ET'."""
     if not close_iso:
         return None
     try:
-        # Keep label simple / timezone-agnostic for the API; UI can format.
-        return close_iso
+        from datetime import datetime, timezone
+        from zoneinfo import ZoneInfo
+
+        dt = datetime.fromisoformat(close_iso.replace("Z", "+00:00")).astimezone(
+            ZoneInfo("America/New_York")
+        )
+        # Kalshi-style: 9:30pm ET
+        stamp = dt.strftime("%I:%M%p ET").lstrip("0").replace("AM", "am").replace("PM", "pm")
+        return stamp
     except Exception:
         return close_iso
 
@@ -70,53 +78,90 @@ def window_label(close_iso: str | None) -> str | None:
 def fetch_target_payload() -> dict:
     now = time.time()
     with _cache_lock:
-        if _target_cache["payload"] and now - _target_cache["at"] < TARGET_TTL:
-            return _target_cache["payload"]
+        cached = _target_cache["payload"]
+        age = now - _target_cache["at"]
+        # Don't hold a TBD/empty target — retry quickly until Kalshi publishes floor_strike.
+        ttl = TARGET_TTL if cached and cached.get("price_to_beat") is not None else 1.0
+        if cached and age < ttl:
+            return cached
 
     try:
         data = http_get_json(KALSHI_URL)
         markets = data.get("markets") or []
+        # Prefer an active/open market that already has Price to beat set.
         market = next(
-            (m for m in markets if m.get("status") in ("active", "open")),
-            markets[0] if markets else None,
+            (
+                m
+                for m in markets
+                if m.get("status") in ("active", "open") and parse_target(m) is not None
+            ),
+            None,
         )
+        if market is None:
+            market = next(
+                (m for m in markets if m.get("status") in ("active", "open")),
+                markets[0] if markets else None,
+            )
         if not market:
             payload = {
                 "ok": True,
                 "target": None,
+                "price_to_beat": None,
                 "ticker": None,
                 "event_ticker": None,
                 "open_time": None,
                 "close_time": None,
+                "close_et": None,
                 "subtitle": None,
+                "label": "Price to beat",
                 "error": "No open KXBTC15M market",
                 "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             }
         else:
+            # Kalshi "Price to beat" == floor_strike / Target Price on KXBTC15M
             target = parse_target(market)
+            close_et = format_et_close(market.get("close_time"))
             payload = {
                 "ok": True,
                 "target": target,
+                "price_to_beat": target,
                 "ticker": market.get("ticker"),
                 "event_ticker": market.get("event_ticker"),
                 "open_time": market.get("open_time"),
                 "close_time": market.get("close_time"),
+                "close_et": close_et,
                 "subtitle": market.get("yes_sub_title"),
+                "label": f"Price to beat • {close_et}" if close_et else "Price to beat",
                 "error": None
                 if target is not None
-                else "Target price TBD (waiting for window open)",
+                else "Price to beat TBD (waiting for window open)",
                 "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             }
+            # If this window is still TBD, keep showing the previous known Price to beat
+            # until Kalshi publishes the new floor (usually seconds after rollover).
+            if target is None:
+                with _cache_lock:
+                    prev = _target_cache.get("payload") or {}
+                if prev.get("price_to_beat") is not None:
+                    payload = {
+                        **payload,
+                        "target": prev["price_to_beat"],
+                        "price_to_beat": prev["price_to_beat"],
+                        "error": "Waiting for new 15m Price to beat…",
+                        "stale_previous": True,
+                        "previous_ticker": prev.get("ticker"),
+                    }
     except Exception as exc:
         payload = {
             "ok": False,
             "target": None,
+            "price_to_beat": None,
             "error": str(exc),
             "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         }
 
     with _cache_lock:
-        _target_cache["at"] = now
+        _target_cache["at"] = time.time()
         _target_cache["payload"] = payload
     return payload
 

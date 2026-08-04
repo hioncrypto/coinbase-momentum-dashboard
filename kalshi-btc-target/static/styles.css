@@ -121,6 +121,42 @@ h1 {
   color: var(--muted);
 }
 
+.spot-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+
+.spot-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.spot-value {
+  font-size: 1.05rem;
+  font-weight: 650;
+  color: var(--fg);
+}
+
+.spot-delta {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.spot-delta.up {
+  color: var(--accent);
+}
+
+.spot-delta.down {
+  color: #d45454;
+}
+
 #chart {
   margin: 0 8px;
   border: 1px solid var(--border);

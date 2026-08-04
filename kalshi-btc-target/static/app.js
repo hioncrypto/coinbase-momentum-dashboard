@@ -5,8 +5,11 @@
 
   const el = {
     chart: document.getElementById("chart"),
+    targetLabel: document.getElementById("target-label"),
     targetValue: document.getElementById("target-value"),
     targetMeta: document.getElementById("target-meta"),
+    spotValue: document.getElementById("spot-value"),
+    spotDelta: document.getElementById("spot-delta"),
     status: document.getElementById("status"),
     clock: document.getElementById("clock"),
   };
@@ -36,19 +39,39 @@
     el.status.textContent = text;
   }
 
-  function formatWindow(closeIso) {
+  function formatWindow(closeIso, closeEt) {
+    if (closeEt) return closeEt;
     if (!closeIso) return "";
     try {
-      const d = new Date(closeIso);
-      return (
-        d.toLocaleString(undefined, {
-          hour: "numeric",
-          minute: "2-digit",
-          hour12: true,
-        }) + " close"
-      );
+      return new Date(closeIso).toLocaleString("en-US", {
+        timeZone: "America/New_York",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+        timeZoneName: "short",
+      });
     } catch {
       return closeIso;
+    }
+  }
+
+  function updateSpot(lastClose) {
+    if (!el.spotValue) return;
+    if (lastClose == null || !Number.isFinite(lastClose)) {
+      el.spotValue.textContent = "—";
+      el.spotDelta.textContent = "";
+      el.spotDelta.className = "spot-delta";
+      return;
+    }
+    el.spotValue.textContent = money(lastClose);
+    if (lastTarget != null && Number.isFinite(lastTarget)) {
+      const delta = lastClose - lastTarget;
+      const sign = delta >= 0 ? "+" : "-";
+      el.spotDelta.textContent = `${sign}$${Math.abs(delta).toFixed(2)}`;
+      el.spotDelta.className = "spot-delta " + (delta >= 0 ? "up" : "down");
+    } else {
+      el.spotDelta.textContent = "";
+      el.spotDelta.className = "spot-delta";
     }
   }
 
@@ -121,7 +144,7 @@
     }
     const opts = {
       price: target,
-      color: "#1ac96b",
+      color: "#ffffff",
       lineWidth: 2,
       lineStyle: (ensureChart.LineStyle && ensureChart.LineStyle.Dashed) || 2,
       axisLabelVisible: true,
@@ -138,29 +161,37 @@
     try {
       const res = await fetch("/api/target", { cache: "no-store" });
       const data = await res.json();
-      if (!data.ok && data.target == null) {
+      const beat = data.price_to_beat ?? data.target;
+      if (el.targetLabel) {
+        el.targetLabel.textContent = data.label || "Price to beat";
+      }
+      if (!data.ok && beat == null) {
         setStatus("warn", data.error || "Kalshi error");
         el.targetValue.textContent = "—";
         el.targetMeta.textContent = data.error || "Unavailable";
         return;
       }
 
-      if (data.target == null) {
-        setStatus("warn", "Target TBD");
+      if (beat == null) {
+        setStatus("warn", "Price to beat TBD");
         el.targetValue.textContent = "TBD";
-        el.targetMeta.textContent = data.error || "Waiting for next window";
+        el.targetMeta.textContent = data.error || "Waiting for next 15m window";
         applyTargetLine(null);
+        updateSpot(null);
       } else {
         const rolled = lastTicker && data.ticker && lastTicker !== data.ticker;
         lastTicker = data.ticker;
-        setStatus("ok", rolled ? "New 15m target" : "Live");
-        el.targetValue.textContent = money(data.target);
-        const bits = [];
-        const win = formatWindow(data.close_time);
-        if (win) bits.push(win);
-        if (data.ticker) bits.push(data.ticker);
-        el.targetMeta.textContent = bits.join(" · ");
-        applyTargetLine(data.target, "TARGET");
+        setStatus("ok", rolled ? "New 15m price to beat" : "Live · KXBTC15M");
+        el.targetValue.textContent = money(beat);
+        const win = formatWindow(data.close_time, data.close_et);
+        el.targetMeta.textContent = win
+          ? `Kalshi 15m · settles ${win}`
+          : "Kalshi 15m";
+        applyTargetLine(beat, "TARGET");
+        // refresh delta if we already have a spot
+        if (el.spotValue && el.spotValue.dataset.last) {
+          updateSpot(Number(el.spotValue.dataset.last));
+        }
       }
       scheduleBoundaryRefresh(data.close_time);
     } catch (err) {
@@ -181,8 +212,12 @@
       }
       ensureChart();
       if (!series) return;
-      series.setData(data.candles || []);
+      const candles = data.candles || [];
+      series.setData(candles);
       if (lastTarget != null) applyTargetLine(lastTarget, "TARGET");
+      const last = candles.length ? candles[candles.length - 1].close : null;
+      if (el.spotValue && last != null) el.spotValue.dataset.last = String(last);
+      updateSpot(last);
       chart.timeScale().scrollToRealTime();
     } catch (err) {
       setStatus("warn", "Candle fetch failed");
