@@ -51,7 +51,7 @@
     settleTitle: document.getElementById("settle-title"),
     settleAvg: document.getElementById("settle-avg"),
     settleMeta: document.getElementById("settle-meta"),
-    kalshiLink: document.getElementById("kalshi-link"),
+    kalshiLink: null,
   };
 
   let chart = null;
