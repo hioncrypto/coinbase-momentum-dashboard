@@ -80,6 +80,9 @@
     bestSide: document.getElementById("best-side"),
     bestSideLabel: document.getElementById("best-side-label"),
     bestSideAmount: document.getElementById("best-side-amount"),
+    bestSideSuggest: document.getElementById("best-side-suggest"),
+    bestSideSuggestAmount: document.getElementById("best-side-suggest-amount"),
+    bestSideSuggestMeta: document.getElementById("best-side-suggest-meta"),
     bestSideMeta: document.getElementById("best-side-meta"),
     roiAbovePrice: document.getElementById("roi-above-price"),
     roiAboveSummary: document.getElementById("roi-above-summary"),
@@ -156,6 +159,10 @@
     buyAmount: document.getElementById("buy-amount"),
     buyRange: document.getElementById("buy-range"),
     buyRangeValue: document.getElementById("buy-range-value"),
+    buySuggest: document.getElementById("buy-suggest"),
+    buySuggestAmount: document.getElementById("buy-suggest-amount"),
+    buySuggestMeta: document.getElementById("buy-suggest-meta"),
+    buySuggestUse: document.getElementById("buy-suggest-use"),
     buyBalanceHint: document.getElementById("buy-balance-hint"),
     buyPreview: document.getElementById("buy-preview"),
     buySlide: document.getElementById("buy-slide"),
@@ -199,6 +206,7 @@
   let buySheetOpen = false;
   let buySheetSide = null; // above | below
   let buySheetAmount = 1;
+  let buySuggestStake = null;
   let buySlideDragging = false;
   let buySlideStartX = 0;
   let buySlideProgress = 0;
@@ -1418,6 +1426,42 @@
           : "Slide to buy Below";
       el.buySlideLabel.textContent = label;
     }
+    renderBuySuggest(side, amount);
+  }
+
+  function renderBuySuggest(side, currentAmount) {
+    if (!el.buySuggest) return;
+    const s = suggestForSide(side);
+    buySuggestStake =
+      s && !s.lowProb && s.stake >= BUY_AMOUNT_MIN ? s.stake : null;
+    if (buySuggestStake == null) {
+      el.buySuggest.hidden = true;
+      return;
+    }
+    el.buySuggest.hidden = false;
+    const atSuggested = Math.round(Number(currentAmount) || 0) === buySuggestStake;
+    el.buySuggest.classList.toggle("is-active", atSuggested);
+    if (el.buySuggestAmount) {
+      el.buySuggestAmount.textContent = `$${buySuggestStake}${
+        s.contracts ? ` · ${s.contracts} cts` : ""
+      }`;
+    }
+    if (el.buySuggestMeta) {
+      const roi =
+        s.roiIfWin != null
+          ? `${s.roiIfWin >= 0 ? "+" : ""}${s.roiIfWin.toFixed(0)}% if win`
+          : "";
+      const conf = s.pWin != null ? `${Math.round(s.pWin * 100)}% model` : "";
+      const bankTxt = bankPctText(s.bankPct);
+      const bank = bankTxt ? `${bankTxt} of balance` : "";
+      el.buySuggestMeta.textContent = [conf, roi, bank]
+        .filter(Boolean)
+        .join(" · ");
+    }
+    if (el.buySuggestUse) {
+      el.buySuggestUse.textContent = atSuggested ? "Set" : "Use";
+      el.buySuggestUse.disabled = atSuggested;
+    }
   }
 
   function setBuySlideProgress(pct) {
@@ -1472,13 +1516,16 @@
     buySheetSide = side;
     buySheetOpen = true;
     const adding = !!(demo.position && demo.position.side === side);
-    const suggested =
-      opts.useSuggest &&
-      lastBestPick &&
-      lastBestPick.side === side &&
-      lastBestPick.suggestedStake >= BUY_AMOUNT_MIN
+    const sideSuggest = suggestForSide(side);
+    const suggested = !opts.useSuggest
+      ? null
+      : lastBestPick &&
+          lastBestPick.side === side &&
+          lastBestPick.suggestedStake >= BUY_AMOUNT_MIN
         ? lastBestPick.suggestedStake
-        : null;
+        : sideSuggest && sideSuggest.stake >= BUY_AMOUNT_MIN
+          ? sideSuggest.stake
+          : null;
     // Prefer Best Side suggestion when buying the suggested side.
     const preferred =
       suggested != null
@@ -2270,12 +2317,18 @@
     const pWin = Math.max(0.01, Math.min(0.99, Number(best.pWin) || 0.5));
     const edge = pWin - costPer;
     if (!(edge > 0)) {
+      const minSized = roiForStake(best.askCents, BUY_AMOUNT_MIN);
       return {
         stake: BUY_AMOUNT_MIN,
-        contracts: 0,
-        roiIfWin: unit.roiIfWin,
-        bankPct: 0,
-        note: "min",
+        contracts: minSized && !minSized.empty ? minSized.contracts : 0,
+        total: minSized && !minSized.empty ? minSized.total : BUY_AMOUNT_MIN,
+        profitIfWin: minSized && !minSized.empty ? minSized.profitIfWin : 0,
+        roiIfWin:
+          minSized && !minSized.empty ? minSized.roiIfWin : unit.roiIfWin,
+        bankPct: bank > 0 ? (BUY_AMOUNT_MIN / bank) * 100 : 0,
+        pWin,
+        lowProb: pWin < 0.5,
+        note: "no edge at this ask",
       };
     }
 
@@ -2308,6 +2361,10 @@
     const sized = roiForStake(best.askCents, stake);
     return {
       stake,
+      pWin,
+      // Cheap longshots can screen as +EV on model noise; never present them
+      // as a "minimize risk" size.
+      lowProb: pWin < 0.5,
       contracts: sized && !sized.empty ? sized.contracts : 0,
       total: sized && !sized.empty ? sized.total : stake,
       profitIfWin: sized && !sized.empty ? sized.profitIfWin : 0,
@@ -2315,6 +2372,28 @@
       bankPct: bank > 0 ? (stake / bank) * 100 : 0,
       note: "¼-Kelly bal",
     };
+  }
+
+  /**
+   * Suggested size for either side (not just Best Side) so the buy sheet can
+   * always recommend a stake: maximize ROI while capping bankroll risk.
+   */
+  function suggestForSide(side) {
+    if (side !== "above" && side !== "below") return null;
+    const ask = side === "above" ? lastRoiAsks.above : lastRoiAsks.below;
+    if (ask == null || !Number.isFinite(ask)) return null;
+    const spotRaw = el.spotValue && el.spotValue.dataset.last;
+    const spot = spotRaw != null ? Number(spotRaw) : null;
+    const beat = lastTarget;
+    const secs = secondsLeft();
+    if (spot == null || beat == null || secs == null) return null;
+    const modelP = modelProbAbove(spot, beat, secs);
+    if (modelP == null) return null;
+    const scored = scoreSide(side, ask, modelP, tradeStake);
+    if (!scored) return null;
+    const suggestion = suggestStakeForEdge(scored);
+    if (!suggestion) return null;
+    return { ...suggestion, side, pWin: scored.pWin, ev: scored.ev };
   }
 
   function secondsLeft() {
@@ -2334,6 +2413,52 @@
     bestSideFlashTimer = setTimeout(() => {
       if (el.bestSide) el.bestSide.classList.remove("is-flash");
     }, 1200);
+  }
+
+  function bankPctText(pct) {
+    if (pct == null || !Number.isFinite(pct)) return null;
+    if (pct > 0 && pct < 1) return "<1%";
+    return `${pct.toFixed(0)}%`;
+  }
+
+  /** Suggested-buy row inside the Best Side block. */
+  function renderBestSideSuggest(side, suggestion, opts = {}) {
+    if (!el.bestSideSuggest) return;
+    const s = suggestion || (side ? suggestForSide(side) : null);
+    if (!side || !s || !(s.stake >= BUY_AMOUNT_MIN)) {
+      el.bestSideSuggest.hidden = true;
+      return;
+    }
+    const waiting = !!opts.waiting || !!s.lowProb;
+    el.bestSideSuggest.hidden = false;
+    el.bestSideSuggest.classList.toggle("is-waiting", waiting);
+    el.bestSideSuggest.classList.toggle("is-below", !waiting && side === "below");
+    const conf = s.pWin != null ? Math.round(s.pWin * 100) : null;
+    if (el.bestSideSuggestAmount) {
+      el.bestSideSuggestAmount.textContent = s.lowProb
+        ? "Sit out"
+        : `$${s.stake}${s.contracts ? ` · ${s.contracts} cts` : ""}`;
+    }
+    if (el.bestSideSuggestMeta) {
+      if (s.lowProb) {
+        el.bestSideSuggestMeta.textContent = `${
+          side === "above" ? "Above" : "Below"
+        } is the underdog${conf != null ? ` at ${conf}%` : ""} — no size worth risking`;
+      } else {
+        const roi =
+          s.roiIfWin != null
+            ? `${s.roiIfWin >= 0 ? "+" : ""}${s.roiIfWin.toFixed(0)}% if win`
+            : "";
+        const bankTxt = bankPctText(s.bankPct);
+        const bank = bankTxt ? `risks ${bankTxt} of balance` : "";
+        const lead = opts.waiting
+          ? `${side === "above" ? "Above" : "Below"} if you enter`
+          : `${side === "above" ? "Above" : "Below"}`;
+        el.bestSideSuggestMeta.textContent = [lead, roi, bank]
+          .filter(Boolean)
+          .join(" · ");
+      }
+    }
   }
 
   function setRoiCardBest(side) {
@@ -2378,6 +2503,7 @@
       (aboveAsk == null && belowAsk == null)
     ) {
       el.bestSide.hidden = true;
+      renderBestSideSuggest(null, null);
       setRoiCardBest(null);
       setDockBestDetail("—", null);
       lastBestSideKey = null;
@@ -2394,6 +2520,7 @@
     if (b) scored.push(b);
     if (!scored.length) {
       el.bestSide.hidden = true;
+      renderBestSideSuggest(null, null);
       setRoiCardBest(null);
       setDockBestDetail("—", null);
       lastBestPick = null;
@@ -2422,6 +2549,10 @@
         el.bestSideAmount.textContent =
           tradeStake > 0 ? `Holding $${tradeStake}` : "Set a trade size";
       }
+      // Still show what we'd risk on the better-priced side, marked as a wait.
+      renderBestSideSuggest(best.side, suggestStakeForEdge(best), {
+        waiting: true,
+      });
       if (el.bestSideMeta) {
         const lead = spot - beat;
         const mAbove = modelP != null ? Math.round(modelP * 100) : null;
@@ -2484,9 +2615,7 @@
           openPos.side === "above" ? "Above" : "Below"
         } · close to flip`;
       } else if (suggestStake != null) {
-        el.bestSideAmount.textContent = `Suggest $${suggestStake} · ${
-          best.contracts
-        } contract${best.contracts === 1 ? "" : "s"}`;
+        el.bestSideAmount.textContent = `Tap to buy $${suggestStake}`;
       } else if (tradeStake <= 0) {
         el.bestSideAmount.textContent = "Set a trade size";
       } else {
@@ -2520,6 +2649,9 @@
           lead >= 0 ? "+" : ""
         }$${lead.toFixed(0)} · ${m}:${String(s).padStart(2, "0")} left${openNote}`;
     }
+    renderBestSideSuggest(best.side, suggestion, {
+      waiting: oppositeOpen,
+    });
     setRoiCardBest(best.side);
     setDockBestDetail(
       suggestStake != null
@@ -3600,6 +3732,11 @@
     }
     if (el.tradeHistoryClear) {
       el.tradeHistoryClear.addEventListener("click", () => clearTradeHistory());
+    }
+    if (el.buySuggestUse) {
+      el.buySuggestUse.addEventListener("click", () => {
+        if (buySuggestStake != null) setBuyAmountUi(buySuggestStake, true);
+      });
     }
     if (el.accountExport) {
       el.accountExport.addEventListener("click", () => exportAccountBackup());

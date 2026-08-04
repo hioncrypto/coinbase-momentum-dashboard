@@ -1700,6 +1700,118 @@ h1 {
   }
 }
 
+.best-side-suggest {
+  margin: 8px 0 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(26, 201, 107, 0.45);
+  background: rgba(26, 201, 107, 0.14);
+  text-align: left;
+}
+
+.best-side-suggest.is-below {
+  border-color: rgba(212, 84, 84, 0.5);
+  background: rgba(212, 84, 84, 0.13);
+}
+
+.best-side-suggest.is-waiting {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.best-side-suggest-main {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.best-side-suggest-kicker {
+  font-size: 0.62rem;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.best-side-suggest-amount {
+  font-size: 1.15rem;
+  font-weight: 850;
+  letter-spacing: -0.02em;
+  color: #d7ffe8;
+  font-variant-numeric: tabular-nums;
+}
+
+.best-side-suggest.is-waiting .best-side-suggest-amount {
+  color: #e6efe9;
+}
+
+.best-side-suggest-meta {
+  margin-top: 2px;
+  font-size: 0.7rem;
+  line-height: 1.35;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.buy-suggest {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(26, 201, 107, 0.4);
+  background: rgba(26, 201, 107, 0.12);
+}
+
+.buy-suggest.is-active {
+  border-color: rgba(26, 201, 107, 0.7);
+}
+
+.buy-suggest-kicker {
+  font-size: 0.62rem;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.buy-suggest-amount {
+  font-size: 1.1rem;
+  font-weight: 850;
+  color: #d7ffe8;
+  font-variant-numeric: tabular-nums;
+}
+
+.buy-suggest-meta {
+  margin-top: 2px;
+  font-size: 0.7rem;
+  line-height: 1.3;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.buy-suggest-use {
+  flex-shrink: 0;
+  min-height: 38px;
+  padding: 6px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(26, 201, 107, 0.65);
+  background: rgba(26, 201, 107, 0.25);
+  color: #d7ffe8;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.buy-suggest-use:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 .roi-card.is-best {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
@@ -2213,6 +2325,19 @@ body.portrait-app #chart {
   font-size: 0.95rem;
   font-weight: 750;
   color: var(--fg);
+}
+
+.best-side-suggest {
+  margin: 6px 0 4px;
+  padding: 6px 8px;
+}
+
+.best-side-suggest-amount {
+  font-size: 1rem;
+}
+
+.best-side-suggest-meta {
+  font-size: 0.66rem;
 }
 
 .best-side-meta {

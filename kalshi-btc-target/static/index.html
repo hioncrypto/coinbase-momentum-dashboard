@@ -22,12 +22,12 @@
     <link rel="apple-touch-icon" href="/icons/icon-192.png?v=2.6" />
     <link rel="icon" href="/icons/icon-192.png?v=2.6" sizes="192x192" type="image/png" />
     <title>BeatLine</title>
-    <link rel="stylesheet" href="/styles.css?v=7.6" />
+    <link rel="stylesheet" href="/styles.css?v=7.7" />
     <script
       src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"
       defer
     ></script>
-    <script src="/app.js?v=7.6" defer></script>
+    <script src="/app.js?v=7.7" defer></script>
   </head>
   <body class="portrait-app">
     <div id="rotate-gate" class="rotate-gate" hidden>
@@ -186,6 +186,13 @@
           <div class="best-side-kicker">Best side</div>
           <div id="best-side-label" class="best-side-label">—</div>
           <div id="best-side-amount" class="best-side-amount">—</div>
+          <div id="best-side-suggest" class="best-side-suggest" hidden>
+            <div class="best-side-suggest-main">
+              <span class="best-side-suggest-kicker">Suggested buy</span>
+              <span id="best-side-suggest-amount" class="best-side-suggest-amount">—</span>
+            </div>
+            <div id="best-side-suggest-meta" class="best-side-suggest-meta">—</div>
+          </div>
           <div id="best-side-meta" class="best-side-meta">—</div>
         </div>
         <div id="roi-panel" class="roi-panel" hidden>
@@ -422,6 +429,14 @@
           inputmode="numeric"
           enterkeyhint="done"
         />
+      </div>
+      <div id="buy-suggest" class="buy-suggest" hidden>
+        <div class="buy-suggest-text">
+          <div class="buy-suggest-kicker">Suggested size</div>
+          <div id="buy-suggest-amount" class="buy-suggest-amount">—</div>
+          <div id="buy-suggest-meta" class="buy-suggest-meta">—</div>
+        </div>
+        <button type="button" id="buy-suggest-use" class="buy-suggest-use">Use</button>
       </div>
       <div class="buy-quick" aria-label="Quick amounts">
         <button type="button" class="buy-chip" data-amt="1">$1</button>
