@@ -35,6 +35,10 @@ Copy `.env.example` to `.env` for local Docker tests.
 - Terms: [legal/TERMS.md](legal/TERMS.md) (review with counsel before selling)
 - Privacy: [legal/PRIVACY.md](legal/PRIVACY.md)
 
+## Kalshi → TradingView (Chrome extension)
+
+`tradingview-kalshi-target/` — overlays Kalshi’s rolling 15-minute BTC **Target Price** (`KXBTC15M`) as a horizontal line on TradingView BTCUSD charts. See that folder’s README to load unpacked in Chrome.
+
 ## Legacy files
 
 `app_v2.py`, `app-before-cursor.py`, and `app_broken_backup.py` are old backups — **use `app.py` only**.

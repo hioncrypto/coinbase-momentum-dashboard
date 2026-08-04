@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Kalshi BTC Target</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0d1411;
+        --fg: #e8f5ee;
+        --muted: #8fa399;
+        --accent: #1ac96b;
+        --warn: #ffd28a;
+      }
+      body {
+        margin: 0;
+        width: 300px;
+        font: 13px/1.4 "IBM Plex Sans", "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+      }
+      main {
+        padding: 14px 14px 12px;
+      }
+      h1 {
+        margin: 0 0 4px;
+        font-size: 14px;
+        font-weight: 650;
+      }
+      .muted {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-top: 12px;
+      }
+      .target {
+        font-size: 22px;
+        font-weight: 700;
+        color: var(--accent);
+        letter-spacing: -0.02em;
+        margin-top: 10px;
+      }
+      .error {
+        color: var(--warn);
+        margin-top: 8px;
+        font-size: 12px;
+      }
+      button {
+        background: #163526;
+        color: var(--fg);
+        border: 1px solid rgba(26, 201, 107, 0.45);
+        border-radius: 6px;
+        padding: 6px 10px;
+        cursor: pointer;
+        font: inherit;
+      }
+      button:hover {
+        border-color: var(--accent);
+      }
+      label.toggle {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        user-select: none;
+      }
+      code {
+        font-size: 11px;
+        color: #b6dcc7;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Kalshi → TradingView</h1>
+      <div class="muted">KXBTC15M · new target every 15 minutes</div>
+      <div id="target" class="target">—</div>
+      <div id="meta" class="muted"></div>
+      <div id="error" class="error" hidden></div>
+      <div class="row">
+        <label class="toggle">
+          <input type="checkbox" id="enabled" checked />
+          Overlay enabled
+        </label>
+        <button type="button" id="refresh">Refresh</button>
+      </div>
+      <p class="muted" style="margin: 12px 0 0">
+        Open a <code>BTCUSD</code> chart on TradingView. The dashed TARGET line
+        updates automatically each 15m window.
+      </p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>
