@@ -722,12 +722,23 @@
     try {
       const orient = screen.orientation;
       if (!orient || typeof orient.lock !== "function") return;
-      const type = String(orient.type || "");
-      if (type.startsWith("portrait")) return;
-      orient.lock("portrait").catch(() => {});
+      // Prefer primary portrait; fall back if the UA rejects that token.
+      const lock = (mode) => orient.lock(mode);
+      Promise.resolve()
+        .then(() => lock("portrait-primary"))
+        .catch(() => lock("portrait"))
+        .catch(() => {});
     } catch {
       // Browser may require fullscreen / installed PWA.
     }
+  }
+
+  function afterOrientationSettle() {
+    tryLockPortrait();
+    // Chart must remeasure after CSS landscape→portrait transform.
+    setTimeout(resizeChart, 50);
+    setTimeout(resizeChart, 250);
+    setTimeout(resizeChart, 600);
   }
 
   function boot() {
@@ -803,11 +814,14 @@
     setInterval(refreshSpot, SPOT_POLL_MS);
     setInterval(tickClock, 250);
     tickClock();
-    window.addEventListener("resize", resizeChart);
-    window.addEventListener("orientationchange", () => {
+    window.addEventListener("resize", () => {
       tryLockPortrait();
-      setTimeout(resizeChart, 250);
+      resizeChart();
     });
+    window.addEventListener("orientationchange", afterOrientationSettle);
+    if (screen.orientation && typeof screen.orientation.addEventListener === "function") {
+      screen.orientation.addEventListener("change", afterOrientationSettle);
+    }
   }
 
   if (document.readyState === "loading") {

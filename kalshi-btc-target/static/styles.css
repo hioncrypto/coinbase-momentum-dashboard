@@ -425,3 +425,33 @@ h1 {
     margin: 0 auto;
   }
 }
+
+/*
+ * Hard portrait fallback for phones in landscape.
+ * Browser tabs often ignore manifest orientation; this keeps the UI
+ * upright as a portrait frame even when the device rotates.
+ */
+@media (orientation: landscape) and (max-height: 560px) {
+  html {
+    overflow: hidden;
+    width: 100%;
+    height: 100%;
+  }
+
+  body.portrait-app {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100vh;
+    width: 100dvh;
+    height: 100vw;
+    height: 100dvw;
+    max-width: none;
+    margin: 0;
+    transform: rotate(-90deg);
+    transform-origin: left top;
+    overflow: auto;
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+  }
+}

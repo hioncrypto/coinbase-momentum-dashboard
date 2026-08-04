@@ -5,10 +5,11 @@
   "description": "Kalshi 15-minute BTC Price to beat with BRTI chart, Yes/No %, and alerts.",
   "start_url": "/?source=homescreen",
   "scope": "/",
-  "display": "minimal-ui",
+  "display": "standalone",
+  "display_override": ["standalone", "fullscreen", "minimal-ui"],
   "background_color": "#0b1210",
   "theme_color": "#0b1210",
-  "orientation": "portrait",
+  "orientation": "portrait-primary",
   "icons": [
     {
       "src": "/icons/icon-192.png",
