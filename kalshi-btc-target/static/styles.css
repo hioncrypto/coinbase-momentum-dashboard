@@ -942,22 +942,73 @@ h1 {
   color: #b8f0d0;
 }
 
-.buy-range-wrap {
+.buy-range-wrap,
+.buy-range-block {
   display: block;
-  margin-top: 10px;
+  margin-top: 12px;
+  padding: 10px 12px 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(26, 201, 107, 0.28);
+  background: rgba(26, 201, 107, 0.08);
+}
+
+.buy-range-label {
+  margin-bottom: 8px;
+  font-size: 0.7rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #b8f0d0;
 }
 
 .buy-range {
+  -webkit-appearance: none;
+  appearance: none;
   width: 100%;
+  height: 28px;
+  margin: 0;
+  background: transparent;
   accent-color: var(--accent);
+}
+
+.buy-range::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.buy-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 26px;
+  height: 26px;
+  margin-top: -9px;
+  border-radius: 50%;
+  border: 2px solid #0b1210;
+  background: #1ac96b;
+  box-shadow: 0 0 0 3px rgba(26, 201, 107, 0.25);
+}
+
+.buy-range::-moz-range-track {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.buy-range::-moz-range-thumb {
+  width: 26px;
+  height: 26px;
+  border: 2px solid #0b1210;
+  border-radius: 50%;
+  background: #1ac96b;
 }
 
 .buy-range-ends {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 4px;
-  font-size: 0.72rem;
+  margin-top: 6px;
+  font-size: 0.78rem;
   font-weight: 700;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
@@ -965,7 +1016,8 @@ h1 {
 
 .buy-range-ends #buy-range-value {
   color: #d7ffe8;
-  font-size: 0.86rem;
+  font-size: 1rem;
+  font-weight: 800;
 }
 
 .buy-preview {
