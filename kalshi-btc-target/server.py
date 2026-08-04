@@ -69,7 +69,7 @@ CF_BASIC_PASS = os.environ.get(
 
 UA = "kalshi-btc-target/2.0 (+android-pwa)"
 
-_cache_lock = threading.Lock()
+_cache_lock = threading.RLock()
 _target_cache: dict = {}  # key -> {at, payload}
 _candles_cache: dict = {"at": 0.0, "key": None, "payload": None}
 _spot_cache: dict = {"at": 0.0, "payload": None}
@@ -567,6 +567,9 @@ def fetch_target_payload(tf: str = "15m") -> dict:
     _ = tf
     cache_key = "15m"
     now = time.time()
+    cached_payload = None
+    refresh_settle = False
+    close_ms = None
     with _cache_lock:
         cached = _target_cache.get(cache_key)
         if cached:
@@ -581,18 +584,25 @@ def fetch_target_payload(tf: str = "15m") -> dict:
                 else TARGET_TTL
             )
             if not expired and age < ttl:
-                # Refresh settlement fields even on cache hit when in last minute.
                 if settling:
-                    try:
-                        ticks = fetch_brti_ticks()
-                        settle = brti_settlement_snapshot(
-                            ticks, close_ms, payload.get("price_to_beat")
-                        )
-                        payload = {**payload, **settle}
-                        _target_cache[cache_key] = {"at": now, "payload": payload}
-                    except Exception:
-                        pass
-                return payload
+                    # Refresh settlement outside the lock (avoids deadlock).
+                    cached_payload = dict(payload)
+                    refresh_settle = True
+                else:
+                    return payload
+
+    if refresh_settle and cached_payload is not None:
+        try:
+            ticks = fetch_brti_ticks()
+            settle = brti_settlement_snapshot(
+                ticks, close_ms, cached_payload.get("price_to_beat")
+            )
+            cached_payload.update(settle)
+            with _cache_lock:
+                _target_cache[cache_key] = {"at": time.time(), "payload": cached_payload}
+            return cached_payload
+        except Exception:
+            return cached_payload
 
     payload = fetch_kalshi_series_target("KXBTC15M")
     if payload:
@@ -1062,7 +1072,7 @@ class Handler(BaseHTTPRequestHandler):
                 {
                     "ok": True,
                     "service": "kalshi-btc-target",
-                    "version": "2.0",
+                    "version": "2.0.1",
                     "push": bool(_vapid_app_server_key or VAPID_PUBLIC_RAW.is_file()),
                     "subscribers": len(_push_subs),
                 },
