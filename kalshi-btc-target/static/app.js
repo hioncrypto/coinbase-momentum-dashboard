@@ -12,7 +12,7 @@
   const TRADE_HISTORY_KEY = "beatlineTradeHistory";
   const HISTORY_LIMIT = 40;
   const DEMO_DEFAULT_START = 1000;
-  const APP_VERSION = "7.8";
+  const APP_VERSION = "7.9";
   const TUTORIAL_KEY = "beatlineTutorialSeen";
   const OPEN_PL_COLLAPSE_KEY = "beatlineOpenPlCollapsed";
 
@@ -116,6 +116,8 @@
     tutorialOpen: document.getElementById("tutorial-open"),
     appVersionLine: document.getElementById("app-version-line"),
     appUpdate: document.getElementById("app-update"),
+    pullRefresh: document.getElementById("pull-refresh"),
+    pullRefreshLabel: document.getElementById("pull-refresh-label"),
     demoToggle: document.getElementById("demo-toggle"),
     demoAccount: document.getElementById("demo-account"),
     demoBalance: document.getElementById("demo-balance"),
@@ -2470,6 +2472,99 @@
     window.location.replace(url.toString());
   }
 
+  /**
+   * Pull-to-refresh. The shell is a fixed-height flex layout with no page
+   * scroll, so Chrome's native gesture never fires — track it ourselves.
+   */
+  const PULL_TRIGGER_PX = 72;
+  const PULL_MAX_PX = 110;
+  let pullStartY = null;
+  let pullActive = false;
+  let pullDistance = 0;
+  let pullRunning = false;
+
+  function setPullIndicator(distance, ready) {
+    if (!el.pullRefresh) return;
+    const shown = distance > 6;
+    el.pullRefresh.classList.toggle("is-visible", shown);
+    el.pullRefresh.classList.toggle("is-ready", !!ready);
+    const y = Math.min(distance, PULL_MAX_PX);
+    el.pullRefresh.style.transform = `translate(-50%, ${Math.max(
+      -120,
+      y - 44
+    )}px)`;
+    if (el.pullRefreshLabel && !pullRunning) {
+      el.pullRefreshLabel.textContent = ready
+        ? "Release to update"
+        : "Pull to refresh";
+    }
+  }
+
+  function resetPullIndicator() {
+    pullStartY = null;
+    pullActive = false;
+    pullDistance = 0;
+    if (!el.pullRefresh) return;
+    el.pullRefresh.classList.remove("is-visible", "is-ready", "is-loading");
+    el.pullRefresh.style.transform = "translate(-50%, -120%)";
+  }
+
+  /** Only start the gesture where a downward drag isn't already meaningful. */
+  function pullAllowedFrom(target) {
+    if (pullRunning || buySheetOpen || optionsOpen || tutorialOpen) return false;
+    if (!(target instanceof Element)) return true;
+    if (target.closest("#chart, .chart-wrap, .buy-sheet, .options-sheet, .tutorial"))
+      return false;
+    if (target.closest("input, button, a, .open-pl-bar")) return false;
+    // Respect scrollable panels that aren't already at the top.
+    const scroller = target.closest(".summary-panel, .trade-panel");
+    if (scroller && scroller.scrollTop > 2) return false;
+    return true;
+  }
+
+  function onPullStart(ev) {
+    const t = ev.touches && ev.touches[0];
+    if (!t) return;
+    if (!pullAllowedFrom(ev.target)) {
+      pullStartY = null;
+      return;
+    }
+    pullStartY = t.clientY;
+    pullActive = false;
+    pullDistance = 0;
+  }
+
+  function onPullMove(ev) {
+    if (pullStartY == null || pullRunning) return;
+    const t = ev.touches && ev.touches[0];
+    if (!t) return;
+    const dy = t.clientY - pullStartY;
+    if (dy <= 0) {
+      if (pullActive) resetPullIndicator();
+      return;
+    }
+    pullActive = true;
+    // Rubber-band so it never feels like a free-scrolling page.
+    pullDistance = dy < PULL_MAX_PX ? dy : PULL_MAX_PX + (dy - PULL_MAX_PX) * 0.15;
+    setPullIndicator(pullDistance, pullDistance >= PULL_TRIGGER_PX);
+  }
+
+  function onPullEnd() {
+    if (pullStartY == null || pullRunning) return;
+    const trigger = pullActive && pullDistance >= PULL_TRIGGER_PX;
+    if (!trigger) {
+      resetPullIndicator();
+      return;
+    }
+    pullRunning = true;
+    if (el.pullRefresh) {
+      el.pullRefresh.classList.add("is-visible", "is-ready", "is-loading");
+      el.pullRefresh.style.transform = "translate(-50%, 12px)";
+    }
+    if (el.pullRefreshLabel) el.pullRefreshLabel.textContent = "Updating…";
+    forceAppUpdate();
+  }
+
   function bankPctText(pct) {
     if (pct == null || !Number.isFinite(pct)) return null;
     if (pct > 0 && pct < 1) return "<1%";
@@ -3797,6 +3892,12 @@
       el.appUpdate.addEventListener("click", () => forceAppUpdate());
       refreshVersionLine();
     }
+    document.addEventListener("touchstart", onPullStart, { passive: true });
+    document.addEventListener("touchmove", onPullMove, { passive: true });
+    document.addEventListener("touchend", onPullEnd, { passive: true });
+    document.addEventListener("touchcancel", () => resetPullIndicator(), {
+      passive: true,
+    });
     if (el.accountExport) {
       el.accountExport.addEventListener("click", () => exportAccountBackup());
     }

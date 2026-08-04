@@ -540,6 +540,55 @@ h1 {
   font-size: 0.75rem;
 }
 
+.pull-refresh {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(26, 201, 107, 0.4);
+  background: rgba(11, 18, 16, 0.95);
+  color: #d7ffe8;
+  font-size: 0.78rem;
+  font-weight: 750;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -120%);
+  transition: opacity 0.12s linear;
+}
+
+.pull-refresh.is-visible {
+  opacity: 1;
+}
+
+.pull-refresh.is-ready {
+  border-color: rgba(26, 201, 107, 0.9);
+  background: rgba(26, 201, 107, 0.22);
+}
+
+.pull-refresh-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(215, 255, 232, 0.35);
+  border-top-color: #1ac96b;
+}
+
+.pull-refresh.is-loading .pull-refresh-spinner {
+  animation: pull-spin 0.7s linear infinite;
+}
+
+@keyframes pull-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .options-update {
   display: flex;
   align-items: center;
