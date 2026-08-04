@@ -1754,7 +1754,7 @@ body.portrait-app {
 
 .app-shell > .chart-wrap {
   flex: 1 1 auto !important;
-  min-height: 48dvh !important;
+  min-height: 32dvh !important;
   display: flex !important;
   flex-direction: column;
   overflow: hidden;
@@ -1828,19 +1828,19 @@ body.portrait-app .live-time {
 .app-shell > .chart-wrap > #chart,
 body.portrait-app #chart {
   flex: 1 1 auto !important;
-  min-height: 44dvh !important;
+  min-height: 28dvh !important;
   height: auto !important;
 }
 
 /*
-  Trade strip: compact odds only.
-  Best Side / stake / ROI live in the buy sheet + Best dock button.
+  Trade strip: odds + Best Side + stake + ROI (compact, scrollable).
 */
 .trade-panel {
-  max-height: none;
+  max-height: min(34dvh, 300px);
   margin: 2px 8px 0;
-  padding: 4px 8px 4px;
-  overflow: visible;
+  padding: 4px 8px 6px;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .odds-heading {
@@ -1848,7 +1848,7 @@ body.portrait-app #chart {
 }
 
 .odds-hint {
-  display: none !important;
+  font-size: 0.65rem;
 }
 
 .odds-row {
@@ -1867,13 +1867,100 @@ body.portrait-app #chart {
   font-size: 0.65rem;
 }
 
-.roi-panel,
-.roi-heading,
-.stake-slider-wrap,
-.roi-grid,
-.roi-note,
+.roi-panel {
+  display: block !important;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
 .best-side {
-  display: none !important;
+  display: flex !important;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  padding: 6px 8px;
+  margin: 0 0 6px;
+}
+
+.best-side-kicker {
+  width: 100%;
+  margin: 0;
+  font-size: 0.62rem;
+}
+
+.best-side-label {
+  font-size: 0.95rem;
+  margin: 0;
+  line-height: 1.15;
+}
+
+.best-side-amount {
+  font-size: 0.82rem;
+  margin: 0;
+}
+
+.best-side-meta {
+  width: 100%;
+  margin: 0;
+  font-size: 0.68rem;
+  line-height: 1.25;
+  color: var(--muted);
+}
+
+.roi-heading {
+  display: flex !important;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 0 0 4px;
+  font-size: 0.72rem;
+}
+
+.stake-slider-wrap {
+  display: block !important;
+  margin: 0 0 6px;
+}
+
+.stake-slider {
+  height: 28px;
+}
+
+.stake-ends {
+  font-size: 0.65rem;
+}
+
+.roi-grid {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.roi-card {
+  padding: 6px 8px;
+}
+
+.roi-side {
+  font-size: 0.65rem;
+}
+
+.roi-price {
+  font-size: 1rem;
+}
+
+.roi-summary {
+  font-size: 0.78rem;
+}
+
+.roi-detail {
+  font-size: 0.65rem;
+  line-height: 1.25;
+}
+
+.roi-note {
+  display: block !important;
+  margin: 4px 0 0;
+  font-size: 0.62rem;
+  line-height: 1.3;
 }
 
 .buy-dock {
