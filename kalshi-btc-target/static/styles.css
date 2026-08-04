@@ -433,9 +433,9 @@ h1 {
 }
 
 .tf-btn[aria-pressed="true"] {
-  background: #163526;
+  background: #1ac96b;
   border-color: #1ac96b;
-  color: var(--fg);
+  color: #04140c;
 }
 
 #chart {
