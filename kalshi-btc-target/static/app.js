@@ -4,6 +4,7 @@
   const SPOT_POLL_MS = 2_000;
   const BOUNDARY_PAD_MS = 2_000;
   const TF_KEY = "kalshiChartTf";
+  const CHIME_KEY = "kalshiChimeEnabled";
 
   const TF_LABELS = {
     "1m": "1m candles",
@@ -24,6 +25,8 @@
     countdownMeta: document.getElementById("countdown-meta"),
     status: document.getElementById("status"),
     clock: document.getElementById("clock"),
+    chimeEnabled: document.getElementById("chime-enabled"),
+    chimeTest: document.getElementById("chime-test"),
   };
 
   let chart = null;
@@ -31,12 +34,18 @@
   let targetLine = null;
   let lastTicker = null;
   let lastTarget = null;
+  let lastFifteenTarget = null;
+  let lastFifteenTicker = null;
   let closeTimeIso = null;
   let boundaryTimer = null;
   let fittedOnce = false;
   let prevSpot = null;
+  let audioCtx = null;
+  let chimeReady = false;
   let currentTf = localStorage.getItem(TF_KEY) || "15m";
   if (!["1m", "5m", "15m"].includes(currentTf)) currentTf = "15m";
+  let chimeOn = localStorage.getItem(CHIME_KEY);
+  chimeOn = chimeOn === null ? true : chimeOn === "1";
 
   function money(n) {
     if (n == null || !Number.isFinite(n)) return "—";
@@ -46,6 +55,70 @@
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
+  }
+
+  function ensureAudio() {
+    if (!audioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      audioCtx = new AC();
+    }
+    if (audioCtx.state === "suspended") {
+      audioCtx.resume().catch(() => {});
+    }
+    chimeReady = true;
+    return audioCtx;
+  }
+
+  function playChime(force) {
+    if (!chimeOn && !force) return;
+    const ctx = ensureAudio();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    // Two-tone soft chime
+    const tones = [
+      { f: 880, t: 0.0, d: 0.18 },
+      { f: 1174.7, t: 0.14, d: 0.28 },
+    ];
+    for (const tone of tones) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = tone.f;
+      gain.gain.setValueAtTime(0.0001, now + tone.t);
+      gain.gain.exponentialRampToValueAtTime(0.22, now + tone.t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + tone.t + tone.d);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + tone.t);
+      osc.stop(now + tone.t + tone.d + 0.02);
+    }
+    if (navigator.vibrate) {
+      try {
+        navigator.vibrate([40, 60, 80]);
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  function maybeChimeNewFifteenTarget(beat, ticker, source) {
+    // Fire only for the real Kalshi 15m target rollover.
+    const isFifteen =
+      source === "kalshi" || (ticker && String(ticker).includes("KXBTC15M"));
+    if (!isFifteen || beat == null || !Number.isFinite(beat)) return;
+
+    const changed =
+      lastFifteenTarget != null &&
+      (Math.abs(lastFifteenTarget - beat) > 0.005 ||
+        (lastFifteenTicker && ticker && lastFifteenTicker !== ticker));
+
+    if (changed) {
+      playChime();
+      setStatus("ok", "New 15m target · chime");
+    }
+    lastFifteenTarget = beat;
+    if (ticker) lastFifteenTicker = ticker;
   }
 
   function setStatus(state, text) {
@@ -192,13 +265,21 @@
     });
   }
 
+  function clearTargetLine() {
+    if (targetLine && series) {
+      try {
+        series.removePriceLine(targetLine);
+      } catch {
+        // line may already be gone after series reset
+      }
+    }
+    targetLine = null;
+  }
+
   function applyTargetLine(target, title) {
     lastTarget = target;
     if (!series || target == null || !Number.isFinite(target)) {
-      if (targetLine && series) {
-        series.removePriceLine(targetLine);
-        targetLine = null;
-      }
+      clearTargetLine();
       return;
     }
     const opts = {
@@ -209,8 +290,9 @@
       axisLabelVisible: true,
       title: title || "TARGET",
     };
-    if (!targetLine) targetLine = series.createPriceLine(opts);
-    else targetLine.applyOptions(opts);
+    // Always replace so stale lines never stack after candle refreshes.
+    clearTargetLine();
+    targetLine = series.createPriceLine(opts);
   }
 
   async function refreshTarget() {
@@ -253,6 +335,10 @@
         const src = data.source === "kalshi" ? "Kalshi" : "Window";
         el.targetMeta.textContent = win ? `${src} · settles ${win}` : src;
         applyTargetLine(beat, "TARGET");
+        // Always watch the 15m Kalshi mark for chimes (poll 15m target too).
+        if (currentTf === "15m") {
+          maybeChimeNewFifteenTarget(beat, data.ticker, data.source);
+        }
         if (el.spotValue && el.spotValue.dataset.last) {
           updateSpot(Number(el.spotValue.dataset.last));
         }
@@ -288,10 +374,10 @@
       ensureChart();
       if (!series) return;
       const candles = data.candles || [];
-      // Hard reset so timeframe switches are obvious
+      // Remove TARGET line before resetting candles so old lines don't stack.
+      clearTargetLine();
       series.setData([]);
       series.setData(candles);
-      targetLine = null;
       if (lastTarget != null) applyTargetLine(lastTarget, "TARGET");
       if (!el.spotValue?.dataset.last && candles.length) {
         updateSpot(candles[candles.length - 1].close);
@@ -318,6 +404,19 @@
     Promise.all([refreshCandles(), refreshTarget(), refreshSpot()]);
   }
 
+  async function pollFifteenChime() {
+    // Keep chime working even if user is viewing 1m/5m chart.
+    if (currentTf === "15m") return;
+    try {
+      const res = await fetch("/api/target?tf=15m", { cache: "no-store" });
+      const data = await res.json();
+      const beat = data.price_to_beat ?? data.target;
+      maybeChimeNewFifteenTarget(beat, data.ticker, data.source);
+    } catch {
+      // ignore
+    }
+  }
+
   function tickClock() {
     el.clock.textContent = new Date().toLocaleTimeString();
     updateCountdown();
@@ -332,6 +431,29 @@
       el.timeframe.value = currentTf;
       el.timeframe.addEventListener("change", onTimeframeChange);
     }
+    if (el.chimeEnabled) {
+      el.chimeEnabled.checked = chimeOn;
+      el.chimeEnabled.addEventListener("change", () => {
+        chimeOn = el.chimeEnabled.checked;
+        localStorage.setItem(CHIME_KEY, chimeOn ? "1" : "0");
+        ensureAudio();
+      });
+    }
+    if (el.chimeTest) {
+      el.chimeTest.addEventListener("click", () => {
+        ensureAudio();
+        playChime(true);
+      });
+    }
+    // Unlock audio after first user gesture anywhere
+    const unlock = () => {
+      ensureAudio();
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+
     setTfLabel();
     ensureChart();
     resizeChart();
@@ -339,6 +461,7 @@
     setInterval(refreshTarget, TARGET_POLL_MS);
     setInterval(refreshCandles, CANDLE_POLL_MS);
     setInterval(refreshSpot, SPOT_POLL_MS);
+    setInterval(pollFifteenChime, TARGET_POLL_MS);
     setInterval(tickClock, 250);
     tickClock();
     window.addEventListener("resize", resizeChart);

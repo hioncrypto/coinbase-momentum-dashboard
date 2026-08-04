@@ -132,6 +132,60 @@ h1 {
   background-repeat: no-repeat;
 }
 
+.sound-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.sound-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--muted);
+  user-select: none;
+}
+
+.chip-btn {
+  border: 1px solid rgba(26, 201, 107, 0.35);
+  background: #163526;
+  color: var(--fg);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.install-help {
+  margin: 8px 16px 18px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(12, 20, 16, 0.55);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.install-help summary {
+  cursor: pointer;
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.install-help ol {
+  margin: 10px 0 0;
+  padding-left: 1.2rem;
+}
+
+.install-help li {
+  margin: 6px 0;
+}
+
 .target-panel .label {
   font-size: 0.7rem;
   text-transform: uppercase;

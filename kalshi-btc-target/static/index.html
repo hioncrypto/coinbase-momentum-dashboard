@@ -45,6 +45,14 @@
         </select>
       </div>
 
+      <div class="sound-row">
+        <label class="sound-toggle">
+          <input type="checkbox" id="chime-enabled" checked />
+          Chime on new 15m target
+        </label>
+        <button type="button" id="chime-test" class="chip-btn">Test chime</button>
+      </div>
+
       <div class="metrics">
         <div class="metric">
           <div id="target-label" class="label">Price to beat</div>
@@ -73,5 +81,16 @@
       <span id="chart-tf-label">Chart · 15m candles</span>
       <span id="clock"></span>
     </footer>
+
+    <details class="install-help">
+      <summary>Add shortcut to Android home screen</summary>
+      <ol>
+        <li>Open this page in <strong>Chrome</strong></li>
+        <li>Tap the <strong>⋮</strong> menu (top right)</li>
+        <li>Tap <strong>Add to Home screen</strong> / <strong>Install app</strong></li>
+        <li>Tap <strong>Add</strong></li>
+        <li>Open the new icon anytime — keep the page open for 15m chimes</li>
+      </ol>
+    </details>
   </body>
 </html>
