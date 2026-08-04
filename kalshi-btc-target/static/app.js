@@ -1989,7 +1989,7 @@
     const height = el.chart.clientHeight || el.chart.offsetHeight;
     chart.applyOptions({
       width: Math.max(240, Math.floor(width || 280)),
-      height: Math.max(180, Math.floor(height || 240)),
+      height: Math.max(260, Math.floor(height || 320)),
     });
   }
 
