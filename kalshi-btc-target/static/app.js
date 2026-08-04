@@ -1997,9 +1997,15 @@
     ensureAudio();
     playEdgeChime();
     const sideLabel = side === "above" ? "Above" : "Below";
+    const sug =
+      lastBestPick && lastBestPick.side === side && lastBestPick.suggestedStake
+        ? lastBestPick.suggestedStake
+        : null;
     setStatus(
       "ok",
-      `Clear edge · Buy ${sideLabel}${ask ? ` @ ${ask}¢` : ""}`
+      sug != null
+        ? `Clear edge · Buy ${sideLabel} · suggest $${sug}${ask ? ` @ ${ask}¢` : ""}`
+        : `Clear edge · Buy ${sideLabel}${ask ? ` @ ${ask}¢` : ""}`
     );
     // System notification only when backgrounded — avoids foreground alert loops.
     if (document.visibilityState !== "visible") {

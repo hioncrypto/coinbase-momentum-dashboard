@@ -47,6 +47,10 @@ Quick Cloudflare tunnels change hostnames and die. Use a real host:
 
 GitHub Pages cannot run BeatLine’s Python backend.
 
+### Temporary tunnel (dev only)
+
+`./tunnel_watchdog.sh` keeps a quick Cloudflare tunnel alive and writes the current URL to `/tmp/beatline-tunnel-url.txt`. Restarts still produce a **new hostname** — that's a limitation of free quick tunnels, which is why a real host is better.
+
 ## Demo account & trade history
 
 Balance, open position, P/L, and trade history sync to the **BeatLine server** (`data/demo_account.json`), not only the browser.
