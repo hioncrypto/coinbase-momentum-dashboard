@@ -11,7 +11,7 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta
       name="description"
-      content="Kalshi 15-minute BTC Price to beat with live moving price and countdown."
+      content="Kalshi 15-minute BTC Price to beat with 1m/5m/15m charts, live price, and countdown."
     />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
@@ -29,13 +29,22 @@
         <span class="mark" aria-hidden="true"></span>
         <div>
           <h1>Kalshi BTC Target</h1>
-          <p class="sub">KXBTC15M · live price · countdown</p>
+          <p class="sub">Price to beat · live price · countdown</p>
         </div>
       </div>
       <div id="status" class="status" data-state="loading">Connecting…</div>
     </header>
 
     <section class="target-panel" aria-live="polite">
+      <div class="tf-row">
+        <label class="tf-label" for="timeframe">Chart timeframe</label>
+        <select id="timeframe" class="tf-select" aria-label="Chart timeframe">
+          <option value="1m">1 minute</option>
+          <option value="5m">5 minutes</option>
+          <option value="15m" selected>15 minutes</option>
+        </select>
+      </div>
+
       <div class="metrics">
         <div class="metric">
           <div id="target-label" class="label">Price to beat</div>
@@ -54,14 +63,14 @@
       <div class="countdown-block">
         <div class="label">Time left</div>
         <div id="countdown" class="countdown">—:—</div>
-        <div id="countdown-meta" class="meta">Until 15m window ends</div>
+        <div id="countdown-meta" class="meta">Until Kalshi 15m window ends</div>
       </div>
     </section>
 
     <main id="chart" role="img" aria-label="BTC-USD chart with Kalshi target line"></main>
 
     <footer class="foot">
-      <span>BTC-USD · Coinbase</span>
+      <span id="chart-tf-label">Chart · 15m candles</span>
       <span id="clock"></span>
     </footer>
   </body>

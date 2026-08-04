@@ -24,9 +24,31 @@ HOST = os.environ.get("HOST", "0.0.0.0")
 PORT = int(os.environ.get("PORT", "8765"))
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
+TIMEFRAMES = {
+    "1m": {
+        "label": "1 minute",
+        "granularity": 60,
+        "candle_limit": 300,
+        "series": "KXBTC15M",  # Kalshi BTC up/down markets are 15m only
+    },
+    "5m": {
+        "label": "5 minutes",
+        "granularity": 300,
+        "candle_limit": 300,
+        "series": "KXBTC15M",
+    },
+    "15m": {
+        "label": "15 minutes",
+        "granularity": 900,
+        "candle_limit": 300,
+        "series": "KXBTC15M",
+    },
+}
+
+KALSHI_SERIES = "KXBTC15M"
 KALSHI_URL = (
     "https://api.elections.kalshi.com/trade-api/v2/markets"
-    "?limit=5&status=open&series_ticker=KXBTC15M"
+    f"?limit=5&status=open&series_ticker={KALSHI_SERIES}"
 )
 COINBASE_CANDLES = "https://api.exchange.coinbase.com/products/BTC-USD/candles"
 COINBASE_TICKER = "https://api.exchange.coinbase.com/products/BTC-USD/ticker"
@@ -272,7 +294,7 @@ def fetch_candles(granularity: int = 60, limit: int = 300) -> dict:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "KalshiBtcTarget/1.1"
+    server_version = "KalshiBtcTarget/1.2"
 
     def log_message(self, fmt, *args):
         print(f"[kalshi-btc-target] {self.address_string()} {fmt % args}")
@@ -301,6 +323,25 @@ class Handler(BaseHTTPRequestHandler):
         path = parsed.path
         qs = urllib.parse.parse_qs(parsed.query)
 
+        if path == "/api/timeframes":
+            self._send_json(
+                200,
+                {
+                    "ok": True,
+                    "default": "15m",
+                    "timeframes": [
+                        {
+                            "id": key,
+                            "label": cfg["label"],
+                            "granularity": cfg["granularity"],
+                            "note": "Chart candles; Kalshi Price to beat is always KXBTC15M",
+                        }
+                        for key, cfg in TIMEFRAMES.items()
+                    ],
+                },
+            )
+            return
+
         if path in ("/api/target", "/api/kalshi/target"):
             self._send_json(200, fetch_target_payload())
             return
@@ -310,24 +351,32 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path in ("/api/candles", "/api/btc/candles"):
-            try:
-                gran = int((qs.get("granularity") or ["60"])[0])
-            except ValueError:
-                gran = 60
-            if gran not in (60, 300, 900, 3600):
-                gran = 60
-            try:
-                limit = int((qs.get("limit") or ["300"])[0])
-            except ValueError:
-                limit = 300
-            limit = max(50, min(limit, 300))
-            self._send_json(200, fetch_candles(gran, limit))
+            tf = (qs.get("tf") or qs.get("timeframe") or [""])[0].strip().lower()
+            cfg = TIMEFRAMES.get(tf)
+            if cfg:
+                gran = cfg["granularity"]
+                limit = cfg["candle_limit"]
+            else:
+                try:
+                    gran = int((qs.get("granularity") or ["60"])[0])
+                except ValueError:
+                    gran = 60
+                if gran not in (60, 300, 900, 3600):
+                    gran = 60
+                try:
+                    limit = int((qs.get("limit") or ["300"])[0])
+                except ValueError:
+                    limit = 300
+                limit = max(50, min(limit, 300))
+            payload = fetch_candles(gran, limit)
+            payload["timeframe"] = tf or None
+            self._send_json(200, payload)
             return
 
         if path == "/api/health":
             self._send_json(
                 200,
-                {"ok": True, "service": "kalshi-btc-target", "version": "1.1"},
+                {"ok": True, "service": "kalshi-btc-target", "version": "1.2"},
             )
             return
 

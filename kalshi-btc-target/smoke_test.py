@@ -35,6 +35,16 @@ def main() -> int:
     assert spot.get("ok"), spot
     assert spot.get("price") is not None, spot
     print("spot", spot.get("price"))
+
+    tfs = get("/api/timeframes")
+    assert tfs.get("ok"), tfs
+    ids = {t["id"] for t in tfs.get("timeframes") or []}
+    assert {"1m", "5m", "15m"} <= ids, ids
+    for tf in ("1m", "5m", "15m"):
+        c = get(f"/api/candles?tf={tf}")
+        assert c.get("ok"), (tf, c)
+        assert len(c.get("candles") or []) >= 20, (tf, len(c.get("candles") or []))
+        print("tf", tf, "candles", len(c["candles"]), "gran", c.get("granularity"))
     print("OK")
     return 0
 

@@ -3,9 +3,18 @@
   const CANDLE_POLL_MS = 15_000;
   const SPOT_POLL_MS = 2_000;
   const BOUNDARY_PAD_MS = 2_000;
+  const TF_KEY = "kalshiChartTf";
+
+  const TF_LABELS = {
+    "1m": "1m candles",
+    "5m": "5m candles",
+    "15m": "15m candles",
+  };
 
   const el = {
     chart: document.getElementById("chart"),
+    timeframe: document.getElementById("timeframe"),
+    chartTfLabel: document.getElementById("chart-tf-label"),
     targetLabel: document.getElementById("target-label"),
     targetValue: document.getElementById("target-value"),
     targetMeta: document.getElementById("target-meta"),
@@ -26,6 +35,8 @@
   let boundaryTimer = null;
   let fittedOnce = false;
   let prevSpot = null;
+  let currentTf = localStorage.getItem(TF_KEY) || "15m";
+  if (!["1m", "5m", "15m"].includes(currentTf)) currentTf = "15m";
 
   function money(n) {
     if (n == null || !Number.isFinite(n)) return "—";
@@ -40,6 +51,12 @@
   function setStatus(state, text) {
     el.status.dataset.state = state;
     el.status.textContent = text;
+  }
+
+  function setTfLabel() {
+    if (el.chartTfLabel) {
+      el.chartTfLabel.textContent = `Chart · ${TF_LABELS[currentTf] || currentTf}`;
+    }
   }
 
   function formatWindow(closeIso, closeEt) {
@@ -69,7 +86,6 @@
     el.spotValue.textContent = money(lastClose);
     el.spotValue.dataset.last = String(lastClose);
 
-    // Flash direction vs previous tick
     if (prevSpot != null && Number.isFinite(prevSpot)) {
       if (lastClose > prevSpot) el.spotValue.style.color = "#1ac96b";
       else if (lastClose < prevSpot) el.spotValue.style.color = "#d45454";
@@ -92,7 +108,7 @@
     if (!closeTimeIso) {
       el.countdown.textContent = "—:—";
       el.countdown.classList.remove("urgent");
-      if (el.countdownMeta) el.countdownMeta.textContent = "Until 15m window ends";
+      if (el.countdownMeta) el.countdownMeta.textContent = "Until Kalshi 15m window ends";
       return;
     }
     const end = Date.parse(closeTimeIso);
@@ -114,7 +130,7 @@
     el.countdown.classList.toggle("urgent", totalSec <= 60);
     if (el.countdownMeta) {
       el.countdownMeta.textContent =
-        totalSec <= 60 ? "Under 1 minute left" : "Until 15m window ends";
+        totalSec <= 60 ? "Under 1 minute left" : "Until Kalshi 15m window ends";
     }
   }
 
@@ -231,9 +247,7 @@
         );
         el.targetValue.textContent = money(beat);
         const win = formatWindow(data.close_time, data.close_et);
-        el.targetMeta.textContent = win
-          ? `Settles ${win}`
-          : "Kalshi 15m";
+        el.targetMeta.textContent = win ? `Settles ${win}` : "Kalshi 15m";
         applyTargetLine(beat, "TARGET");
         if (el.spotValue && el.spotValue.dataset.last) {
           updateSpot(Number(el.spotValue.dataset.last));
@@ -259,7 +273,7 @@
 
   async function refreshCandles() {
     try {
-      const res = await fetch("/api/candles?granularity=60&limit=300", {
+      const res = await fetch(`/api/candles?tf=${encodeURIComponent(currentTf)}`, {
         cache: "no-store",
       });
       const data = await res.json();
@@ -275,15 +289,23 @@
       if (!el.spotValue?.dataset.last && candles.length) {
         updateSpot(candles[candles.length - 1].close);
       }
-      if (!fittedOnce && candles.length) {
+      // Always refit when timeframe changes / first load
+      if (!fittedOnce || candles.length) {
         chart.timeScale().fitContent();
         fittedOnce = true;
-      } else {
-        chart.timeScale().scrollToRealTime();
       }
     } catch (err) {
       setStatus("warn", "Candle fetch failed");
     }
+  }
+
+  function onTimeframeChange() {
+    currentTf = el.timeframe.value;
+    localStorage.setItem(TF_KEY, currentTf);
+    fittedOnce = false;
+    setTfLabel();
+    setStatus("loading", `Loading ${currentTf} chart…`);
+    refreshCandles();
   }
 
   function tickClock() {
@@ -296,6 +318,11 @@
       setStatus("warn", "Chart library failed to load");
       return;
     }
+    if (el.timeframe) {
+      el.timeframe.value = currentTf;
+      el.timeframe.addEventListener("change", onTimeframeChange);
+    }
+    setTfLabel();
     ensureChart();
     resizeChart();
     refreshCandles().then(refreshTarget).then(refreshSpot);
