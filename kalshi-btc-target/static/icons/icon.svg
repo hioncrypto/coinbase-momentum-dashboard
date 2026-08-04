@@ -1,6 +1,43 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img">
-  <rect width="128" height="128" rx="24" fill="#0b1210"/>
-  <rect x="18" y="60" width="92" height="6" rx="2" fill="#1ac96b"/>
-  <rect x="86" y="48" width="24" height="30" rx="4" fill="#163526" stroke="#1ac96b" stroke-width="3"/>
-  <text x="98" y="68" text-anchor="middle" font-size="14" font-family="Segoe UI, sans-serif" fill="#1ac96b">T</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Kalshi BTC Target">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0d1713"/>
+      <stop offset="100%" stop-color="#08110e"/>
+    </linearGradient>
+  </defs>
+  <!-- App tile -->
+  <rect width="128" height="128" rx="28" fill="url(#bg)"/>
+  <rect x="6" y="6" width="116" height="116" rx="24" fill="none" stroke="#1a2e25" stroke-width="2"/>
+
+  <!-- Subtle target guide -->
+  <line x1="14" y1="70" x2="114" y2="70" stroke="#2a4a3a" stroke-width="2" stroke-dasharray="4 4" opacity="0.9"/>
+
+  <!-- Candles: blue = up, red = down -->
+  <!-- Down red -->
+  <line x1="30" y1="38" x2="30" y2="92" stroke="#d45454" stroke-width="3" stroke-linecap="round"/>
+  <rect x="22" y="48" width="16" height="28" rx="2" fill="#d45454"/>
+
+  <!-- Up blue -->
+  <line x1="54" y1="34" x2="54" y2="86" stroke="#3b82f6" stroke-width="3" stroke-linecap="round"/>
+  <rect x="46" y="42" width="16" height="32" rx="2" fill="#3b82f6"/>
+
+  <!-- Down red -->
+  <line x1="78" y1="44" x2="78" y2="96" stroke="#d45454" stroke-width="3" stroke-linecap="round"/>
+  <rect x="70" y="56" width="16" height="26" rx="2" fill="#d45454"/>
+
+  <!-- Up blue (latest) -->
+  <line x1="102" y1="28" x2="102" y2="78" stroke="#3b82f6" stroke-width="3" stroke-linecap="round"/>
+  <rect x="94" y="36" width="16" height="30" rx="2" fill="#3b82f6"/>
+
+  <!-- Small % badge -->
+  <circle cx="100" cy="104" r="16" fill="#163526" stroke="#1ac96b" stroke-width="2.5"/>
+  <text
+    x="100"
+    y="109"
+    text-anchor="middle"
+    font-size="15"
+    font-weight="800"
+    font-family="IBM Plex Sans, Segoe UI, sans-serif"
+    fill="#1ac96b"
+  >%</text>
 </svg>
