@@ -30,6 +30,7 @@
     clock: document.getElementById("clock"),
     bgStatus: document.getElementById("bg-status"),
     pushBadge: document.getElementById("push-badge"),
+    rotateGate: document.getElementById("rotate-gate"),
     oddsRow: document.getElementById("odds-row"),
     yesPct: document.getElementById("yes-pct"),
     noPct: document.getElementById("no-pct"),
@@ -720,24 +721,79 @@
     updateCountdown();
   }
 
-  function tryLockPortrait() {
+  function isLandscapeNow() {
     try {
-      const orient = screen.orientation;
-      if (!orient || typeof orient.lock !== "function") return;
-      // Prefer primary portrait; fall back if the UA rejects that token.
-      const lock = (mode) => orient.lock(mode);
-      Promise.resolve()
-        .then(() => lock("portrait-primary"))
-        .catch(() => lock("portrait"))
-        .catch(() => {});
+      const type = String((screen.orientation && screen.orientation.type) || "");
+      if (type.startsWith("landscape")) return true;
+      if (type.startsWith("portrait")) return false;
     } catch {
-      // Browser may require fullscreen / installed PWA.
+      // fall through
+    }
+    return window.matchMedia("(orientation: landscape)").matches;
+  }
+
+  function syncRotateGate() {
+    if (!el.rotateGate) return;
+    const landscape = isLandscapeNow();
+    el.rotateGate.hidden = !landscape;
+  }
+
+  async function lockOrientationPortrait() {
+    const orient = screen.orientation;
+    if (!orient || typeof orient.lock !== "function") return false;
+    try {
+      await orient.lock("portrait-primary");
+      return true;
+    } catch {
+      try {
+        await orient.lock("portrait");
+        return true;
+      } catch {
+        return false;
+      }
     }
   }
 
+  async function enterFullscreenIfNeeded() {
+    if (document.fullscreenElement) return true;
+    const root = document.documentElement;
+    try {
+      if (typeof root.requestFullscreen === "function") {
+        await root.requestFullscreen({ navigationUI: "hide" });
+        return true;
+      }
+    } catch {
+      // ignore
+    }
+    try {
+      if (typeof root.webkitRequestFullscreen === "function") {
+        root.webkitRequestFullscreen();
+        return true;
+      }
+    } catch {
+      // ignore
+    }
+    return !!document.fullscreenElement;
+  }
+
+  async function ensurePortraitLock(fromGesture) {
+    // Chrome only allows orientation.lock from a gesture, and usually only
+    // after fullscreen — unless the app is an installed fullscreen/standalone PWA.
+    if (fromGesture) {
+      await enterFullscreenIfNeeded();
+    }
+    await lockOrientationPortrait();
+    syncRotateGate();
+    setTimeout(resizeChart, 100);
+    setTimeout(resizeChart, 350);
+  }
+
+  function tryLockPortrait() {
+    ensurePortraitLock(false);
+  }
+
   function afterOrientationSettle() {
-    tryLockPortrait();
-    // Chart must remeasure after CSS landscape→portrait transform.
+    ensurePortraitLock(false);
     setTimeout(resizeChart, 50);
     setTimeout(resizeChart, 250);
     setTimeout(resizeChart, 600);
