@@ -484,6 +484,114 @@ h1 {
   color: var(--down);
 }
 
+.trade-history {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.trade-history-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.trade-history-summary {
+  margin-top: 4px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.trade-history-summary.is-up {
+  color: var(--accent);
+}
+
+.trade-history-summary.is-down {
+  color: var(--down);
+}
+
+.trade-history-clear {
+  flex-shrink: 0;
+  min-height: 32px;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+}
+
+.trade-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: min(42dvh, 320px);
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.trade-history-empty {
+  padding: 12px 10px;
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.trade-history-item {
+  padding: 10px 10px 9px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.trade-history-item.is-win {
+  border-color: rgba(26, 201, 107, 0.28);
+  background: rgba(26, 201, 107, 0.08);
+}
+
+.trade-history-item.is-loss {
+  border-color: rgba(212, 84, 84, 0.28);
+  background: rgba(212, 84, 84, 0.08);
+}
+
+.trade-history-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.trade-history-kind {
+  font-size: 0.86rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.trade-history-pl {
+  font-size: 0.95rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.trade-history-item.is-win .trade-history-pl {
+  color: var(--accent);
+}
+
+.trade-history-item.is-loss .trade-history-pl {
+  color: var(--down);
+}
+
+.trade-history-meta {
+  margin-top: 4px;
+  font-size: 0.68rem;
+  line-height: 1.35;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .demo-mark {
   margin-top: 8px;
   padding: 10px 12px;
