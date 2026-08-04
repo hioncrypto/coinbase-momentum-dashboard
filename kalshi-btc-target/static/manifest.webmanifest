@@ -2,7 +2,7 @@
   "name": "Kalshi BTC Target",
   "short_name": "Kalshi Target",
   "id": "/?app=kalshi-btc-target",
-  "description": "Kalshi 15-minute BTC Price to beat with BRTI chart, Yes/No %, and alerts.",
+  "description": "Kalshi 15-minute BTC Price to beat with BRTI chart, Above/Below %, and alerts.",
   "start_url": "/?source=homescreen",
   "scope": "/",
   "display": "standalone",
