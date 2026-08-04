@@ -20,12 +20,12 @@
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
     <link rel="icon" href="/icons/icon-192.png" sizes="192x192" type="image/png" />
     <title>Kalshi BTC · Above or Below</title>
-    <link rel="stylesheet" href="/styles.css?v=2.8" />
+    <link rel="stylesheet" href="/styles.css?v=2.9" />
     <script
       src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"
       defer
     ></script>
-    <script src="/app.js?v=2.8" defer></script>
+    <script src="/app.js?v=2.9" defer></script>
   </head>
   <body class="portrait-app">
     <div id="rotate-gate" class="rotate-gate" hidden>
@@ -87,7 +87,7 @@
       </div>
     </header>
 
-    <section class="target-panel" aria-live="polite">
+    <section class="summary-panel" aria-live="polite">
       <div class="hero-beat">
         <div class="label" id="target-label">Price to beat</div>
         <div id="target-value" class="value beat">—</div>
@@ -117,6 +117,26 @@
         </div>
       </div>
 
+      <p id="countdown-meta" class="countdown-meta">Until this 15m window ends</p>
+      <p id="bg-status" class="sound-hint" hidden></p>
+      <p id="edge-line" class="edge-line" hidden></p>
+    </section>
+
+    <section class="chart-wrap">
+      <div
+        id="timeframe"
+        class="tf-btns"
+        role="group"
+        aria-label="Chart candle size"
+      >
+        <button type="button" class="tf-btn" data-tf="15m" aria-pressed="true">15m</button>
+        <button type="button" class="tf-btn" data-tf="5m" aria-pressed="false">5m</button>
+        <button type="button" class="tf-btn" data-tf="1m" aria-pressed="false">1m</button>
+      </div>
+      <main id="chart" role="img" aria-label="Bitcoin chart with Price to beat line"></main>
+    </section>
+
+    <section class="trade-panel">
       <div class="odds-block">
         <div class="odds-heading">
           <span>Market chance</span>
@@ -176,25 +196,8 @@
             Est. Kalshi taker fee included. Win pays $1/contract · lose = $0.
           </p>
         </div>
-        <p id="edge-line" class="edge-line" hidden></p>
-      </div>
-
-      <p id="countdown-meta" class="countdown-meta">Until this 15m window ends</p>
-      <p id="bg-status" class="sound-hint" hidden></p>
-
-      <div
-        id="timeframe"
-        class="tf-btns"
-        role="group"
-        aria-label="Chart candle size"
-      >
-        <button type="button" class="tf-btn" data-tf="15m" aria-pressed="true">15m</button>
-        <button type="button" class="tf-btn" data-tf="5m" aria-pressed="false">5m</button>
-        <button type="button" class="tf-btn" data-tf="1m" aria-pressed="false">1m</button>
       </div>
     </section>
-
-    <main id="chart" role="img" aria-label="Bitcoin chart with Price to beat line"></main>
 
     <footer class="foot">
       <span id="chart-tf-label">Chart · live Kalshi index</span>
