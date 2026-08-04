@@ -41,6 +41,10 @@
     roiPanel: document.getElementById("roi-panel"),
     stakeSlider: document.getElementById("stake-slider"),
     stakeValue: document.getElementById("stake-value"),
+    bestSide: document.getElementById("best-side"),
+    bestSideLabel: document.getElementById("best-side-label"),
+    bestSideAmount: document.getElementById("best-side-amount"),
+    bestSideMeta: document.getElementById("best-side-meta"),
     roiAbovePrice: document.getElementById("roi-above-price"),
     roiAboveSummary: document.getElementById("roi-above-summary"),
     roiAboveDetail: document.getElementById("roi-above-detail"),
@@ -65,7 +69,12 @@
   let lastKalshiUrl = "https://kalshi.com/markets/kxbtc15m";
   let lastYesPct = null;
   let lastSettlementAvg = null;
+  let lastSettlementSide = null;
+  let lastSettlementMode = false;
+  let lastThinBook = false;
   let closeTimeIso = null;
+  let lastBestSideKey = null;
+  let bestSideFlashTimer = null;
   let boundaryTimer = null;
   let rolloverTimer = null;
   let rolloverUntil = 0;
@@ -469,6 +478,206 @@
     };
   }
 
+  /** Standard normal CDF (Abramowitz & Stegun 26.2.17). */
+  function normalCdf(x) {
+    if (!Number.isFinite(x)) return 0.5;
+    const sign = x < 0 ? -1 : 1;
+    const z = Math.abs(x) / Math.SQRT2;
+    const t = 1 / (1 + 0.3275911 * z);
+    const a1 = 0.254829592;
+    const a2 = -0.284496736;
+    const a3 = 1.421413741;
+    const a4 = -1.453152027;
+    const a5 = 1.061405429;
+    const erf =
+      1 -
+      ((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t * Math.exp(-z * z);
+    return 0.5 * (1 + sign * erf);
+  }
+
+  /**
+   * Model P(Above) from live vs beat and time left.
+   * Uses ~55% annualized BTC vol; settlement mode trusts the running avg.
+   */
+  function modelProbAbove(spot, beat, secsLeft) {
+    if (spot == null || beat == null || !Number.isFinite(spot) || !Number.isFinite(beat)) {
+      return null;
+    }
+    if (lastSettlementMode && lastSettlementSide === "above") return 0.97;
+    if (lastSettlementMode && lastSettlementSide === "below") return 0.03;
+    if (lastSettlementMode && lastSettlementAvg != null && Number.isFinite(lastSettlementAvg)) {
+      const d = lastSettlementAvg - beat;
+      // Soft settle lean while samples accumulate.
+      return normalCdf(d / Math.max(8, Math.abs(beat) * 0.00015));
+    }
+    const t = Math.max(1, Number(secsLeft) || 1);
+    // Dollar sigma over remaining window (~55% ann. vol), floored for noise.
+    const sigma = Math.max(
+      8,
+      Math.abs(beat) * 0.55 * Math.sqrt(t / (365.25 * 24 * 3600))
+    );
+    return normalCdf((spot - beat) / sigma);
+  }
+
+  function scoreSide(side, askCents, modelProb, stakeUsd) {
+    if (askCents == null || modelProb == null || !Number.isFinite(modelProb)) {
+      return null;
+    }
+    const sized = roiForStake(askCents, Math.max(1, stakeUsd || 1));
+    if (!sized) return null;
+    const bought = stakeUsd > 0 ? roiForStake(askCents, stakeUsd) : null;
+    const pWin = side === "above" ? modelProb : 1 - modelProb;
+    const costPer = sized.total / Math.max(1, sized.contracts);
+    const ev = pWin * 1 - costPer;
+    const risk = Math.max(0.04, 1 - pWin);
+    return {
+      side,
+      askCents: sized.askCents,
+      pWin,
+      ev,
+      risk,
+      score: ev / risk,
+      roiIfWin: bought && !bought.empty ? bought.roiIfWin : sized.roiIfWin,
+      contracts: bought && !bought.empty ? bought.contracts : 0,
+      total: bought && !bought.empty ? bought.total : 0,
+      profitIfWin: bought && !bought.empty ? bought.profitIfWin : 0,
+    };
+  }
+
+  function secondsLeft() {
+    if (!closeTimeIso) return null;
+    const end = Date.parse(closeTimeIso);
+    if (!Number.isFinite(end)) return null;
+    return Math.max(0, Math.floor((end - Date.now()) / 1000));
+  }
+
+  function flashBestSide() {
+    if (!el.bestSide) return;
+    el.bestSide.classList.remove("is-flash");
+    // Restart CSS animation.
+    void el.bestSide.offsetWidth;
+    el.bestSide.classList.add("is-flash");
+    if (bestSideFlashTimer) clearTimeout(bestSideFlashTimer);
+    bestSideFlashTimer = setTimeout(() => {
+      if (el.bestSide) el.bestSide.classList.remove("is-flash");
+    }, 1200);
+  }
+
+  function setRoiCardBest(side) {
+    const above = document.querySelector(".roi-card.above");
+    const below = document.querySelector(".roi-card.below");
+    if (above) above.classList.toggle("is-best", side === "above");
+    if (below) below.classList.toggle("is-best", side === "below");
+  }
+
+  function refreshBestSide() {
+    if (!el.bestSide || !el.roiPanel || el.roiPanel.hidden) return;
+    const spotRaw = el.spotValue && el.spotValue.dataset.last;
+    const spot = spotRaw != null ? Number(spotRaw) : null;
+    const beat = lastTarget;
+    const secs = secondsLeft();
+    const aboveAsk = lastRoiAsks.above;
+    const belowAsk = lastRoiAsks.below;
+
+    if (
+      spot == null ||
+      !Number.isFinite(spot) ||
+      beat == null ||
+      !Number.isFinite(beat) ||
+      secs == null ||
+      (aboveAsk == null && belowAsk == null)
+    ) {
+      el.bestSide.hidden = true;
+      setRoiCardBest(null);
+      lastBestSideKey = null;
+      return;
+    }
+
+    const modelP = modelProbAbove(spot, beat, secs);
+    const scored = [];
+    const a = scoreSide("above", aboveAsk, modelP, tradeStake);
+    const b = scoreSide("below", belowAsk, modelP, tradeStake);
+    if (a) scored.push(a);
+    if (b) scored.push(b);
+    if (!scored.length) {
+      el.bestSide.hidden = true;
+      setRoiCardBest(null);
+      return;
+    }
+
+    scored.sort((x, y) => y.score - x.score);
+    let best = scored[0];
+    // Haircut noisy/thin books and early-window coin flips with tiny edge.
+    if (lastThinBook) best = { ...best, score: best.score - 0.08 };
+    const clear =
+      best.ev > 0.01 &&
+      best.score > 0.04 &&
+      best.pWin >= 0.52 &&
+      !(secs > 12 * 60 && Math.abs(best.ev) < 0.03);
+
+    el.bestSide.hidden = false;
+    el.bestSide.classList.toggle("is-below", clear && best.side === "below");
+    el.bestSide.classList.toggle("is-none", !clear);
+    el.bestSide.classList.toggle("is-above", clear && best.side === "above");
+
+    if (!clear) {
+      if (el.bestSideLabel) el.bestSideLabel.textContent = "No clear edge";
+      if (el.bestSideAmount) {
+        el.bestSideAmount.textContent =
+          tradeStake > 0 ? `Holding $${tradeStake}` : "Set a trade size";
+      }
+      if (el.bestSideMeta) {
+        const lead = spot - beat;
+        el.bestSideMeta.textContent =
+          `Live ${lead >= 0 ? "+" : ""}$${lead.toFixed(0)} · ${Math.floor(secs / 60)}:${String(
+            secs % 60
+          ).padStart(2, "0")} left · wait for better ask`;
+      }
+      setRoiCardBest(null);
+      const noneKey = "none";
+      if (lastBestSideKey !== noneKey) {
+        lastBestSideKey = noneKey;
+        flashBestSide();
+      }
+      return;
+    }
+
+    const label = best.side === "above" ? "BUY ABOVE" : "BUY BELOW";
+    if (el.bestSideLabel) el.bestSideLabel.textContent = label;
+    if (el.bestSideAmount) {
+      if (tradeStake <= 0) {
+        el.bestSideAmount.textContent = "Set a trade size";
+      } else {
+        el.bestSideAmount.textContent = `Buy $${tradeStake} · ${best.contracts} contract${
+          best.contracts === 1 ? "" : "s"
+        }`;
+      }
+    }
+    if (el.bestSideMeta) {
+      const roiTxt =
+        best.roiIfWin != null
+          ? `${best.roiIfWin >= 0 ? "+" : ""}${best.roiIfWin.toFixed(0)}% if win`
+          : "";
+      const conf = Math.round(best.pWin * 100);
+      const m = Math.floor(secs / 60);
+      const s = secs % 60;
+      el.bestSideMeta.textContent =
+        `${conf}% model · ask ${best.askCents}¢ · ${roiTxt} · ${m}:${String(s).padStart(
+          2,
+          "0"
+        )} left`;
+    }
+    setRoiCardBest(best.side);
+
+    const key = clear
+      ? `${best.side}:${tradeStake}:${best.contracts}`
+      : "none";
+    if (key !== lastBestSideKey) {
+      lastBestSideKey = key;
+      flashBestSide();
+    }
+  }
+
   function fillRoiCard(priceEl, summaryEl, detailEl, askCents, stakeUsd) {
     if (priceEl) {
       priceEl.textContent =
@@ -529,6 +738,7 @@
       tradeStake
     );
     el.roiPanel.hidden = !(okA || okB);
+    refreshBestSide();
   }
 
   function setTradeStake(n) {
@@ -564,6 +774,8 @@
       if (el.noBook) el.noBook.textContent = "—";
       lastYesPct = null;
       if (el.roiPanel) el.roiPanel.hidden = true;
+      if (el.bestSide) el.bestSide.hidden = true;
+      setRoiCardBest(null);
       return;
     }
     el.oddsRow.hidden = false;
@@ -583,6 +795,7 @@
         el.oddsHint.textContent = `Spread ${data.spread_cents}¢`;
       } else el.oddsHint.textContent = "What traders are pricing";
     }
+    lastThinBook = !!(data && data.thin_book);
     updateRoi(data);
   }
 
@@ -617,11 +830,14 @@
   function updateSettlement(data) {
     if (!el.settleBanner) return;
     const mode = !!(data && data.settlement_mode);
+    lastSettlementMode = mode;
+    lastSettlementSide = (data && data.settlement_side) || null;
     if (!mode) {
       el.settleBanner.hidden = true;
       el.settleBanner.classList.remove("is-above", "is-below");
       lastSettlementAvg = null;
       applySettleLine(null);
+      refreshBestSide();
       return;
     }
     el.settleBanner.hidden = false;
@@ -654,6 +870,7 @@
       el.settleMeta.textContent = `Kalshi settles on a 60-second average, not the last tick · ${n}/60 samples${deltaTxt}`;
     }
     applySettleLine(avg);
+    refreshBestSide();
   }
 
   function updateSpot(lastClose) {
@@ -688,6 +905,7 @@
       }
     }
     updateEdgeLine(lastClose);
+    refreshBestSide();
   }
 
   function updateCountdown() {
@@ -696,11 +914,13 @@
       el.countdown.textContent = "—:—";
       el.countdown.classList.remove("urgent");
       if (el.countdownMeta) el.countdownMeta.textContent = "Until this 15m window ends";
+      refreshBestSide();
       return;
     }
     const end = Date.parse(closeTimeIso);
     if (!Number.isFinite(end)) {
       el.countdown.textContent = "—:—";
+      refreshBestSide();
       return;
     }
     let ms = end - Date.now();
@@ -711,6 +931,7 @@
         el.countdownMeta.textContent = "Window closed · loading next…";
       }
       startRolloverBurst();
+      refreshBestSide();
       return;
     }
     const totalSec = Math.floor(ms / 1000);
@@ -725,6 +946,7 @@
           : "Until this 15m window ends";
     }
     if (totalSec <= 25) startRolloverBurst();
+    refreshBestSide();
   }
 
   function clearRolloverBurst() {

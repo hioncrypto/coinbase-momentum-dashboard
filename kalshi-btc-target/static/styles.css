@@ -412,6 +412,123 @@ h1 {
   border-top: 1px solid var(--border);
 }
 
+.best-side {
+  margin: 0 0 10px;
+  padding: 12px 14px 11px;
+  border-radius: 12px;
+  border: 1px solid rgba(26, 201, 107, 0.35);
+  background:
+    linear-gradient(135deg, rgba(26, 201, 107, 0.14), rgba(8, 14, 11, 0.35)),
+    rgba(8, 14, 11, 0.72);
+  text-align: center;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.best-side.is-below {
+  border-color: rgba(212, 84, 84, 0.4);
+  background:
+    linear-gradient(135deg, rgba(212, 84, 84, 0.14), rgba(8, 14, 11, 0.35)),
+    rgba(8, 14, 11, 0.72);
+}
+
+.best-side.is-none {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(8, 14, 11, 0.45);
+}
+
+.best-side-kicker {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.best-side-label {
+  margin-top: 2px;
+  font-size: 1.85rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.best-side.is-below .best-side-label {
+  color: var(--down);
+}
+
+.best-side.is-none .best-side-label {
+  color: var(--muted);
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.best-side-amount {
+  margin-top: 6px;
+  font-size: 1.2rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.best-side-meta {
+  margin-top: 4px;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.best-side.is-flash .best-side-label {
+  animation: best-side-pop 1.15s ease-out;
+}
+
+.best-side.is-flash .best-side-amount {
+  animation: best-side-amount-pop 1.15s ease-out;
+}
+
+@keyframes best-side-pop {
+  0% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  18% {
+    transform: scale(1.22);
+    filter: brightness(1.35);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+@keyframes best-side-amount-pop {
+  0% {
+    transform: scale(1);
+  }
+  18% {
+    transform: scale(1.12);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.roi-card.is-best {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.roi-card.above.is-best {
+  border-color: rgba(26, 201, 107, 0.65);
+  background: rgba(26, 201, 107, 0.1);
+}
+
+.roi-card.below.is-best {
+  border-color: rgba(212, 84, 84, 0.65);
+  background: rgba(212, 84, 84, 0.1);
+}
+
 .roi-heading {
   display: flex;
   justify-content: space-between;
