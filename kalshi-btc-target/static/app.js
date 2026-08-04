@@ -11,6 +11,7 @@
   const DEMO_KEY = "kalshiDemoState";
   const DEMO_DEFAULT_START = 1000;
   const TUTORIAL_KEY = "beatlineTutorialSeen";
+  const OPEN_PL_COLLAPSE_KEY = "beatlineOpenPlCollapsed";
 
   const TUTORIAL_STEPS = [
     {
@@ -135,6 +136,9 @@
     openPlValue: document.getElementById("open-pl-value"),
     openPlSub: document.getElementById("open-pl-sub"),
     openPlClose: document.getElementById("open-pl-close"),
+    openPlToggle: document.getElementById("open-pl-toggle"),
+    openPlPeek: document.getElementById("open-pl-peek"),
+    openPlBody: document.getElementById("open-pl-body"),
     buyBackdrop: document.getElementById("buy-backdrop"),
     buySheet: document.getElementById("buy-sheet"),
     buySheetTitle: document.getElementById("buy-sheet-title"),
@@ -154,6 +158,8 @@
   let series = null;
   let targetLine = null;
   let settleLine = null;
+  let breakevenLine = null;
+  let entryLine = null;
   let lastTicker = null;
   let lastTarget = null;
   let lastFifteenTarget = null;
@@ -170,6 +176,8 @@
   let lastBestPick = null; // { side } | null when clear edge
   let lastClearEdgeAlertKey = null;
   let lastClearEdgeAlertAt = 0;
+  let openPlCollapsed = localStorage.getItem(OPEN_PL_COLLAPSE_KEY) === "1";
+  let lastBreakevenPrice = null;
   let settleHintByTicker = {};
   let optionsOpen = false;
   let buySheetOpen = false;
@@ -434,18 +442,72 @@
     return { realized, open, total, hasOpen: !!(demo.position && mark) };
   }
 
+  function setOpenPlCollapsed(collapsed) {
+    openPlCollapsed = !!collapsed;
+    try {
+      localStorage.setItem(OPEN_PL_COLLAPSE_KEY, openPlCollapsed ? "1" : "0");
+    } catch {
+      // ignore
+    }
+    document.body.classList.toggle("open-pl-collapsed", openPlCollapsed);
+    if (el.openPlBar) el.openPlBar.classList.toggle("is-collapsed", openPlCollapsed);
+    if (el.openPlToggle) {
+      el.openPlToggle.setAttribute("aria-expanded", openPlCollapsed ? "false" : "true");
+      el.openPlToggle.title = openPlCollapsed
+        ? "Show trade metrics"
+        : "Slide trade metrics away";
+    }
+    setTimeout(resizeChart, 60);
+  }
+
+  /** Approximate inverse error function for model break-even spot. */
+  function erfinvApprox(x) {
+    const a = 0.147;
+    const sign = x < 0 ? -1 : 1;
+    const z = Math.min(0.999, Math.max(-0.999, x));
+    const ln = Math.log(1 - z * z);
+    const t = 2 / (Math.PI * a) + ln / 2;
+    return sign * Math.sqrt(Math.sqrt(t * t - ln / a) - t);
+  }
+
+  function modelBreakevenSpot(pos, secsLeft) {
+    if (!pos || pos.beat == null || !Number.isFinite(pos.beat)) return null;
+    if (!(pos.contracts > 0) || !(pos.total > 0)) return null;
+    const costPer = pos.total / pos.contracts;
+    let needAbove = Math.min(0.92, Math.max(0.08, costPer));
+    // Above needs P(above) >= costPer; Below needs P(below) >= costPer
+    // => P(above) <= 1 - costPer
+    if (pos.side === "below") needAbove = 1 - needAbove;
+    const t = Math.max(1, Number(secsLeft) || 1);
+    const sigma = Math.max(
+      8,
+      Math.abs(pos.beat) * 0.55 * Math.sqrt(t / (365.25 * 24 * 3600))
+    );
+    const z = Math.SQRT2 * erfinvApprox(2 * needAbove - 1);
+    if (!Number.isFinite(z)) return null;
+    return Math.round((pos.beat + sigma * z) * 100) / 100;
+  }
+
   function renderOpenPlBar(pos, mark) {
     if (!el.openPlBar) return;
     if (!pos) {
       el.openPlBar.hidden = true;
       document.body.classList.remove("has-open-pl");
+      document.body.classList.remove("open-pl-collapsed");
+      clearBreakevenLines();
+      if (lastTarget != null) applyTargetLine(lastTarget, "TARGET");
       return;
     }
     el.openPlBar.hidden = false;
     document.body.classList.add("has-open-pl");
+    setOpenPlCollapsed(openPlCollapsed);
     const side = pos.side === "above" ? "Above" : "Below";
     const accounted = pos.accounted !== false && demo.on;
     const sess = sessionPlBreakdown(mark);
+    const beSpot = modelBreakevenSpot(pos, mark && mark.secs);
+    lastBreakevenPrice = beSpot;
+    applyBreakevenLines(pos.beat, pos.entrySpot, beSpot, pos.side);
+
     if (el.openPlSide) {
       el.openPlSide.textContent = `Buy ${side} · ${pos.contracts} cts @ ${pos.askCents}¢`;
       el.openPlSide.classList.toggle("is-up", pos.side === "above");
@@ -462,6 +524,13 @@
         "is-down",
         !!(mark && mark.unrealized < 0)
       );
+    }
+    if (el.openPlPeek) {
+      const plTxt =
+        mark && mark.unrealized != null ? formatPl(mark.unrealized) : "—";
+      el.openPlPeek.textContent = `Open ${side} ${plTxt} · tap to expand`;
+      el.openPlPeek.classList.toggle("is-up", !!(mark && mark.unrealized > 0));
+      el.openPlPeek.classList.toggle("is-down", !!(mark && mark.unrealized < 0));
     }
     if (el.openPlSub) {
       const bits = [];
@@ -480,6 +549,9 @@
         bits.push(
           `${mark.delta >= 0 ? "+" : ""}$${mark.delta.toFixed(0)} vs beat`
         );
+      }
+      if (beSpot != null) {
+        bits.push(`B/E $${beSpot.toFixed(0)}`);
       }
       if (mark && mark.secs != null) {
         bits.push(
@@ -682,6 +754,11 @@
       fee: sized.fee,
       total: sized.total,
       beat: lastTarget,
+      entrySpot: (() => {
+        const raw = el.spotValue && el.spotValue.dataset.last;
+        const n = raw != null ? Number(raw) : null;
+        return n != null && Number.isFinite(n) ? n : null;
+      })(),
       openedAt: Date.now(),
       accounted,
     };
@@ -2058,9 +2135,13 @@
       autoscaleInfoProvider: (original) => {
         const res = original();
         if (!res) return res;
-        const extras = [lastTarget, lastSettlementAvg].filter(
-          (v) => v != null && Number.isFinite(v)
-        );
+        const extras = [
+          lastTarget,
+          lastSettlementAvg,
+          lastBreakevenPrice,
+          demo.position && demo.position.entrySpot,
+          demo.position && demo.position.beat,
+        ].filter((v) => v != null && Number.isFinite(v));
         if (!extras.length) return res;
         let min = res.priceRange ? res.priceRange.minValue : extras[0];
         let max = res.priceRange ? res.priceRange.maxValue : extras[0];
@@ -2120,10 +2201,87 @@
     settleLine = null;
   }
 
+  function clearBreakevenLines() {
+    if (breakevenLine && series) {
+      try {
+        series.removePriceLine(breakevenLine);
+      } catch {
+        // ignore
+      }
+    }
+    if (entryLine && series) {
+      try {
+        series.removePriceLine(entryLine);
+      } catch {
+        // ignore
+      }
+    }
+    breakevenLine = null;
+    entryLine = null;
+    lastBreakevenPrice = null;
+  }
+
+  function applyBreakevenLines(beat, entrySpot, modelBe, side) {
+    ensureChart();
+    clearBreakevenLines();
+    if (!series || !demo.position) return;
+
+    const winAt = beat != null && Number.isFinite(beat) ? beat : null;
+    if (winAt != null) {
+      const label =
+        side === "below" ? "B/E · WIN BELOW" : "B/E · WIN ABOVE";
+      breakevenLine = series.createPriceLine({
+        price: winAt,
+        color: side === "below" ? "#f0a0a0" : "#7dffa8",
+        lineWidth: 2,
+        lineStyle: (ensureChart.LineStyle && ensureChart.LineStyle.Solid) || 0,
+        axisLabelVisible: true,
+        title: label,
+      });
+      lastBreakevenPrice = winAt;
+    }
+
+    if (
+      modelBe != null &&
+      Number.isFinite(modelBe) &&
+      (winAt == null || Math.abs(modelBe - winAt) > 8)
+    ) {
+      entryLine = series.createPriceLine({
+        price: modelBe,
+        color: "#ffd28a",
+        lineWidth: 2,
+        lineStyle: (ensureChart.LineStyle && ensureChart.LineStyle.Dotted) || 1,
+        axisLabelVisible: true,
+        title: "MODEL B/E",
+      });
+      lastBreakevenPrice = modelBe;
+    } else if (entrySpot != null && Number.isFinite(entrySpot)) {
+      entryLine = series.createPriceLine({
+        price: entrySpot,
+        color: "#8ab4ff",
+        lineWidth: 1,
+        lineStyle: (ensureChart.LineStyle && ensureChart.LineStyle.Dotted) || 1,
+        axisLabelVisible: true,
+        title: "ENTRY",
+      });
+    }
+
+    try {
+      series.applyOptions({});
+    } catch {
+      // ignore
+    }
+  }
+
   function applyTargetLine(target, title) {
     lastTarget = target;
     ensureChart();
     if (!series || target == null || !Number.isFinite(target)) {
+      clearTargetLine();
+      return;
+    }
+    // Open trade uses the B/E line on the beat — don't stack TARGET on top.
+    if (demo.position) {
       clearTargetLine();
       return;
     }
@@ -2137,7 +2295,6 @@
     };
     clearTargetLine();
     targetLine = series.createPriceLine(opts);
-    // Nudge autoscale so the TARGET line is on-screen.
     try {
       series.applyOptions({});
     } catch {
@@ -2537,6 +2694,39 @@
     }
     if (el.openPlClose) {
       el.openPlClose.addEventListener("click", () => closeDemoPosition());
+    }
+    if (el.openPlToggle) {
+      el.openPlToggle.addEventListener("click", () => {
+        setOpenPlCollapsed(!openPlCollapsed);
+      });
+    }
+    if (el.openPlBar) {
+      let dragY = null;
+      const onStart = (y) => {
+        dragY = y;
+      };
+      const onEnd = (y) => {
+        if (dragY == null) return;
+        const dy = y - dragY;
+        dragY = null;
+        if (dy > 28) setOpenPlCollapsed(true);
+        else if (dy < -28) setOpenPlCollapsed(false);
+      };
+      el.openPlBar.addEventListener(
+        "touchstart",
+        (ev) => {
+          if (ev.touches && ev.touches[0]) onStart(ev.touches[0].clientY);
+        },
+        { passive: true }
+      );
+      el.openPlBar.addEventListener(
+        "touchend",
+        (ev) => {
+          const t = ev.changedTouches && ev.changedTouches[0];
+          if (t) onEnd(t.clientY);
+        },
+        { passive: true }
+      );
     }
     if (el.buySheetX) {
       el.buySheetX.addEventListener("click", () => dismissBuySheet());

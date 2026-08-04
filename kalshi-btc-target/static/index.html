@@ -22,12 +22,12 @@
     <link rel="apple-touch-icon" href="/icons/icon-192.png?v=2.6" />
     <link rel="icon" href="/icons/icon-192.png?v=2.6" sizes="192x192" type="image/png" />
     <title>BeatLine</title>
-    <link rel="stylesheet" href="/styles.css?v=5.6" />
+    <link rel="stylesheet" href="/styles.css?v=5.7" />
     <script
       src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"
       defer
     ></script>
-    <script src="/app.js?v=5.6" defer></script>
+    <script src="/app.js?v=5.7" defer></script>
   </head>
   <body class="portrait-app">
     <div id="rotate-gate" class="rotate-gate" hidden>
@@ -273,17 +273,30 @@
       </div>
     </section>
       <div id="open-pl-bar" class="open-pl-bar" hidden aria-live="polite">
-      <div class="open-pl-main">
-        <div>
-          <div class="open-pl-kicker">Open trade P/L</div>
-          <div id="open-pl-side" class="open-pl-side">—</div>
-        </div>
-        <div id="open-pl-value" class="open-pl-value">—</div>
-      </div>
-      <div id="open-pl-sub" class="open-pl-sub">—</div>
-      <button type="button" id="open-pl-close" class="open-pl-close">
-        Close at bid
+      <button
+        type="button"
+        id="open-pl-toggle"
+        class="open-pl-handle"
+        aria-expanded="true"
+        aria-controls="open-pl-body"
+        title="Slide trade metrics away"
+      >
+        <span class="open-pl-handle-bar" aria-hidden="true"></span>
+        <span id="open-pl-peek" class="open-pl-peek">Open P/L</span>
       </button>
+      <div id="open-pl-body" class="open-pl-body">
+        <div class="open-pl-main">
+          <div>
+            <div class="open-pl-kicker">Open trade P/L</div>
+            <div id="open-pl-side" class="open-pl-side">—</div>
+          </div>
+          <div id="open-pl-value" class="open-pl-value">—</div>
+        </div>
+        <div id="open-pl-sub" class="open-pl-sub">—</div>
+        <button type="button" id="open-pl-close" class="open-pl-close">
+          Close at bid
+        </button>
+      </div>
     </div>
 
     <section class="buy-dock" aria-label="Buy">
