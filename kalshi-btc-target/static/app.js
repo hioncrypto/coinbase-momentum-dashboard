@@ -33,6 +33,7 @@
     enableBg: document.getElementById("enable-bg"),
     bgStatus: document.getElementById("bg-status"),
     bgSetup: document.getElementById("bg-setup"),
+    pushBadge: document.getElementById("push-badge"),
     oddsRow: document.getElementById("odds-row"),
     yesPct: document.getElementById("yes-pct"),
     noPct: document.getElementById("no-pct"),
@@ -145,13 +146,28 @@
     el.bgStatus.classList.toggle("warn", !ok);
   }
 
+  function setPushBadge(on) {
+    if (!el.pushBadge) return;
+    if (on) {
+      el.pushBadge.hidden = false;
+      // Next frame so fade/scale transition plays.
+      requestAnimationFrame(() => el.pushBadge.classList.add("is-on"));
+    } else {
+      el.pushBadge.classList.remove("is-on");
+      const hide = () => {
+        if (!el.pushBadge.classList.contains("is-on")) el.pushBadge.hidden = true;
+      };
+      el.pushBadge.addEventListener("transitionend", hide, { once: true });
+      setTimeout(hide, 320);
+    }
+  }
+
   function hideBgSetup(animated) {
     if (!el.bgSetup) return;
     if (!animated) {
       el.bgSetup.classList.add("is-hidden");
       return;
     }
-    // Force reflow so CSS transition runs.
     void el.bgSetup.offsetWidth;
     el.bgSetup.classList.add("is-hidden");
   }
@@ -168,6 +184,17 @@
       Notification.permission === "granted" &&
       localStorage.getItem(BG_ARMED_KEY) !== "0"
     );
+  }
+
+  function syncPushUi(armed) {
+    const on =
+      !!armed &&
+      chimeOn &&
+      "Notification" in window &&
+      Notification.permission === "granted";
+    setPushBadge(on);
+    if (on) hideBgSetup(true);
+    else showBgSetup();
   }
 
   async function runChimeTest() {
@@ -226,11 +253,15 @@
       localStorage.setItem(BG_ARMED_KEY, "1");
       setBgStatus(true, "Background alerts on");
       setStatus("ok", "Background alerts on");
-      setTimeout(() => hideBgSetup(true), 700);
+      setTimeout(() => {
+        hideBgSetup(true);
+        setPushBadge(true);
+      }, 500);
     } else {
       setBgStatus(false, "Could not subscribe to push. Stay on HTTPS / installed app and retry.");
       setStatus("warn", "Push subscribe failed");
       showBgSetup();
+      setPushBadge(false);
     }
     return ok;
   }
@@ -724,15 +755,18 @@
           if (!ok) {
             setStatus("warn", "Allow Notifications for background chime");
             showBgSetup();
+            setPushBadge(false);
           } else {
             localStorage.setItem(BG_ARMED_KEY, "1");
             setStatus("ok", "Background chime enabled");
             hideBgSetup(true);
+            setPushBadge(true);
           }
         } else {
           await unsubscribePush();
           localStorage.setItem(BG_ARMED_KEY, "0");
           showBgSetup();
+          setPushBadge(false);
           setBgStatus(false, "Chime off. Turn it back on, then enable background alerts again.");
         }
       });
@@ -766,6 +800,9 @@
     }
     if (isBgArmed() && Notification.permission === "granted") {
       hideBgSetup(false);
+      setPushBadge(true);
+    } else {
+      setPushBadge(false);
     }
     const unlock = () => ensureAudio();
     window.addEventListener("pointerdown", unlock, { passive: true });

@@ -156,6 +156,58 @@ h1 {
   margin-bottom: 6px;
 }
 
+.push-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 5px 9px 5px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(26, 201, 107, 0.4);
+  background: rgba(22, 53, 38, 0.85);
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  opacity: 0;
+  transform: scale(0.92);
+  transition: opacity 0.28s ease, transform 0.28s ease;
+}
+
+.push-badge.is-on {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.push-badge[hidden] {
+  display: none !important;
+}
+
+.push-badge-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 0 rgba(26, 201, 107, 0.55);
+  animation: pushPulse 1.8s ease-out infinite;
+}
+
+.push-badge-text {
+  line-height: 1;
+}
+
+@keyframes pushPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(26, 201, 107, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(26, 201, 107, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(26, 201, 107, 0);
+  }
+}
+
 .bg-setup {
   overflow: hidden;
   max-height: 120px;
