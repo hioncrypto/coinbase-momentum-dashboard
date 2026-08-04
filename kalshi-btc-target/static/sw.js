@@ -1,5 +1,5 @@
 /* BeatLine service worker — background 15m target + clear-edge alerts */
-const SW_VERSION = "2.7-edge";
+const SW_VERSION = "2.8-edge";
 const TARGET_URL = "/api/target?tf=15m";
 const STATE_KEY = "kalshiFifteenState";
 
@@ -73,8 +73,8 @@ async function showTargetNotification(payload) {
     badge: "/icons/icon-192.png?v=2.6",
     vibrate: [80, 40, 80, 40, 160],
     tag: "kalshi-15m-target",
-    renotify: true,
-    requireInteraction: true,
+    renotify: false,
+    requireInteraction: false,
     silent: false,
     data: { url: "/", ticker: payload && payload.ticker },
   };
@@ -108,8 +108,8 @@ async function showEdgeNotification(payload) {
     badge: "/icons/icon-192.png?v=2.6",
     vibrate: [60, 40, 60, 40, 120],
     tag: "kalshi-clear-edge",
-    renotify: true,
-    requireInteraction: true,
+    renotify: false,
+    requireInteraction: false,
     silent: false,
     data: { url: "/", ticker: payload && payload.ticker, kind: "clear_edge" },
   });
@@ -198,8 +198,12 @@ self.addEventListener("message", (event) => {
         const state = await readState();
         if (!state.chimeOn) return;
         const key = `${msg.side}:${Math.round(Number(msg.askCents) || 0)}`;
+        const now = Date.now();
+        const lastAt = Number(state.edgeAt) || 0;
         if (state.edgeKey === key) return;
+        if (now - lastAt < 120000) return;
         state.edgeKey = key;
+        state.edgeAt = now;
         await writeState(state);
         await showEdgeNotification(msg);
       })()

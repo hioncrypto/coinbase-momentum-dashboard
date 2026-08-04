@@ -178,6 +178,9 @@
   let lastBestPick = null; // { side } | null when clear edge
   let lastClearEdgeAlertKey = null;
   let lastClearEdgeAlertAt = 0;
+  let lastClearEdgeGoneAt = 0;
+  const EDGE_ALERT_COOLDOWN_MS = 120_000;
+  const EDGE_GONE_RESET_MS = 60_000;
   let openPlCollapsed = localStorage.getItem(OPEN_PL_COLLAPSE_KEY) === "1";
   let lastBreakevenPrice = null;
   let settleHintByTicker = {};
@@ -1258,7 +1261,7 @@
   async function ensureServiceWorker() {
     if (!("serviceWorker" in navigator)) return null;
     try {
-      const reg = await navigator.serviceWorker.register("/sw.js?v=2.7", { scope: "/" });
+      const reg = await navigator.serviceWorker.register("/sw.js?v=2.8", { scope: "/" });
       await navigator.serviceWorker.ready;
       return reg;
     } catch (err) {
@@ -1430,7 +1433,7 @@
   }
 
   async function alertNewTarget(beat, ticker, closeEt) {
-    // Foreground: Web Audio chime. Background: system notification (+ push from server).
+    // Foreground: chime only. Background: system notification (+ server push).
     playChime();
     postToSW({
       type: "arm-state",
@@ -1440,14 +1443,6 @@
     });
     if (!chimeOn) return;
     if (document.visibilityState !== "visible") {
-      postToSW({
-        type: "test-notify",
-        beat,
-        ticker,
-        closeEt,
-      });
-    } else if ("Notification" in window && Notification.permission === "granted") {
-      // Still ping notification so Android can ring if audio is muted/blocked.
       postToSW({
         type: "test-notify",
         beat,
@@ -1466,24 +1461,25 @@
 
     const side = best.side;
     const ask = Math.round(Number(best.askCents) || 0);
-    const conf = best.pWin != null ? Math.round(best.pWin * 100) : null;
     const alertKey = `${side}:${ask}`;
     const now = Date.now();
+    // Hard cooldown stops alert loops when Best Side flickers around the threshold.
+    if (now - lastClearEdgeAlertAt < EDGE_ALERT_COOLDOWN_MS) return;
+
     const prev = lastClearEdgeAlertKey;
-    const sideChanged = prev && prev !== "none" && !String(prev).startsWith(`${side}:`);
+    const sideChanged =
+      prev && prev !== "none" && !String(prev).startsWith(`${side}:`);
     const newlyClear = !prev || prev === "none";
     const askMoved =
       prev &&
       String(prev).startsWith(`${side}:`) &&
-      Math.abs(Number(String(prev).split(":")[1]) - ask) >= 3;
-    const cooled = now - lastClearEdgeAlertAt > 75_000;
+      Math.abs(Number(String(prev).split(":")[1]) - ask) >= 5;
 
-    if (!(newlyClear || sideChanged || (askMoved && cooled))) {
-      return;
-    }
+    if (!(newlyClear || sideChanged || askMoved)) return;
 
     lastClearEdgeAlertKey = alertKey;
     lastClearEdgeAlertAt = now;
+    lastClearEdgeGoneAt = 0;
     ensureAudio();
     playEdgeChime();
     const sideLabel = side === "above" ? "Above" : "Below";
@@ -1491,14 +1487,17 @@
       "ok",
       `Clear edge · Buy ${sideLabel}${ask ? ` @ ${ask}¢` : ""}`
     );
-    postToSW({
-      type: "edge-notify",
-      side,
-      askCents: ask || null,
-      pWin: best.pWin,
-      ticker: lastTicker || lastFifteenTicker,
-      beat: lastTarget,
-    });
+    // System notification only when backgrounded — avoids foreground alert loops.
+    if (document.visibilityState !== "visible") {
+      postToSW({
+        type: "edge-notify",
+        side,
+        askCents: ask || null,
+        pWin: best.pWin,
+        ticker: lastTicker || lastFifteenTicker,
+        beat: lastTarget,
+      });
+    }
   }
 
   function maybeChimeNewFifteenTarget(beat, ticker, source, closeEt) {
@@ -1509,10 +1508,12 @@
     const tickerChanged =
       lastFifteenTicker && ticker && lastFifteenTicker !== ticker;
     const beatReady = beat != null && Number.isFinite(beat);
+    // Ignore tiny float / book jitter — only real window rolls should chime.
     const beatChanged =
       beatReady &&
       lastFifteenTarget != null &&
-      Math.abs(lastFifteenTarget - beat) > 0.005;
+      tickerChanged &&
+      Math.abs(lastFifteenTarget - beat) > 1;
 
     if (tickerChanged || beatChanged) {
       alertNewTarget(beat, ticker, closeEt);
@@ -1732,6 +1733,14 @@
     }
   }
 
+  function markClearEdgeGone() {
+    const now = Date.now();
+    if (!lastClearEdgeGoneAt) lastClearEdgeGoneAt = now;
+    if (now - lastClearEdgeGoneAt >= EDGE_GONE_RESET_MS) {
+      lastClearEdgeAlertKey = "none";
+    }
+  }
+
   function refreshBestSide() {
     if (!el.bestSide) return;
     const spotRaw = el.spotValue && el.spotValue.dataset.last;
@@ -1754,7 +1763,7 @@
       setDockBestDetail("—", null);
       lastBestSideKey = null;
       lastBestPick = null;
-      lastClearEdgeAlertKey = "none";
+      markClearEdgeGone();
       return;
     }
 
@@ -1769,7 +1778,7 @@
       setRoiCardBest(null);
       setDockBestDetail("—", null);
       lastBestPick = null;
-      lastClearEdgeAlertKey = "none";
+      markClearEdgeGone();
       return;
     }
 
@@ -1810,10 +1819,11 @@
         lastBestSideKey = noneKey;
         flashBestSide();
       }
-      lastClearEdgeAlertKey = "none";
+      markClearEdgeGone();
       return;
     }
 
+    lastClearEdgeGoneAt = 0;
     lastBestPick = { side: best.side, askCents: best.askCents, pWin: best.pWin };
     const openPos = demo.position;
     const sameAsOpen = !!(openPos && openPos.side === best.side);
@@ -2282,6 +2292,7 @@
         background: { color: "#121c18" },
         textColor: "#8fa399",
         fontFamily: "IBM Plex Sans, Segoe UI, sans-serif",
+        attributionLogo: false,
       },
       grid: {
         vertLines: { color: "rgba(255,255,255,0.04)" },
@@ -2496,7 +2507,7 @@
     const dash =
       (ensureChart.LineStyle && ensureChart.LineStyle.Dashed) || 2;
 
-    // Axis label on the candle series (price line).
+    // Single axis label via candle price line (avoid a second series label).
     if (series) {
       clearTargetLine();
       targetLine = series.createPriceLine({
@@ -2509,16 +2520,16 @@
       });
     }
 
-    // Full-width line series — stays visible across candle setData refreshes.
+    // Full-width dashed line — no last-value label (that caused the double TO BEAT).
     if (!targetSeries) {
       targetSeries = chart.addLineSeries({
-        color: "#f4fff8",
+        color: "rgba(244,255,248,0.95)",
         lineWidth: 2,
         lineStyle: dash,
         crosshairMarkerVisible: false,
-        lastValueVisible: true,
+        lastValueVisible: false,
         priceLineVisible: false,
-        title: label,
+        title: "",
       });
     }
     const flat = buildFlatLineData(lastTarget);

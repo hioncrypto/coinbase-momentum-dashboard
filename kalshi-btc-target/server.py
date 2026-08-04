@@ -1081,7 +1081,7 @@ def score_clear_edge(data: dict, spot: float | None) -> dict | None:
 
 def push_watcher_loop() -> None:
     """Poll Kalshi and push to phones even when the PWA is backgrounded."""
-    global _last_push_ticker, _last_edge_key
+    global _last_push_ticker, _last_edge_key, _last_edge_at, _last_edge_gone_at
     print("[kalshi-btc-target] background push watcher started")
     while True:
         try:
@@ -1112,6 +1112,7 @@ def push_watcher_loop() -> None:
                     f"beat={beat} pushed={n}"
                 )
                 _last_edge_key = None
+                _last_edge_gone_at = 0.0
             if ticker:
                 _last_push_ticker = ticker
 
@@ -1124,9 +1125,11 @@ def push_watcher_loop() -> None:
             except Exception:
                 spot = None
             edge = score_clear_edge(data, spot)
+            now = time.time()
             if edge:
                 key = f"{edge['side']}:{edge['ask_cents']}"
-                if key != _last_edge_key:
+                cooled = now - _last_edge_at >= EDGE_PUSH_COOLDOWN_SEC
+                if key != _last_edge_key and cooled:
                     n = send_web_push(
                         {
                             "type": "clear_edge",
@@ -1144,10 +1147,17 @@ def push_watcher_loop() -> None:
                         f"ask={edge['ask_cents']}¢ pushed={n}"
                     )
                     _last_edge_key = key
+                    _last_edge_at = now
+                _last_edge_gone_at = 0.0
             else:
-                # Allow a fresh alert when edge disappears then returns.
+                # Only forget the edge after it has been gone for a while —
+                # prevents push loops when the score flickers around threshold.
                 if _last_edge_key is not None:
-                    _last_edge_key = None
+                    if not _last_edge_gone_at:
+                        _last_edge_gone_at = now
+                    elif now - _last_edge_gone_at >= EDGE_GONE_RESET_SEC:
+                        _last_edge_key = None
+                        _last_edge_gone_at = 0.0
         except Exception as exc:
             print(f"[kalshi-btc-target] push watcher error: {exc}")
         time.sleep(PUSH_POLL_SEC)
