@@ -82,8 +82,11 @@
     demoMarkMeta: document.getElementById("demo-mark-meta"),
     demoClose: document.getElementById("demo-close"),
     demoLive: document.getElementById("demo-live"),
+    demoLiveKicker: document.getElementById("demo-live-kicker"),
     demoLiveSide: document.getElementById("demo-live-side"),
     demoLivePl: document.getElementById("demo-live-pl"),
+    demoLivePct: document.getElementById("demo-live-pct"),
+    demoLiveFactors: document.getElementById("demo-live-factors"),
     demoLiveMeta: document.getElementById("demo-live-meta"),
     demoLiveClose: document.getElementById("demo-live-close"),
     buyBackdrop: document.getElementById("buy-backdrop"),
@@ -215,24 +218,62 @@
   function getPositionBidCents(pos) {
     if (!pos) return null;
     const bid = pos.side === "above" ? lastRoiBids.above : lastRoiBids.below;
-    if (bid != null && Number.isFinite(bid)) return Math.round(bid);
-    // Fall back to mid/ask if book is one-sided.
+    if (bid != null && Number.isFinite(bid) && bid >= 1 && bid <= 99) {
+      return Math.round(bid);
+    }
     const ask = pos.side === "above" ? lastRoiAsks.above : lastRoiAsks.below;
-    if (ask != null && Number.isFinite(ask)) return Math.round(ask);
+    if (ask != null && Number.isFinite(ask) && ask >= 1 && ask <= 99) {
+      return Math.round(ask);
+    }
     return null;
   }
 
-  function markDemoPosition() {
-    const pos = demo.position;
+  function markOpenPosition(pos) {
     if (!pos) return null;
     const bidCents = getPositionBidCents(pos);
+    const spotRaw = el.spotValue && el.spotValue.dataset.last;
+    const spot = spotRaw != null ? Number(spotRaw) : null;
+    const secs = secondsLeft();
+    const marketAsk =
+      pos.side === "above" ? lastRoiAsks.above : lastRoiAsks.below;
+    const marketPct =
+      pos.side === "above"
+        ? lastYesPct
+        : lastYesPct != null
+          ? 100 - lastYesPct
+          : null;
+    const beat = pos.beat != null ? pos.beat : lastTarget;
+    const delta =
+      spot != null && Number.isFinite(spot) && beat != null && Number.isFinite(beat)
+        ? spot - beat
+        : null;
+    const leadingSide =
+      delta == null ? null : delta >= 0 ? "above" : "below";
+    const settleNowWin = leadingSide != null && leadingSide === pos.side;
+    const modelP =
+      spot != null && beat != null ? modelProbAbove(spot, beat, secs) : null;
+    const pWin =
+      modelP == null ? null : pos.side === "above" ? modelP : 1 - modelP;
+
     if (bidCents == null) {
       return {
         bidCents: null,
         markValue: null,
         unrealized: null,
+        unrealizedPct: null,
         exitFee: 0,
         proceeds: null,
+        spot,
+        beat,
+        delta,
+        secs,
+        marketAsk,
+        marketPct,
+        settleNowWin,
+        pWin,
+        heldWinPayout: pos.contracts * 1,
+        heldPlIfWin: Math.round((pos.contracts * 1 - pos.total) * 100) / 100,
+        heldPlIfLose: Math.round((0 - pos.total) * 100) / 100,
       };
     }
     const P = bidCents / 100;
@@ -240,13 +281,155 @@
     const exitFee = kalshiTakerFee(pos.contracts, Math.min(0.99, Math.max(0.01, P)));
     const proceeds = Math.max(0, Math.round((gross - exitFee) * 100) / 100);
     const unrealized = Math.round((proceeds - pos.total) * 100) / 100;
-    return { bidCents, markValue: gross, unrealized, exitFee, proceeds };
+    const unrealizedPct =
+      pos.total > 0 ? Math.round((unrealized / pos.total) * 1000) / 10 : null;
+    return {
+      bidCents,
+      markValue: Math.round(gross * 100) / 100,
+      unrealized,
+      unrealizedPct,
+      exitFee,
+      proceeds,
+      spot,
+      beat,
+      delta,
+      secs,
+      marketAsk,
+      marketPct,
+      settleNowWin,
+      pWin,
+      heldWinPayout: pos.contracts * 1,
+      heldPlIfWin: Math.round((pos.contracts * 1 - pos.total) * 100) / 100,
+      heldPlIfLose: Math.round((0 - pos.total) * 100) / 100,
+    };
+  }
+
+  function markDemoPosition() {
+    return markOpenPosition(demo.position);
   }
 
   function formatPl(n) {
     if (n == null || !Number.isFinite(n)) return "—";
     const sign = n > 0 ? "+" : "";
     return `${sign}${money(n)}`;
+  }
+
+  function factorCell(label, value, span2) {
+    return (
+      `<div class="demo-live-factor${span2 ? " span2" : ""}">` +
+      `<span class="fk">${label}</span>` +
+      `<span class="fv">${value}</span></div>`
+    );
+  }
+
+  function renderOpenPositionUi() {
+    const pos = demo.position;
+    const mark = markOpenPosition(pos);
+    if (!el.demoLive) return mark;
+
+    if (!pos) {
+      el.demoLive.hidden = true;
+      return mark;
+    }
+
+    el.demoLive.hidden = false;
+    const side = pos.side === "above" ? "Above" : "Below";
+    const accounted = pos.accounted !== false && demo.on;
+    if (el.demoLiveKicker) {
+      el.demoLiveKicker.textContent = accounted
+        ? "Open · demo account"
+        : "Open · paper mark";
+    }
+    if (el.demoLiveSide) {
+      el.demoLiveSide.textContent = `Buy ${side}`;
+      el.demoLiveSide.classList.toggle("is-up", pos.side === "above");
+      el.demoLiveSide.classList.toggle("is-down", pos.side === "below");
+    }
+    if (el.demoLivePl) {
+      el.demoLivePl.textContent =
+        mark && mark.unrealized != null ? formatPl(mark.unrealized) : "—";
+      el.demoLivePl.classList.toggle("is-up", !!(mark && mark.unrealized > 0));
+      el.demoLivePl.classList.toggle("is-down", !!(mark && mark.unrealized < 0));
+    }
+    if (el.demoLivePct) {
+      if (mark && mark.unrealizedPct != null) {
+        const sign = mark.unrealizedPct > 0 ? "+" : "";
+        el.demoLivePct.textContent = `${sign}${mark.unrealizedPct.toFixed(1)}% vs entry`;
+      } else {
+        el.demoLivePct.textContent = "Marking to live bid…";
+      }
+      el.demoLivePct.classList.toggle(
+        "is-up",
+        !!(mark && mark.unrealizedPct > 0)
+      );
+      el.demoLivePct.classList.toggle(
+        "is-down",
+        !!(mark && mark.unrealizedPct < 0)
+      );
+    }
+
+    if (el.demoLiveFactors && mark) {
+      const timeTxt =
+        mark.secs != null
+          ? `${Math.floor(mark.secs / 60)}:${String(mark.secs % 60).padStart(2, "0")}`
+          : "—";
+      const deltaTxt =
+        mark.delta != null
+          ? `${mark.delta >= 0 ? "+" : "-"}$${Math.abs(mark.delta).toFixed(2)}`
+          : "—";
+      const settleTxt =
+        mark.delta == null
+          ? "—"
+          : mark.settleNowWin
+            ? `Winning if settle now`
+            : `Losing if settle now`;
+      const modelTxt =
+        mark.pWin != null ? `${Math.round(mark.pWin * 100)}% model` : "—";
+      const chanceTxt =
+        mark.marketPct != null
+          ? `${Math.round(mark.marketPct)}% mkt`
+          : mark.marketAsk != null
+            ? `ask ${Math.round(mark.marketAsk)}¢`
+            : "—";
+      el.demoLiveFactors.innerHTML = [
+        factorCell("Contracts", String(pos.contracts)),
+        factorCell("Entry ask", `${pos.askCents}¢`),
+        factorCell("Paid (cost+fee)", money(pos.total)),
+        factorCell("Entry fee", money(pos.fee)),
+        factorCell(
+          "Live bid",
+          mark.bidCents != null ? `${mark.bidCents}¢` : "—"
+        ),
+        factorCell(
+          "Exit fee est.",
+          mark.bidCents != null ? money(mark.exitFee) : "—"
+        ),
+        factorCell(
+          "Exit value",
+          mark.proceeds != null ? money(mark.proceeds) : "—"
+        ),
+        factorCell("Open P/L", formatPl(mark.unrealized)),
+        factorCell("Live vs beat", deltaTxt),
+        factorCell("Time left", timeTxt),
+        factorCell("Side chance", chanceTxt),
+        factorCell("Model win%", modelTxt),
+        factorCell(
+          "If hold & win",
+          formatPl(mark.heldPlIfWin),
+          false
+        ),
+        factorCell("If hold & lose", formatPl(mark.heldPlIfLose)),
+        factorCell("Settle lean", settleTxt, true),
+      ].join("");
+    }
+
+    if (el.demoLiveClose) {
+      el.demoLiveClose.disabled = !mark || mark.bidCents == null;
+      el.demoLiveClose.textContent = accounted
+        ? "Close at bid · post P/L"
+        : "Close at bid · clear mark";
+    }
+    return mark;
   }
 
   function renderDemoUi() {
@@ -265,10 +448,7 @@
     }
 
     const pos = demo.position;
-    const mark = markDemoPosition();
-    const secs = secondsLeft();
-    const spotRaw = el.spotValue && el.spotValue.dataset.last;
-    const spot = spotRaw != null ? Number(spotRaw) : null;
+    const mark = renderOpenPositionUi();
 
     if (el.demoPosition) {
       if (!pos) {
@@ -293,61 +473,17 @@
       }
       if (el.demoMarkMeta) {
         const timeTxt =
-          secs != null
-            ? `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")} left`
+          mark.secs != null
+            ? `${Math.floor(mark.secs / 60)}:${String(mark.secs % 60).padStart(2, "0")} left`
             : "— left";
         const deltaTxt =
-          spot != null && Number.isFinite(spot) && pos.beat != null
-            ? `live ${spot >= pos.beat ? "+" : ""}$${(spot - pos.beat).toFixed(0)} vs beat`
+          mark.delta != null
+            ? `live ${mark.delta >= 0 ? "+" : ""}$${mark.delta.toFixed(0)} vs beat`
             : "live —";
         el.demoMarkMeta.textContent =
           mark.bidCents == null
             ? `Waiting for bid · ${deltaTxt} · ${timeTxt}`
             : `Bid ${mark.bidCents}¢ · exit ~${money(mark.proceeds)} · ${deltaTxt} · ${timeTxt}`;
-      }
-    }
-
-    // Main-screen rolling strip (visible without opening ⋮).
-    if (el.demoLive) {
-      const showLive = !!(demo.on && pos);
-      el.demoLive.hidden = !showLive;
-      if (showLive) {
-        const side = pos.side === "above" ? "Above" : "Below";
-        if (el.demoLiveSide) {
-          el.demoLiveSide.textContent = `Buy ${side}`;
-          el.demoLiveSide.classList.toggle("is-up", pos.side === "above");
-          el.demoLiveSide.classList.toggle("is-down", pos.side === "below");
-        }
-        if (el.demoLivePl) {
-          el.demoLivePl.textContent =
-            mark && mark.unrealized != null ? formatPl(mark.unrealized) : "—";
-          el.demoLivePl.classList.toggle(
-            "is-up",
-            !!(mark && mark.unrealized > 0)
-          );
-          el.demoLivePl.classList.toggle(
-            "is-down",
-            !!(mark && mark.unrealized < 0)
-          );
-        }
-        if (el.demoLiveMeta) {
-          const timeTxt =
-            secs != null
-              ? `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")} left`
-              : "—";
-          const deltaTxt =
-            spot != null && Number.isFinite(spot) && pos.beat != null
-              ? `${spot >= pos.beat ? "+" : ""}$${Math.abs(spot - pos.beat).toFixed(0)} ${
-                  spot >= pos.beat ? "above" : "below"
-                } beat`
-              : "vs beat —";
-          el.demoLiveMeta.textContent =
-            mark && mark.bidCents != null
-              ? `${pos.contracts} cts · entry ${pos.askCents}¢ → bid ${mark.bidCents}¢ · exit ~${money(
-                  mark.proceeds
-                )} · ${deltaTxt} · ${timeTxt}`
-              : `${pos.contracts} cts @ ${pos.askCents}¢ · waiting for bid · ${deltaTxt} · ${timeTxt}`;
-        }
       }
     }
 
@@ -363,27 +499,27 @@
       }
     }
     const busy = !!demo.position;
-    if (el.demoBuyBest) el.demoBuyBest.disabled = !demo.on || busy;
+    if (el.demoBuyBest) el.demoBuyBest.disabled = busy;
     if (el.demoBuyAbove) el.demoBuyAbove.disabled = !demo.on || busy;
     if (el.demoBuyBelow) el.demoBuyBelow.disabled = !demo.on || busy;
     if (el.demoClose) el.demoClose.disabled = !pos || !mark || mark.bidCents == null;
-    if (el.demoLiveClose) {
-      el.demoLiveClose.disabled = !pos || !mark || mark.bidCents == null;
-    }
     syncBuyDock();
   }
 
   function closeDemoPosition() {
     const pos = demo.position;
-    if (!demo.on || !pos) return;
-    const mark = markDemoPosition();
+    if (!pos) return;
+    const mark = markOpenPosition(pos);
     if (!mark || mark.bidCents == null || mark.proceeds == null) {
       setStatus("warn", "No live bid to close against");
       return;
     }
     const pl = mark.unrealized;
-    demo.balance = Math.round((demo.balance + mark.proceeds) * 100) / 100;
-    demo.realizedPl = Math.round((demo.realizedPl + pl) * 100) / 100;
+    const accounted = pos.accounted !== false && demo.on;
+    if (accounted) {
+      demo.balance = Math.round((demo.balance + mark.proceeds) * 100) / 100;
+      demo.realizedPl = Math.round((demo.realizedPl + pl) * 100) / 100;
+    }
     const sideLabel = pos.side === "above" ? "Above" : "Below";
     const won = pl >= 0;
     demo.lastResult = {
@@ -391,9 +527,11 @@
       pl,
       side: pos.side,
       ticker: pos.ticker,
-      text: `CLOSED ${sideLabel} @ ${mark.bidCents}¢ · ${formatPl(pl)} · bal ${money(
-        demo.balance
-      )}`,
+      text: accounted
+        ? `CLOSED ${sideLabel} @ ${mark.bidCents}¢ · ${formatPl(pl)} · bal ${money(
+            demo.balance
+          )}`
+        : `CLOSED ${sideLabel} @ ${mark.bidCents}¢ · ${formatPl(pl)} · paper`,
     };
     demo.position = null;
     saveDemoState();
@@ -423,13 +561,8 @@
   }
 
   function demoBuy(side, amountUsd) {
-    if (!demo.on) {
-      setStatus("warn", "Turn on Demo in Options");
-      openOptions();
-      return false;
-    }
     if (demo.position) {
-      setStatus("warn", "Already in a demo position");
+      setStatus("warn", "Already in an open position");
       return false;
     }
     const stake = amountUsd != null ? Number(amountUsd) : tradeStake;
@@ -447,11 +580,14 @@
       setStatus("warn", "Need a live ask");
       return false;
     }
-    if (sized.total > demo.balance + 1e-9) {
+    const accounted = !!demo.on;
+    if (accounted && sized.total > demo.balance + 1e-9) {
       setStatus("warn", "Not enough demo balance");
       return false;
     }
-    demo.balance = Math.round((demo.balance - sized.total) * 100) / 100;
+    if (accounted) {
+      demo.balance = Math.round((demo.balance - sized.total) * 100) / 100;
+    }
     demo.position = {
       ticker: lastTicker,
       side,
@@ -462,6 +598,7 @@
       total: sized.total,
       beat: lastTarget,
       openedAt: Date.now(),
+      accounted,
     };
     // Keep main trade-size slider in sync for Best Side sizing.
     if (stake <= 100) setTradeStake(Math.round(stake));
@@ -469,7 +606,9 @@
     renderDemoUi();
     setStatus(
       "ok",
-      `Demo bought ${side === "above" ? "Above" : "Below"} · ${sized.contracts} cts`
+      accounted
+        ? `Demo bought ${side === "above" ? "Above" : "Below"} · ${sized.contracts} cts`
+        : `Paper bought ${side === "above" ? "Above" : "Below"} · rolling P/L on`
     );
     return true;
   }
@@ -477,7 +616,10 @@
   function readBuyAmount() {
     let n = Number(el.buyAmount && el.buyAmount.value);
     if (!Number.isFinite(n)) n = buySheetAmount;
-    n = Math.max(1, Math.min(Math.floor(demo.balance || 0) || 1, Math.round(n)));
+    const cap = demo.on
+      ? Math.max(1, Math.floor(demo.balance) || 1)
+      : 100000;
+    n = Math.max(1, Math.min(cap, Math.round(n)));
     buySheetAmount = n;
     return n;
   }
@@ -489,7 +631,9 @@
     const ask = side === "above" ? lastRoiAsks.above : lastRoiAsks.below;
     const sized = roiForStake(ask, amount);
     if (el.buyBalanceHint) {
-      el.buyBalanceHint.textContent = `Bal ${money(demo.balance)}`;
+      el.buyBalanceHint.textContent = demo.on
+        ? `Bal ${money(demo.balance)}`
+        : "Paper · rolling P/L";
     }
     if (el.buySheetMeta) {
       const askTxt = ask != null ? `${Math.round(ask)}¢ ask` : "ask —";
@@ -551,27 +695,25 @@
   }
 
   function openBuySheet(side) {
-    if (!demo.on) {
-      setStatus("warn", "Turn on Demo in Options");
-      openOptions();
-      return;
-    }
     if (demo.position) {
-      setStatus("warn", "Already in a demo position");
+      setStatus("warn", "Already in an open position");
       return;
     }
     if (side !== "above" && side !== "below") return;
     const ask = side === "above" ? lastRoiAsks.above : lastRoiAsks.below;
-    if (ask == null) {
+    if (ask == null || !(ask >= 1 && ask <= 99)) {
       setStatus("warn", "Need a live ask");
       return;
     }
     closeOptions();
     buySheetSide = side;
     buySheetOpen = true;
+    const cap = demo.on
+      ? Math.max(1, Math.floor(demo.balance) || 50)
+      : 100;
     buySheetAmount = Math.max(
       1,
-      Math.min(Math.floor(demo.balance) || 50, tradeStake > 0 ? tradeStake : 50)
+      Math.min(cap, tradeStake > 0 ? tradeStake : 50)
     );
     if (el.buyAmount) el.buyAmount.value = String(buySheetAmount);
     if (el.buySheet) {
@@ -582,6 +724,10 @@
     if (el.buyBackdrop) el.buyBackdrop.hidden = false;
     if (el.buySheetTitle) {
       el.buySheetTitle.textContent = side === "above" ? "Buy Above" : "Buy Below";
+    }
+    const kicker = document.querySelector(".buy-sheet-kicker");
+    if (kicker) {
+      kicker.textContent = demo.on ? "Demo order" : "Paper order · rolling P/L";
     }
     resetBuySlide();
     requestAnimationFrame(() => {
@@ -696,24 +842,31 @@
 
   function settleDemoPosition(tickerJustClosed) {
     const pos = demo.position;
-    if (!demo.on || !pos) return;
+    if (!pos) return;
     if (tickerJustClosed && pos.ticker && pos.ticker !== tickerJustClosed) return;
     const outcome = resolveOutcomeForTicker(pos.ticker, pos.beat);
     if (!outcome) return;
     const won = outcome === pos.side;
     const payout = won ? pos.contracts * 1 : 0;
     const pl = Math.round((payout - pos.total) * 100) / 100;
-    demo.balance = Math.round((demo.balance + payout) * 100) / 100;
-    demo.realizedPl = Math.round((demo.realizedPl + pl) * 100) / 100;
+    const accounted = pos.accounted !== false && demo.on;
+    if (accounted) {
+      demo.balance = Math.round((demo.balance + payout) * 100) / 100;
+      demo.realizedPl = Math.round((demo.realizedPl + pl) * 100) / 100;
+    }
     const sideLabel = pos.side === "above" ? "Above" : "Below";
     demo.lastResult = {
       won,
       pl,
       side: pos.side,
       ticker: pos.ticker,
-      text: won
-        ? `WIN ${sideLabel} · ${money(pl)} · bal ${money(demo.balance)}`
-        : `LOSS ${sideLabel} · ${money(pl)} · bal ${money(demo.balance)}`,
+      text: accounted
+        ? won
+          ? `WIN ${sideLabel} · ${money(pl)} · bal ${money(demo.balance)}`
+          : `LOSS ${sideLabel} · ${money(pl)} · bal ${money(demo.balance)}`
+        : won
+          ? `WIN ${sideLabel} · ${money(pl)} · paper`
+          : `LOSS ${sideLabel} · ${money(pl)} · paper`,
     };
     demo.position = null;
     saveDemoState();
@@ -1373,7 +1526,7 @@
   }
 
   function syncBuyDock() {
-    const busy = !!(demo.on && demo.position);
+    const busy = !!demo.position;
     if (el.dockAbovePct) {
       el.dockAbovePct.textContent =
         lastRoiAsks.above != null ? `${Math.round(lastRoiAsks.above)}¢` : "—";
@@ -1406,10 +1559,15 @@
     if (aboveAsk == null && data && data.no_bid_pct != null) {
       aboveAsk = Math.max(1, 100 - data.no_bid_pct);
     }
-    // Reject locked 0¢/100¢ asks (common in settlement) — use mid %.
+    // Reject locked/extreme asks (settlement 0–1¢) — prefer mid %.
     const usable = (c) => c != null && Number.isFinite(c) && c >= 1 && c <= 99;
-    if (!usable(aboveAsk) && usable(data && data.yes_pct)) aboveAsk = data.yes_pct;
-    if (!usable(belowAsk) && usable(data && data.no_pct)) belowAsk = data.no_pct;
+    const midOk = (c) => usable(c) && c >= 5 && c <= 95;
+    if ((!usable(aboveAsk) || (aboveAsk <= 2 && midOk(data && data.yes_pct))) && usable(data && data.yes_pct)) {
+      aboveAsk = data.yes_pct;
+    }
+    if ((!usable(belowAsk) || (belowAsk <= 2 && midOk(data && data.no_pct))) && usable(data && data.no_pct)) {
+      belowAsk = data.no_pct;
+    }
     if (!usable(aboveAsk)) aboveAsk = null;
     if (!usable(belowAsk)) belowAsk = null;
     if (aboveBid == null && data && data.yes_pct != null) {
@@ -1547,6 +1705,7 @@
     }
     applySettleLine(avg);
     refreshBestSide();
+    if (demo.position) renderDemoUi();
   }
 
   function updateSpot(lastClose) {

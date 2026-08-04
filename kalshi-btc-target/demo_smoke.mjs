@@ -124,12 +124,13 @@ async function main() {
 
     // Prefer sticky dock buy (2-step). Pick side with a usable ask.
     const side = await page.evaluate(() => {
-      const a = document.getElementById("dock-above-pct")?.textContent || "";
-      const b = document.getElementById("dock-below-pct")?.textContent || "";
-      const aN = parseInt(a, 10);
-      const bN = parseInt(b, 10);
-      if (Number.isFinite(aN) && aN >= 1 && aN <= 99) return "above";
-      if (Number.isFinite(bN) && bN >= 1 && bN <= 99) return "below";
+      const a = parseInt(document.getElementById("dock-above-pct")?.textContent || "", 10);
+      const b = parseInt(document.getElementById("dock-below-pct")?.textContent || "", 10);
+      const good = (n) => Number.isFinite(n) && n >= 5 && n <= 95;
+      if (good(a)) return "above";
+      if (good(b)) return "below";
+      if (Number.isFinite(b) && b >= 1 && b <= 99) return "below";
+      if (Number.isFinite(a) && a >= 1 && a <= 99) return "above";
       return "below";
     });
     await page.evaluate((s) => {
@@ -188,8 +189,12 @@ async function main() {
     ok("Rolling strip visible", await page.$eval("#demo-live", (el) => !el.hidden));
     const livePl = await page.$eval("#demo-live-pl", (el) => el.textContent.trim());
     ok("Rolling P/L shown", livePl && livePl !== "—", livePl);
-    const liveMeta = await page.$eval("#demo-live-meta", (el) => el.textContent.trim());
-    ok("Rolling meta has entry/bid/time", /cts|bid|entry|left/i.test(liveMeta), liveMeta);
+    const factors = await page.$eval("#demo-live-factors", (el) => el.textContent.trim());
+    ok(
+      "Rolling factors show entry/bid/time",
+      /Entry|bid|Time|Paid|Contracts/i.test(factors),
+      factors.slice(0, 120)
+    );
 
     const bal = await page.evaluate(
       () => JSON.parse(localStorage.getItem("kalshiDemoState") || "{}").balance
@@ -209,12 +214,12 @@ async function main() {
     const canClose = await page.$eval("#demo-live-close", (el) => !el.disabled);
     ok("Close-at-bid enabled", canClose);
     if (canClose) {
-      await page.click("#demo-live-close");
+      await page.evaluate(() => document.getElementById("demo-live-close").click());
       await wait(600);
       const after = await page.evaluate(() =>
         JSON.parse(localStorage.getItem("kalshiDemoState") || "{}")
       );
-      ok("Position cleared after close", !after.position);
+      ok("Position cleared after close", !after.position, JSON.stringify(after.position));
       ok(
         "Last result is CLOSED",
         !!(after.lastResult && /CLOSED/i.test(after.lastResult.text || "")),
