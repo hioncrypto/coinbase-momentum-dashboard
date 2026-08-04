@@ -1,5 +1,5 @@
 /* BeatLine service worker — background 15m target + clear-edge alerts */
-const SW_VERSION = "2.8-edge";
+const SW_VERSION = "2.9-link";
 const TARGET_URL = "/api/target?tf=15m";
 const STATE_KEY = "kalshiFifteenState";
 
@@ -115,6 +115,27 @@ async function showEdgeNotification(payload) {
   });
 }
 
+async function showLinkNotification(payload) {
+  const url = (payload && payload.url) || "/";
+  let host = url;
+  try {
+    host = new URL(url).host;
+  } catch {
+    // keep raw
+  }
+  await self.registration.showNotification("BeatLine · new link", {
+    body: `Tap to reopen — ${host}. Your balance and trade history follow you.`,
+    icon: "/icons/icon-192.png?v=2.6",
+    badge: "/icons/icon-192.png?v=2.6",
+    vibrate: [100, 50, 100],
+    tag: "beatline-new-link",
+    renotify: true,
+    requireInteraction: true,
+    silent: false,
+    data: { url, kind: "new_link" },
+  });
+}
+
 async function checkTarget(forceNotify) {
   const state = await readState();
   if (!state.chimeOn && !forceNotify) return;
@@ -219,6 +240,10 @@ self.addEventListener("push", (event) => {
     payload = { body: event.data ? event.data.text() : "" };
   }
   const kind = payload.type || payload.kind || "new_target";
+  if (kind === "new_link") {
+    event.waitUntil(showLinkNotification({ url: payload.url }));
+    return;
+  }
   if (kind === "clear_edge") {
     event.waitUntil(
       showEdgeNotification({

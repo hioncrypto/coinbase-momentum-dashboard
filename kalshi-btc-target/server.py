@@ -1311,6 +1311,15 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(200, {"ok": True, "pushed": n})
             return
 
+        if path == "/api/push/link":
+            url = str(body.get("url") or "").strip()
+            if not url.startswith("https://"):
+                self._send_json(400, {"ok": False, "error": "https url required"})
+                return
+            n = send_web_push({"type": "new_link", "url": url})
+            self._send_json(200, {"ok": True, "pushed": n, "url": url})
+            return
+
         if path in ("/api/demo-account", "/api/account"):
             state = body.get("state") if isinstance(body.get("state"), dict) else body
             saved = save_demo_account(state)
