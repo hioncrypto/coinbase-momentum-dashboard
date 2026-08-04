@@ -2118,6 +2118,10 @@ body.portrait-app #chart {
   display: block;
 }
 
+.open-pl-bar:not(.is-collapsed) .open-pl-peek {
+  display: none;
+}
+
 .open-pl-peek.is-up {
   color: var(--accent);
 }
