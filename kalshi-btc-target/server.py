@@ -53,7 +53,7 @@ COINBASE_CANDLES = "https://api.exchange.coinbase.com/products/BTC-USD/candles"
 COINBASE_TICKER = "https://api.exchange.coinbase.com/products/BTC-USD/ticker"
 KALSHI_MARKETS = "https://api.elections.kalshi.com/trade-api/v2/markets"
 
-UA = "kalshi-btc-target/1.4 (+android-pwa)"
+UA = "kalshi-btc-target/1.5 (+android-pwa)"
 
 _cache_lock = threading.Lock()
 _target_cache: dict = {}  # key -> {at, payload}
@@ -73,8 +73,22 @@ def _parse_dollars(value) -> float | None:
         return None
 
 
+def _dollars_to_pct_cents(value) -> int | None:
+    """Kalshi UI shows whole cents truncated (0.999 → 99), not rounded (100)."""
+    dollars = _parse_dollars(value)
+    if dollars is None:
+        return None
+    dollars = max(0.0, min(1.0, dollars))
+    return int(dollars * 100 + 1e-9)
+
+
 def market_odds(market: dict) -> dict:
-    """Kalshi Yes/No % from last trade or mid of bid/ask (dollars fields)."""
+    """
+    Yes/No % the way Kalshi's UI tends to show them:
+    - Use last trade, else mid of yes bid/ask
+    - Truncate to whole cents (0.999 → 99%, not 100%)
+    - On a live market, never show 100/0 (clamp to 99/1)
+    """
     last = _parse_dollars(market.get("last_price_dollars"))
     yes_bid = _parse_dollars(market.get("yes_bid_dollars"))
     yes_ask = _parse_dollars(market.get("yes_ask_dollars"))
@@ -84,10 +98,10 @@ def market_odds(market: dict) -> dict:
     yes = last
     if yes is None and yes_bid is not None and yes_ask is not None:
         yes = (yes_bid + yes_ask) / 2.0
-    elif yes is None and yes_ask is not None:
-        yes = yes_ask
     elif yes is None and yes_bid is not None:
         yes = yes_bid
+    elif yes is None and yes_ask is not None:
+        yes = yes_ask
 
     if yes is None:
         return {
@@ -98,16 +112,21 @@ def market_odds(market: dict) -> dict:
             "last_pct": None,
         }
 
-    yes = max(0.0, min(1.0, yes))
-    no = 1.0 - yes
+    yes_pct = int(max(0.0, min(1.0, yes)) * 100 + 1e-9)
+    live = market.get("status") in ("active", "open", "initialized")
+    # Live Kalshi screens don't show a locked 100%/0% side.
+    if live:
+        yes_pct = min(99, max(1, yes_pct))
+    no_pct = 100 - yes_pct
+
     return {
-        "yes_pct": round(yes * 100),
-        "no_pct": round(no * 100),
-        "yes_bid_pct": round(yes_bid * 100) if yes_bid is not None else None,
-        "yes_ask_pct": round(yes_ask * 100) if yes_ask is not None else None,
-        "last_pct": round(last * 100) if last is not None else None,
-        "no_bid_pct": round(no_bid * 100) if no_bid is not None else None,
-        "no_ask_pct": round(no_ask * 100) if no_ask is not None else None,
+        "yes_pct": yes_pct,
+        "no_pct": no_pct,
+        "yes_bid_pct": _dollars_to_pct_cents(market.get("yes_bid_dollars")),
+        "yes_ask_pct": _dollars_to_pct_cents(market.get("yes_ask_dollars")),
+        "last_pct": _dollars_to_pct_cents(market.get("last_price_dollars")),
+        "no_bid_pct": _dollars_to_pct_cents(market.get("no_bid_dollars")),
+        "no_ask_pct": _dollars_to_pct_cents(market.get("no_ask_dollars")),
     }
 
 
@@ -436,7 +455,7 @@ def fetch_candles(granularity: int = 60, limit: int = 300) -> dict:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "KalshiBtcTarget/1.4"
+    server_version = "KalshiBtcTarget/1.5"
 
     def log_message(self, fmt, *args):
         print(f"[kalshi-btc-target] {self.address_string()} {fmt % args}")
@@ -519,7 +538,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/health":
             self._send_json(
                 200,
-                {"ok": True, "service": "kalshi-btc-target", "version": "1.4"},
+                {"ok": True, "service": "kalshi-btc-target", "version": "1.5"},
             )
             return
 
