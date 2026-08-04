@@ -187,6 +187,20 @@ h1 {
   }
 }
 
+.summary-panel,
+.trade-panel {
+  margin: 0 10px 4px;
+  padding: 10px 12px 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(22, 53, 40, 0.5), rgba(12, 20, 16, 0.72));
+}
+
+.trade-panel {
+  margin-top: 2px;
+  margin-bottom: 2px;
+}
+
 .target-panel {
   margin: 0 10px 4px;
   padding: 10px 12px 8px;
@@ -557,12 +571,13 @@ h1 {
   display: flex;
   width: 100%;
   gap: 5px;
-  margin-top: 8px;
+  margin: 0 0 6px;
+  padding: 0 2px;
 }
 
 .tf-btn {
   flex: 1;
-  min-height: 38px;
+  min-height: 34px;
   border: 1px solid rgba(26, 201, 107, 0.28);
   border-radius: 8px;
   background: #0f1a15;
@@ -584,13 +599,20 @@ h1 {
   color: #04140c;
 }
 
-#chart {
+.chart-wrap {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   margin: 0 8px;
+}
+
+#chart {
+  flex: 1;
+  min-height: 200px;
   border: 1px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
   background: var(--bg-2);
-  min-height: 220px;
 }
 
 .foot {
