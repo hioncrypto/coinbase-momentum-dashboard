@@ -718,11 +718,24 @@
     updateCountdown();
   }
 
+  function tryLockPortrait() {
+    try {
+      const orient = screen.orientation;
+      if (!orient || typeof orient.lock !== "function") return;
+      const type = String(orient.type || "");
+      if (type.startsWith("portrait")) return;
+      orient.lock("portrait").catch(() => {});
+    } catch {
+      // Browser may require fullscreen / installed PWA.
+    }
+  }
+
   function boot() {
     if (!window.LightweightCharts) {
       setStatus("warn", "Chart library failed to load");
       return;
     }
+    tryLockPortrait();
     if (el.timeframe) {
       syncTfButtons();
       el.timeframe.addEventListener("click", (ev) => {
@@ -730,21 +743,27 @@
         if (!btn || !el.timeframe.contains(btn)) return;
         setTimeframe(btn.dataset.tf);
         ensureAudio();
+        tryLockPortrait();
       });
     }
     if (el.pushBadge) {
       el.pushBadge.addEventListener("click", () => {
+        tryLockPortrait();
         toggleAlerts();
       });
     }
     syncAlertsUi();
-    const unlock = () => ensureAudio();
+    const unlock = () => {
+      ensureAudio();
+      tryLockPortrait();
+    };
     window.addEventListener("pointerdown", unlock, { passive: true });
     window.addEventListener("touchstart", unlock, { passive: true });
     window.addEventListener("keydown", unlock);
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") {
         ensureAudio();
+        tryLockPortrait();
         startRolloverBurst();
       } else {
         // Page hidden — rely on SW poll + server Web Push.
@@ -785,7 +804,10 @@
     setInterval(tickClock, 250);
     tickClock();
     window.addEventListener("resize", resizeChart);
-    window.addEventListener("orientationchange", () => setTimeout(resizeChart, 250));
+    window.addEventListener("orientationchange", () => {
+      tryLockPortrait();
+      setTimeout(resizeChart, 250);
+    });
   }
 
   if (document.readyState === "loading") {
