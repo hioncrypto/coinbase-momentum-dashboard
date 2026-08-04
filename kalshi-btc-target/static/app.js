@@ -10,6 +10,37 @@
   const BG_ARMED_KEY = "kalshiBgAlertsArmed";
   const DEMO_KEY = "kalshiDemoState";
   const DEMO_DEFAULT_START = 1000;
+  const TUTORIAL_KEY = "beatlineTutorialSeen";
+
+  const TUTORIAL_STEPS = [
+    {
+      title: "Welcome to BeatLine",
+      body: "BeatLine tracks Kalshi’s 15-minute BTC Price to beat. Live price, countdown, odds, and a TARGET line on the chart — all in one portrait screen.",
+    },
+    {
+      title: "Read the window",
+      body: "Price to beat is the line BTC must finish above or below. Live now is the current index. Time left is when this 15m window settles. The chart shows that TARGET as a dashed line.",
+    },
+    {
+      title: "Odds & Best Side",
+      body: "Market chance shows Above/Below pricing. Best Side scores distance from the beat, time left, ask, and fees — tap it when you want a suggested side.",
+    },
+    {
+      title: "Set size, then buy",
+      body: "Use the Trade size slider ($0–$100). Then tap Buy Above, Best, or Buy Below at the bottom. Enter dollars if needed and slide to confirm — release early to cancel.",
+    },
+    {
+      title: "Rolling P/L",
+      body: "After a buy, an Open trade card tracks live P/L as price and odds move: entry, bid, fees, vs beat, time left, and hold outcomes. Close at bid anytime, or hold to window settle.",
+    },
+    {
+      title: "Demo & alerts",
+      body: "⋮ Options → Demo mode turns on a paper bankroll and session P/L. The bell enables new-target alerts. Reopen this guide anytime from Options → How to use BeatLine.",
+    },
+  ];
+
+  let tutorialIndex = 0;
+  let tutorialOpen = false;
 
   const TF_LABELS = {
     "1m": "1m candles",
@@ -66,6 +97,15 @@
     optionsBackdrop: document.getElementById("options-backdrop"),
     optionsSheet: document.getElementById("options-sheet"),
     optionsClose: document.getElementById("options-close"),
+    tutorial: document.getElementById("tutorial"),
+    tutorialBackdrop: document.getElementById("tutorial-backdrop"),
+    tutorialTitle: document.getElementById("tutorial-title"),
+    tutorialBody: document.getElementById("tutorial-body"),
+    tutorialStepNum: document.getElementById("tutorial-step-num"),
+    tutorialStepTotal: document.getElementById("tutorial-step-total"),
+    tutorialNext: document.getElementById("tutorial-next"),
+    tutorialSkip: document.getElementById("tutorial-skip"),
+    tutorialOpen: document.getElementById("tutorial-open"),
     demoToggle: document.getElementById("demo-toggle"),
     demoAccount: document.getElementById("demo-account"),
     demoBalance: document.getElementById("demo-balance"),
@@ -213,6 +253,51 @@
   function toggleOptions() {
     if (optionsOpen) closeOptions();
     else openOptions();
+  }
+
+  function renderTutorialStep() {
+    const step = TUTORIAL_STEPS[tutorialIndex];
+    if (!step) return;
+    if (el.tutorialStepNum) el.tutorialStepNum.textContent = String(tutorialIndex + 1);
+    if (el.tutorialStepTotal) el.tutorialStepTotal.textContent = String(TUTORIAL_STEPS.length);
+    if (el.tutorialTitle) el.tutorialTitle.textContent = step.title;
+    if (el.tutorialBody) el.tutorialBody.textContent = step.body;
+    if (el.tutorialNext) {
+      el.tutorialNext.textContent =
+        tutorialIndex >= TUTORIAL_STEPS.length - 1 ? "Got it" : "Next";
+    }
+  }
+
+  function openTutorial(fromStart) {
+    closeOptions();
+    dismissBuySheet();
+    tutorialOpen = true;
+    tutorialIndex = fromStart === false ? tutorialIndex : 0;
+    if (el.tutorial) el.tutorial.hidden = false;
+    if (el.tutorialBackdrop) el.tutorialBackdrop.hidden = false;
+    renderTutorialStep();
+  }
+
+  function closeTutorial(markSeen) {
+    tutorialOpen = false;
+    if (el.tutorial) el.tutorial.hidden = true;
+    if (el.tutorialBackdrop) el.tutorialBackdrop.hidden = true;
+    if (markSeen) {
+      try {
+        localStorage.setItem(TUTORIAL_KEY, "1");
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  function nextTutorial() {
+    if (tutorialIndex >= TUTORIAL_STEPS.length - 1) {
+      closeTutorial(true);
+      return;
+    }
+    tutorialIndex += 1;
+    renderTutorialStep();
   }
 
   function getPositionBidCents(pos) {
@@ -2405,11 +2490,31 @@
       card.addEventListener("click", () => openBuySheet("below"));
     });
     document.addEventListener("keydown", (ev) => {
-      if (ev.key === "Escape" && buySheetOpen) dismissBuySheet();
+      if (ev.key === "Escape" && tutorialOpen) closeTutorial(false);
+      else if (ev.key === "Escape" && buySheetOpen) dismissBuySheet();
       else if (ev.key === "Escape" && optionsOpen) closeOptions();
     });
+    if (el.tutorialOpen) {
+      el.tutorialOpen.addEventListener("click", () => openTutorial(true));
+    }
+    if (el.tutorialNext) {
+      el.tutorialNext.addEventListener("click", () => nextTutorial());
+    }
+    if (el.tutorialSkip) {
+      el.tutorialSkip.addEventListener("click", () => closeTutorial(true));
+    }
+    if (el.tutorialBackdrop) {
+      el.tutorialBackdrop.addEventListener("click", () => closeTutorial(false));
+    }
     renderDemoUi();
     syncAlertsUi();
+    try {
+      if (localStorage.getItem(TUTORIAL_KEY) !== "1") {
+        setTimeout(() => openTutorial(true), 700);
+      }
+    } catch {
+      // ignore
+    }
     const unlock = () => {
       ensureAudio();
       ensurePortraitLock(true);
