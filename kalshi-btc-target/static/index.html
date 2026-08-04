@@ -35,12 +35,13 @@
         </div>
       </div>
       <div class="top-right">
-        <div
+        <button
+          type="button"
           id="push-badge"
           class="push-badge"
-          hidden
-          title="Push notifications active"
-          aria-label="Push notifications active"
+          title="Background alerts"
+          aria-label="Background alerts"
+          aria-pressed="false"
         >
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
             <path
@@ -49,7 +50,7 @@
             />
           </svg>
           <span class="push-badge-dot" aria-hidden="true"></span>
-        </div>
+        </button>
         <div id="status" class="status" data-state="loading">Connecting…</div>
       </div>
     </header>

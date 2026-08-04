@@ -169,33 +169,41 @@ h1 {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  padding: 0;
   border-radius: 999px;
-  border: 1px solid rgba(26, 201, 107, 0.4);
-  background: rgba(22, 53, 38, 0.85);
-  color: var(--accent);
-  opacity: 0;
-  transform: scale(0.92);
-  transition: opacity 0.28s ease, transform 0.28s ease;
+  border: 1px solid rgba(143, 163, 153, 0.35);
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--muted);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
 }
 
 .push-badge.is-on {
-  opacity: 1;
-  transform: scale(1);
-}
-
-.push-badge[hidden] {
-  display: none !important;
+  color: var(--accent);
+  border-color: rgba(26, 201, 107, 0.45);
+  background: rgba(22, 53, 38, 0.9);
 }
 
 .push-badge-dot {
   position: absolute;
-  top: 5px;
-  right: 6px;
+  top: 6px;
+  right: 7px;
   width: 7px;
   height: 7px;
   border-radius: 50%;
+  background: currentColor;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.push-badge.is-on .push-badge-dot {
+  opacity: 1;
+  transform: scale(1);
   background: var(--accent);
   box-shadow: 0 0 0 0 rgba(26, 201, 107, 0.55);
   animation: pushPulse 1.8s ease-out infinite;

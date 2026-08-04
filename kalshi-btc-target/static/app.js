@@ -148,18 +148,11 @@
 
   function setPushBadge(on) {
     if (!el.pushBadge) return;
-    if (on) {
-      el.pushBadge.hidden = false;
-      // Next frame so fade/scale transition plays.
-      requestAnimationFrame(() => el.pushBadge.classList.add("is-on"));
-    } else {
-      el.pushBadge.classList.remove("is-on");
-      const hide = () => {
-        if (!el.pushBadge.classList.contains("is-on")) el.pushBadge.hidden = true;
-      };
-      el.pushBadge.addEventListener("transitionend", hide, { once: true });
-      setTimeout(hide, 320);
-    }
+    el.pushBadge.classList.toggle("is-on", !!on);
+    el.pushBadge.setAttribute("aria-pressed", on ? "true" : "false");
+    el.pushBadge.title = on
+      ? "Background alerts on"
+      : "Tap to enable background alerts";
   }
 
   function hideBgSetup(animated) {
@@ -796,6 +789,12 @@
     if (el.enableBg) {
       el.enableBg.addEventListener("click", () => {
         enableBackgroundAlerts();
+      });
+    }
+    if (el.pushBadge) {
+      el.pushBadge.addEventListener("click", () => {
+        if (el.pushBadge.classList.contains("is-on")) runChimeTest();
+        else enableBackgroundAlerts();
       });
     }
     if (isBgArmed() && Notification.permission === "granted") {
