@@ -30,12 +30,12 @@ body {
 
 body {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(280px, 1fr) auto auto auto;
   height: 100dvh;
   max-height: 100dvh;
   overflow: hidden;
   padding-top: var(--safe-top);
-  padding-bottom: var(--safe-bottom);
+  padding-bottom: 0;
 }
 
 .top {
@@ -831,12 +831,19 @@ h1 {
   border: 1px solid var(--border);
   border-radius: 12px;
   background: linear-gradient(180deg, rgba(22, 53, 40, 0.5), rgba(12, 20, 16, 0.72));
-  overflow: auto;
-  max-height: 42dvh;
+  overflow: visible;
+  max-height: none;
 }
 
 .trade-panel {
-  display: none;
+  display: block;
+  margin: 2px 8px 0;
+  padding: 8px 10px 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(22, 53, 40, 0.5), rgba(12, 20, 16, 0.72));
+  overflow: auto;
+  max-height: 32dvh;
 }
 
 .buy-dock {
@@ -845,8 +852,9 @@ h1 {
   gap: 8px;
   padding: 8px 10px calc(8px + var(--safe-bottom));
   border-top: 1px solid var(--border);
-  background: rgba(8, 14, 11, 0.92);
+  background: rgba(8, 14, 11, 0.96);
   backdrop-filter: blur(8px);
+  flex-shrink: 0;
 }
 
 .dock-btn {
@@ -940,37 +948,17 @@ h1 {
 .best-side.compact {
   margin: 6px 0 0;
   padding: 8px 10px;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  grid-template-areas:
-    "kicker label amount"
-    "meta meta meta";
-  gap: 2px 10px;
-  text-align: left;
-  align-items: baseline;
-}
-
-.best-side.compact .best-side-kicker {
-  grid-area: kicker;
+  display: block;
+  text-align: center;
 }
 
 .best-side.compact .best-side-label {
-  grid-area: label;
-  margin: 0;
-  font-size: 1.15rem;
+  font-size: 1.85rem;
 }
 
 .best-side.compact .best-side-amount {
-  grid-area: amount;
-  margin: 0;
-  font-size: 0.9rem;
-  text-align: right;
-}
-
-.best-side.compact .best-side-meta {
-  grid-area: meta;
-  margin: 0;
-  font-size: 0.68rem;
+  font-size: 1.2rem;
+  text-align: center;
 }
 
 .demo-live {
@@ -1005,23 +993,33 @@ h1 {
 }
 
 .countdown-meta,
-.foot,
 .roi-note,
 .buy-sheet-note {
+  display: block;
+}
+
+.countdown-meta {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.foot {
   display: none;
 }
 
 .chart-wrap {
   display: flex;
   flex-direction: column;
+  justify-content: center;
   min-height: 0;
-  margin: 0 8px;
+  margin: 4px 8px;
   overflow: hidden;
 }
 
 #chart {
   flex: 1;
-  min-height: 120px;
+  min-height: 200px;
 }
 
 .tf-btns {

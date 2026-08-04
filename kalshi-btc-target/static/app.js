@@ -1366,7 +1366,7 @@
       lastRoiAsks.below,
       tradeStake
     );
-    el.roiPanel.hidden = true;
+    el.roiPanel.hidden = !(okA || okB);
     refreshBestSide();
     renderDemoUi();
     syncBuyDock();
@@ -2237,6 +2237,14 @@
         }
       });
     }
+    document.querySelectorAll(".roi-card.above").forEach((card) => {
+      card.style.cursor = "pointer";
+      card.addEventListener("click", () => openBuySheet("above"));
+    });
+    document.querySelectorAll(".roi-card.below").forEach((card) => {
+      card.style.cursor = "pointer";
+      card.addEventListener("click", () => openBuySheet("below"));
+    });
     document.addEventListener("keydown", (ev) => {
       if (ev.key === "Escape" && buySheetOpen) dismissBuySheet();
       else if (ev.key === "Escape" && optionsOpen) closeOptions();
