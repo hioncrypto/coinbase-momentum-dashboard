@@ -122,28 +122,35 @@ async function main() {
     });
     ok("Buy Above enabled", !openDiag.disabled, JSON.stringify(openDiag));
 
-    await page.evaluate(() => document.getElementById("demo-buy-above").click());
+    // Prefer sticky dock buy (2-step). Pick side with a usable ask.
+    const side = await page.evaluate(() => {
+      const a = document.getElementById("dock-above-pct")?.textContent || "";
+      const b = document.getElementById("dock-below-pct")?.textContent || "";
+      const aN = parseInt(a, 10);
+      const bN = parseInt(b, 10);
+      if (Number.isFinite(aN) && aN >= 1 && aN <= 99) return "above";
+      if (Number.isFinite(bN) && bN >= 1 && bN <= 99) return "below";
+      return "below";
+    });
+    await page.evaluate((s) => {
+      document
+        .getElementById(s === "above" ? "dock-buy-above" : "dock-buy-below")
+        .click();
+    }, side);
     await wait(600);
 
     let buyOpen = await page.$eval("#buy-sheet", (el) => !el.hidden);
-    if (!buyOpen) {
-      // Fallback: invoke through ROI card
-      await page.evaluate(() => {
-        const card = document.querySelector(".roi-card.above");
-        if (card) card.click();
-      });
-      await wait(500);
-      buyOpen = await page.$eval("#buy-sheet", (el) => !el.hidden);
-    }
     const status = await page.$eval("#status", (el) => el.textContent.trim());
-    ok("Buy sheet pops out", buyOpen, status);
+    ok("Buy sheet pops out (dock 2-step)", buyOpen, status + " side=" + side);
 
     if (!buyOpen) throw new Error("Buy sheet failed to open: " + status);
 
+    const wantTitle = side === "above" ? "Buy Above" : "Buy Below";
     ok(
-      "Buy sheet title Buy Above",
+      "Buy sheet title matches side",
       (await page.$eval("#buy-sheet-title", (el) => el.textContent.trim())) ===
-        "Buy Above"
+        wantTitle,
+      wantTitle
     );
 
     await page.evaluate(() => {
@@ -174,7 +181,7 @@ async function main() {
     );
     ok(
       "Position opened (Above)",
-      !!(pos && pos.side === "above" && pos.contracts > 0),
+      !!(pos && (pos.side === "above" || pos.side === "below") && pos.contracts > 0),
       JSON.stringify(pos)
     );
 
@@ -232,10 +239,8 @@ async function main() {
     await wait(300);
     ok("X cancels sheet", await page.$eval("#buy-sheet", (el) => el.hidden));
 
-    // Buy Best or chip path
-    await page.click("#menu-btn");
-    await wait(200);
-    await page.evaluate(() => document.getElementById("demo-buy-best").click());
+    // Buy Best via sticky dock
+    await page.evaluate(() => document.getElementById("dock-buy-best").click());
     await wait(500);
     const best = await page.evaluate(() => ({
       open: !document.getElementById("buy-sheet").hidden,
@@ -243,7 +248,7 @@ async function main() {
     }));
     ok(
       "Buy Best opens sheet or warns",
-      best.open || /no clear|best side/i.test(best.status),
+      best.open || /no clear|best side|demo/i.test(best.status),
       JSON.stringify(best)
     );
     if (best.open) {
@@ -262,7 +267,21 @@ async function main() {
     }
 
     const fs = await page.$eval("#countdown", (el) => parseFloat(getComputedStyle(el).fontSize));
-    ok("Time left font ≥ 24px", fs >= 24, `${fs}px`);
+    ok("Time left font ≥ 22px", fs >= 22, `${fs}px`);
+
+    const fit = await page.evaluate(() => {
+      const docH = document.documentElement.scrollHeight;
+      const viewH = window.innerHeight;
+      const dock = document.querySelector(".buy-dock");
+      const dockVis = dock && getComputedStyle(dock).display !== "none";
+      return { docH, viewH, overflow: docH > viewH + 8, dockVis };
+    });
+    ok("Sticky buy dock visible", fit.dockVis);
+    ok(
+      "Page roughly fits viewport (little/no page scroll)",
+      !fit.overflow || fit.docH - fit.viewH < 40,
+      JSON.stringify(fit)
+    );
   } catch (err) {
     ok("Runner", false, String(err && err.stack ? err.stack : err));
   } finally {

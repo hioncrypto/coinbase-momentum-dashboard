@@ -53,6 +53,11 @@
     roiBelowPrice: document.getElementById("roi-below-price"),
     roiBelowSummary: document.getElementById("roi-below-summary"),
     roiBelowDetail: document.getElementById("roi-below-detail"),
+    dockBuyAbove: document.getElementById("dock-buy-above"),
+    dockBuyBelow: document.getElementById("dock-buy-below"),
+    dockBuyBest: document.getElementById("dock-buy-best"),
+    dockAbovePct: document.getElementById("dock-above-pct"),
+    dockBelowPct: document.getElementById("dock-below-pct"),
     settleBanner: document.getElementById("settle-banner"),
     settleTitle: document.getElementById("settle-title"),
     settleAvg: document.getElementById("settle-avg"),
@@ -365,6 +370,7 @@
     if (el.demoLiveClose) {
       el.demoLiveClose.disabled = !pos || !mark || mark.bidCents == null;
     }
+    syncBuyDock();
   }
 
   function closeDemoPosition() {
@@ -1190,7 +1196,7 @@
   }
 
   function refreshBestSide() {
-    if (!el.bestSide || !el.roiPanel || el.roiPanel.hidden) return;
+    if (!el.bestSide) return;
     const spotRaw = el.spotValue && el.spotValue.dataset.last;
     const spot = spotRaw != null ? Number(spotRaw) : null;
     const beat = lastTarget;
@@ -1360,9 +1366,25 @@
       lastRoiAsks.below,
       tradeStake
     );
-    el.roiPanel.hidden = !(okA || okB);
+    el.roiPanel.hidden = true;
     refreshBestSide();
     renderDemoUi();
+    syncBuyDock();
+  }
+
+  function syncBuyDock() {
+    const busy = !!(demo.on && demo.position);
+    if (el.dockAbovePct) {
+      el.dockAbovePct.textContent =
+        lastRoiAsks.above != null ? `${Math.round(lastRoiAsks.above)}¢` : "—";
+    }
+    if (el.dockBelowPct) {
+      el.dockBelowPct.textContent =
+        lastRoiAsks.below != null ? `${Math.round(lastRoiAsks.below)}¢` : "—";
+    }
+    if (el.dockBuyAbove) el.dockBuyAbove.disabled = busy;
+    if (el.dockBuyBelow) el.dockBuyBelow.disabled = busy;
+    if (el.dockBuyBest) el.dockBuyBest.disabled = busy;
   }
 
   function setTradeStake(n) {
@@ -1384,6 +1406,12 @@
     if (aboveAsk == null && data && data.no_bid_pct != null) {
       aboveAsk = Math.max(1, 100 - data.no_bid_pct);
     }
+    // Reject locked 0¢/100¢ asks (common in settlement) — use mid %.
+    const usable = (c) => c != null && Number.isFinite(c) && c >= 1 && c <= 99;
+    if (!usable(aboveAsk) && usable(data && data.yes_pct)) aboveAsk = data.yes_pct;
+    if (!usable(belowAsk) && usable(data && data.no_pct)) belowAsk = data.no_pct;
+    if (!usable(aboveAsk)) aboveAsk = null;
+    if (!usable(belowAsk)) belowAsk = null;
     if (aboveBid == null && data && data.yes_pct != null) {
       aboveBid = Math.max(1, Math.round(data.yes_pct) - 1);
     }
@@ -1396,6 +1424,8 @@
     if (aboveBid == null && belowAsk != null) {
       aboveBid = Math.max(1, 100 - belowAsk);
     }
+    if (!usable(aboveBid)) aboveBid = aboveAsk != null ? Math.max(1, aboveAsk - 1) : null;
+    if (!usable(belowBid)) belowBid = belowAsk != null ? Math.max(1, belowAsk - 1) : null;
     lastRoiAsks = { above: aboveAsk, below: belowAsk };
     lastRoiBids = { above: aboveBid, below: belowBid };
     renderRoi();
@@ -2141,6 +2171,15 @@
     if (el.demoBuyBelow) {
       el.demoBuyBelow.addEventListener("click", () => openBuySheet("below"));
     }
+    if (el.dockBuyAbove) {
+      el.dockBuyAbove.addEventListener("click", () => openBuySheet("above"));
+    }
+    if (el.dockBuyBelow) {
+      el.dockBuyBelow.addEventListener("click", () => openBuySheet("below"));
+    }
+    if (el.dockBuyBest) {
+      el.dockBuyBest.addEventListener("click", () => demoBuyBest());
+    }
     if (el.demoClose) {
       el.demoClose.addEventListener("click", () => closeDemoPosition());
     }
@@ -2198,14 +2237,6 @@
         }
       });
     }
-    document.querySelectorAll(".roi-card.above").forEach((card) => {
-      card.style.cursor = "pointer";
-      card.addEventListener("click", () => openBuySheet("above"));
-    });
-    document.querySelectorAll(".roi-card.below").forEach((card) => {
-      card.style.cursor = "pointer";
-      card.addEventListener("click", () => openBuySheet("below"));
-    });
     document.addEventListener("keydown", (ev) => {
       if (ev.key === "Escape" && buySheetOpen) dismissBuySheet();
       else if (ev.key === "Escape" && optionsOpen) closeOptions();

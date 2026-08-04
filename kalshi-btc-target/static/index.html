@@ -20,12 +20,12 @@
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
     <link rel="icon" href="/icons/icon-192.png" sizes="192x192" type="image/png" />
     <title>BeatLine · BTC 15m</title>
-    <link rel="stylesheet" href="/styles.css?v=3.7" />
+    <link rel="stylesheet" href="/styles.css?v=3.8" />
     <script
       src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"
       defer
     ></script>
-    <script src="/app.js?v=3.7" defer></script>
+    <script src="/app.js?v=3.8" defer></script>
   </head>
   <body class="portrait-app">
     <div id="rotate-gate" class="rotate-gate" hidden>
@@ -231,7 +231,6 @@
         <div id="buy-slide-label" class="buy-slide-label">Slide to buy</div>
         <div id="buy-slide-thumb" class="buy-slide-thumb" aria-hidden="true">››</div>
       </div>
-      <p class="buy-sheet-note">Release early to cancel · completes only at the end</p>
     </div>
 
     <section class="summary-panel" aria-live="polite">
@@ -264,14 +263,13 @@
         </div>
       </div>
 
-      <p id="countdown-meta" class="countdown-meta">Until this 15m window ends</p>
       <p id="bg-status" class="sound-hint" hidden></p>
       <p id="edge-line" class="edge-line" hidden></p>
 
       <div id="demo-live" class="demo-live" hidden aria-live="polite">
         <div class="demo-live-top">
           <div>
-            <div class="demo-live-kicker">Demo position</div>
+            <div class="demo-live-kicker">Open</div>
             <div id="demo-live-side" class="demo-live-side">—</div>
           </div>
           <div id="demo-live-pl" class="demo-live-pl">—</div>
@@ -280,6 +278,25 @@
         <button type="button" id="demo-live-close" class="demo-live-close">
           Close at bid
         </button>
+      </div>
+
+      <div class="odds-row compact" id="odds-row" hidden>
+        <div class="odd yes">
+          <span class="odd-label">Above</span>
+          <span id="yes-pct" class="odd-pct">—</span>
+          <span id="yes-book" class="odd-book">—</span>
+        </div>
+        <div class="odd no">
+          <span class="odd-label">Below</span>
+          <span id="no-pct" class="odd-pct">—</span>
+          <span id="no-book" class="odd-book">—</span>
+        </div>
+      </div>
+      <div id="best-side" class="best-side compact" hidden aria-live="polite">
+        <div class="best-side-kicker">Best</div>
+        <div id="best-side-label" class="best-side-label">—</div>
+        <div id="best-side-amount" class="best-side-amount">—</div>
+        <div id="best-side-meta" class="best-side-meta">—</div>
       </div>
     </section>
 
@@ -297,77 +314,31 @@
       <main id="chart" role="img" aria-label="Bitcoin chart with Price to beat line"></main>
     </section>
 
-    <section class="trade-panel">
-      <div class="odds-block">
-        <div class="odds-heading">
-          <span>Market chance</span>
-          <span id="odds-hint" class="odds-hint">What traders are pricing</span>
-        </div>
-        <div class="odds-row" id="odds-row" hidden>
-          <div class="odd yes">
-            <span class="odd-label">Above</span>
-            <span id="yes-pct" class="odd-pct">—</span>
-            <span id="yes-book" class="odd-book">—</span>
-          </div>
-          <div class="odd no">
-            <span class="odd-label">Below</span>
-            <span id="no-pct" class="odd-pct">—</span>
-            <span id="no-book" class="odd-book">—</span>
-          </div>
-        </div>
-        <div id="roi-panel" class="roi-panel" hidden>
-          <div id="best-side" class="best-side" hidden aria-live="polite">
-            <div class="best-side-kicker">Best side</div>
-            <div id="best-side-label" class="best-side-label">—</div>
-            <div id="best-side-amount" class="best-side-amount">—</div>
-            <div id="best-side-meta" class="best-side-meta">—</div>
-          </div>
-          <div class="roi-heading">
-            <span>Trade size</span>
-            <span id="stake-value" class="stake-value">$50</span>
-          </div>
-          <label class="stake-slider-wrap" for="stake-slider">
-            <input
-              id="stake-slider"
-              class="stake-slider"
-              type="range"
-              min="0"
-              max="100"
-              step="1"
-              value="50"
-              aria-valuemin="0"
-              aria-valuemax="100"
-              aria-valuenow="50"
-              aria-label="Trade size in dollars"
-            />
-            <div class="stake-ends">
-              <span>$0</span>
-              <span>$100</span>
-            </div>
-          </label>
-          <div class="roi-grid">
-            <div class="roi-card above">
-              <div class="roi-side">Buy Above</div>
-              <div id="roi-above-price" class="roi-price">—</div>
-              <div id="roi-above-summary" class="roi-summary">—</div>
-              <div id="roi-above-detail" class="roi-detail">—</div>
-            </div>
-            <div class="roi-card below">
-              <div class="roi-side">Buy Below</div>
-              <div id="roi-below-price" class="roi-price">—</div>
-              <div id="roi-below-summary" class="roi-summary">—</div>
-              <div id="roi-below-detail" class="roi-detail">—</div>
-            </div>
-          </div>
-          <p class="roi-note">
-            Est. Kalshi taker fee included. Win pays $1/contract · lose = $0.
-          </p>
-        </div>
-      </div>
+    <section class="buy-dock" aria-label="Buy">
+      <button type="button" id="dock-buy-above" class="dock-btn above">
+        <span class="dock-label">Buy Above</span>
+        <span id="dock-above-pct" class="dock-pct">—</span>
+      </button>
+      <button type="button" id="dock-buy-best" class="dock-btn best" title="Buy Best Side">
+        Best
+      </button>
+      <button type="button" id="dock-buy-below" class="dock-btn below">
+        <span class="dock-label">Buy Below</span>
+        <span id="dock-below-pct" class="dock-pct">—</span>
+      </button>
     </section>
 
-    <footer class="foot">
-      <span id="chart-tf-label">Chart · live Kalshi index</span>
-    </footer>
+    <!-- Hidden ROI sizing helpers kept for JS calculations -->
+    <div id="roi-panel" class="roi-panel" hidden aria-hidden="true">
+      <span id="odds-hint" hidden></span>
+      <span id="stake-value" hidden>$50</span>
+      <input id="stake-slider" type="range" min="0" max="100" value="50" hidden />
+      <span id="roi-above-price" hidden></span>
+      <span id="roi-above-summary" hidden></span>
+      <span id="roi-above-detail" hidden></span>
+      <span id="roi-below-price" hidden></span>
+      <span id="roi-below-summary" hidden></span>
+      <span id="roi-below-detail" hidden></span>
+    </div>
   </body>
 </html>
