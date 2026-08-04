@@ -929,7 +929,7 @@
   async function ensureServiceWorker() {
     if (!("serviceWorker" in navigator)) return null;
     try {
-      const reg = await navigator.serviceWorker.register("/sw.js?v=2.5", { scope: "/" });
+      const reg = await navigator.serviceWorker.register("/sw.js?v=2.6", { scope: "/" });
       await navigator.serviceWorker.ready;
       return reg;
     } catch (err) {
