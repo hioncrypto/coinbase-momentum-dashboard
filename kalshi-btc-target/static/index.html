@@ -22,12 +22,12 @@
     <link rel="apple-touch-icon" href="/icons/icon-192.png?v=2.6" />
     <link rel="icon" href="/icons/icon-192.png?v=2.6" sizes="192x192" type="image/png" />
     <title>BeatLine</title>
-    <link rel="stylesheet" href="/styles.css?v=4.0" />
+    <link rel="stylesheet" href="/styles.css?v=4.1" />
     <script
       src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"
       defer
     ></script>
-    <script src="/app.js?v=4.0" defer></script>
+    <script src="/app.js?v=4.1" defer></script>
   </head>
   <body class="portrait-app">
     <div id="rotate-gate" class="rotate-gate" hidden>
@@ -116,6 +116,10 @@
           ✕
         </button>
       </div>
+
+      <button type="button" id="tutorial-open" class="tutorial-open-btn">
+        How to use BeatLine
+      </button>
 
       <label class="options-row toggle-row" for="demo-toggle">
         <span>
@@ -232,6 +236,26 @@
         <div id="buy-slide-fill" class="buy-slide-fill"></div>
         <div id="buy-slide-label" class="buy-slide-label">Slide to buy</div>
         <div id="buy-slide-thumb" class="buy-slide-thumb" aria-hidden="true">››</div>
+      </div>
+    </div>
+
+    <div id="tutorial-backdrop" class="tutorial-backdrop" hidden></div>
+    <div
+      id="tutorial"
+      class="tutorial"
+      hidden
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="tutorial-title"
+    >
+      <div class="tutorial-progress">
+        <span id="tutorial-step-num">1</span> / <span id="tutorial-step-total">6</span>
+      </div>
+      <h2 id="tutorial-title" class="tutorial-title">Welcome to BeatLine</h2>
+      <p id="tutorial-body" class="tutorial-body">—</p>
+      <div class="tutorial-actions">
+        <button type="button" id="tutorial-skip" class="tutorial-btn ghost">Skip</button>
+        <button type="button" id="tutorial-next" class="tutorial-btn primary">Next</button>
       </div>
     </div>
 
