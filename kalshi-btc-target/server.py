@@ -67,7 +67,7 @@ CF_BASIC_PASS = os.environ.get(
     "CF_API_PASS", "e3709a02-9876-45ea-ac46-e9020e06d7c6"
 )
 
-UA = "kalshi-btc-target/1.7 (+android-pwa)"
+UA = "kalshi-btc-target/1.8 (+android-pwa)"
 
 _cache_lock = threading.Lock()
 _target_cache: dict = {}  # key -> {at, payload}
@@ -79,11 +79,11 @@ _push_subs: list[dict] = []
 _last_push_ticker: str | None = None
 _vapid_app_server_key: str | None = None
 _vapid_private_path: str | None = None
-TARGET_TTL = 2.0
+TARGET_TTL = 1.0
 CANDLES_TTL = 5.0
 SPOT_TTL = 1.0
 BRTI_TTL = 1.0
-PUSH_POLL_SEC = 5.0
+PUSH_POLL_SEC = 3.0
 
 
 def _parse_dollars(value) -> float | None:
@@ -104,54 +104,6 @@ def _dollars_to_pct_cents(value) -> int | None:
     return int(dollars * 100 + 1e-9)
 
 
-def market_odds(market: dict) -> dict:
-    """
-    Yes/No % the way Kalshi's UI tends to show them:
-    - Use last trade, else mid of yes bid/ask
-    - Truncate to whole cents (0.999 → 99%, not 100%)
-    - On a live market, never show 100/0 (clamp to 99/1)
-    """
-    last = _parse_dollars(market.get("last_price_dollars"))
-    yes_bid = _parse_dollars(market.get("yes_bid_dollars"))
-    yes_ask = _parse_dollars(market.get("yes_ask_dollars"))
-    no_bid = _parse_dollars(market.get("no_bid_dollars"))
-    no_ask = _parse_dollars(market.get("no_ask_dollars"))
-
-    yes = last
-    if yes is None and yes_bid is not None and yes_ask is not None:
-        yes = (yes_bid + yes_ask) / 2.0
-    elif yes is None and yes_bid is not None:
-        yes = yes_bid
-    elif yes is None and yes_ask is not None:
-        yes = yes_ask
-
-    if yes is None:
-        return {
-            "yes_pct": None,
-            "no_pct": None,
-            "yes_bid_pct": None,
-            "yes_ask_pct": None,
-            "last_pct": None,
-        }
-
-    yes_pct = int(max(0.0, min(1.0, yes)) * 100 + 1e-9)
-    live = market.get("status") in ("active", "open", "initialized")
-    # Live Kalshi screens don't show a locked 100%/0% side.
-    if live:
-        yes_pct = min(99, max(1, yes_pct))
-    no_pct = 100 - yes_pct
-
-    return {
-        "yes_pct": yes_pct,
-        "no_pct": no_pct,
-        "yes_bid_pct": _dollars_to_pct_cents(market.get("yes_bid_dollars")),
-        "yes_ask_pct": _dollars_to_pct_cents(market.get("yes_ask_dollars")),
-        "last_pct": _dollars_to_pct_cents(market.get("last_price_dollars")),
-        "no_bid_pct": _dollars_to_pct_cents(market.get("no_bid_dollars")),
-        "no_ask_pct": _dollars_to_pct_cents(market.get("no_ask_dollars")),
-    }
-
-
 def parse_close_ms(close_time) -> float | None:
     if not close_time:
         return None
@@ -164,28 +116,131 @@ def parse_close_ms(close_time) -> float | None:
         return None
 
 
+def parse_open_ms(open_time) -> float | None:
+    return parse_close_ms(open_time)
+
+
+def market_odds(market: dict) -> dict:
+    """
+    Yes/No % the way Kalshi's UI tends to show them.
+    Prefer live bid/ask mid over a stale last trade right after a new
+    15m window opens (last can still look like 1%/99% briefly).
+    """
+    last = _parse_dollars(market.get("last_price_dollars"))
+    yes_bid = _parse_dollars(market.get("yes_bid_dollars"))
+    yes_ask = _parse_dollars(market.get("yes_ask_dollars"))
+    mid = None
+    if yes_bid is not None and yes_ask is not None:
+        mid = (yes_bid + yes_ask) / 2.0
+
+    open_ms = parse_open_ms(market.get("open_time"))
+    age_sec = None
+    if open_ms is not None:
+        age_sec = max(0.0, time.time() - open_ms / 1000.0)
+
+    # Fresh window: lean on the book (near 50/50), not a leftover last print.
+    fresh = age_sec is not None and age_sec < 60.0
+    last_extreme = last is not None and (last <= 0.08 or last >= 0.92)
+
+    if fresh:
+        if mid is not None:
+            yes = mid
+        elif last is not None and not last_extreme:
+            yes = last
+        else:
+            yes = 0.50
+    elif last is not None:
+        yes = last
+    elif mid is not None:
+        yes = mid
+    elif yes_bid is not None:
+        yes = yes_bid
+    elif yes_ask is not None:
+        yes = yes_ask
+    else:
+        yes = None
+
+    if yes is None:
+        return {
+            "yes_pct": None,
+            "no_pct": None,
+            "yes_bid_pct": None,
+            "yes_ask_pct": None,
+            "last_pct": None,
+            "odds_fresh": fresh,
+        }
+
+    yes_pct = int(max(0.0, min(1.0, yes)) * 100 + 1e-9)
+    live = market.get("status") in ("active", "open", "initialized")
+    if live:
+        yes_pct = min(99, max(1, yes_pct))
+    no_pct = 100 - yes_pct
+
+    return {
+        "yes_pct": yes_pct,
+        "no_pct": no_pct,
+        "yes_bid_pct": _dollars_to_pct_cents(market.get("yes_bid_dollars")),
+        "yes_ask_pct": _dollars_to_pct_cents(market.get("yes_ask_dollars")),
+        "last_pct": _dollars_to_pct_cents(market.get("last_price_dollars")),
+        "no_bid_pct": _dollars_to_pct_cents(market.get("no_bid_dollars")),
+        "no_ask_pct": _dollars_to_pct_cents(market.get("no_ask_dollars")),
+        "odds_fresh": bool(fresh),
+    }
+
+
 def pick_current_market(markets: list) -> dict | None:
-    """Prefer the open market whose close is soonest but still in the future."""
+    """
+    Pick the *current* 15m window — newest market that has already opened
+    and has not closed yet.
+
+    Important: do NOT prefer soonest close alone. Right at rollover, the
+    expiring market and the new market can both be "open"; soonest-close
+    would keep the dying 99/1 market.
+    """
     now_ms = time.time() * 1000.0
     openish = [
         m
         for m in markets
         if m.get("status") in ("active", "open", "initialized")
     ] or list(markets)
-    future = []
+
+    current = []
     for m in openish:
+        open_ms = parse_open_ms(m.get("open_time"))
         close_ms = parse_close_ms(m.get("close_time"))
         if close_ms is None:
             continue
-        if close_ms > now_ms - 5_000:  # allow tiny clock skew
-            future.append((close_ms, m))
-    if future:
-        future.sort(key=lambda x: x[0])
-        # Prefer a market that already has a Price to beat when possible.
-        with_target = [pair for pair in future if parse_target(pair[1]) is not None]
-        return (with_target or future)[0][1]
-    return openish[0] if openish else None
+        # Must still be in-window (tiny skew allowed).
+        if close_ms <= now_ms - 2_000:
+            continue
+        # Prefer markets that have opened (or are about to within 2s).
+        if open_ms is not None and open_ms > now_ms + 2_000:
+            continue
+        # Skip markets with almost no time left if a fresher window exists.
+        remaining = close_ms - now_ms
+        current.append((open_ms or 0.0, remaining, m))
 
+    if not current:
+        # Fallback: soonest future close.
+        future = []
+        for m in openish:
+            close_ms = parse_close_ms(m.get("close_time"))
+            if close_ms is not None and close_ms > now_ms - 5_000:
+                future.append((close_ms, m))
+        if future:
+            future.sort(key=lambda x: x[0])
+            return future[0][1]
+        return openish[0] if openish else None
+
+    # Newest open_time first; among ties, more time remaining.
+    current.sort(key=lambda x: (x[0], x[1]), reverse=True)
+
+    # Prefer a market that already has Price to beat, unless it's nearly over
+    # and a newer one exists.
+    fresh_enough = [p for p in current if p[1] > 20_000]
+    pool = fresh_enough or current
+    with_target = [p for p in pool if parse_target(p[2]) is not None]
+    return (with_target or pool)[0][2]
 
 def http_get_json(url: str, timeout: float = 20.0, headers: dict | None = None):
     hdrs = {"Accept": "application/json", "User-Agent": UA}
@@ -326,6 +381,7 @@ def fetch_kalshi_series_target(series: str) -> dict | None:
         "yes_bid_pct": odds.get("yes_bid_pct"),
         "yes_ask_pct": odds.get("yes_ask_pct"),
         "last_pct": odds.get("last_pct"),
+        "odds_fresh": odds.get("odds_fresh"),
         "stale_previous": stale_previous,
         "error": None
         if target is not None
@@ -735,7 +791,7 @@ def push_watcher_loop() -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "KalshiBtcTarget/1.7"
+    server_version = "KalshiBtcTarget/1.8"
 
     def log_message(self, fmt, *args):
         print(f"[kalshi-btc-target] {self.address_string()} {fmt % args}")
@@ -879,7 +935,7 @@ class Handler(BaseHTTPRequestHandler):
                 {
                     "ok": True,
                     "service": "kalshi-btc-target",
-                    "version": "1.7",
+                    "version": "1.8",
                     "push": bool(_vapid_app_server_key or VAPID_PUBLIC_RAW.is_file()),
                     "subscribers": len(_push_subs),
                 },

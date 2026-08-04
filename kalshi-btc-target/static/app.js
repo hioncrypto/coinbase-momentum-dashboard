@@ -1,5 +1,5 @@
 (() => {
-  const TARGET_POLL_MS = 2_000;
+  const TARGET_POLL_MS = 1_500;
   const CANDLE_POLL_MS = 10_000;
   const SPOT_POLL_MS = 2_000;
   const BOUNDARY_PAD_MS = 500;
@@ -28,8 +28,6 @@
     countdownMeta: document.getElementById("countdown-meta"),
     status: document.getElementById("status"),
     clock: document.getElementById("clock"),
-    chimeEnabled: document.getElementById("chime-enabled"),
-    chimeToggleLabel: document.getElementById("chime-toggle-label"),
     bgStatus: document.getElementById("bg-status"),
     pushBadge: document.getElementById("push-badge"),
     oddsRow: document.getElementById("odds-row"),
@@ -176,9 +174,7 @@
   }
 
   function syncAlertsUi() {
-    const on = alertsAreOn();
-    setPushBadge(on);
-    if (el.chimeEnabled) el.chimeEnabled.checked = chimeOn;
+    setPushBadge(alertsAreOn());
   }
 
   async function runChimeTest() {
@@ -207,7 +203,6 @@
     ensureAudio();
     chimeOn = true;
     localStorage.setItem(CHIME_KEY, "1");
-    if (el.chimeEnabled) el.chimeEnabled.checked = true;
     postToSW({ type: "set-chime", enabled: true });
     const allowed = await ensureNotificationPermission();
     if (!allowed) {
@@ -234,7 +229,6 @@
     chimeOn = false;
     localStorage.setItem(CHIME_KEY, "0");
     localStorage.setItem(BG_ARMED_KEY, "0");
-    if (el.chimeEnabled) el.chimeEnabled.checked = false;
     postToSW({ type: "set-chime", enabled: false });
     await unsubscribePush();
     setPushBadge(false);
@@ -579,9 +573,24 @@
       const data = await res.json();
       const beat = data.price_to_beat ?? data.target;
       const prevClose = closeTimeIso;
+      const prevTicker = lastTicker;
       closeTimeIso = data.close_time || null;
       updateCountdown();
-      updateOdds(data);
+
+      const rolled =
+        (prevTicker && data.ticker && prevTicker !== data.ticker) ||
+        (prevClose && closeTimeIso && prevClose !== closeTimeIso) ||
+        !!data.stale_previous;
+
+      // Don't flash the dying window's 1/99 — show a fair open immediately.
+      if (rolled && (data.odds_fresh || data.stale_previous || data.yes_pct == null)) {
+        updateOdds({
+          yes_pct: data.yes_pct != null && !data.stale_previous ? data.yes_pct : 50,
+          no_pct: data.no_pct != null && !data.stale_previous ? data.no_pct : 50,
+        });
+      } else {
+        updateOdds(data);
+      }
       if (el.targetLabel) {
         el.targetLabel.textContent = data.label || "Price to beat · Kalshi 15m";
       }
@@ -598,12 +607,10 @@
         el.targetValue.textContent = "TBD";
         el.targetMeta.textContent = data.error || "Waiting for Kalshi 15m window";
         applyTargetLine(null);
+        updateOdds({ yes_pct: 50, no_pct: 50 });
         maybeChimeNewFifteenTarget(null, data.ticker, data.source, data.close_et);
         startRolloverBurst();
       } else {
-        const rolled =
-          (lastTicker && data.ticker && lastTicker !== data.ticker) ||
-          (prevClose && closeTimeIso && prevClose !== closeTimeIso);
         lastTicker = data.ticker;
         setStatus(
           "ok",
@@ -624,13 +631,15 @@
           updateSpot(Number(el.spotValue.dataset.last));
         }
         if (rolled || forceCandles) refreshCandles();
+        if (rolled) startRolloverBurst();
         if (
           rolled &&
           !data.stale_previous &&
           closeTimeIso &&
           Date.parse(closeTimeIso) > Date.now() + 5_000
         ) {
-          clearRolloverBurst();
+          // Keep bursting briefly so odds settle near the open.
+          rolloverUntil = Math.max(rolloverUntil, Date.now() + 20_000);
         }
       }
       scheduleBoundaryRefresh(data.close_time);
@@ -722,35 +731,6 @@
         setTimeframe(btn.dataset.tf);
         ensureAudio();
       });
-    }
-    if (el.chimeEnabled) {
-      el.chimeEnabled.checked = chimeOn;
-      el.chimeEnabled.addEventListener("change", async () => {
-        if (el.chimeEnabled.checked) await turnAlertsOn();
-        else await turnAlertsOff();
-      });
-    }
-    // Long-press chime label = test sound.
-    if (el.chimeToggleLabel) {
-      let pressTimer = null;
-      const clearPress = () => {
-        if (pressTimer) {
-          clearTimeout(pressTimer);
-          pressTimer = null;
-        }
-      };
-      el.chimeToggleLabel.addEventListener("pointerdown", (ev) => {
-        if (ev.pointerType === "mouse" && ev.button !== 0) return;
-        clearPress();
-        pressTimer = setTimeout(() => {
-          pressTimer = null;
-          runChimeTest();
-        }, 550);
-      });
-      el.chimeToggleLabel.addEventListener("pointerup", clearPress);
-      el.chimeToggleLabel.addEventListener("pointerleave", clearPress);
-      el.chimeToggleLabel.addEventListener("pointercancel", clearPress);
-      el.chimeToggleLabel.addEventListener("contextmenu", (ev) => ev.preventDefault());
     }
     if (el.pushBadge) {
       el.pushBadge.addEventListener("click", () => {
