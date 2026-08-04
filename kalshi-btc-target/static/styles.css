@@ -919,7 +919,7 @@ h1 {
 
 .buy-quick {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 6px;
   margin-top: 10px;
 }
@@ -934,6 +934,38 @@ h1 {
   font-size: 0.82rem;
   font-weight: 700;
   cursor: pointer;
+}
+
+.buy-chip.is-active {
+  border-color: rgba(26, 201, 107, 0.65);
+  background: rgba(26, 201, 107, 0.2);
+  color: #b8f0d0;
+}
+
+.buy-range-wrap {
+  display: block;
+  margin-top: 10px;
+}
+
+.buy-range {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.buy-range-ends {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.buy-range-ends #buy-range-value {
+  color: #d7ffe8;
+  font-size: 0.86rem;
 }
 
 .buy-preview {

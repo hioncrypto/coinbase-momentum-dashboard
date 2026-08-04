@@ -151,6 +151,8 @@
     buySheetMeta: document.getElementById("buy-sheet-meta"),
     buySheetX: document.getElementById("buy-sheet-x"),
     buyAmount: document.getElementById("buy-amount"),
+    buyRange: document.getElementById("buy-range"),
+    buyRangeValue: document.getElementById("buy-range-value"),
     buyBalanceHint: document.getElementById("buy-balance-hint"),
     buyPreview: document.getElementById("buy-preview"),
     buySlide: document.getElementById("buy-slide"),
@@ -193,7 +195,7 @@
   let optionsOpen = false;
   let buySheetOpen = false;
   let buySheetSide = null; // above | below
-  let buySheetAmount = 50;
+  let buySheetAmount = 1;
   let buySlideDragging = false;
   let buySlideStartX = 0;
   let buySlideProgress = 0;
@@ -1132,9 +1134,36 @@
     return true;
   }
 
+  function setBuyAmountUi(n, syncStake) {
+    const amt = clampBuyAmount(n);
+    buySheetAmount = amt;
+    if (el.buyAmount && document.activeElement !== el.buyAmount) {
+      el.buyAmount.value = String(amt);
+    } else if (el.buyAmount && document.activeElement === el.buyAmount) {
+      // Keep typing free; commit on change/blur via callers.
+    } else if (el.buyAmount) {
+      el.buyAmount.value = String(amt);
+    }
+    if (el.buyRange) {
+      const cap = buyAmountCap();
+      el.buyRange.min = String(BUY_AMOUNT_MIN);
+      el.buyRange.max = String(cap);
+      el.buyRange.value = String(Math.min(amt, cap));
+      el.buyRange.setAttribute("aria-valuenow", String(amt));
+      el.buyRange.setAttribute("aria-valuemax", String(cap));
+    }
+    if (el.buyRangeValue) el.buyRangeValue.textContent = `$${amt}`;
+    document.querySelectorAll(".buy-chip").forEach((btn) => {
+      const chipAmt = Number(btn.dataset.amt);
+      btn.classList.toggle("is-active", chipAmt === amt);
+    });
+    if (syncStake) setTradeStake(amt);
+    return amt;
+  }
+
   function readBuyAmount() {
     const n = clampBuyAmount(el.buyAmount && el.buyAmount.value);
-    buySheetAmount = n;
+    setBuyAmountUi(n, false);
     return n;
   }
 
@@ -1241,12 +1270,18 @@
     buySheetSide = side;
     buySheetOpen = true;
     const adding = !!(demo.position && demo.position.side === side);
-    buySheetAmount = clampBuyAmount(tradeStake > 0 ? tradeStake : 50);
+    // Prefer last chosen buy size; never force a $10+ floor.
+    const preferred =
+      buySheetAmount >= BUY_AMOUNT_MIN
+        ? buySheetAmount
+        : tradeStake >= BUY_AMOUNT_MIN
+          ? tradeStake
+          : BUY_AMOUNT_MIN;
     if (el.buyAmount) {
       el.buyAmount.min = String(BUY_AMOUNT_MIN);
       el.buyAmount.max = String(buyAmountCap());
-      el.buyAmount.value = String(buySheetAmount);
     }
+    setBuyAmountUi(preferred, false);
     if (el.buySheet) {
       el.buySheet.hidden = false;
       el.buySheet.classList.remove("is-done");
@@ -1833,8 +1868,9 @@
   let lastRoiBids = { above: null, below: null };
   const STAKE_KEY = "kalshiTradeStake";
   let tradeStake = Number(localStorage.getItem(STAKE_KEY));
-  if (!Number.isFinite(tradeStake)) tradeStake = 50;
-  tradeStake = Math.max(0, Math.min(100, Math.round(tradeStake)));
+  if (!Number.isFinite(tradeStake)) tradeStake = 1;
+  tradeStake = Math.max(1, Math.min(100, Math.round(tradeStake)));
+  if (tradeStake < 1) tradeStake = 1;
 
   function dollars(n) {
     if (n == null || !Number.isFinite(n)) return "—";
@@ -2264,7 +2300,7 @@
   }
 
   function setTradeStake(n) {
-    tradeStake = Math.max(0, Math.min(100, Math.round(Number(n) || 0)));
+    tradeStake = Math.max(1, Math.min(100, Math.round(Number(n) || 1)));
     localStorage.setItem(STAKE_KEY, String(tradeStake));
     renderRoi();
   }
@@ -3294,18 +3330,36 @@
     }
     if (el.buyAmount) {
       const syncAmt = () => {
-        readBuyAmount();
+        const amt = clampBuyAmount(el.buyAmount.value);
+        el.buyAmount.value = String(amt);
+        setBuyAmountUi(amt, true);
+        refreshBuySheetPreview();
+      };
+      el.buyAmount.addEventListener("input", () => {
+        // Allow free typing; clamp lightly only when valid number.
+        const raw = Number(el.buyAmount.value);
+        if (Number.isFinite(raw) && raw >= BUY_AMOUNT_MIN) {
+          setBuyAmountUi(Math.min(buyAmountCap(), Math.round(raw)), false);
+          refreshBuySheetPreview();
+        }
+      });
+      el.buyAmount.addEventListener("change", syncAmt);
+      el.buyAmount.addEventListener("blur", syncAmt);
+    }
+    if (el.buyRange) {
+      const onRange = () => {
+        setBuyAmountUi(el.buyRange.value, true);
         if (el.buyAmount) el.buyAmount.value = String(buySheetAmount);
         refreshBuySheetPreview();
       };
-      el.buyAmount.addEventListener("input", syncAmt);
-      el.buyAmount.addEventListener("change", syncAmt);
+      el.buyRange.addEventListener("input", onRange);
+      el.buyRange.addEventListener("change", onRange);
     }
     document.querySelectorAll(".buy-chip").forEach((btn) => {
       btn.addEventListener("click", () => {
         const amt = Number(btn.dataset.amt);
         if (!Number.isFinite(amt)) return;
-        buySheetAmount = clampBuyAmount(amt);
+        setBuyAmountUi(amt, true);
         if (el.buyAmount) el.buyAmount.value = String(buySheetAmount);
         refreshBuySheetPreview();
       });
