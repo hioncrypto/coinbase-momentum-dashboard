@@ -1237,6 +1237,22 @@
     setTfLabel();
     ensureChart();
     resizeChart();
+    ensureServiceWorker().then(async (reg) => {
+      swReg = reg;
+      postToSW({ type: "set-chime", enabled: chimeOn });
+      if (chimeOn) {
+        subscribePush().catch(() => {});
+      }
+      if (reg && "periodicSync" in reg) {
+        try {
+          await reg.periodicSync.register("kalshi-15m-check", {
+            minInterval: 15 * 60 * 1000,
+          });
+        } catch {
+          // unsupported / not granted
+        }
+      }
+    });
     // Target first so Price-to-beat line exists when candles paint.
     refreshTarget()
       .then(() => refreshCandles())
