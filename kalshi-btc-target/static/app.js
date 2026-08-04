@@ -107,7 +107,118 @@
     }
   }
 
-  function maybeChimeNewFifteenTarget(beat, ticker, source) {
+  function urlBase64ToUint8Array(base64String) {
+    const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+    const raw = atob(base64);
+    const out = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+
+  async function ensureServiceWorker() {
+    if (!("serviceWorker" in navigator)) return null;
+    try {
+      const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+      await navigator.serviceWorker.ready;
+      return reg;
+    } catch (err) {
+      console.warn("SW register failed", err);
+      return null;
+    }
+  }
+
+  function postToSW(msg) {
+    const ctrl = navigator.serviceWorker && navigator.serviceWorker.controller;
+    if (ctrl) ctrl.postMessage(msg);
+    else if (swReg && swReg.active) swReg.active.postMessage(msg);
+  }
+
+  async function ensureNotificationPermission() {
+    if (!("Notification" in window)) return false;
+    if (Notification.permission === "granted") return true;
+    if (Notification.permission === "denied") return false;
+    const res = await Notification.requestPermission();
+    return res === "granted";
+  }
+
+  async function subscribePush() {
+    const reg = swReg || (await ensureServiceWorker());
+    if (!reg || !reg.pushManager) return false;
+    const allowed = await ensureNotificationPermission();
+    if (!allowed) return false;
+    try {
+      const keyRes = await fetch("/api/push/vapid-public", { cache: "no-store" });
+      const keyData = await keyRes.json();
+      if (!keyData.ok || !keyData.publicKey) return false;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(keyData.publicKey),
+        });
+      }
+      await fetch("/api/push/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subscription: sub.toJSON() }),
+      });
+      postToSW({ type: "set-chime", enabled: chimeOn });
+      return true;
+    } catch (err) {
+      console.warn("push subscribe failed", err);
+      return false;
+    }
+  }
+
+  async function unsubscribePush() {
+    try {
+      const reg = swReg || (await ensureServiceWorker());
+      if (!reg) return;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        await fetch("/api/push/unsubscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endpoint: sub.endpoint }),
+        });
+        await sub.unsubscribe();
+      }
+      postToSW({ type: "set-chime", enabled: false });
+    } catch {
+      // ignore
+    }
+  }
+
+  async function alertNewTarget(beat, ticker, closeEt) {
+    // Foreground: Web Audio chime. Background: system notification (+ push from server).
+    playChime();
+    postToSW({
+      type: "arm-state",
+      ticker,
+      target: beat,
+      chimeOn,
+    });
+    if (!chimeOn) return;
+    if (document.visibilityState !== "visible") {
+      postToSW({
+        type: "test-notify",
+        beat,
+        ticker,
+        closeEt,
+      });
+    } else if ("Notification" in window && Notification.permission === "granted") {
+      // Still ping notification so Android can ring if audio is muted/blocked.
+      postToSW({
+        type: "test-notify",
+        beat,
+        ticker,
+        closeEt,
+      });
+    }
+  }
+
+  function maybeChimeNewFifteenTarget(beat, ticker, source, closeEt) {
     const isFifteen =
       source === "kalshi" || (ticker && String(ticker).includes("KXBTC15M"));
     if (!isFifteen) return;
@@ -121,13 +232,21 @@
       Math.abs(lastFifteenTarget - beat) > 0.005;
 
     if (tickerChanged || beatChanged) {
-      playChime();
+      alertNewTarget(beat, ticker, closeEt);
       setStatus("ok", "New 15m target · chime");
     }
 
     if (ticker) lastFifteenTicker = ticker;
     if (beatReady) lastFifteenTarget = beat;
+    postToSW({
+      type: "arm-state",
+      ticker: lastFifteenTicker,
+      target: lastFifteenTarget,
+      chimeOn,
+    });
   }
+
+  let swReg = null;
 
   function setStatus(state, text) {
     el.status.dataset.state = state;
@@ -374,7 +493,7 @@
         el.targetValue.textContent = "TBD";
         el.targetMeta.textContent = data.error || "Waiting for Kalshi 15m window";
         applyTargetLine(null);
-        maybeChimeNewFifteenTarget(null, data.ticker, data.source);
+        maybeChimeNewFifteenTarget(null, data.ticker, data.source, data.close_et);
         startRolloverBurst();
       } else {
         const rolled =
@@ -395,7 +514,7 @@
           ? `Kalshi 15m · settles ${win}`
           : "Kalshi 15m";
         applyTargetLine(beat, "TARGET");
-        maybeChimeNewFifteenTarget(beat, data.ticker, data.source);
+        maybeChimeNewFifteenTarget(beat, data.ticker, data.source, data.close_et);
         if (el.spotValue && el.spotValue.dataset.last) {
           updateSpot(Number(el.spotValue.dataset.last));
         }
@@ -501,17 +620,51 @@
     }
     if (el.chimeEnabled) {
       el.chimeEnabled.checked = chimeOn;
-      el.chimeEnabled.addEventListener("change", () => {
+      el.chimeEnabled.addEventListener("change", async () => {
         chimeOn = el.chimeEnabled.checked;
         localStorage.setItem(CHIME_KEY, chimeOn ? "1" : "0");
         ensureAudio();
-        if (chimeOn) playChime(true);
+        postToSW({ type: "set-chime", enabled: chimeOn });
+        if (chimeOn) {
+          const ok = await subscribePush();
+          playChime(true);
+          if (!ok) {
+            setStatus(
+              "warn",
+              "Allow Notifications for background chime"
+            );
+          } else {
+            setStatus("ok", "Background chime enabled");
+          }
+        } else {
+          await unsubscribePush();
+        }
       });
     }
     if (el.chimeTest) {
-      el.chimeTest.addEventListener("click", () => {
+      el.chimeTest.addEventListener("click", async () => {
         ensureAudio();
         playChime(true);
+        await ensureNotificationPermission();
+        await subscribePush();
+        postToSW({
+          type: "test-notify",
+          beat: lastFifteenTarget,
+          ticker: lastFifteenTicker || "TEST",
+          closeEt: closeTimeIso,
+        });
+        try {
+          await fetch("/api/push/test", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              beat: lastFifteenTarget,
+              close_et: closeTimeIso,
+            }),
+          });
+        } catch {
+          // ignore
+        }
       });
     }
     const unlock = () => ensureAudio();
@@ -522,12 +675,38 @@
       if (document.visibilityState === "visible") {
         ensureAudio();
         startRolloverBurst();
+      } else {
+        // Page hidden — rely on SW poll + server Web Push.
+        postToSW({ type: "check-now" });
+        postToSW({
+          type: "arm-state",
+          ticker: lastFifteenTicker,
+          target: lastFifteenTarget,
+          chimeOn,
+        });
       }
     });
 
     setTfLabel();
     ensureChart();
     resizeChart();
+    ensureServiceWorker().then(async (reg) => {
+      swReg = reg;
+      postToSW({ type: "set-chime", enabled: chimeOn });
+      if (chimeOn) {
+        // Don't block UI; request permission on first gesture via Test/toggle too.
+        subscribePush().catch(() => {});
+      }
+      if (reg && "periodicSync" in reg) {
+        try {
+          await reg.periodicSync.register("kalshi-15m-check", {
+            minInterval: 15 * 60 * 1000,
+          });
+        } catch {
+          // unsupported / not granted
+        }
+      }
+    });
     refreshCandles().then(refreshTarget).then(refreshSpot);
     setInterval(refreshTarget, TARGET_POLL_MS);
     setInterval(refreshCandles, CANDLE_POLL_MS);

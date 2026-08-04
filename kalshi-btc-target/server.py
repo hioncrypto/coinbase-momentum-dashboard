@@ -25,6 +25,12 @@ from zoneinfo import ZoneInfo
 HOST = os.environ.get("HOST", "0.0.0.0")
 PORT = int(os.environ.get("PORT", "8765"))
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+DATA_DIR = Path(__file__).resolve().parent / "data"
+PUSH_SUBS_FILE = DATA_DIR / "push_subscriptions.json"
+VAPID_PRIVATE = DATA_DIR / "vapid_private.pem"
+VAPID_PUBLIC_RAW = DATA_DIR / "vapid_public_raw.txt"
+VAPID_SUBJECT = os.environ.get("VAPID_SUBJECT", "mailto:kalshi-btc-target@localhost")
+
 
 # Chart candle size + settlement window length (seconds) per TF.
 TIMEFRAMES = {
@@ -61,17 +67,23 @@ CF_BASIC_PASS = os.environ.get(
     "CF_API_PASS", "e3709a02-9876-45ea-ac46-e9020e06d7c6"
 )
 
-UA = "kalshi-btc-target/1.6 (+android-pwa)"
+UA = "kalshi-btc-target/1.7 (+android-pwa)"
 
 _cache_lock = threading.Lock()
 _target_cache: dict = {}  # key -> {at, payload}
 _candles_cache: dict = {"at": 0.0, "key": None, "payload": None}
 _spot_cache: dict = {"at": 0.0, "payload": None}
 _brti_cache: dict = {"at": 0.0, "ticks": None, "error": None}
+_push_lock = threading.Lock()
+_push_subs: list[dict] = []
+_last_push_ticker: str | None = None
+_vapid_app_server_key: str | None = None
+_vapid_private_path: str | None = None
 TARGET_TTL = 2.0
 CANDLES_TTL = 5.0
 SPOT_TTL = 1.0
 BRTI_TTL = 1.0
+PUSH_POLL_SEC = 5.0
 
 
 def _parse_dollars(value) -> float | None:
@@ -575,8 +587,155 @@ def fetch_candles(granularity: int = 60, limit: int = 300) -> dict:
     return payload
 
 
+def ensure_vapid_keys() -> tuple[str | None, str | None]:
+    """Return (applicationServerKey, private_pem_path)."""
+    global _vapid_app_server_key, _vapid_private_path
+    if _vapid_app_server_key and _vapid_private_path:
+        return _vapid_app_server_key, _vapid_private_path
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        from cryptography.hazmat.primitives import serialization
+        from py_vapid import Vapid
+    except Exception as exc:
+        print(f"[kalshi-btc-target] Web Push unavailable (install pywebpush): {exc}")
+        return None, None
+
+    vapid = Vapid()
+    if VAPID_PRIVATE.is_file() and VAPID_PUBLIC_RAW.is_file():
+        vapid = Vapid.from_file(str(VAPID_PRIVATE))
+        app_key = VAPID_PUBLIC_RAW.read_text().strip()
+    else:
+        vapid.generate_keys()
+        vapid.save_key(str(VAPID_PRIVATE))
+        raw = vapid.public_key.public_bytes(
+            encoding=serialization.Encoding.X962,
+            format=serialization.PublicFormat.UncompressedPoint,
+        )
+        app_key = base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+        VAPID_PUBLIC_RAW.write_text(app_key)
+
+    _vapid_app_server_key = app_key
+    _vapid_private_path = str(VAPID_PRIVATE)
+    return _vapid_app_server_key, _vapid_private_path
+
+
+def load_push_subs() -> None:
+    global _push_subs
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    if not PUSH_SUBS_FILE.is_file():
+        _push_subs = []
+        return
+    try:
+        _push_subs = json.loads(PUSH_SUBS_FILE.read_text())
+        if not isinstance(_push_subs, list):
+            _push_subs = []
+    except Exception:
+        _push_subs = []
+
+
+def save_push_subs() -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    with _push_lock:
+        payload = json.dumps(_push_subs, indent=2)
+    PUSH_SUBS_FILE.write_text(payload)
+
+
+def upsert_push_sub(sub: dict) -> None:
+    endpoint = (sub or {}).get("endpoint")
+    if not endpoint:
+        return
+    with _push_lock:
+        _push_subs[:] = [s for s in _push_subs if s.get("endpoint") != endpoint]
+        _push_subs.append(sub)
+    save_push_subs()
+
+
+def remove_push_sub(endpoint: str) -> None:
+    if not endpoint:
+        return
+    with _push_lock:
+        _push_subs[:] = [s for s in _push_subs if s.get("endpoint") != endpoint]
+    save_push_subs()
+
+
+def send_web_push(payload: dict) -> int:
+    app_key, priv = ensure_vapid_keys()
+    if not app_key or not priv:
+        return 0
+    try:
+        from pywebpush import webpush, WebPushException
+    except Exception as exc:
+        print(f"[kalshi-btc-target] pywebpush missing: {exc}")
+        return 0
+
+    body = json.dumps(payload)
+    sent = 0
+    dead: list[str] = []
+    with _push_lock:
+        subs = list(_push_subs)
+    for sub in subs:
+        try:
+            webpush(
+                subscription_info=sub,
+                data=body,
+                vapid_private_key=priv,
+                vapid_claims={"sub": VAPID_SUBJECT},
+                ttl=120,
+            )
+            sent += 1
+        except Exception as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            msg = str(exc)
+            if status in (404, 410) or "410" in msg or "404" in msg:
+                dead.append(sub.get("endpoint") or "")
+            else:
+                print(f"[kalshi-btc-target] push failed: {exc}")
+    for endpoint in dead:
+        remove_push_sub(endpoint)
+    return sent
+
+
+def push_watcher_loop() -> None:
+    """Poll Kalshi and push to phones even when the PWA is backgrounded."""
+    global _last_push_ticker
+    print("[kalshi-btc-target] background push watcher started")
+    while True:
+        try:
+            data = fetch_target_payload("15m")
+            ticker = data.get("ticker")
+            beat = data.get("price_to_beat")
+            if beat is None:
+                beat = data.get("target")
+            if (
+                ticker
+                and _last_push_ticker
+                and ticker != _last_push_ticker
+                and data.get("source") == "kalshi"
+            ):
+                n = send_web_push(
+                    {
+                        "type": "new_target",
+                        "ticker": ticker,
+                        "beat": beat,
+                        "price_to_beat": beat,
+                        "target": beat,
+                        "close_et": data.get("close_et"),
+                        "close_time": data.get("close_time"),
+                    }
+                )
+                print(
+                    f"[kalshi-btc-target] new 15m target {ticker} "
+                    f"beat={beat} pushed={n}"
+                )
+            if ticker:
+                _last_push_ticker = ticker
+        except Exception as exc:
+            print(f"[kalshi-btc-target] push watcher error: {exc}")
+        time.sleep(PUSH_POLL_SEC)
+
+
 class Handler(BaseHTTPRequestHandler):
-    server_version = "KalshiBtcTarget/1.6"
+    server_version = "KalshiBtcTarget/1.7"
 
     def log_message(self, fmt, *args):
         print(f"[kalshi-btc-target] {self.address_string()} {fmt % args}")
@@ -596,9 +755,55 @@ class Handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
+
+    def _read_json_body(self) -> dict:
+        try:
+            length = int(self.headers.get("Content-Length") or "0")
+        except ValueError:
+            length = 0
+        raw = self.rfile.read(length) if length > 0 else b"{}"
+        try:
+            obj = json.loads(raw.decode("utf-8") or "{}")
+        except Exception:
+            return {}
+        return obj if isinstance(obj, dict) else {}
+
+    def do_POST(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        body = self._read_json_body()
+
+        if path == "/api/push/subscribe":
+            sub = body.get("subscription") if isinstance(body.get("subscription"), dict) else body
+            if not sub.get("endpoint") or not sub.get("keys"):
+                self._send_json(400, {"ok": False, "error": "invalid subscription"})
+                return
+            upsert_push_sub(sub)
+            self._send_json(200, {"ok": True, "subscribers": len(_push_subs)})
+            return
+
+        if path == "/api/push/unsubscribe":
+            endpoint = body.get("endpoint") or ""
+            remove_push_sub(endpoint)
+            self._send_json(200, {"ok": True, "subscribers": len(_push_subs)})
+            return
+
+        if path == "/api/push/test":
+            n = send_web_push(
+                {
+                    "type": "test",
+                    "beat": body.get("beat"),
+                    "ticker": "TEST",
+                    "close_et": body.get("close_et"),
+                }
+            )
+            self._send_json(200, {"ok": True, "pushed": n})
+            return
+
+        self._send_json(404, {"ok": False, "error": "not found"})
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
@@ -656,10 +861,28 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(200, payload)
             return
 
+        if path == "/api/push/vapid-public":
+            app_key, _priv = ensure_vapid_keys()
+            self._send_json(
+                200,
+                {
+                    "ok": bool(app_key),
+                    "publicKey": app_key,
+                    "subscribers": len(_push_subs),
+                },
+            )
+            return
+
         if path == "/api/health":
             self._send_json(
                 200,
-                {"ok": True, "service": "kalshi-btc-target", "version": "1.6"},
+                {
+                    "ok": True,
+                    "service": "kalshi-btc-target",
+                    "version": "1.7",
+                    "push": bool(_vapid_app_server_key or VAPID_PUBLIC_RAW.is_file()),
+                    "subscribers": len(_push_subs),
+                },
             )
             return
 
@@ -684,15 +907,29 @@ class Handler(BaseHTTPRequestHandler):
             ".png": "image/png",
             ".ico": "image/x-icon",
         }.get(file_path.suffix.lower(), "application/octet-stream")
-        self._send(200, data, ctype)
+        # Service worker must not be cached aggressively.
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        if rel == "sw.js":
+            self.send_header("Service-Worker-Allowed", "/")
+        self.end_headers()
+        self.wfile.write(data)
 
 
 def main():
     if not STATIC_DIR.is_dir():
         raise SystemExit(f"Missing static dir: {STATIC_DIR}")
+    load_push_subs()
+    ensure_vapid_keys()
+    watcher = threading.Thread(target=push_watcher_loop, name="push-watcher", daemon=True)
+    watcher.start()
     httpd = ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"Kalshi BTC Price-to-beat app → http://{HOST}:{PORT}/")
     print("Android Chrome → open URL → Add to Home Screen")
+    print("Background chime → allow Notifications when prompted")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
