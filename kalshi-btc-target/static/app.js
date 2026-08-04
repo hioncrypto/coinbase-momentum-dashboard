@@ -19,7 +19,6 @@
     chart: document.getElementById("chart"),
     timeframe: document.getElementById("timeframe"),
     chartTfLabel: document.getElementById("chart-tf-label"),
-    question: document.getElementById("question"),
     targetLabel: document.getElementById("target-label"),
     targetValue: document.getElementById("target-value"),
     targetMeta: document.getElementById("target-meta"),
@@ -755,10 +754,6 @@
 
       if (el.targetLabel) {
         el.targetLabel.textContent = "Price to beat";
-      }
-      if (el.question) {
-        el.question.innerHTML =
-          'Will live Bitcoin finish <em>above</em> or <em>below</em> this price?';
       }
 
       if ((!data.ok && beat == null) || data.waiting_next) {

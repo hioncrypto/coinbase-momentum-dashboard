@@ -181,17 +181,7 @@ h1 {
 }
 
 .question {
-  margin: 0 0 12px;
-  font-size: 0.95rem;
-  line-height: 1.35;
-  color: #cfe6d9;
-  font-weight: 500;
-}
-
-.question em {
-  font-style: normal;
-  color: var(--fg);
-  font-weight: 700;
+  display: none;
 }
 
 .hero-beat {
