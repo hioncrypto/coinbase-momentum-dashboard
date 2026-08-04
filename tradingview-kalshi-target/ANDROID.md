@@ -1,6 +1,6 @@
 # Android-only: Kalshi 15m TARGET on TradingView
 
-Phone only. No computer. No GitHub.
+Phone only. No computer.
 
 Uses **Firefox + Tampermonkey** on the TradingView **website** (not the TradingView Play Store app).
 
@@ -20,9 +20,8 @@ Tap **Add to Firefox**.
 2. Tap **Dashboard**  
 3. Tap **+** (Create a new script)  
 4. Delete the template text  
-5. Paste in `kalshi-tv-target.user.js` (full file)  
-6. Tap the save / checkmark icon  
-7. Make sure the script is **Enabled**
+5. Paste the userscript  
+6. Save and keep it **Enabled**
 
 ### 4) Open TradingView BTCUSD in Firefox
 Open: [TradingView BTCUSD](https://www.tradingview.com/chart/?symbol=BTCUSD)
@@ -30,9 +29,4 @@ Open: [TradingView BTCUSD](https://www.tradingview.com/chart/?symbol=BTCUSD)
 Do **not** use the TradingView app.
 
 ### 5) Confirm
-You should see a dashed green **TARGET** line and label on the chart.  
-It moves automatically when Kalshi publishes the next 15m target.
-
-## Notes
-- TradingView Play Store app cannot run this  
-- After one install, it runs automatically — no price typing  
+Dashed green **TARGET** line on the chart. Updates automatically each new Kalshi 15m target.
