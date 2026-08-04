@@ -2,12 +2,14 @@
 """
 Kalshi BTC Price-to-beat chart server (Android PWA).
 
-- Chart buttons: 1m / 5m / 15m Coinbase candles
+- Chart + moving price: CF Benchmarks BRTI (same index Kalshi uses)
 - Price to beat, countdown, Yes/No %: always live Kalshi KXBTC15M
+- Chart buttons 1m / 5m / 15m only change BRTI candle size
 """
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
@@ -52,16 +54,24 @@ TIMEFRAMES = {
 COINBASE_CANDLES = "https://api.exchange.coinbase.com/products/BTC-USD/candles"
 COINBASE_TICKER = "https://api.exchange.coinbase.com/products/BTC-USD/ticker"
 KALSHI_MARKETS = "https://api.elections.kalshi.com/trade-api/v2/markets"
+# Same CF Benchmarks BRTI index Kalshi uses for BTC 15m charts / settlement.
+CF_BRTI_VALUES = "https://www.cfbenchmarks.com/api/v1/values?id=BRTI"
+CF_BASIC_USER = os.environ.get("CF_API_USER", "cfbenchmarksws2")
+CF_BASIC_PASS = os.environ.get(
+    "CF_API_PASS", "e3709a02-9876-45ea-ac46-e9020e06d7c6"
+)
 
-UA = "kalshi-btc-target/1.5 (+android-pwa)"
+UA = "kalshi-btc-target/1.6 (+android-pwa)"
 
 _cache_lock = threading.Lock()
 _target_cache: dict = {}  # key -> {at, payload}
 _candles_cache: dict = {"at": 0.0, "key": None, "payload": None}
 _spot_cache: dict = {"at": 0.0, "payload": None}
+_brti_cache: dict = {"at": 0.0, "ticks": None, "error": None}
 TARGET_TTL = 2.0
-CANDLES_TTL = 8.0
-SPOT_TTL = 1.5
+CANDLES_TTL = 5.0
+SPOT_TTL = 1.0
+BRTI_TTL = 1.0
 
 
 def _parse_dollars(value) -> float | None:
@@ -165,13 +175,78 @@ def pick_current_market(markets: list) -> dict | None:
     return openish[0] if openish else None
 
 
-def http_get_json(url: str, timeout: float = 20.0):
-    req = urllib.request.Request(
-        url,
-        headers={"Accept": "application/json", "User-Agent": UA},
-    )
+def http_get_json(url: str, timeout: float = 20.0, headers: dict | None = None):
+    hdrs = {"Accept": "application/json", "User-Agent": UA}
+    if headers:
+        hdrs.update(headers)
+    req = urllib.request.Request(url, headers=hdrs)
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return json.load(resp)
+
+
+def http_get_json_basic(url: str, user: str, password: str, timeout: float = 20.0):
+    token = base64.b64encode(f"{user}:{password}".encode("utf-8")).decode("ascii")
+    return http_get_json(
+        url,
+        timeout=timeout,
+        headers={"Authorization": f"Basic {token}"},
+    )
+
+
+def fetch_brti_ticks(force: bool = False) -> list[dict]:
+    """1-second CF Benchmarks BRTI ticks (≈ last 60 minutes)."""
+    now = time.time()
+    with _cache_lock:
+        if (
+            not force
+            and _brti_cache["ticks"]
+            and now - _brti_cache["at"] < BRTI_TTL
+        ):
+            return _brti_cache["ticks"]
+    data = http_get_json_basic(CF_BRTI_VALUES, CF_BASIC_USER, CF_BASIC_PASS)
+    payload = data.get("payload") or []
+    ticks = []
+    for row in payload:
+        try:
+            ticks.append(
+                {
+                    "time_ms": int(row["time"]),
+                    "value": float(row["value"]),
+                }
+            )
+        except (KeyError, TypeError, ValueError):
+            continue
+    ticks.sort(key=lambda t: t["time_ms"])
+    with _cache_lock:
+        _brti_cache["at"] = time.time()
+        _brti_cache["ticks"] = ticks
+        _brti_cache["error"] = None
+    return ticks
+
+
+def brti_to_candles(ticks: list[dict], granularity: int, limit: int) -> list[dict]:
+    """Resample 1s BRTI ticks into OHLC candles (same index Kalshi charts)."""
+    buckets: dict[int, list[float]] = {}
+    for tick in ticks:
+        ts = int(tick["time_ms"] // 1000)
+        bucket = ts - (ts % granularity)
+        v = float(tick["value"])
+        if bucket not in buckets:
+            buckets[bucket] = [v, v, v, v]  # o,h,l,c
+        else:
+            o, h, l, c = buckets[bucket]
+            buckets[bucket] = [o, max(h, v), min(l, v), v]
+    candles = [
+        {
+            "time": t,
+            "open": ohlc[0],
+            "high": ohlc[1],
+            "low": ohlc[2],
+            "close": ohlc[3],
+        }
+        for t, ohlc in sorted(buckets.items())
+    ]
+    return candles[-limit:]
 
 
 def parse_target(market: dict) -> float | None:
@@ -355,31 +430,56 @@ def fetch_target_payload(tf: str = "15m") -> dict:
 
 
 def fetch_spot() -> dict:
+    """Live moving price = CF Benchmarks BRTI (same source Kalshi uses)."""
     now = time.time()
     with _cache_lock:
         if _spot_cache["payload"] and now - _spot_cache["at"] < SPOT_TTL:
             return _spot_cache["payload"]
     try:
-        data = http_get_json(COINBASE_TICKER)
-        price = float(data.get("price"))
+        ticks = fetch_brti_ticks()
+        if not ticks:
+            raise RuntimeError("No BRTI ticks")
+        last = ticks[-1]
         payload = {
             "ok": True,
-            "symbol": "BTC-USD",
-            "price": price,
-            "bid": float(data["bid"]) if data.get("bid") is not None else None,
-            "ask": float(data["ask"]) if data.get("ask") is not None else None,
-            "time": data.get("time"),
+            "symbol": "BRTI",
+            "source": "cf_benchmarks",
+            "label": "CF BRTI (Kalshi)",
+            "price": float(last["value"]),
+            "time": datetime.fromtimestamp(
+                last["time_ms"] / 1000.0, tz=timezone.utc
+            ).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "bid": None,
+            "ask": None,
             "error": None,
             "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         }
     except Exception as exc:
-        payload = {
-            "ok": False,
-            "symbol": "BTC-USD",
-            "price": None,
-            "error": str(exc),
-            "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        }
+        # Fallback only if CF is down — still label clearly.
+        try:
+            data = http_get_json(COINBASE_TICKER)
+            price = float(data.get("price"))
+            payload = {
+                "ok": True,
+                "symbol": "BTC-USD",
+                "source": "coinbase_fallback",
+                "label": "Coinbase (BRTI unavailable)",
+                "price": price,
+                "bid": float(data["bid"]) if data.get("bid") is not None else None,
+                "ask": float(data["ask"]) if data.get("ask") is not None else None,
+                "time": data.get("time"),
+                "error": f"BRTI fallback: {exc}",
+                "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            }
+        except Exception as exc2:
+            payload = {
+                "ok": False,
+                "symbol": "BRTI",
+                "source": None,
+                "price": None,
+                "error": f"BRTI: {exc}; Coinbase: {exc2}",
+                "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            }
     with _cache_lock:
         _spot_cache["at"] = time.time()
         _spot_cache["payload"] = payload
@@ -387,8 +487,9 @@ def fetch_spot() -> dict:
 
 
 def fetch_candles(granularity: int = 60, limit: int = 300) -> dict:
+    """Chart candles from CF BRTI (Kalshi's index), not a single exchange."""
     now = time.time()
-    key = (granularity, limit)
+    key = (granularity, limit, "brti")
     with _cache_lock:
         if (
             _candles_cache["payload"]
@@ -397,55 +498,75 @@ def fetch_candles(granularity: int = 60, limit: int = 300) -> dict:
         ):
             return _candles_cache["payload"]
 
-    end = int(now)
-    start = end - granularity * limit
-    qs = urllib.parse.urlencode(
-        {
-            "granularity": granularity,
-            "start": datetime.fromtimestamp(start, tz=timezone.utc).strftime(
-                "%Y-%m-%dT%H:%M:%SZ"
-            ),
-            "end": datetime.fromtimestamp(end, tz=timezone.utc).strftime(
-                "%Y-%m-%dT%H:%M:%SZ"
-            ),
-        }
-    )
     try:
-        raw = http_get_json(f"{COINBASE_CANDLES}?{qs}")
-        rows = sorted(raw, key=lambda r: r[0])
-        candles = []
-        seen = set()
-        for r in rows:
-            t = int(r[0])
-            if t in seen:
-                continue
-            seen.add(t)
-            candles.append(
-                {
-                    "time": t,
-                    "open": float(r[3]),
-                    "high": float(r[2]),
-                    "low": float(r[1]),
-                    "close": float(r[4]),
-                }
-            )
+        ticks = fetch_brti_ticks()
+        candles = brti_to_candles(ticks, granularity, limit)
+        if not candles:
+            raise RuntimeError("No BRTI candles")
         payload = {
             "ok": True,
-            "symbol": "BTC-USD",
+            "symbol": "BRTI",
+            "source": "cf_benchmarks",
+            "label": "CF BRTI (Kalshi)",
             "granularity": granularity,
-            "candles": candles[-limit:],
+            "candles": candles,
             "error": None,
             "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         }
     except Exception as exc:
-        payload = {
-            "ok": False,
-            "symbol": "BTC-USD",
-            "granularity": granularity,
-            "candles": [],
-            "error": str(exc),
-            "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        }
+        # Fallback to Coinbase only if BRTI fails.
+        try:
+            end = int(time.time())
+            start = end - granularity * limit
+            qs = urllib.parse.urlencode(
+                {
+                    "granularity": granularity,
+                    "start": datetime.fromtimestamp(start, tz=timezone.utc).strftime(
+                        "%Y-%m-%dT%H:%M:%SZ"
+                    ),
+                    "end": datetime.fromtimestamp(end, tz=timezone.utc).strftime(
+                        "%Y-%m-%dT%H:%M:%SZ"
+                    ),
+                }
+            )
+            raw = http_get_json(f"{COINBASE_CANDLES}?{qs}")
+            rows = sorted(raw, key=lambda r: r[0])
+            candles = []
+            seen = set()
+            for r in rows:
+                t = int(r[0])
+                if t in seen:
+                    continue
+                seen.add(t)
+                candles.append(
+                    {
+                        "time": t,
+                        "open": float(r[3]),
+                        "high": float(r[2]),
+                        "low": float(r[1]),
+                        "close": float(r[4]),
+                    }
+                )
+            payload = {
+                "ok": True,
+                "symbol": "BTC-USD",
+                "source": "coinbase_fallback",
+                "label": "Coinbase (BRTI unavailable)",
+                "granularity": granularity,
+                "candles": candles[-limit:],
+                "error": f"BRTI fallback: {exc}",
+                "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            }
+        except Exception as exc2:
+            payload = {
+                "ok": False,
+                "symbol": "BRTI",
+                "source": None,
+                "granularity": granularity,
+                "candles": [],
+                "error": f"BRTI: {exc}; Coinbase: {exc2}",
+                "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            }
 
     with _cache_lock:
         _candles_cache["at"] = time.time()
@@ -455,7 +576,7 @@ def fetch_candles(granularity: int = 60, limit: int = 300) -> dict:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "KalshiBtcTarget/1.5"
+    server_version = "KalshiBtcTarget/1.6"
 
     def log_message(self, fmt, *args):
         print(f"[kalshi-btc-target] {self.address_string()} {fmt % args}")
@@ -538,7 +659,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/health":
             self._send_json(
                 200,
-                {"ok": True, "service": "kalshi-btc-target", "version": "1.5"},
+                {"ok": True, "service": "kalshi-btc-target", "version": "1.6"},
             )
             return
 

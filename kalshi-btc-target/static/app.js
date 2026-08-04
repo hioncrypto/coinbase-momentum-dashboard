@@ -9,9 +9,9 @@
   const CHIME_KEY = "kalshiChimeEnabled";
 
   const TF_LABELS = {
-    "1m": "1m candles",
-    "5m": "5m candles",
-    "15m": "15m candles",
+    "1m": "1m BRTI",
+    "5m": "5m BRTI",
+    "15m": "15m BRTI",
   };
 
   const el = {
