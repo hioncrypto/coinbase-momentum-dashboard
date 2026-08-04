@@ -358,9 +358,9 @@
       }
     }
     const busy = !!demo.position;
-    if (el.demoBuyBest) el.demoBuyBest.disabled = !demo.on || busy || tradeStake <= 0;
-    if (el.demoBuyAbove) el.demoBuyAbove.disabled = !demo.on || busy || tradeStake <= 0;
-    if (el.demoBuyBelow) el.demoBuyBelow.disabled = !demo.on || busy || tradeStake <= 0;
+    if (el.demoBuyBest) el.demoBuyBest.disabled = !demo.on || busy;
+    if (el.demoBuyAbove) el.demoBuyAbove.disabled = !demo.on || busy;
+    if (el.demoBuyBelow) el.demoBuyBelow.disabled = !demo.on || busy;
     if (el.demoClose) el.demoClose.disabled = !pos || !mark || mark.bidCents == null;
     if (el.demoLiveClose) {
       el.demoLiveClose.disabled = !pos || !mark || mark.bidCents == null;
