@@ -30,9 +30,7 @@
     clock: document.getElementById("clock"),
     chimeEnabled: document.getElementById("chime-enabled"),
     chimeToggleLabel: document.getElementById("chime-toggle-label"),
-    enableBg: document.getElementById("enable-bg"),
     bgStatus: document.getElementById("bg-status"),
-    bgSetup: document.getElementById("bg-setup"),
     pushBadge: document.getElementById("push-badge"),
     oddsRow: document.getElementById("odds-row"),
     yesPct: document.getElementById("yes-pct"),
@@ -150,24 +148,20 @@
     if (!el.pushBadge) return;
     el.pushBadge.classList.toggle("is-on", !!on);
     el.pushBadge.setAttribute("aria-pressed", on ? "true" : "false");
-    el.pushBadge.title = on
-      ? "Background alerts on"
-      : "Tap to enable background alerts";
+    el.pushBadge.title = on ? "Alerts on — tap to turn off" : "Alerts off — tap to turn on";
   }
 
-  function hideBgSetup(animated) {
-    if (!el.bgSetup) return;
-    if (!animated) {
-      el.bgSetup.classList.add("is-hidden");
+  function setBgStatus(ok, text) {
+    if (!el.bgStatus) return;
+    if (!text) {
+      el.bgStatus.hidden = true;
+      el.bgStatus.textContent = "";
       return;
     }
-    void el.bgSetup.offsetWidth;
-    el.bgSetup.classList.add("is-hidden");
-  }
-
-  function showBgSetup() {
-    if (!el.bgSetup) return;
-    el.bgSetup.classList.remove("is-hidden");
+    el.bgStatus.hidden = false;
+    el.bgStatus.textContent = text;
+    el.bgStatus.classList.toggle("ok", !!ok);
+    el.bgStatus.classList.toggle("warn", !ok);
   }
 
   function isBgArmed() {
@@ -179,15 +173,19 @@
     );
   }
 
-  function syncPushUi(armed) {
-    const on =
-      !!armed &&
+  function alertsAreOn() {
+    return (
       chimeOn &&
+      isBgArmed() &&
       "Notification" in window &&
-      Notification.permission === "granted";
+      Notification.permission === "granted"
+    );
+  }
+
+  function syncAlertsUi() {
+    const on = alertsAreOn();
     setPushBadge(on);
-    if (on) hideBgSetup(true);
-    else showBgSetup();
+    if (el.chimeEnabled) el.chimeEnabled.checked = chimeOn;
   }
 
   async function runChimeTest() {
@@ -212,51 +210,48 @@
     return res === "granted";
   }
 
-  async function enableBackgroundAlerts() {
+  async function turnAlertsOn() {
     ensureAudio();
     chimeOn = true;
     localStorage.setItem(CHIME_KEY, "1");
     if (el.chimeEnabled) el.chimeEnabled.checked = true;
-    setBgStatus(false, "Requesting notification permission…");
+    postToSW({ type: "set-chime", enabled: true });
     const allowed = await ensureNotificationPermission();
     if (!allowed) {
-      setBgStatus(
-        false,
-        "Notifications blocked. Chrome → site settings → Notifications → Allow, then try again."
-      );
-      setStatus("warn", "Notifications blocked");
-      showBgSetup();
+      setPushBadge(false);
+      setStatus("warn", "Allow Notifications to enable alerts");
+      setBgStatus(false, "Notifications blocked in Chrome site settings.");
       return false;
     }
     const ok = await subscribePush();
-    await runChimeTest();
-    try {
-      await fetch("/api/push/test", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          beat: lastFifteenTarget,
-          close_et: closeTimeIso,
-        }),
-      });
-    } catch {
-      // ignore
-    }
-    if (ok) {
-      localStorage.setItem(BG_ARMED_KEY, "1");
-      setBgStatus(true, "Background alerts on");
-      setStatus("ok", "Background alerts on");
-      setTimeout(() => {
-        hideBgSetup(true);
-        setPushBadge(true);
-      }, 500);
-    } else {
-      setBgStatus(false, "Could not subscribe to push. Stay on HTTPS / installed app and retry.");
-      setStatus("warn", "Push subscribe failed");
-      showBgSetup();
+    if (!ok) {
       setPushBadge(false);
+      setStatus("warn", "Could not enable push alerts");
+      return false;
     }
-    return ok;
+    localStorage.setItem(BG_ARMED_KEY, "1");
+    setPushBadge(true);
+    setBgStatus(null, "");
+    await runChimeTest();
+    setStatus("ok", "Alerts on");
+    return true;
+  }
+
+  async function turnAlertsOff() {
+    chimeOn = false;
+    localStorage.setItem(CHIME_KEY, "0");
+    localStorage.setItem(BG_ARMED_KEY, "0");
+    if (el.chimeEnabled) el.chimeEnabled.checked = false;
+    postToSW({ type: "set-chime", enabled: false });
+    await unsubscribePush();
+    setPushBadge(false);
+    setBgStatus(null, "");
+    setStatus("ok", "Alerts off");
+  }
+
+  async function toggleAlerts() {
+    if (alertsAreOn()) await turnAlertsOff();
+    else await turnAlertsOn();
   }
 
   async function subscribePush() {
