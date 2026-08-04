@@ -137,13 +137,6 @@
     else if (swReg && swReg.active) swReg.active.postMessage(msg);
   }
 
-  function setBgStatus(ok, text) {
-    if (!el.bgStatus) return;
-    el.bgStatus.textContent = text;
-    el.bgStatus.classList.toggle("ok", !!ok);
-    el.bgStatus.classList.toggle("warn", !ok);
-  }
-
   function setPushBadge(on) {
     if (!el.pushBadge) return;
     el.pushBadge.classList.toggle("is-on", !!on);
@@ -733,33 +726,11 @@
     if (el.chimeEnabled) {
       el.chimeEnabled.checked = chimeOn;
       el.chimeEnabled.addEventListener("change", async () => {
-        chimeOn = el.chimeEnabled.checked;
-        localStorage.setItem(CHIME_KEY, chimeOn ? "1" : "0");
-        ensureAudio();
-        postToSW({ type: "set-chime", enabled: chimeOn });
-        if (chimeOn) {
-          const ok = await subscribePush();
-          playChime(true);
-          if (!ok) {
-            setStatus("warn", "Allow Notifications for background chime");
-            showBgSetup();
-            setPushBadge(false);
-          } else {
-            localStorage.setItem(BG_ARMED_KEY, "1");
-            setStatus("ok", "Background chime enabled");
-            hideBgSetup(true);
-            setPushBadge(true);
-          }
-        } else {
-          await unsubscribePush();
-          localStorage.setItem(BG_ARMED_KEY, "0");
-          showBgSetup();
-          setPushBadge(false);
-          setBgStatus(false, "Chime off. Turn it back on, then enable background alerts again.");
-        }
+        if (el.chimeEnabled.checked) await turnAlertsOn();
+        else await turnAlertsOff();
       });
     }
-    // Long-press chime label = test (no permanent Test button).
+    // Long-press chime label = test sound.
     if (el.chimeToggleLabel) {
       let pressTimer = null;
       const clearPress = () => {
@@ -781,23 +752,12 @@
       el.chimeToggleLabel.addEventListener("pointercancel", clearPress);
       el.chimeToggleLabel.addEventListener("contextmenu", (ev) => ev.preventDefault());
     }
-    if (el.enableBg) {
-      el.enableBg.addEventListener("click", () => {
-        enableBackgroundAlerts();
-      });
-    }
     if (el.pushBadge) {
       el.pushBadge.addEventListener("click", () => {
-        if (el.pushBadge.classList.contains("is-on")) runChimeTest();
-        else enableBackgroundAlerts();
+        toggleAlerts();
       });
     }
-    if (isBgArmed() && Notification.permission === "granted") {
-      hideBgSetup(false);
-      setPushBadge(true);
-    } else {
-      setPushBadge(false);
-    }
+    syncAlertsUi();
     const unlock = () => ensureAudio();
     window.addEventListener("pointerdown", unlock, { passive: true });
     window.addEventListener("touchstart", unlock, { passive: true });
