@@ -13,31 +13,32 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta
       name="description"
-      content="Kalshi 15-minute BTC Price to beat with 1m/5m/15m charts, live price, and Above/Below odds."
+      content="Will Bitcoin finish above or below Kalshi’s 15-minute Price to beat?"
     />
-    <link rel="manifest" href="/manifest.webmanifest?v=2.1" />
+    <link rel="manifest" href="/manifest.webmanifest?v=2.2" />
     <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
     <link rel="icon" href="/icons/icon-192.png" sizes="192x192" type="image/png" />
-    <title>Kalshi BTC Target</title>
-    <link rel="stylesheet" href="/styles.css?v=2.1" />
+    <title>Kalshi BTC · Above or Below</title>
+    <link rel="stylesheet" href="/styles.css?v=2.2" />
     <script
       src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"
       defer
     ></script>
-    <script src="/app.js?v=2.1" defer></script>
+    <script src="/app.js?v=2.2" defer></script>
   </head>
   <body class="portrait-app">
     <div id="rotate-gate" class="rotate-gate" hidden>
       <strong>Portrait only</strong>
-      <span>Keep the phone upright. Tap here to lock portrait mode.</span>
+      <span>Keep the phone upright. Tap here to lock.</span>
     </div>
+
     <header class="top">
       <div class="brand">
         <span class="mark" aria-hidden="true"></span>
         <div>
-          <h1>Kalshi BTC Target</h1>
-          <p class="sub">Kalshi 15m Price to beat · chart · Above/Below %</p>
+          <h1>Kalshi BTC</h1>
+          <p class="sub">15 minutes · above or below?</p>
         </div>
       </div>
       <div class="top-right">
@@ -86,59 +87,88 @@
     </header>
 
     <section class="target-panel" aria-live="polite">
-      <div class="tf-row">
-        <span class="tf-label" id="tf-label">Chart</span>
+      <p class="question" id="question">
+        Will live Bitcoin finish <em>above</em> or <em>below</em> this price?
+      </p>
+
+      <div class="hero-beat">
+        <div class="label" id="target-label">Price to beat</div>
+        <div id="target-value" class="value beat">—</div>
+        <div id="target-meta" class="meta">Waiting for Kalshi…</div>
+      </div>
+
+      <div class="live-row">
+        <div class="live-block">
+          <div class="label">Live now</div>
+          <div id="spot-value" class="value spot">—</div>
+        </div>
+        <div class="live-block live-delta">
+          <div class="label">vs beat</div>
+          <div id="spot-delta" class="spot-delta">—</div>
+        </div>
+        <div class="live-block live-time">
+          <div class="label">Time left</div>
+          <div id="countdown" class="countdown">—:—</div>
+        </div>
+      </div>
+
+      <div id="settle-banner" class="settle-banner" hidden>
+        <div class="settle-title" id="settle-title">Last minute · settling</div>
+        <div class="settle-avg" id="settle-avg">—</div>
+        <div class="settle-meta" id="settle-meta">
+          Kalshi averages the last 60 seconds — not just the final tick.
+        </div>
+      </div>
+
+      <div class="odds-block">
+        <div class="odds-heading">
+          <span>Market chance</span>
+          <span id="odds-hint" class="odds-hint">What traders are pricing</span>
+        </div>
+        <div class="odds-row" id="odds-row" hidden>
+          <div class="odd yes">
+            <span class="odd-label">Above</span>
+            <span id="yes-pct" class="odd-pct">—</span>
+            <span id="yes-book" class="odd-book">—</span>
+          </div>
+          <div class="odd no">
+            <span class="odd-label">Below</span>
+            <span id="no-pct" class="odd-pct">—</span>
+            <span id="no-book" class="odd-book">—</span>
+          </div>
+        </div>
+        <p id="edge-line" class="edge-line" hidden></p>
+      </div>
+
+      <p id="countdown-meta" class="countdown-meta">Until this 15m window ends</p>
+      <p id="bg-status" class="sound-hint" hidden></p>
+
+      <div class="actions">
+        <a
+          id="kalshi-link"
+          class="trade-btn"
+          href="https://kalshi.com/markets/kxbtc15m"
+          target="_blank"
+          rel="noopener noreferrer"
+          >Trade on Kalshi</a
+        >
         <div
           id="timeframe"
           class="tf-btns"
           role="group"
-          aria-labelledby="tf-label"
+          aria-label="Chart candle size"
         >
           <button type="button" class="tf-btn" data-tf="15m" aria-pressed="true">15m</button>
           <button type="button" class="tf-btn" data-tf="5m" aria-pressed="false">5m</button>
           <button type="button" class="tf-btn" data-tf="1m" aria-pressed="false">1m</button>
         </div>
       </div>
-
-      <p id="bg-status" class="sound-hint" hidden></p>
-
-      <div class="metrics">
-        <div class="metric">
-          <div id="target-label" class="label">Price to beat</div>
-          <div id="target-value" class="value beat">—</div>
-          <div id="target-meta" class="meta">Waiting for Kalshi 15m…</div>
-        </div>
-        <div class="metric">
-          <div class="label">Moving price · Kalshi BRTI</div>
-          <div id="spot-value" class="value spot">—</div>
-          <div class="meta">
-            <span id="spot-delta" class="spot-delta"></span>
-          </div>
-        </div>
-      </div>
-
-      <div class="odds-row" id="odds-row" hidden>
-        <div class="odd yes">
-          <span class="odd-label">Above</span>
-          <span id="yes-pct" class="odd-pct">—</span>
-        </div>
-        <div class="odd no">
-          <span class="odd-label">Below</span>
-          <span id="no-pct" class="odd-pct">—</span>
-        </div>
-      </div>
-
-      <div class="countdown-block">
-        <div class="label">Time left</div>
-        <div id="countdown" class="countdown">—:—</div>
-        <div id="countdown-meta" class="meta">Until Kalshi 15m window ends</div>
-      </div>
     </section>
 
-    <main id="chart" role="img" aria-label="BTC-USD chart with Kalshi target line"></main>
+    <main id="chart" role="img" aria-label="Bitcoin chart with Price to beat line"></main>
 
     <footer class="foot">
-      <span id="chart-tf-label">Chart · 15m candles</span>
+      <span id="chart-tf-label">Chart · live Kalshi index</span>
       <span id="clock"></span>
     </footer>
   </body>

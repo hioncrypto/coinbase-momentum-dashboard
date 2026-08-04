@@ -67,7 +67,7 @@ CF_BASIC_PASS = os.environ.get(
     "CF_API_PASS", "e3709a02-9876-45ea-ac46-e9020e06d7c6"
 )
 
-UA = "kalshi-btc-target/1.8 (+android-pwa)"
+UA = "kalshi-btc-target/2.0 (+android-pwa)"
 
 _cache_lock = threading.Lock()
 _target_cache: dict = {}  # key -> {at, payload}
@@ -79,11 +79,13 @@ _push_subs: list[dict] = []
 _last_push_ticker: str | None = None
 _vapid_app_server_key: str | None = None
 _vapid_private_path: str | None = None
-TARGET_TTL = 1.0
+TARGET_TTL = 0.75
 CANDLES_TTL = 5.0
 SPOT_TTL = 1.0
 BRTI_TTL = 1.0
-PUSH_POLL_SEC = 3.0
+PUSH_POLL_SEC = 2.0
+SETTLE_WINDOW_SEC = 60.0
+KALSHI_SERIES_URL = "https://kalshi.com/markets/kxbtc15m"
 
 
 def _parse_dollars(value) -> float | None:
@@ -129,6 +131,8 @@ def market_odds(market: dict) -> dict:
     last = _parse_dollars(market.get("last_price_dollars"))
     yes_bid = _parse_dollars(market.get("yes_bid_dollars"))
     yes_ask = _parse_dollars(market.get("yes_ask_dollars"))
+    no_bid = _parse_dollars(market.get("no_bid_dollars"))
+    no_ask = _parse_dollars(market.get("no_ask_dollars"))
     mid = None
     if yes_bid is not None and yes_ask is not None:
         mid = (yes_bid + yes_ask) / 2.0
@@ -139,7 +143,7 @@ def market_odds(market: dict) -> dict:
         age_sec = max(0.0, time.time() - open_ms / 1000.0)
 
     # Fresh window: lean on the book (near 50/50), not a leftover last print.
-    fresh = age_sec is not None and age_sec < 60.0
+    fresh = age_sec is not None and age_sec < 90.0
     last_extreme = last is not None and (last <= 0.08 or last >= 0.92)
 
     if fresh:
@@ -149,10 +153,11 @@ def market_odds(market: dict) -> dict:
             yes = last
         else:
             yes = 0.50
+    elif mid is not None:
+        # Prefer live book over last for displayable "fair" price.
+        yes = mid
     elif last is not None:
         yes = last
-    elif mid is not None:
-        yes = mid
     elif yes_bid is not None:
         yes = yes_bid
     elif yes_ask is not None:
@@ -160,14 +165,22 @@ def market_odds(market: dict) -> dict:
     else:
         yes = None
 
+    spread_cents = None
+    if yes_bid is not None and yes_ask is not None:
+        spread_cents = max(0, int(round((yes_ask - yes_bid) * 100)))
+
     if yes is None:
         return {
             "yes_pct": None,
             "no_pct": None,
-            "yes_bid_pct": None,
-            "yes_ask_pct": None,
-            "last_pct": None,
+            "yes_bid_pct": _dollars_to_pct_cents(yes_bid),
+            "yes_ask_pct": _dollars_to_pct_cents(yes_ask),
+            "no_bid_pct": _dollars_to_pct_cents(no_bid),
+            "no_ask_pct": _dollars_to_pct_cents(no_ask),
+            "last_pct": _dollars_to_pct_cents(last),
+            "spread_cents": spread_cents,
             "odds_fresh": fresh,
+            "thin_book": spread_cents is not None and spread_cents >= 5,
         }
 
     yes_pct = int(max(0.0, min(1.0, yes)) * 100 + 1e-9)
@@ -179,23 +192,29 @@ def market_odds(market: dict) -> dict:
     return {
         "yes_pct": yes_pct,
         "no_pct": no_pct,
-        "yes_bid_pct": _dollars_to_pct_cents(market.get("yes_bid_dollars")),
-        "yes_ask_pct": _dollars_to_pct_cents(market.get("yes_ask_dollars")),
-        "last_pct": _dollars_to_pct_cents(market.get("last_price_dollars")),
-        "no_bid_pct": _dollars_to_pct_cents(market.get("no_bid_dollars")),
-        "no_ask_pct": _dollars_to_pct_cents(market.get("no_ask_dollars")),
+        "yes_bid_pct": _dollars_to_pct_cents(yes_bid),
+        "yes_ask_pct": _dollars_to_pct_cents(yes_ask),
+        "no_bid_pct": _dollars_to_pct_cents(no_bid),
+        "no_ask_pct": _dollars_to_pct_cents(no_ask),
+        "last_pct": _dollars_to_pct_cents(last),
+        "spread_cents": spread_cents,
         "odds_fresh": bool(fresh),
+        "thin_book": bool(spread_cents is not None and spread_cents >= 5),
     }
+
+
+def kalshi_market_url(ticker: str | None, event_ticker: str | None) -> str:
+    if event_ticker:
+        return f"{KALSHI_SERIES_URL}/{str(event_ticker).lower()}"
+    if ticker:
+        return f"{KALSHI_SERIES_URL}/{str(ticker).lower()}"
+    return KALSHI_SERIES_URL
 
 
 def pick_current_market(markets: list) -> dict | None:
     """
     Pick the *current* 15m window — newest market that has already opened
-    and has not closed yet.
-
-    Important: do NOT prefer soonest close alone. Right at rollover, the
-    expiring market and the new market can both be "open"; soonest-close
-    would keep the dying 99/1 market.
+    and has not closed yet. Never cling to an expired market.
     """
     now_ms = time.time() * 1000.0
     openish = [
@@ -210,37 +229,103 @@ def pick_current_market(markets: list) -> dict | None:
         close_ms = parse_close_ms(m.get("close_time"))
         if close_ms is None:
             continue
-        # Must still be in-window (tiny skew allowed).
-        if close_ms <= now_ms - 2_000:
+        # Strict: do not keep markets after close.
+        if close_ms <= now_ms:
             continue
-        # Prefer markets that have opened (or are about to within 2s).
-        if open_ms is not None and open_ms > now_ms + 2_000:
+        # Prefer markets that have opened (or are about to within 3s).
+        if open_ms is not None and open_ms > now_ms + 3_000:
             continue
-        # Skip markets with almost no time left if a fresher window exists.
         remaining = close_ms - now_ms
         current.append((open_ms or 0.0, remaining, m))
 
-    if not current:
-        # Fallback: soonest future close.
-        future = []
-        for m in openish:
-            close_ms = parse_close_ms(m.get("close_time"))
-            if close_ms is not None and close_ms > now_ms - 5_000:
-                future.append((close_ms, m))
-        if future:
-            future.sort(key=lambda x: x[0])
-            return future[0][1]
-        return openish[0] if openish else None
+    if current:
+        # Newest open_time first; among ties, more time remaining.
+        current.sort(key=lambda x: (x[0], x[1]), reverse=True)
+        # If the newest has almost no time left but a later window already
+        # opened, prefer the later one.
+        best = current[0]
+        for cand in current:
+            if cand[0] > best[0] and cand[1] > 5_000:
+                best = cand
+                break
+        # Prefer a market that already has Price to beat among the newest cohort.
+        newest_open = current[0][0]
+        cohort = [p for p in current if abs(p[0] - newest_open) < 1_000]
+        with_target = [p for p in cohort if parse_target(p[2]) is not None]
+        return (with_target or cohort or current)[0][2]
 
-    # Newest open_time first; among ties, more time remaining.
-    current.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    # No live window: next upcoming open (rollover gap).
+    upcoming = []
+    for m in openish:
+        open_ms = parse_open_ms(m.get("open_time"))
+        close_ms = parse_close_ms(m.get("close_time"))
+        if open_ms is None or close_ms is None:
+            continue
+        if open_ms >= now_ms - 5_000 and close_ms > now_ms:
+            upcoming.append((open_ms, m))
+    if upcoming:
+        upcoming.sort(key=lambda x: x[0])
+        return upcoming[0][1]
+    return None
 
-    # Prefer a market that already has Price to beat, unless it's nearly over
-    # and a newer one exists.
-    fresh_enough = [p for p in current if p[1] > 20_000]
-    pool = fresh_enough or current
-    with_target = [p for p in pool if parse_target(p[2]) is not None]
-    return (with_target or pool)[0][2]
+
+def brti_settlement_snapshot(
+    ticks: list[dict], close_ms: float | None, beat: float | None
+) -> dict:
+    """
+    Kalshi crypto settlement = average of 60 BRTI 1s samples in the final minute.
+    While that minute is running, return the running average of samples so far.
+    """
+    now_ms = time.time() * 1000.0
+    out = {
+        "settlement_mode": False,
+        "settlement_avg": None,
+        "settlement_samples": 0,
+        "settlement_delta": None,
+        "settlement_side": None,  # above | below | null
+        "seconds_to_close": None,
+        "settle_window_sec": SETTLE_WINDOW_SEC,
+    }
+    if close_ms is None:
+        return out
+    seconds_to_close = (close_ms - now_ms) / 1000.0
+    out["seconds_to_close"] = seconds_to_close
+    window_start = close_ms - SETTLE_WINDOW_SEC * 1000.0
+    # Enter settlement mode in the final minute (and briefly after close).
+    if seconds_to_close > SETTLE_WINDOW_SEC:
+        return out
+    out["settlement_mode"] = True
+    end_ms = min(now_ms, close_ms)
+    samples = [
+        float(t["value"])
+        for t in ticks
+        if window_start <= float(t["time_ms"]) <= end_ms
+    ]
+    # One sample per second bucket if we somehow get duplicates.
+    if not samples and ticks:
+        # Fall back to last ≤60 ticks before end.
+        prior = [t for t in ticks if float(t["time_ms"]) <= end_ms]
+        samples = [float(t["value"]) for t in prior[-60:]]
+    out["settlement_samples"] = len(samples)
+    if not samples:
+        return out
+    avg = sum(samples) / len(samples)
+    # Kalshi rounds settlement-style values to 2 decimals in practice.
+    avg = round(avg, 2)
+    out["settlement_avg"] = avg
+    if beat is not None and Number_is_finite(beat):
+        delta = avg - float(beat)
+        out["settlement_delta"] = round(delta, 2)
+        out["settlement_side"] = "above" if delta >= 0 else "below"
+    return out
+
+
+def Number_is_finite(x) -> bool:
+    try:
+        return x is not None and float(x) == float(x) and abs(float(x)) != float("inf")
+    except (TypeError, ValueError):
+        return False
+
 
 def http_get_json(url: str, timeout: float = 20.0, headers: dict | None = None):
     hdrs = {"Accept": "application/json", "User-Agent": UA}
@@ -344,24 +429,94 @@ def format_et(ts_iso_or_unix) -> str | None:
         return None
 
 
+def fetch_kalshi_markets(series: str) -> list:
+    """Open markets plus nearby unopened windows (for seamless rollover)."""
+    markets: list = []
+    seen = set()
+    queries = [
+        f"{KALSHI_MARKETS}?limit=30&status=open&series_ticker={urllib.parse.quote(series)}",
+        f"{KALSHI_MARKETS}?limit=40&status=unopened&series_ticker={urllib.parse.quote(series)}",
+    ]
+    for url in queries:
+        try:
+            data = http_get_json(url, timeout=12.0)
+        except Exception:
+            continue
+        for m in data.get("markets") or []:
+            ticker = m.get("ticker")
+            if not ticker or ticker in seen:
+                continue
+            seen.add(ticker)
+            markets.append(m)
+    return markets
+
+
 def fetch_kalshi_series_target(series: str) -> dict | None:
-    url = (
-        f"{KALSHI_MARKETS}?limit=20&status=open&series_ticker="
-        + urllib.parse.quote(series)
-    )
-    try:
-        data = http_get_json(url)
-    except Exception:
+    markets = fetch_kalshi_markets(series)
+    if not markets:
         return None
-    markets = data.get("markets") or []
     market = pick_current_market(markets)
     if not market:
-        return None
+        return {
+            "ok": False,
+            "source": "kalshi",
+            "series": series,
+            "target": None,
+            "price_to_beat": None,
+            "ticker": None,
+            "event_ticker": None,
+            "kalshi_url": KALSHI_SERIES_URL,
+            "open_time": None,
+            "close_time": None,
+            "close_et": None,
+            "subtitle": None,
+            "title": None,
+            "label": "Price to beat",
+            "yes_pct": None,
+            "no_pct": None,
+            "yes_bid_pct": None,
+            "yes_ask_pct": None,
+            "no_bid_pct": None,
+            "no_ask_pct": None,
+            "last_pct": None,
+            "spread_cents": None,
+            "odds_fresh": False,
+            "thin_book": False,
+            "stale_previous": True,
+            "waiting_next": True,
+            "settlement_mode": False,
+            "settlement_avg": None,
+            "settlement_samples": 0,
+            "settlement_delta": None,
+            "settlement_side": None,
+            "error": "Waiting for next Kalshi 15m market…",
+            "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+
     target = parse_target(market)
     close_et = format_et(market.get("close_time"))
     odds = market_odds(market)
     close_ms = parse_close_ms(market.get("close_time"))
-    stale_previous = bool(close_ms is not None and close_ms <= time.time() * 1000.0)
+    open_ms = parse_open_ms(market.get("open_time"))
+    now_ms = time.time() * 1000.0
+    stale_previous = bool(close_ms is not None and close_ms <= now_ms)
+    waiting_next = bool(open_ms is not None and open_ms > now_ms)
+
+    settle = {
+        "settlement_mode": False,
+        "settlement_avg": None,
+        "settlement_samples": 0,
+        "settlement_delta": None,
+        "settlement_side": None,
+        "seconds_to_close": None,
+        "settle_window_sec": SETTLE_WINDOW_SEC,
+    }
+    try:
+        ticks = fetch_brti_ticks()
+        settle = brti_settlement_snapshot(ticks, close_ms, target)
+    except Exception:
+        pass
+
     return {
         "ok": True,
         "source": "kalshi",
@@ -370,86 +525,34 @@ def fetch_kalshi_series_target(series: str) -> dict | None:
         "price_to_beat": target,
         "ticker": market.get("ticker"),
         "event_ticker": market.get("event_ticker"),
+        "kalshi_url": kalshi_market_url(market.get("ticker"), market.get("event_ticker")),
         "open_time": market.get("open_time"),
         "close_time": market.get("close_time"),
         "close_et": close_et,
         "subtitle": market.get("yes_sub_title"),
-        "title": market.get("title"),
-        "label": f"Price to beat • {close_et}" if close_et else "Price to beat",
+        "title": market.get("title") or "BTC above or below in 15 minutes?",
+        "label": f"Price to beat · {close_et}" if close_et else "Price to beat",
         "yes_pct": odds["yes_pct"],
         "no_pct": odds["no_pct"],
         "yes_bid_pct": odds.get("yes_bid_pct"),
         "yes_ask_pct": odds.get("yes_ask_pct"),
+        "no_bid_pct": odds.get("no_bid_pct"),
+        "no_ask_pct": odds.get("no_ask_pct"),
         "last_pct": odds.get("last_pct"),
+        "spread_cents": odds.get("spread_cents"),
         "odds_fresh": odds.get("odds_fresh"),
+        "thin_book": odds.get("thin_book"),
         "stale_previous": stale_previous,
+        "waiting_next": waiting_next,
+        "settlement_mode": settle.get("settlement_mode"),
+        "settlement_avg": settle.get("settlement_avg"),
+        "settlement_samples": settle.get("settlement_samples"),
+        "settlement_delta": settle.get("settlement_delta"),
+        "settlement_side": settle.get("settlement_side"),
+        "seconds_to_close": settle.get("seconds_to_close"),
         "error": None
         if target is not None
         else "Price to beat TBD (waiting for window open)",
-        "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-    }
-
-
-def fetch_window_target(tf: str, cfg: dict) -> dict:
-    """Price to beat = open of the current 1m/5m/15m wall-clock window (Coinbase)."""
-    window = int(cfg["window_sec"])
-    now = int(time.time())
-    open_ts = now - (now % window)
-    close_ts = open_ts + window
-    # Fetch a short candle window around open_ts
-    start = open_ts - window
-    end = min(now + window, close_ts)
-    qs = urllib.parse.urlencode(
-        {
-            "granularity": cfg["granularity"],
-            "start": datetime.fromtimestamp(start, tz=timezone.utc).strftime(
-                "%Y-%m-%dT%H:%M:%SZ"
-            ),
-            "end": datetime.fromtimestamp(end, tz=timezone.utc).strftime(
-                "%Y-%m-%dT%H:%M:%SZ"
-            ),
-        }
-    )
-    target = None
-    try:
-        raw = http_get_json(f"{COINBASE_CANDLES}?{qs}")
-        # Coinbase rows: [time, low, high, open, close, volume]
-        rows = sorted(raw, key=lambda r: r[0])
-        for r in rows:
-            if int(r[0]) == open_ts:
-                target = float(r[3])  # open
-                break
-        if target is None and rows:
-            # nearest at-or-before open
-            prior = [r for r in rows if int(r[0]) <= open_ts]
-            if prior:
-                target = float(prior[-1][3])
-    except Exception:
-        spot = fetch_spot()
-        target = spot.get("price")
-
-    close_iso = datetime.fromtimestamp(close_ts, tz=timezone.utc).strftime(
-        "%Y-%m-%dT%H:%M:%SZ"
-    )
-    open_iso = datetime.fromtimestamp(open_ts, tz=timezone.utc).strftime(
-        "%Y-%m-%dT%H:%M:%SZ"
-    )
-    close_et = format_et(close_ts)
-    return {
-        "ok": True,
-        "source": "window",
-        "series": None,
-        "timeframe": tf,
-        "target": target,
-        "price_to_beat": target,
-        "ticker": f"WINDOW-{tf.upper()}",
-        "event_ticker": None,
-        "open_time": open_iso,
-        "close_time": close_iso,
-        "close_et": close_et,
-        "subtitle": f"Window open @ {format_et(open_ts)}" if target else None,
-        "label": f"Price to beat • {close_et}" if close_et else "Price to beat",
-        "error": None if target is not None else "Waiting for window open price",
         "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
 
@@ -459,12 +562,10 @@ def fetch_target_payload(tf: str = "15m") -> dict:
     Price to beat is ALWAYS the live Kalshi KXBTC15M market.
 
     Chart timeframe (1m/5m/15m) only affects candles on the client — never the
-    Kalshi target, countdown, or Yes/No odds. The `tf` query arg is accepted for
-    compatibility but ignored for target selection.
+    Kalshi target, countdown, or Above/Below odds.
     """
-    _ = tf  # chart TF is separate; target is always 15m Kalshi
+    _ = tf
     cache_key = "15m"
-    cfg = TIMEFRAMES["15m"]
     now = time.time()
     with _cache_lock:
         cached = _target_cache.get(cache_key)
@@ -472,13 +573,25 @@ def fetch_target_payload(tf: str = "15m") -> dict:
             payload = cached["payload"] or {}
             close_ms = parse_close_ms(payload.get("close_time"))
             expired = close_ms is not None and close_ms <= now * 1000.0
+            settling = bool(payload.get("settlement_mode"))
             age = now - cached["at"]
             ttl = (
-                0.4
-                if expired or payload.get("price_to_beat") is None
+                0.35
+                if expired or settling or payload.get("price_to_beat") is None
                 else TARGET_TTL
             )
             if not expired and age < ttl:
+                # Refresh settlement fields even on cache hit when in last minute.
+                if settling:
+                    try:
+                        ticks = fetch_brti_ticks()
+                        settle = brti_settlement_snapshot(
+                            ticks, close_ms, payload.get("price_to_beat")
+                        )
+                        payload = {**payload, **settle}
+                        _target_cache[cache_key] = {"at": now, "payload": payload}
+                    except Exception:
+                        pass
                 return payload
 
     payload = fetch_kalshi_series_target("KXBTC15M")
@@ -486,11 +599,25 @@ def fetch_target_payload(tf: str = "15m") -> dict:
         payload["timeframe"] = "15m"
         payload["chart_tf_hint"] = "candles only — target is always Kalshi 15m"
     else:
-        # Last-resort window fallback if Kalshi is unreachable.
-        payload = fetch_window_target("15m", cfg)
-        payload["yes_pct"] = None
-        payload["no_pct"] = None
-        payload["error"] = payload.get("error") or "Kalshi unreachable — using 15m window open"
+        # Fail closed — never present Coinbase as Kalshi Price to beat.
+        payload = {
+            "ok": False,
+            "source": "kalshi",
+            "series": "KXBTC15M",
+            "timeframe": "15m",
+            "target": None,
+            "price_to_beat": None,
+            "ticker": None,
+            "event_ticker": None,
+            "kalshi_url": KALSHI_SERIES_URL,
+            "yes_pct": None,
+            "no_pct": None,
+            "stale_previous": True,
+            "waiting_next": True,
+            "settlement_mode": False,
+            "error": "Kalshi unreachable — pull to refresh",
+            "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
 
     with _cache_lock:
         _target_cache[cache_key] = {"at": time.time(), "payload": payload}
@@ -791,7 +918,7 @@ def push_watcher_loop() -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "KalshiBtcTarget/1.8"
+    server_version = "KalshiBtcTarget/2.0"
 
     def log_message(self, fmt, *args):
         print(f"[kalshi-btc-target] {self.address_string()} {fmt % args}")
@@ -935,7 +1062,7 @@ class Handler(BaseHTTPRequestHandler):
                 {
                     "ok": True,
                     "service": "kalshi-btc-target",
-                    "version": "1.8",
+                    "version": "2.0",
                     "push": bool(_vapid_app_server_key or VAPID_PUBLIC_RAW.is_file()),
                     "subscribers": len(_push_subs),
                 },

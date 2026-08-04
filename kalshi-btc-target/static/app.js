@@ -1,24 +1,25 @@
 (() => {
-  const TARGET_POLL_MS = 1_500;
+  const TARGET_POLL_MS = 1_200;
   const CANDLE_POLL_MS = 10_000;
-  const SPOT_POLL_MS = 2_000;
-  const BOUNDARY_PAD_MS = 500;
-  const ROLLOVER_BURST_MS = 45_000;
-  const ROLLOVER_TICK_MS = 1_000;
+  const SPOT_POLL_MS = 1_500;
+  const BOUNDARY_PAD_MS = 250;
+  const ROLLOVER_BURST_MS = 60_000;
+  const ROLLOVER_TICK_MS = 750;
   const TF_KEY = "kalshiChartTf";
   const CHIME_KEY = "kalshiChimeEnabled";
   const BG_ARMED_KEY = "kalshiBgAlertsArmed";
 
   const TF_LABELS = {
-    "1m": "1m BRTI",
-    "5m": "5m BRTI",
-    "15m": "15m BRTI",
+    "1m": "1m candles",
+    "5m": "5m candles",
+    "15m": "15m candles",
   };
 
   const el = {
     chart: document.getElementById("chart"),
     timeframe: document.getElementById("timeframe"),
     chartTfLabel: document.getElementById("chart-tf-label"),
+    question: document.getElementById("question"),
     targetLabel: document.getElementById("target-label"),
     targetValue: document.getElementById("target-value"),
     targetMeta: document.getElementById("target-meta"),
@@ -34,15 +35,28 @@
     oddsRow: document.getElementById("odds-row"),
     yesPct: document.getElementById("yes-pct"),
     noPct: document.getElementById("no-pct"),
+    yesBook: document.getElementById("yes-book"),
+    noBook: document.getElementById("no-book"),
+    oddsHint: document.getElementById("odds-hint"),
+    edgeLine: document.getElementById("edge-line"),
+    settleBanner: document.getElementById("settle-banner"),
+    settleTitle: document.getElementById("settle-title"),
+    settleAvg: document.getElementById("settle-avg"),
+    settleMeta: document.getElementById("settle-meta"),
+    kalshiLink: document.getElementById("kalshi-link"),
   };
 
   let chart = null;
   let series = null;
   let targetLine = null;
+  let settleLine = null;
   let lastTicker = null;
   let lastTarget = null;
   let lastFifteenTarget = null;
   let lastFifteenTicker = null;
+  let lastKalshiUrl = "https://kalshi.com/markets/kxbtc15m";
+  let lastYesPct = null;
+  let lastSettlementAvg = null;
   let closeTimeIso = null;
   let boundaryTimer = null;
   let rolloverTimer = null;
@@ -121,7 +135,7 @@
   async function ensureServiceWorker() {
     if (!("serviceWorker" in navigator)) return null;
     try {
-      const reg = await navigator.serviceWorker.register("/sw.js?v=2.1", { scope: "/" });
+      const reg = await navigator.serviceWorker.register("/sw.js?v=2.2", { scope: "/" });
       await navigator.serviceWorker.ready;
       return reg;
     } catch (err) {
@@ -375,6 +389,13 @@
     }
   }
 
+  function bookText(bid, ask) {
+    if (bid == null && ask == null) return "book —";
+    if (bid != null && ask != null) return `bid ${bid}¢ · ask ${ask}¢`;
+    if (bid != null) return `bid ${bid}¢`;
+    return `ask ${ask}¢`;
+  }
+
   function updateOdds(data) {
     if (!el.oddsRow || !el.yesPct || !el.noPct) return;
     const yes = data && data.yes_pct;
@@ -383,19 +404,109 @@
       el.oddsRow.hidden = true;
       el.yesPct.textContent = "—";
       el.noPct.textContent = "—";
+      if (el.yesBook) el.yesBook.textContent = "—";
+      if (el.noBook) el.noBook.textContent = "—";
+      lastYesPct = null;
       return;
     }
     el.oddsRow.hidden = false;
     el.yesPct.textContent = `${Math.round(yes)}%`;
     el.noPct.textContent = `${Math.round(no)}%`;
+    lastYesPct = Math.round(yes);
+    if (el.yesBook) {
+      el.yesBook.textContent = bookText(data.yes_bid_pct, data.yes_ask_pct);
+    }
+    if (el.noBook) {
+      el.noBook.textContent = bookText(data.no_bid_pct, data.no_ask_pct);
+    }
+    if (el.oddsHint) {
+      if (data.thin_book) el.oddsHint.textContent = "Wide spread · thin book";
+      else if (data.odds_fresh) el.oddsHint.textContent = "Fresh window · book mid";
+      else if (data.spread_cents != null) {
+        el.oddsHint.textContent = `Spread ${data.spread_cents}¢`;
+      } else el.oddsHint.textContent = "What traders are pricing";
+    }
+  }
+
+  function updateEdgeLine(spot) {
+    if (!el.edgeLine) return;
+    if (
+      spot == null ||
+      !Number.isFinite(spot) ||
+      lastTarget == null ||
+      !Number.isFinite(lastTarget) ||
+      lastYesPct == null
+    ) {
+      el.edgeLine.hidden = true;
+      el.edgeLine.textContent = "";
+      return;
+    }
+    const delta = spot - lastTarget;
+    const side = delta >= 0 ? "above" : "below";
+    const abs = Math.abs(delta);
+    let left = "—";
+    if (closeTimeIso) {
+      const ms = Date.parse(closeTimeIso) - Date.now();
+      if (Number.isFinite(ms) && ms > 0) {
+        const sec = Math.floor(ms / 1000);
+        left = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+      } else if (Number.isFinite(ms) && ms <= 0) left = "0:00";
+    }
+    el.edgeLine.hidden = false;
+    el.edgeLine.textContent = `Live is $${abs.toFixed(2)} ${side} beat · Above ${lastYesPct}% · ${left} left`;
+  }
+
+  function updateSettlement(data) {
+    if (!el.settleBanner) return;
+    const mode = !!(data && data.settlement_mode);
+    if (!mode) {
+      el.settleBanner.hidden = true;
+      el.settleBanner.classList.remove("is-above", "is-below");
+      lastSettlementAvg = null;
+      applySettleLine(null);
+      return;
+    }
+    el.settleBanner.hidden = false;
+    const avg = data.settlement_avg;
+    lastSettlementAvg = avg;
+    const side = data.settlement_side;
+    el.settleBanner.classList.toggle("is-above", side === "above");
+    el.settleBanner.classList.toggle("is-below", side === "below");
+    if (el.settleTitle) {
+      el.settleTitle.textContent =
+        side === "above"
+          ? "Last minute · average is ABOVE"
+          : side === "below"
+            ? "Last minute · average is BELOW"
+            : "Last minute · settling now";
+    }
+    if (el.settleAvg) {
+      el.settleAvg.textContent =
+        avg != null && Number.isFinite(avg)
+          ? `${money(avg)} avg`
+          : "Collecting samples…";
+    }
+    if (el.settleMeta) {
+      const n = data.settlement_samples || 0;
+      const d = data.settlement_delta;
+      const deltaTxt =
+        d != null && Number.isFinite(d)
+          ? ` · ${d >= 0 ? "+" : "-"}$${Math.abs(d).toFixed(2)} vs beat`
+          : "";
+      el.settleMeta.textContent = `Kalshi settles on a 60-second average, not the last tick · ${n}/60 samples${deltaTxt}`;
+    }
+    applySettleLine(avg);
   }
 
   function updateSpot(lastClose) {
     if (!el.spotValue) return;
     if (lastClose == null || !Number.isFinite(lastClose)) {
       el.spotValue.textContent = "—";
-      el.spotDelta.textContent = "";
-      el.spotDelta.className = "spot-delta";
+      if (el.spotDelta) {
+        el.spotDelta.textContent = "—";
+        el.spotDelta.className = "spot-delta";
+      }
+      updateEdgeLine(null);
       return;
     }
     el.spotValue.textContent = money(lastClose);
@@ -407,15 +518,18 @@
     }
     prevSpot = lastClose;
 
-    if (lastTarget != null && Number.isFinite(lastTarget)) {
-      const delta = lastClose - lastTarget;
-      const sign = delta >= 0 ? "+" : "-";
-      el.spotDelta.textContent = `${sign}$${Math.abs(delta).toFixed(2)} vs beat`;
-      el.spotDelta.className = "spot-delta " + (delta >= 0 ? "up" : "down");
-    } else {
-      el.spotDelta.textContent = "";
-      el.spotDelta.className = "spot-delta";
+    if (el.spotDelta) {
+      if (lastTarget != null && Number.isFinite(lastTarget)) {
+        const delta = lastClose - lastTarget;
+        const sign = delta >= 0 ? "+" : "-";
+        el.spotDelta.textContent = `${sign}$${Math.abs(delta).toFixed(2)}`;
+        el.spotDelta.className = "spot-delta " + (delta >= 0 ? "up" : "down");
+      } else {
+        el.spotDelta.textContent = "—";
+        el.spotDelta.className = "spot-delta";
+      }
     }
+    updateEdgeLine(lastClose);
   }
 
   function updateCountdown() {
@@ -423,7 +537,7 @@
     if (!closeTimeIso) {
       el.countdown.textContent = "—:—";
       el.countdown.classList.remove("urgent");
-      if (el.countdownMeta) el.countdownMeta.textContent = "Until Kalshi 15m window ends";
+      if (el.countdownMeta) el.countdownMeta.textContent = "Until this 15m window ends";
       return;
     }
     const end = Date.parse(closeTimeIso);
@@ -435,7 +549,9 @@
     if (ms <= 0) {
       el.countdown.textContent = "0:00";
       el.countdown.classList.add("urgent");
-      if (el.countdownMeta) el.countdownMeta.textContent = "Window rolling…";
+      if (el.countdownMeta) {
+        el.countdownMeta.textContent = "Window closed · loading next…";
+      }
       startRolloverBurst();
       return;
     }
@@ -446,9 +562,11 @@
     el.countdown.classList.toggle("urgent", totalSec <= 60);
     if (el.countdownMeta) {
       el.countdownMeta.textContent =
-        totalSec <= 60 ? "Under 1 minute left" : "Until Kalshi 15m window ends";
+        totalSec <= 60
+          ? "Final minute — settlement average decides the winner"
+          : "Until this 15m window ends";
     }
-    if (totalSec <= 20) startRolloverBurst();
+    if (totalSec <= 25) startRolloverBurst();
   }
 
   function clearRolloverBurst() {
@@ -548,6 +666,17 @@
     targetLine = null;
   }
 
+  function clearSettleLine() {
+    if (settleLine && series) {
+      try {
+        series.removePriceLine(settleLine);
+      } catch {
+        // ignore
+      }
+    }
+    settleLine = null;
+  }
+
   function applyTargetLine(target, title) {
     lastTarget = target;
     if (!series || target == null || !Number.isFinite(target)) {
@@ -560,16 +689,32 @@
       lineWidth: 2,
       lineStyle: (ensureChart.LineStyle && ensureChart.LineStyle.Dashed) || 2,
       axisLabelVisible: true,
-      title: title || "TARGET",
+      title: title || "BEAT",
     };
     clearTargetLine();
     targetLine = series.createPriceLine(opts);
   }
 
+  function applySettleLine(avg) {
+    if (!series || avg == null || !Number.isFinite(avg)) {
+      clearSettleLine();
+      return;
+    }
+    const opts = {
+      price: avg,
+      color: "#ffd28a",
+      lineWidth: 2,
+      lineStyle: (ensureChart.LineStyle && ensureChart.LineStyle.Solid) || 0,
+      axisLabelVisible: true,
+      title: "AVG",
+    };
+    clearSettleLine();
+    settleLine = series.createPriceLine(opts);
+  }
+
   async function refreshTarget(opts = {}) {
     const forceCandles = !!opts.forceCandles;
     try {
-      // Always Kalshi 15m — never switch target with chart buttons.
       const res = await fetch(`/api/target?tf=15m&_=${Date.now()}`, {
         cache: "no-store",
       });
@@ -579,70 +724,92 @@
       const prevTicker = lastTicker;
       closeTimeIso = data.close_time || null;
       updateCountdown();
+      updateSettlement(data);
+
+      if (data.kalshi_url && el.kalshiLink) {
+        lastKalshiUrl = data.kalshi_url;
+        el.kalshiLink.href = data.kalshi_url;
+      }
 
       const rolled =
         (prevTicker && data.ticker && prevTicker !== data.ticker) ||
         (prevClose && closeTimeIso && prevClose !== closeTimeIso) ||
-        !!data.stale_previous;
+        !!data.stale_previous ||
+        !!data.waiting_next;
 
-      // Don't flash the dying window's 1/99 — show a fair open immediately.
       if (rolled && (data.odds_fresh || data.stale_previous || data.yes_pct == null)) {
         updateOdds({
           yes_pct: data.yes_pct != null && !data.stale_previous ? data.yes_pct : 50,
           no_pct: data.no_pct != null && !data.stale_previous ? data.no_pct : 50,
+          yes_bid_pct: data.yes_bid_pct,
+          yes_ask_pct: data.yes_ask_pct,
+          no_bid_pct: data.no_bid_pct,
+          no_ask_pct: data.no_ask_pct,
+          spread_cents: data.spread_cents,
+          thin_book: data.thin_book,
+          odds_fresh: true,
         });
       } else {
         updateOdds(data);
       }
+
       if (el.targetLabel) {
-        el.targetLabel.textContent = data.label || "Price to beat · Kalshi 15m";
+        el.targetLabel.textContent = "Price to beat";
+      }
+      if (el.question) {
+        el.question.innerHTML =
+          'Will live Bitcoin finish <em>above</em> or <em>below</em> this price?';
       }
 
-      if (!data.ok && beat == null) {
-        setStatus("warn", data.error || "Kalshi error");
-        el.targetValue.textContent = "—";
-        el.targetMeta.textContent = data.error || "Unavailable";
+      if ((!data.ok && beat == null) || data.waiting_next) {
+        setStatus("warn", data.error || "Waiting for next window");
+        el.targetValue.textContent = beat != null ? money(beat) : "—";
+        el.targetMeta.textContent = data.error || "Next Kalshi 15m opening…";
+        if (beat == null) applyTargetLine(null);
+        startRolloverBurst();
+        scheduleBoundaryRefresh(data.close_time);
         return;
       }
 
       if (beat == null) {
         setStatus("warn", "Price to beat TBD");
         el.targetValue.textContent = "TBD";
-        el.targetMeta.textContent = data.error || "Waiting for Kalshi 15m window";
+        el.targetMeta.textContent = data.error || "Waiting for Kalshi to post the beat";
         applyTargetLine(null);
-        updateOdds({ yes_pct: 50, no_pct: 50 });
+        updateOdds({ yes_pct: 50, no_pct: 50, odds_fresh: true });
         maybeChimeNewFifteenTarget(null, data.ticker, data.source, data.close_et);
         startRolloverBurst();
       } else {
         lastTicker = data.ticker;
         setStatus(
           "ok",
-          data.stale_previous
-            ? "Rolling…"
-            : rolled
-              ? "New 15m price to beat"
-              : "Live · Kalshi 15m"
+          data.settlement_mode
+            ? "Settling…"
+            : data.stale_previous
+              ? "Rolling…"
+              : rolled
+                ? "New 15m window"
+                : "Live"
         );
         el.targetValue.textContent = money(beat);
         const win = formatWindow(data.close_time, data.close_et);
         el.targetMeta.textContent = win
-          ? `Kalshi 15m · settles ${win}`
-          : "Kalshi 15m";
-        applyTargetLine(beat, "TARGET");
+          ? `This window settles ${win}`
+          : "Kalshi 15-minute market";
+        applyTargetLine(beat, "BEAT");
         maybeChimeNewFifteenTarget(beat, data.ticker, data.source, data.close_et);
         if (el.spotValue && el.spotValue.dataset.last) {
           updateSpot(Number(el.spotValue.dataset.last));
         }
-        if (rolled || forceCandles) refreshCandles();
-        if (rolled) startRolloverBurst();
+        if (rolled || forceCandles || data.settlement_mode) refreshCandles();
+        if (rolled || data.settlement_mode) startRolloverBurst();
         if (
           rolled &&
           !data.stale_previous &&
           closeTimeIso &&
           Date.parse(closeTimeIso) > Date.now() + 5_000
         ) {
-          // Keep bursting briefly so odds settle near the open.
-          rolloverUntil = Math.max(rolloverUntil, Date.now() + 20_000);
+          rolloverUntil = Math.max(rolloverUntil, Date.now() + 25_000);
         }
       }
       scheduleBoundaryRefresh(data.close_time);
