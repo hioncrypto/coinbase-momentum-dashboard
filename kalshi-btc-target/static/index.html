@@ -20,12 +20,12 @@
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
     <link rel="icon" href="/icons/icon-192.png" sizes="192x192" type="image/png" />
     <title>Kalshi BTC · Above or Below</title>
-    <link rel="stylesheet" href="/styles.css?v=3.4" />
+    <link rel="stylesheet" href="/styles.css?v=3.6" />
     <script
       src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"
       defer
     ></script>
-    <script src="/app.js?v=3.4" defer></script>
+    <script src="/app.js?v=3.6" defer></script>
   </head>
   <body class="portrait-app">
     <div id="rotate-gate" class="rotate-gate" hidden>
@@ -169,6 +169,70 @@
         <div id="demo-last" class="demo-last">No trades yet</div>
       </div>
     </aside>
+
+    <div id="buy-backdrop" class="buy-backdrop" hidden></div>
+    <div
+      id="buy-sheet"
+      class="buy-sheet"
+      hidden
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="buy-sheet-title"
+    >
+      <div class="buy-sheet-handle" aria-hidden="true"></div>
+      <div class="buy-sheet-head">
+        <div>
+          <div class="buy-sheet-kicker">Demo order</div>
+          <h2 id="buy-sheet-title" class="buy-sheet-title">Buy Above</h2>
+        </div>
+        <button type="button" id="buy-sheet-x" class="options-close" aria-label="Cancel buy">
+          ✕
+        </button>
+      </div>
+      <div id="buy-sheet-meta" class="buy-sheet-meta">—</div>
+
+      <label class="buy-amount-label" for="buy-amount">
+        Dollar amount
+        <span id="buy-balance-hint" class="buy-balance-hint"></span>
+      </label>
+      <div class="buy-amount-row">
+        <span class="buy-amount-prefix">$</span>
+        <input
+          id="buy-amount"
+          class="buy-amount-input"
+          type="number"
+          min="1"
+          max="100000"
+          step="1"
+          value="50"
+          inputmode="decimal"
+          enterkeyhint="done"
+        />
+      </div>
+      <div class="buy-quick">
+        <button type="button" class="buy-chip" data-amt="10">$10</button>
+        <button type="button" class="buy-chip" data-amt="25">$25</button>
+        <button type="button" class="buy-chip" data-amt="50">$50</button>
+        <button type="button" class="buy-chip" data-amt="100">$100</button>
+      </div>
+      <div id="buy-preview" class="buy-preview">—</div>
+
+      <div
+        id="buy-slide"
+        class="buy-slide"
+        role="slider"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow="0"
+        aria-label="Slide to buy"
+        tabindex="0"
+      >
+        <div id="buy-slide-fill" class="buy-slide-fill"></div>
+        <div id="buy-slide-label" class="buy-slide-label">Slide to buy</div>
+        <div id="buy-slide-thumb" class="buy-slide-thumb" aria-hidden="true">››</div>
+      </div>
+      <p class="buy-sheet-note">Release early to cancel · completes only at the end</p>
+    </div>
 
     <section class="summary-panel" aria-live="polite">
       <div class="hero-beat">

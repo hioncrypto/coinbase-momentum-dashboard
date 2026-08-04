@@ -81,6 +81,18 @@
     demoLivePl: document.getElementById("demo-live-pl"),
     demoLiveMeta: document.getElementById("demo-live-meta"),
     demoLiveClose: document.getElementById("demo-live-close"),
+    buyBackdrop: document.getElementById("buy-backdrop"),
+    buySheet: document.getElementById("buy-sheet"),
+    buySheetTitle: document.getElementById("buy-sheet-title"),
+    buySheetMeta: document.getElementById("buy-sheet-meta"),
+    buySheetX: document.getElementById("buy-sheet-x"),
+    buyAmount: document.getElementById("buy-amount"),
+    buyBalanceHint: document.getElementById("buy-balance-hint"),
+    buyPreview: document.getElementById("buy-preview"),
+    buySlide: document.getElementById("buy-slide"),
+    buySlideFill: document.getElementById("buy-slide-fill"),
+    buySlideLabel: document.getElementById("buy-slide-label"),
+    buySlideThumb: document.getElementById("buy-slide-thumb"),
     kalshiLink: null,
   };
 
@@ -104,6 +116,14 @@
   let lastBestPick = null; // { side } | null when clear edge
   let settleHintByTicker = {};
   let optionsOpen = false;
+  let buySheetOpen = false;
+  let buySheetSide = null; // above | below
+  let buySheetAmount = 50;
+  let buySlideDragging = false;
+  let buySlideStartX = 0;
+  let buySlideProgress = 0;
+  let buySlideMax = 0;
+  let buyConfirming = false;
   let demo = loadDemoState();
   let boundaryTimer = null;
   let rolloverTimer = null;
@@ -396,33 +416,34 @@
     setStatus("ok", `Demo reset · ${money(start)}`);
   }
 
-  function demoBuy(side) {
+  function demoBuy(side, amountUsd) {
     if (!demo.on) {
       setStatus("warn", "Turn on Demo in Options");
       openOptions();
-      return;
+      return false;
     }
     if (demo.position) {
       setStatus("warn", "Already in a demo position");
-      return;
+      return false;
     }
-    if (!(tradeStake > 0)) {
-      setStatus("warn", "Set trade size first");
-      return;
+    const stake = amountUsd != null ? Number(amountUsd) : tradeStake;
+    if (!(stake > 0)) {
+      setStatus("warn", "Enter a dollar amount");
+      return false;
     }
     if (!lastTicker || lastTarget == null) {
       setStatus("warn", "Wait for a live window");
-      return;
+      return false;
     }
     const ask = side === "above" ? lastRoiAsks.above : lastRoiAsks.below;
-    const sized = roiForStake(ask, tradeStake);
+    const sized = roiForStake(ask, stake);
     if (!sized || sized.empty) {
       setStatus("warn", "Need a live ask");
-      return;
+      return false;
     }
     if (sized.total > demo.balance + 1e-9) {
       setStatus("warn", "Not enough demo balance");
-      return;
+      return false;
     }
     demo.balance = Math.round((demo.balance - sized.total) * 100) / 100;
     demo.position = {
@@ -436,12 +457,209 @@
       beat: lastTarget,
       openedAt: Date.now(),
     };
+    // Keep main trade-size slider in sync for Best Side sizing.
+    if (stake <= 100) setTradeStake(Math.round(stake));
     saveDemoState();
     renderDemoUi();
     setStatus(
       "ok",
       `Demo bought ${side === "above" ? "Above" : "Below"} · ${sized.contracts} cts`
     );
+    return true;
+  }
+
+  function readBuyAmount() {
+    let n = Number(el.buyAmount && el.buyAmount.value);
+    if (!Number.isFinite(n)) n = buySheetAmount;
+    n = Math.max(1, Math.min(Math.floor(demo.balance || 0) || 1, Math.round(n)));
+    buySheetAmount = n;
+    return n;
+  }
+
+  function refreshBuySheetPreview() {
+    if (!buySheetOpen || !buySheetSide) return;
+    const side = buySheetSide;
+    const amount = readBuyAmount();
+    const ask = side === "above" ? lastRoiAsks.above : lastRoiAsks.below;
+    const sized = roiForStake(ask, amount);
+    if (el.buyBalanceHint) {
+      el.buyBalanceHint.textContent = `Bal ${money(demo.balance)}`;
+    }
+    if (el.buySheetMeta) {
+      const askTxt = ask != null ? `${Math.round(ask)}¢ ask` : "ask —";
+      el.buySheetMeta.textContent =
+        `${side === "above" ? "Above" : "Below"} · ${askTxt} · live Kalshi book`;
+    }
+    if (el.buyPreview) {
+      if (!sized || sized.empty) {
+        el.buyPreview.textContent = "Enter an amount to preview contracts + fees";
+      } else {
+        el.buyPreview.textContent =
+          `${sized.contracts} contracts · cost ${money(sized.cost)} + fee ${money(
+            sized.fee
+          )} · total ${money(sized.total)} · win ${money(sized.profitIfWin)} (${
+            sized.roiIfWin != null
+              ? `${sized.roiIfWin >= 0 ? "+" : ""}${sized.roiIfWin.toFixed(0)}%`
+              : "—"
+          })`;
+      }
+    }
+    if (el.buySlideLabel && !buyConfirming) {
+      const label = side === "above" ? "Slide to buy Above" : "Slide to buy Below";
+      el.buySlideLabel.textContent = label;
+    }
+  }
+
+  function setBuySlideProgress(pct) {
+    buySlideProgress = Math.max(0, Math.min(1, pct));
+    const thumbTravel = Math.max(0, buySlideMax);
+    const x = buySlideProgress * thumbTravel;
+    if (el.buySlideThumb) {
+      el.buySlideThumb.style.transform = `translateX(${x}px)`;
+    }
+    if (el.buySlideFill) {
+      el.buySlideFill.style.width = `${Math.max(
+        0,
+        ((x + 48) / Math.max(1, (el.buySlide && el.buySlide.clientWidth) || 1)) * 100
+      )}%`;
+    }
+    if (el.buySlide) {
+      el.buySlide.setAttribute("aria-valuenow", String(Math.round(buySlideProgress * 100)));
+    }
+  }
+
+  function resetBuySlide() {
+    buySlideDragging = false;
+    buyConfirming = false;
+    if (el.buySlide) el.buySlide.classList.remove("is-complete");
+    setBuySlideProgress(0);
+    refreshBuySheetPreview();
+  }
+
+  function measureBuySlide() {
+    if (!el.buySlide || !el.buySlideThumb) {
+      buySlideMax = 0;
+      return;
+    }
+    buySlideMax = Math.max(0, el.buySlide.clientWidth - el.buySlideThumb.offsetWidth - 8);
+  }
+
+  function openBuySheet(side) {
+    if (!demo.on) {
+      setStatus("warn", "Turn on Demo in Options");
+      openOptions();
+      return;
+    }
+    if (demo.position) {
+      setStatus("warn", "Already in a demo position");
+      return;
+    }
+    if (side !== "above" && side !== "below") return;
+    const ask = side === "above" ? lastRoiAsks.above : lastRoiAsks.below;
+    if (ask == null) {
+      setStatus("warn", "Need a live ask");
+      return;
+    }
+    closeOptions();
+    buySheetSide = side;
+    buySheetOpen = true;
+    buySheetAmount = Math.max(
+      1,
+      Math.min(Math.floor(demo.balance) || 50, tradeStake > 0 ? tradeStake : 50)
+    );
+    if (el.buyAmount) el.buyAmount.value = String(buySheetAmount);
+    if (el.buySheet) {
+      el.buySheet.hidden = false;
+      el.buySheet.classList.remove("is-done");
+      el.buySheet.classList.toggle("is-below", side === "below");
+    }
+    if (el.buyBackdrop) el.buyBackdrop.hidden = false;
+    if (el.buySheetTitle) {
+      el.buySheetTitle.textContent = side === "above" ? "Buy Above" : "Buy Below";
+    }
+    resetBuySlide();
+    requestAnimationFrame(() => {
+      measureBuySlide();
+      setBuySlideProgress(0);
+      refreshBuySheetPreview();
+    });
+  }
+
+  function dismissBuySheet(afterMs) {
+    const finish = () => {
+      buySheetOpen = false;
+      buySheetSide = null;
+      buyConfirming = false;
+      if (el.buySheet) {
+        el.buySheet.hidden = true;
+        el.buySheet.classList.remove("is-done", "is-below");
+      }
+      if (el.buyBackdrop) el.buyBackdrop.hidden = true;
+      resetBuySlide();
+    };
+    if (afterMs && el.buySheet && buySheetOpen) {
+      el.buySheet.classList.add("is-done");
+      setTimeout(finish, afterMs);
+    } else {
+      finish();
+    }
+  }
+
+  function confirmBuyFromSheet() {
+    if (buyConfirming || !buySheetSide) return;
+    buyConfirming = true;
+    if (el.buySlide) el.buySlide.classList.add("is-complete");
+    if (el.buySlideLabel) el.buySlideLabel.textContent = "Bought";
+    setBuySlideProgress(1);
+    const ok = demoBuy(buySheetSide, readBuyAmount());
+    if (!ok) {
+      buyConfirming = false;
+      if (el.buySlide) el.buySlide.classList.remove("is-complete");
+      resetBuySlide();
+      return;
+    }
+    dismissBuySheet(380);
+  }
+
+  function onBuySlidePointerDown(ev) {
+    if (!buySheetOpen || buyConfirming) return;
+    measureBuySlide();
+    buySlideDragging = true;
+    const point = ev.touches ? ev.touches[0] : ev;
+    buySlideStartX = point.clientX - buySlideProgress * buySlideMax;
+    if (el.buySlide && el.buySlide.setPointerCapture && ev.pointerId != null) {
+      try {
+        el.buySlide.setPointerCapture(ev.pointerId);
+      } catch {
+        // ignore
+      }
+    }
+    ev.preventDefault();
+  }
+
+  function onBuySlidePointerMove(ev) {
+    if (!buySlideDragging || buyConfirming) return;
+    const point = ev.touches ? ev.touches[0] : ev;
+    const x = point.clientX - buySlideStartX;
+    setBuySlideProgress(buySlideMax > 0 ? x / buySlideMax : 0);
+    ev.preventDefault();
+  }
+
+  function onBuySlidePointerUp(ev) {
+    if (!buySlideDragging) return;
+    buySlideDragging = false;
+    if (buySlideProgress >= 0.92) {
+      confirmBuyFromSheet();
+    } else {
+      setBuySlideProgress(0);
+    }
+    if (ev && el.buySlide && el.buySlide.releasePointerCapture && ev.pointerId != null) {
+      try {
+        el.buySlide.releasePointerCapture(ev.pointerId);
+      } catch {
+        // ignore
+      }
+    }
   }
 
   function demoBuyBest() {
@@ -449,7 +667,7 @@
       setStatus("warn", "No clear Best Side yet");
       return;
     }
-    demoBuy(lastBestPick.side);
+    openBuySheet(lastBestPick.side);
   }
 
   function resolveOutcomeForTicker(ticker, beatHint) {
@@ -1181,6 +1399,7 @@
     lastRoiAsks = { above: aboveAsk, below: belowAsk };
     lastRoiBids = { above: aboveBid, below: belowBid };
     renderRoi();
+    if (buySheetOpen) refreshBuySheetPreview();
   }
 
   function updateOdds(data) {
@@ -1917,10 +2136,10 @@
       el.demoBuyBest.addEventListener("click", () => demoBuyBest());
     }
     if (el.demoBuyAbove) {
-      el.demoBuyAbove.addEventListener("click", () => demoBuy("above"));
+      el.demoBuyAbove.addEventListener("click", () => openBuySheet("above"));
     }
     if (el.demoBuyBelow) {
-      el.demoBuyBelow.addEventListener("click", () => demoBuy("below"));
+      el.demoBuyBelow.addEventListener("click", () => openBuySheet("below"));
     }
     if (el.demoClose) {
       el.demoClose.addEventListener("click", () => closeDemoPosition());
@@ -1928,8 +2147,68 @@
     if (el.demoLiveClose) {
       el.demoLiveClose.addEventListener("click", () => closeDemoPosition());
     }
+    if (el.buySheetX) {
+      el.buySheetX.addEventListener("click", () => dismissBuySheet());
+    }
+    if (el.buyBackdrop) {
+      el.buyBackdrop.addEventListener("click", () => dismissBuySheet());
+    }
+    if (el.buyAmount) {
+      const syncAmt = () => {
+        readBuyAmount();
+        if (el.buyAmount) el.buyAmount.value = String(buySheetAmount);
+        refreshBuySheetPreview();
+      };
+      el.buyAmount.addEventListener("input", syncAmt);
+      el.buyAmount.addEventListener("change", syncAmt);
+    }
+    document.querySelectorAll(".buy-chip").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const amt = Number(btn.dataset.amt);
+        if (!Number.isFinite(amt)) return;
+        buySheetAmount = amt;
+        if (el.buyAmount) el.buyAmount.value = String(amt);
+        refreshBuySheetPreview();
+      });
+    });
+    if (el.buySlide) {
+      el.buySlide.addEventListener("pointerdown", onBuySlidePointerDown);
+      el.buySlide.addEventListener("pointermove", onBuySlidePointerMove);
+      el.buySlide.addEventListener("pointerup", onBuySlidePointerUp);
+      el.buySlide.addEventListener("pointercancel", onBuySlidePointerUp);
+      el.buySlide.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter" || ev.key === "ArrowRight") {
+          ev.preventDefault();
+          setBuySlideProgress(1);
+          confirmBuyFromSheet();
+        } else if (ev.key === "Escape") {
+          dismissBuySheet();
+        }
+      });
+    }
+    if (el.bestSide) {
+      el.bestSide.style.cursor = "pointer";
+      el.bestSide.title = "Tap to place demo buy";
+      el.bestSide.addEventListener("click", () => {
+        if (lastBestPick && lastBestPick.side) openBuySheet(lastBestPick.side);
+        else if (demo.on) setStatus("warn", "No clear Best Side yet");
+        else {
+          setStatus("warn", "Turn on Demo in Options");
+          openOptions();
+        }
+      });
+    }
+    document.querySelectorAll(".roi-card.above").forEach((card) => {
+      card.style.cursor = "pointer";
+      card.addEventListener("click", () => openBuySheet("above"));
+    });
+    document.querySelectorAll(".roi-card.below").forEach((card) => {
+      card.style.cursor = "pointer";
+      card.addEventListener("click", () => openBuySheet("below"));
+    });
     document.addEventListener("keydown", (ev) => {
-      if (ev.key === "Escape" && optionsOpen) closeOptions();
+      if (ev.key === "Escape" && buySheetOpen) dismissBuySheet();
+      else if (ev.key === "Escape" && optionsOpen) closeOptions();
     });
     renderDemoUi();
     syncAlertsUi();
