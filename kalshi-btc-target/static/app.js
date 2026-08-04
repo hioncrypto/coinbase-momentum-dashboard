@@ -851,6 +851,7 @@
     if (stake <= 100) setTradeStake(Math.round(stake));
     saveDemoState();
     renderDemoUi();
+    refreshBestSide();
     const sideLabel = side === "above" ? "Above" : "Below";
     const added = !!existing;
     setStatus(
@@ -1455,8 +1456,9 @@
   function alertClearEdge(best) {
     if (!best || !best.side) return;
     if (!chimeOn) return;
-    // Already in a trade — don't spam; UI still updates.
-    if (demo.position) return;
+    // If already long the opposite side, skip spam. Same-side clear edge
+    // still alerts — useful when deciding whether to add.
+    if (demo.position && demo.position.side !== best.side) return;
 
     const side = best.side;
     const ask = Math.round(Number(best.askCents) || 0);
@@ -1809,13 +1811,32 @@
     }
 
     lastBestPick = { side: best.side, askCents: best.askCents, pWin: best.pWin };
-    const label = best.side === "above" ? "BUY ABOVE" : "BUY BELOW";
+    const openPos = demo.position;
+    const sameAsOpen = !!(openPos && openPos.side === best.side);
+    const oppositeOpen = !!(openPos && openPos.side !== best.side);
+    const label = oppositeOpen
+      ? best.side === "above"
+        ? "BEST ABOVE"
+        : "BEST BELOW"
+      : sameAsOpen
+        ? best.side === "above"
+          ? "ADD ABOVE"
+          : "ADD BELOW"
+        : best.side === "above"
+          ? "BUY ABOVE"
+          : "BUY BELOW";
     if (el.bestSideLabel) el.bestSideLabel.textContent = label;
     if (el.bestSideAmount) {
       if (tradeStake <= 0) {
         el.bestSideAmount.textContent = "Set a trade size";
+      } else if (oppositeOpen) {
+        el.bestSideAmount.textContent = `Edge vs your ${
+          openPos.side === "above" ? "Above" : "Below"
+        } · close to flip`;
       } else {
-        el.bestSideAmount.textContent = `Buy $${tradeStake} · ${best.contracts} contract${
+        el.bestSideAmount.textContent = `${
+          sameAsOpen ? "Add" : "Buy"
+        } $${tradeStake} · ${best.contracts} contract${
           best.contracts === 1 ? "" : "s"
         }`;
       }
@@ -1829,10 +1850,15 @@
       const m = Math.floor(secs / 60);
       const s = secs % 60;
       const lead = spot - beat;
+      const openNote = sameAsOpen
+        ? ` · open ${openPos.contracts} cts`
+        : oppositeOpen
+          ? ` · opposite your open ${openPos.side === "above" ? "Above" : "Below"}`
+          : "";
       el.bestSideMeta.textContent =
         `${conf}% model · ask ${best.askCents}¢ · ${roiTxt} · live ${
           lead >= 0 ? "+" : ""
-        }$${lead.toFixed(0)} · ${m}:${String(s).padStart(2, "0")} left`;
+        }$${lead.toFixed(0)} · ${m}:${String(s).padStart(2, "0")} left${openNote}`;
     }
     setRoiCardBest(best.side);
     setDockBestDetail(
@@ -1841,7 +1867,9 @@
     );
 
     const key = clear
-      ? `${best.side}:${tradeStake}:${best.contracts}`
+      ? `${best.side}:${tradeStake}:${best.contracts}:${
+          openPos ? openPos.side : "flat"
+        }`
       : "none";
     if (key !== lastBestSideKey) {
       lastBestSideKey = key;

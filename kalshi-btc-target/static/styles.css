@@ -1759,7 +1759,7 @@ body.has-open-pl .summary-panel {
 }
 
 body.has-open-pl .trade-panel {
-  max-height: min(20dvh, 160px);
+  max-height: min(28dvh, 220px);
 }
 
 body.has-open-pl .app-shell > .chart-wrap {
@@ -1767,9 +1767,15 @@ body.has-open-pl .app-shell > .chart-wrap {
   min-height: 38dvh !important;
 }
 
-body.has-open-pl .best-side,
+/* Keep Best Side visible while open so adds can follow the edge.
+   Hide the bulky ROI cards only — stake is set in the buy sheet. */
 body.has-open-pl .roi-panel {
   display: none !important;
+}
+
+body.has-open-pl .best-side {
+  margin-top: 6px;
+  padding: 8px 10px;
 }
 
 .app-shell > .top,
