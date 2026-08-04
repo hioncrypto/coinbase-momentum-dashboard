@@ -9,6 +9,8 @@
   const CHIME_KEY = "kalshiChimeEnabled";
   const BG_ARMED_KEY = "kalshiBgAlertsArmed";
   const DEMO_KEY = "kalshiDemoState";
+  const TRADE_HISTORY_KEY = "beatlineTradeHistory";
+  const HISTORY_LIMIT = 40;
   const DEMO_DEFAULT_START = 1000;
   const TUTORIAL_KEY = "beatlineTutorialSeen";
   const OPEN_PL_COLLAPSE_KEY = "beatlineOpenPlCollapsed";
@@ -221,7 +223,28 @@
     });
   }
 
-  const HISTORY_LIMIT = 40;
+  function loadTradeHistory() {
+    try {
+      const raw = localStorage.getItem(TRADE_HISTORY_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter((h) => h && typeof h === "object").slice(0, HISTORY_LIMIT);
+    } catch {
+      return [];
+    }
+  }
+
+  function persistTradeHistory(list) {
+    try {
+      localStorage.setItem(
+        TRADE_HISTORY_KEY,
+        JSON.stringify((list || []).slice(0, HISTORY_LIMIT))
+      );
+    } catch {
+      // ignore quota
+    }
+  }
 
   function loadDemoState() {
     const fallback = {
@@ -231,15 +254,47 @@
       realizedPl: 0,
       position: null,
       lastResult: null,
-      history: [],
+      history: loadTradeHistory(),
     };
     try {
       const raw = localStorage.getItem(DEMO_KEY);
       if (!raw) return fallback;
       const parsed = JSON.parse(raw);
-      const history = Array.isArray(parsed.history)
-        ? parsed.history.filter((h) => h && typeof h === "object").slice(0, HISTORY_LIMIT)
+      let history = Array.isArray(parsed.history)
+        ? parsed.history.filter((h) => h && typeof h === "object")
         : [];
+      const external = loadTradeHistory();
+      if (external.length && (!history.length || external.length >= history.length)) {
+        history = external;
+      }
+      // Seed one row from lastResult if history is still empty (pre-history sessions).
+      if (
+        !history.length &&
+        parsed.lastResult &&
+        typeof parsed.lastResult === "object" &&
+        parsed.lastResult.text
+      ) {
+        history = [
+          {
+            id: `seed-${Date.now()}`,
+            at: Date.now(),
+            kind: parsed.lastResult.won ? "settle" : "close",
+            side: parsed.lastResult.side || "above",
+            ticker: parsed.lastResult.ticker || null,
+            contracts: null,
+            askCents: null,
+            total: null,
+            fills: 1,
+            exitCents: null,
+            pl: Number(parsed.lastResult.pl),
+            won: !!parsed.lastResult.won,
+            accounted: false,
+            text: parsed.lastResult.text,
+          },
+        ];
+      }
+      history = history.slice(0, HISTORY_LIMIT);
+      persistTradeHistory(history);
       return {
         on: !!parsed.on,
         start:
@@ -263,6 +318,7 @@
   function saveDemoState() {
     try {
       if (!Array.isArray(demo.history)) demo.history = [];
+      persistTradeHistory(demo.history);
       localStorage.setItem(DEMO_KEY, JSON.stringify(demo));
     } catch {
       // ignore quota
@@ -272,14 +328,20 @@
   function pushTradeHistory(entry) {
     if (!entry || typeof entry !== "object") return;
     if (!Array.isArray(demo.history)) demo.history = [];
-    demo.history.unshift(entry);
+    demo.history.unshift({
+      id: entry.id || `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      at: entry.at || Date.now(),
+      ...entry,
+    });
     if (demo.history.length > HISTORY_LIMIT) {
       demo.history = demo.history.slice(0, HISTORY_LIMIT);
     }
+    persistTradeHistory(demo.history);
   }
 
   function clearTradeHistory() {
     demo.history = [];
+    persistTradeHistory([]);
     saveDemoState();
     renderTradeHistory();
     setStatus("ok", "Trade history cleared");
@@ -300,53 +362,100 @@
   }
 
   function renderTradeHistory() {
-    const list = Array.isArray(demo.history) ? demo.history : [];
+    if (!Array.isArray(demo.history)) demo.history = loadTradeHistory();
+    const list = demo.history;
+    const open = demo.position;
+    const openMark = open ? markOpenPosition(open) : null;
+
     if (el.tradeHistorySummary) {
-      if (!list.length) {
-        el.tradeHistorySummary.textContent = "No closed trades yet";
+      if (!list.length && !open) {
+        el.tradeHistorySummary.textContent = "No trades yet";
+        el.tradeHistorySummary.classList.remove("is-up", "is-down");
       } else {
         const wins = list.filter((t) => t.won).length;
+        const closed = list.length;
         const totalPl = list.reduce(
-          (sum, t) => sum + (Number.isFinite(t.pl) ? t.pl : 0),
+          (sum, t) => sum + (Number.isFinite(Number(t.pl)) ? Number(t.pl) : 0),
           0
         );
-        el.tradeHistorySummary.textContent = `${list.length} trade${
-          list.length === 1 ? "" : "s"
-        } · ${wins}W-${list.length - wins}L · ${formatPl(totalPl)}`;
+        const openBit = open
+          ? ` · open ${open.side === "above" ? "Above" : "Below"}`
+          : "";
+        el.tradeHistorySummary.textContent = closed
+          ? `${closed} closed · ${wins}W-${closed - wins}L · ${formatPl(
+              totalPl
+            )}${openBit}`
+          : `Open ${open.side === "above" ? "Above" : "Below"} · ${
+              open.contracts
+            } cts`;
         el.tradeHistorySummary.classList.toggle("is-up", totalPl > 0);
         el.tradeHistorySummary.classList.toggle("is-down", totalPl < 0);
       }
     }
     if (!el.tradeHistoryList) return;
-    if (!list.length) {
-      el.tradeHistoryList.innerHTML =
-        '<div class="trade-history-empty">Closed and settled trades show up here.</div>';
-      return;
+
+    const rows = [];
+    if (open) {
+      const side = open.side === "above" ? "Above" : "Below";
+      const pl = openMark && openMark.unrealized;
+      const plClass =
+        pl == null ? "" : pl >= 0 ? "is-win" : "is-loss";
+      rows.push(
+        `<article class="trade-history-item is-open ${plClass}">` +
+          `<div class="trade-history-top">` +
+          `<span class="trade-history-kind">OPEN ${side}</span>` +
+          `<span class="trade-history-pl">${
+            pl == null ? "—" : formatPl(pl)
+          }</span>` +
+          `</div>` +
+          `<div class="trade-history-meta">${formatHistoryTime(
+            open.openedAt || open.lastAddedAt || Date.now()
+          )} · ${open.contracts} cts @ avg ${
+            open.askCents != null ? open.askCents + "¢" : "—"
+          }${open.fills > 1 ? ` · ${open.fills} fills` : ""} · paid ${money(
+            open.total
+          )}</div>` +
+          `</article>`
+      );
     }
-    el.tradeHistoryList.innerHTML = list
-      .map((t) => {
-        const side = t.side === "above" ? "Above" : "Below";
-        const kind = t.kind === "settle" ? (t.won ? "WIN" : "LOSS") : "CLOSED";
-        const plClass = t.won ? "is-win" : "is-loss";
-        const fills = t.fills > 1 ? ` · ${t.fills} fills` : "";
-        const exit =
-          t.exitCents != null ? ` @ ${t.exitCents}¢` : "";
-        const mode = t.accounted ? "" : " · paper";
-        return (
-          `<article class="trade-history-item ${plClass}">` +
+
+    for (const t of list) {
+      const side = t.side === "above" ? "Above" : t.side === "below" ? "Below" : "—";
+      let kind = "CLOSED";
+      if (t.kind === "settle") kind = t.won ? "WIN" : "LOSS";
+      else if (t.kind === "buy") kind = "BOUGHT";
+      else if (t.kind === "add") kind = "ADDED";
+      else if (t.kind === "close") kind = "CLOSED";
+      const plClass =
+        t.pl == null ? "" : t.won || t.pl >= 0 ? "is-win" : "is-loss";
+      const fills = t.fills > 1 ? ` · ${t.fills} fills` : "";
+      const exit = t.exitCents != null ? ` @ ${t.exitCents}¢` : "";
+      const mode = t.accounted ? "" : " · paper";
+      const plTxt =
+        t.pl == null || !Number.isFinite(Number(t.pl))
+          ? t.text || "—"
+          : formatPl(Number(t.pl));
+      rows.push(
+        `<article class="trade-history-item ${plClass}">` +
           `<div class="trade-history-top">` +
           `<span class="trade-history-kind">${kind} ${side}${exit}</span>` +
-          `<span class="trade-history-pl">${formatPl(t.pl)}</span>` +
+          `<span class="trade-history-pl">${plTxt}</span>` +
           `</div>` +
           `<div class="trade-history-meta">${formatHistoryTime(t.at)} · ${
-            t.contracts || "—"
+            t.contracts != null ? t.contracts : "—"
           } cts @ avg ${t.askCents != null ? t.askCents + "¢" : "—"}${fills} · paid ${
             t.total != null ? money(t.total) : "—"
           }${mode}</div>` +
           `</article>`
-        );
-      })
-      .join("");
+      );
+    }
+
+    if (!rows.length) {
+      el.tradeHistoryList.innerHTML =
+        '<div class="trade-history-empty">Buy, add, close, or settle — trades will list here.</div>';
+      return;
+    }
+    el.tradeHistoryList.innerHTML = rows.join("");
   }
 
   function openOptions() {
@@ -355,6 +464,9 @@
     if (el.optionsBackdrop) el.optionsBackdrop.hidden = false;
     if (el.menuBtn) el.menuBtn.setAttribute("aria-expanded", "true");
     renderDemoUi();
+    renderTradeHistory();
+    // Keep history in view near the top of the ⋮ sheet.
+    if (el.optionsSheet) el.optionsSheet.scrollTop = 0;
   }
 
   function closeOptions() {
@@ -843,7 +955,7 @@
     demo.realizedPl = 0;
     demo.position = null;
     demo.lastResult = null;
-    demo.history = [];
+    // Keep trade history across bankroll resets (use Clear in Options to wipe).
     saveDemoState();
     renderDemoUi();
     setStatus("ok", `Demo reset · ${money(start)}`);
