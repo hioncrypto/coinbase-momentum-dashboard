@@ -7,6 +7,7 @@
   const ROLLOVER_TICK_MS = 1_000;
   const TF_KEY = "kalshiChartTf";
   const CHIME_KEY = "kalshiChimeEnabled";
+  const BG_ARMED_KEY = "kalshiBgAlertsArmed";
 
   const TF_LABELS = {
     "1m": "1m BRTI",
@@ -28,9 +29,10 @@
     status: document.getElementById("status"),
     clock: document.getElementById("clock"),
     chimeEnabled: document.getElementById("chime-enabled"),
-    chimeTest: document.getElementById("chime-test"),
+    chimeToggleLabel: document.getElementById("chime-toggle-label"),
     enableBg: document.getElementById("enable-bg"),
     bgStatus: document.getElementById("bg-status"),
+    bgSetup: document.getElementById("bg-setup"),
     oddsRow: document.getElementById("odds-row"),
     yesPct: document.getElementById("yes-pct"),
     noPct: document.getElementById("no-pct"),
@@ -143,6 +145,45 @@
     el.bgStatus.classList.toggle("warn", !ok);
   }
 
+  function hideBgSetup(animated) {
+    if (!el.bgSetup) return;
+    if (!animated) {
+      el.bgSetup.classList.add("is-hidden");
+      return;
+    }
+    // Force reflow so CSS transition runs.
+    void el.bgSetup.offsetWidth;
+    el.bgSetup.classList.add("is-hidden");
+  }
+
+  function showBgSetup() {
+    if (!el.bgSetup) return;
+    el.bgSetup.classList.remove("is-hidden");
+  }
+
+  function isBgArmed() {
+    if (localStorage.getItem(BG_ARMED_KEY) === "1") return true;
+    return (
+      "Notification" in window &&
+      Notification.permission === "granted" &&
+      localStorage.getItem(BG_ARMED_KEY) !== "0"
+    );
+  }
+
+  async function runChimeTest() {
+    ensureAudio();
+    playChime(true);
+    if ("Notification" in window && Notification.permission === "granted") {
+      postToSW({
+        type: "test-notify",
+        beat: lastFifteenTarget,
+        ticker: lastFifteenTicker || "TEST",
+        closeEt: closeTimeIso,
+      });
+    }
+    setStatus("ok", "Test chime");
+  }
+
   async function ensureNotificationPermission() {
     if (!("Notification" in window)) return false;
     if (Notification.permission === "granted") return true;
@@ -164,16 +205,11 @@
         "Notifications blocked. Chrome → site settings → Notifications → Allow, then try again."
       );
       setStatus("warn", "Notifications blocked");
+      showBgSetup();
       return false;
     }
     const ok = await subscribePush();
-    playChime(true);
-    postToSW({
-      type: "test-notify",
-      beat: lastFifteenTarget,
-      ticker: lastFifteenTicker || "TEST",
-      closeEt: closeTimeIso,
-    });
+    await runChimeTest();
     try {
       await fetch("/api/push/test", {
         method: "POST",
@@ -187,11 +223,14 @@
       // ignore
     }
     if (ok) {
-      setBgStatus(true, "Background alerts ON. You can leave the app; new 15m targets will notify.");
+      localStorage.setItem(BG_ARMED_KEY, "1");
+      setBgStatus(true, "Background alerts on");
       setStatus("ok", "Background alerts on");
+      setTimeout(() => hideBgSetup(true), 700);
     } else {
       setBgStatus(false, "Could not subscribe to push. Stay on HTTPS / installed app and retry.");
       setStatus("warn", "Push subscribe failed");
+      showBgSetup();
     }
     return ok;
   }
@@ -683,48 +722,50 @@
           const ok = await subscribePush();
           playChime(true);
           if (!ok) {
-            setStatus(
-              "warn",
-              "Allow Notifications for background chime"
-            );
+            setStatus("warn", "Allow Notifications for background chime");
+            showBgSetup();
           } else {
+            localStorage.setItem(BG_ARMED_KEY, "1");
             setStatus("ok", "Background chime enabled");
+            hideBgSetup(true);
           }
         } else {
           await unsubscribePush();
+          localStorage.setItem(BG_ARMED_KEY, "0");
+          showBgSetup();
+          setBgStatus(false, "Chime off. Turn it back on, then enable background alerts again.");
         }
       });
     }
-    if (el.chimeTest) {
-      el.chimeTest.addEventListener("click", async () => {
-        ensureAudio();
-        playChime(true);
-        await ensureNotificationPermission();
-        await subscribePush();
-        postToSW({
-          type: "test-notify",
-          beat: lastFifteenTarget,
-          ticker: lastFifteenTicker || "TEST",
-          closeEt: closeTimeIso,
-        });
-        try {
-          await fetch("/api/push/test", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              beat: lastFifteenTarget,
-              close_et: closeTimeIso,
-            }),
-          });
-        } catch {
-          // ignore
+    // Long-press chime label = test (no permanent Test button).
+    if (el.chimeToggleLabel) {
+      let pressTimer = null;
+      const clearPress = () => {
+        if (pressTimer) {
+          clearTimeout(pressTimer);
+          pressTimer = null;
         }
+      };
+      el.chimeToggleLabel.addEventListener("pointerdown", (ev) => {
+        if (ev.pointerType === "mouse" && ev.button !== 0) return;
+        clearPress();
+        pressTimer = setTimeout(() => {
+          pressTimer = null;
+          runChimeTest();
+        }, 550);
       });
+      el.chimeToggleLabel.addEventListener("pointerup", clearPress);
+      el.chimeToggleLabel.addEventListener("pointerleave", clearPress);
+      el.chimeToggleLabel.addEventListener("pointercancel", clearPress);
+      el.chimeToggleLabel.addEventListener("contextmenu", (ev) => ev.preventDefault());
     }
     if (el.enableBg) {
       el.enableBg.addEventListener("click", () => {
         enableBackgroundAlerts();
       });
+    }
+    if (isBgArmed() && Notification.permission === "granted") {
+      hideBgSetup(false);
     }
     const unlock = () => ensureAudio();
     window.addEventListener("pointerdown", unlock, { passive: true });
