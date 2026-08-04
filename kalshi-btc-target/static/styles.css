@@ -1768,6 +1768,31 @@ body.has-open-pl .roi-panel {
   display: none !important;
 }
 
+.app-shell > .top,
+.app-shell > .summary-panel,
+.app-shell > .trade-panel {
+  flex: 0 0 auto;
+}
+
+.app-shell > .chart-wrap {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column;
+  overflow: hidden;
+  margin: 2px 8px;
+}
+
+.top {
+  padding: 6px 12px 2px;
+}
+
+.clock {
+  font-size: 0.92rem;
+  padding: 5px 8px;
+  min-width: 5.2rem;
+}
+
 /* Compact summary */
 .summary-panel {
   max-height: min(26dvh, 200px);
@@ -2087,6 +2112,26 @@ body.portrait-app #chart {
   line-height: 1.35;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+}
+
+.open-pl-close {
+  width: 100%;
+  margin-top: 6px;
+  min-height: 36px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 210, 138, 0.45);
+  background: rgba(255, 210, 138, 0.14);
+  color: var(--warn);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 750;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.open-pl-close:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .dock-btn {

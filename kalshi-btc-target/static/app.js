@@ -2535,6 +2535,9 @@
     if (el.demoLiveClose) {
       el.demoLiveClose.addEventListener("click", () => closeDemoPosition());
     }
+    if (el.openPlClose) {
+      el.openPlClose.addEventListener("click", () => closeDemoPosition());
+    }
     if (el.buySheetX) {
       el.buySheetX.addEventListener("click", () => dismissBuySheet());
     }
