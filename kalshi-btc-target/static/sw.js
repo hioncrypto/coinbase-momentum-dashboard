@@ -1,5 +1,5 @@
-/* Kalshi BTC Target service worker — background 15m target alerts */
-const SW_VERSION = "2.2-ui";
+/* BeatLine service worker — background 15m target + clear-edge alerts */
+const SW_VERSION = "2.7-edge";
 const TARGET_URL = "/api/target?tf=15m";
 const STATE_KEY = "kalshiFifteenState";
 
@@ -40,11 +40,11 @@ self.addEventListener("fetch", (event) => {
 async function readState() {
   const cache = await caches.open(SW_VERSION);
   const res = await cache.match(STATE_KEY);
-  if (!res) return { ticker: null, target: null, chimeOn: true };
+  if (!res) return { ticker: null, target: null, chimeOn: true, edgeKey: null };
   try {
     return await res.json();
   } catch {
-    return { ticker: null, target: null, chimeOn: true };
+    return { ticker: null, target: null, chimeOn: true, edgeKey: null };
   }
 }
 
@@ -79,6 +79,40 @@ async function showTargetNotification(payload) {
     data: { url: "/", ticker: payload && payload.ticker },
   };
   await self.registration.showNotification(title, opts);
+}
+
+async function showEdgeNotification(payload) {
+  const side = payload && payload.side === "below" ? "Below" : "Above";
+  const ask =
+    payload && payload.askCents != null ? Math.round(Number(payload.askCents)) : null;
+  const conf =
+    payload && payload.pWin != null ? Math.round(Number(payload.pWin) * 100) : null;
+  const title = `BeatLine · clear edge · Buy ${side}`;
+  const bits = [];
+  if (ask != null) bits.push(`ask ${ask}¢`);
+  if (conf != null) bits.push(`${conf}% model`);
+  if (payload && payload.beat != null) {
+    bits.push(
+      `beat $${Number(payload.beat).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}`
+    );
+  }
+  const body = bits.length
+    ? bits.join(" · ")
+    : "Best Side found a clear edge — open BeatLine";
+  await self.registration.showNotification(title, {
+    body,
+    icon: "/icons/icon-192.png?v=2.6",
+    badge: "/icons/icon-192.png?v=2.6",
+    vibrate: [60, 40, 60, 40, 120],
+    tag: "kalshi-clear-edge",
+    renotify: true,
+    requireInteraction: true,
+    silent: false,
+    data: { url: "/", ticker: payload && payload.ticker, kind: "clear_edge" },
+  });
 }
 
 async function checkTarget(forceNotify) {
@@ -158,6 +192,19 @@ self.addEventListener("message", (event) => {
       })
     );
   }
+  if (msg.type === "edge-notify") {
+    event.waitUntil(
+      (async () => {
+        const state = await readState();
+        if (!state.chimeOn) return;
+        const key = `${msg.side}:${Math.round(Number(msg.askCents) || 0)}`;
+        if (state.edgeKey === key) return;
+        state.edgeKey = key;
+        await writeState(state);
+        await showEdgeNotification(msg);
+      })()
+    );
+  }
 });
 
 self.addEventListener("push", (event) => {
@@ -166,6 +213,19 @@ self.addEventListener("push", (event) => {
     payload = event.data ? event.data.json() : {};
   } catch {
     payload = { body: event.data ? event.data.text() : "" };
+  }
+  const kind = payload.type || payload.kind || "new_target";
+  if (kind === "clear_edge") {
+    event.waitUntil(
+      showEdgeNotification({
+        side: payload.side,
+        askCents: payload.ask_cents ?? payload.askCents,
+        pWin: payload.p_win ?? payload.pWin,
+        beat: payload.beat ?? payload.price_to_beat ?? payload.target,
+        ticker: payload.ticker,
+      })
+    );
+    return;
   }
   event.waitUntil(
     showTargetNotification({
@@ -181,22 +241,21 @@ self.addEventListener("notificationclick", (event) => {
   const url = (event.notification.data && event.notification.data.url) || "/";
   event.waitUntil(
     (async () => {
-      const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const all = await clients.matchAll({ type: "window", includeUncontrolled: true });
       for (const client of all) {
         if ("focus" in client) {
           await client.focus();
+          if ("navigate" in client) {
+            try {
+              await client.navigate(url);
+            } catch {
+              // ignore
+            }
+          }
           return;
         }
       }
-      if (self.clients.openWindow) await self.clients.openWindow(url);
+      await clients.openWindow(url);
     })()
   );
 });
-
-self.addEventListener("periodicsync", (event) => {
-  if (event.tag === "kalshi-15m-check") {
-    event.waitUntil(checkTarget(false));
-  }
-});
-
-startPollLoop();

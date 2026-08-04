@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import base64
 import json
+import math
 import os
 import re
 import threading
@@ -77,6 +78,7 @@ _brti_cache: dict = {"at": 0.0, "ticks": None, "error": None}
 _push_lock = threading.Lock()
 _push_subs: list[dict] = []
 _last_push_ticker: str | None = None
+_last_edge_key: str | None = None
 _vapid_app_server_key: str | None = None
 _vapid_private_path: str | None = None
 TARGET_TTL = 0.75
@@ -888,9 +890,137 @@ def send_web_push(payload: dict) -> int:
     return sent
 
 
+def _usable_ask_cents(ask_pct) -> int | None:
+    if ask_pct is None:
+        return None
+    try:
+        n = int(round(float(ask_pct)))
+    except (TypeError, ValueError):
+        return None
+    if n < 2 or n > 98:
+        return None
+    return n
+
+
+def _model_prob_above(
+    spot: float,
+    beat: float,
+    secs_left: float,
+    settlement_mode: bool,
+    settlement_side: str | None,
+    settlement_avg: float | None,
+) -> float | None:
+    if settlement_mode and settlement_side == "above":
+        return 0.97
+    if settlement_mode and settlement_side == "below":
+        return 0.03
+    if (
+        settlement_mode
+        and settlement_avg is not None
+        and math.isfinite(settlement_avg)
+    ):
+        d = float(settlement_avg) - float(beat)
+        sigma = max(8.0, abs(float(beat)) * 0.00015)
+        return 0.5 * (1.0 + math.erf((d / sigma) / math.sqrt(2.0)))
+    t = max(1.0, float(secs_left) or 1.0)
+    sigma = max(8.0, abs(float(beat)) * 0.55 * math.sqrt(t / (365.25 * 24 * 3600)))
+    return 0.5 * (1.0 + math.erf(((float(spot) - float(beat)) / sigma) / math.sqrt(2.0)))
+
+
+def _kalshi_taker_fee(contracts: int, price: float) -> float:
+    c = max(0, contracts)
+    p = min(0.99, max(0.01, price))
+    raw = 0.07 * c * p * (1.0 - p)
+    return math.ceil(raw * 100 - 1e-9) / 100.0
+
+
+def score_clear_edge(data: dict, spot: float | None) -> dict | None:
+    """Mirror client Best Side clear-edge thresholds for background push."""
+    if spot is None or not math.isfinite(float(spot)):
+        return None
+    beat = data.get("price_to_beat")
+    if beat is None:
+        beat = data.get("target")
+    if beat is None or not math.isfinite(float(beat)):
+        return None
+
+    close_iso = data.get("close_time")
+    if not close_iso:
+        return None
+    try:
+        close_dt = datetime.fromisoformat(str(close_iso).replace("Z", "+00:00"))
+        secs = max(0.0, (close_dt.timestamp() - time.time()))
+    except Exception:
+        return None
+
+    above_ask = _usable_ask_cents(data.get("yes_ask_pct"))
+    below_ask = _usable_ask_cents(data.get("no_ask_pct"))
+    # Prefer mid-based asks when extreme settlement quotes appear.
+    yes = data.get("yes_pct")
+    no = data.get("no_pct")
+    if above_ask is None and yes is not None:
+        try:
+            above_ask = _usable_ask_cents(max(2, min(98, round(float(yes)))))
+        except (TypeError, ValueError):
+            above_ask = None
+    if below_ask is None and no is not None:
+        try:
+            below_ask = _usable_ask_cents(max(2, min(98, round(float(no)))))
+        except (TypeError, ValueError):
+            below_ask = None
+    if above_ask is None and below_ask is None:
+        return None
+
+    model = _model_prob_above(
+        float(spot),
+        float(beat),
+        secs,
+        bool(data.get("settlement_mode")),
+        data.get("settlement_side"),
+        data.get("settlement_avg"),
+    )
+    if model is None:
+        return None
+
+    scored = []
+    for side, ask in (("above", above_ask), ("below", below_ask)):
+        if ask is None:
+            continue
+        p = ask / 100.0
+        fee = _kalshi_taker_fee(1, p)
+        cost_per = p + fee
+        p_win = model if side == "above" else 1.0 - model
+        ev = p_win * 1.0 - cost_per
+        risk = max(0.04, 1.0 - p_win)
+        scored.append(
+            {
+                "side": side,
+                "ask_cents": ask,
+                "p_win": p_win,
+                "ev": ev,
+                "score": ev / risk,
+            }
+        )
+    if not scored:
+        return None
+    scored.sort(key=lambda x: x["score"], reverse=True)
+    best = scored[0]
+    if data.get("thin_book"):
+        best = {**best, "score": best["score"] - 0.08}
+    clear = (
+        best["ev"] > 0.01
+        and best["score"] > 0.04
+        and best["p_win"] >= 0.52
+        and not (secs > 12 * 60 and abs(best["ev"]) < 0.03)
+    )
+    if not clear:
+        return None
+    return best
+
+
 def push_watcher_loop() -> None:
     """Poll Kalshi and push to phones even when the PWA is backgrounded."""
-    global _last_push_ticker
+    global _last_push_ticker, _last_edge_key
     print("[kalshi-btc-target] background push watcher started")
     while True:
         try:
@@ -920,8 +1050,43 @@ def push_watcher_loop() -> None:
                     f"[kalshi-btc-target] new 15m target {ticker} "
                     f"beat={beat} pushed={n}"
                 )
+                _last_edge_key = None
             if ticker:
                 _last_push_ticker = ticker
+
+            # Clear-edge Best Side push (same thresholds as the app).
+            spot = None
+            try:
+                spot_payload = fetch_spot()
+                if spot_payload.get("ok"):
+                    spot = spot_payload.get("price")
+            except Exception:
+                spot = None
+            edge = score_clear_edge(data, spot)
+            if edge:
+                key = f"{edge['side']}:{edge['ask_cents']}"
+                if key != _last_edge_key:
+                    n = send_web_push(
+                        {
+                            "type": "clear_edge",
+                            "side": edge["side"],
+                            "ask_cents": edge["ask_cents"],
+                            "p_win": edge["p_win"],
+                            "ticker": ticker,
+                            "beat": beat,
+                            "price_to_beat": beat,
+                            "target": beat,
+                        }
+                    )
+                    print(
+                        f"[kalshi-btc-target] clear edge {edge['side']} "
+                        f"ask={edge['ask_cents']}¢ pushed={n}"
+                    )
+                    _last_edge_key = key
+            else:
+                # Allow a fresh alert when edge disappears then returns.
+                if _last_edge_key is not None:
+                    _last_edge_key = None
         except Exception as exc:
             print(f"[kalshi-btc-target] push watcher error: {exc}")
         time.sleep(PUSH_POLL_SEC)

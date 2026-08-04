@@ -23,7 +23,7 @@
     },
     {
       title: "Odds & Best Side",
-      body: "Market chance shows Above/Below pricing. Best Side scores distance from the beat, time left, ask, and fees — tap it when you want a suggested side.",
+      body: "Market chance shows Above/Below pricing. Best Side scores distance from the beat, time left, ask, and fees. When a clear edge appears, BeatLine chimes and notifies you automatically — tap Best to trade it.",
     },
     {
       title: "Set size, then buy",
@@ -35,7 +35,7 @@
     },
     {
       title: "Demo & alerts",
-      body: "⋮ Options → Demo mode turns on a paper bankroll and session P/L. The bell enables new-target alerts. Reopen this guide anytime from Options → How to use BeatLine.",
+      body: "⋮ Options → Demo mode turns on a paper bankroll and session P/L. The bell enables automatic alerts for new 15m targets and clear-edge Best Side moments.",
     },
   ];
 
@@ -167,6 +167,8 @@
   let lastBestSideKey = null;
   let bestSideFlashTimer = null;
   let lastBestPick = null; // { side } | null when clear edge
+  let lastClearEdgeAlertKey = null;
+  let lastClearEdgeAlertAt = 0;
   let settleHintByTicker = {};
   let optionsOpen = false;
   let buySheetOpen = false;
@@ -1095,6 +1097,39 @@
     }
   }
 
+  /** Distinct ascending chime for clear-edge Best Side. */
+  function playEdgeChime(force) {
+    if (!chimeOn && !force) return;
+    const ctx = ensureAudio();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const tones = [
+      { f: 740, t: 0.0, d: 0.12 },
+      { f: 988, t: 0.11, d: 0.14 },
+      { f: 1319, t: 0.24, d: 0.28 },
+    ];
+    for (const tone of tones) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.value = tone.f;
+      gain.gain.setValueAtTime(0.0001, now + tone.t);
+      gain.gain.exponentialRampToValueAtTime(0.2, now + tone.t + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + tone.t + tone.d);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + tone.t);
+      osc.stop(now + tone.t + tone.d + 0.02);
+    }
+    if (navigator.vibrate) {
+      try {
+        navigator.vibrate([30, 40, 30, 40, 90]);
+      } catch {
+        // ignore
+      }
+    }
+  }
+
   function urlBase64ToUint8Array(base64String) {
     const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
     const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -1107,7 +1142,7 @@
   async function ensureServiceWorker() {
     if (!("serviceWorker" in navigator)) return null;
     try {
-      const reg = await navigator.serviceWorker.register("/sw.js?v=2.6", { scope: "/" });
+      const reg = await navigator.serviceWorker.register("/sw.js?v=2.7", { scope: "/" });
       await navigator.serviceWorker.ready;
       return reg;
     } catch (err) {
@@ -1126,7 +1161,9 @@
     if (!el.pushBadge) return;
     el.pushBadge.classList.toggle("is-on", !!on);
     el.pushBadge.setAttribute("aria-pressed", on ? "true" : "false");
-    el.pushBadge.title = on ? "Alerts on — tap to turn off" : "Alerts off — tap to turn on";
+    el.pushBadge.title = on
+      ? "Alerts on — new targets + clear edge"
+      : "Alerts off — tap to turn on";
   }
 
   function setBgStatus(ok, text) {
@@ -1302,6 +1339,49 @@
         closeEt,
       });
     }
+  }
+
+  function alertClearEdge(best) {
+    if (!best || !best.side) return;
+    if (!chimeOn) return;
+    // Already in a trade — don't spam; UI still updates.
+    if (demo.position) return;
+
+    const side = best.side;
+    const ask = Math.round(Number(best.askCents) || 0);
+    const conf = best.pWin != null ? Math.round(best.pWin * 100) : null;
+    const alertKey = `${side}:${ask}`;
+    const now = Date.now();
+    const prev = lastClearEdgeAlertKey;
+    const sideChanged = prev && prev !== "none" && !String(prev).startsWith(`${side}:`);
+    const newlyClear = !prev || prev === "none";
+    const askMoved =
+      prev &&
+      String(prev).startsWith(`${side}:`) &&
+      Math.abs(Number(String(prev).split(":")[1]) - ask) >= 3;
+    const cooled = now - lastClearEdgeAlertAt > 75_000;
+
+    if (!(newlyClear || sideChanged || (askMoved && cooled))) {
+      return;
+    }
+
+    lastClearEdgeAlertKey = alertKey;
+    lastClearEdgeAlertAt = now;
+    ensureAudio();
+    playEdgeChime();
+    const sideLabel = side === "above" ? "Above" : "Below";
+    setStatus(
+      "ok",
+      `Clear edge · Buy ${sideLabel}${ask ? ` @ ${ask}¢` : ""}`
+    );
+    postToSW({
+      type: "edge-notify",
+      side,
+      askCents: ask || null,
+      pWin: best.pWin,
+      ticker: lastTicker || lastFifteenTicker,
+      beat: lastTarget,
+    });
   }
 
   function maybeChimeNewFifteenTarget(beat, ticker, source, closeEt) {
@@ -1557,6 +1637,7 @@
       setDockBestDetail("—", null);
       lastBestSideKey = null;
       lastBestPick = null;
+      lastClearEdgeAlertKey = "none";
       return;
     }
 
@@ -1571,6 +1652,7 @@
       setRoiCardBest(null);
       setDockBestDetail("—", null);
       lastBestPick = null;
+      lastClearEdgeAlertKey = "none";
       return;
     }
 
@@ -1611,6 +1693,7 @@
         lastBestSideKey = noneKey;
         flashBestSide();
       }
+      lastClearEdgeAlertKey = "none";
       return;
     }
 
@@ -1653,6 +1736,7 @@
       lastBestSideKey = key;
       flashBestSide();
     }
+    alertClearEdge(best);
   }
 
   function fillRoiCard(priceEl, summaryEl, detailEl, askCents, stakeUsd) {
