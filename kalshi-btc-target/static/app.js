@@ -962,8 +962,10 @@
         accounted,
       };
     }
-    // Keep main trade-size slider in sync for Best Side sizing.
-    if (stake <= 100) setTradeStake(Math.round(stake));
+    // Keep main trade-size slider in sync for Best Side sizing ($1–$100).
+    if (stake >= BUY_AMOUNT_MIN && stake <= BUY_AMOUNT_MAX) {
+      setTradeStake(Math.round(stake));
+    }
     saveDemoState();
     refreshBestSide();
     renderDemoUi();
@@ -982,13 +984,26 @@
     return true;
   }
 
+  const BUY_AMOUNT_MIN = 1;
+  const BUY_AMOUNT_MAX = 100;
+
+  function buyAmountCap() {
+    const hard = BUY_AMOUNT_MAX;
+    if (demo.on) {
+      return Math.max(BUY_AMOUNT_MIN, Math.min(hard, Math.floor(demo.balance) || BUY_AMOUNT_MIN));
+    }
+    return hard;
+  }
+
+  function clampBuyAmount(n) {
+    const cap = buyAmountCap();
+    let v = Number(n);
+    if (!Number.isFinite(v)) v = buySheetAmount;
+    return Math.max(BUY_AMOUNT_MIN, Math.min(cap, Math.round(v)));
+  }
+
   function readBuyAmount() {
-    let n = Number(el.buyAmount && el.buyAmount.value);
-    if (!Number.isFinite(n)) n = buySheetAmount;
-    const cap = demo.on
-      ? Math.max(1, Math.floor(demo.balance) || 1)
-      : 100000;
-    n = Math.max(1, Math.min(cap, Math.round(n)));
+    const n = clampBuyAmount(el.buyAmount && el.buyAmount.value);
     buySheetAmount = n;
     return n;
   }
@@ -1096,14 +1111,12 @@
     buySheetSide = side;
     buySheetOpen = true;
     const adding = !!(demo.position && demo.position.side === side);
-    const cap = demo.on
-      ? Math.max(1, Math.floor(demo.balance) || 50)
-      : 100000;
-    buySheetAmount = Math.max(
-      1,
-      Math.min(cap, tradeStake > 0 ? tradeStake : 50)
-    );
-    if (el.buyAmount) el.buyAmount.value = String(buySheetAmount);
+    buySheetAmount = clampBuyAmount(tradeStake > 0 ? tradeStake : 50);
+    if (el.buyAmount) {
+      el.buyAmount.min = String(BUY_AMOUNT_MIN);
+      el.buyAmount.max = String(buyAmountCap());
+      el.buyAmount.value = String(buySheetAmount);
+    }
     if (el.buySheet) {
       el.buySheet.hidden = false;
       el.buySheet.classList.remove("is-done");
@@ -3162,8 +3175,8 @@
       btn.addEventListener("click", () => {
         const amt = Number(btn.dataset.amt);
         if (!Number.isFinite(amt)) return;
-        buySheetAmount = amt;
-        if (el.buyAmount) el.buyAmount.value = String(amt);
+        buySheetAmount = clampBuyAmount(amt);
+        if (el.buyAmount) el.buyAmount.value = String(buySheetAmount);
         refreshBuySheetPreview();
       });
     });
