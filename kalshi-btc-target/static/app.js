@@ -3070,6 +3070,9 @@
         resetDemoAccount();
       });
     }
+    if (el.tradeHistoryClear) {
+      el.tradeHistoryClear.addEventListener("click", () => clearTradeHistory());
+    }
     if (el.demoBuyBest) {
       el.demoBuyBest.addEventListener("click", () => demoBuyBest());
     }
