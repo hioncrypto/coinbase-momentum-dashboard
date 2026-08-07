@@ -1,13 +1,8 @@
 # StreetPin
 
-Find mobile vendors — ice cream trucks, Lotte carts, food trucks, and more — live on a map.
+Find mobile vendors — ice cream trucks, Lotte carts, food trucks — live on a map. Street vibe UI for customers and vendors.
 
-## Who it’s for
-
-- **Customers:** see who’s live nearby, filter by type, favorite a vendor, open details
-- **Vendors:** set your cart name, tap **Go live**, share your GPS pin while you roll
-
-## Run locally
+## Try it
 
 ```bash
 cd streetpin
@@ -15,25 +10,22 @@ npm install
 npm run dev
 ```
 
-Open the URL Vite prints (usually `http://localhost:5173`).
+## What’s in this build
 
-## Try the demo
+### Customer
+- Live map of nearby vendors + favorites
+- **Closer alerts** when a favorite enters your distance (1 block → 1 mile)
+- **Request a vendor** — ping live carts within a radius (e.g. you’re at the park)
+- **Invite a vendor** — share a link so they enter cart info and go live
 
-1. Choose **I’m looking for a vendor** — sample live vendors move on the map
-2. Tap a pin or list row → Favorite / filter by type
-3. Switch to **Vendor mode** → edit your profile → **Go live**
-4. Switch back to customer view to see yourself on the map when live
+### Vendor
+- Profile (name, type, menu, when you’re usually around)
+- **Go live / End shift**
+- **Invite customers** — share a track link
+- **Client request inbox** — accept and jump to their pin on the map
 
-Location falls back to a demo neighborhood (Echo Park / LA) if the browser blocks GPS.
+### Demo
+Sample vendors move on the map so you can try without GPS. Location falls back to Echo Park / LA if the browser blocks geolocation.
 
 ## Stack
-
-- React + TypeScript (Vite)
-- Leaflet / React-Leaflet map
-- Local storage for favorites, role, and vendor profile
-
-## Next steps
-
-- Real backend (Supabase/Firebase) for multi-user live pins
-- Push alerts when a favorite vendor goes live nearby
-- Native shell (Expo) for reliable background GPS on the road
+React + TypeScript (Vite), Leaflet map, localStorage for demo state.
