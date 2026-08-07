@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="screen-orientation" content="portrait" />
+    <meta name="theme-color" content="#0b1210" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="BeatLine" />
+    <meta name="application-name" content="BeatLine" />
+    <meta
+      name="description"
+      content="BeatLine — trade the 15-minute BTC Price to beat with live odds, Best Side, and demo P/L."
+    />
+    <link rel="manifest" href="/manifest.webmanifest?v=2.7" />
+    <link rel="icon" href="/icons/icon.svg?v=2.6" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png?v=2.6" />
+    <link rel="icon" href="/icons/icon-192.png?v=2.6" sizes="192x192" type="image/png" />
+    <title>BeatLine</title>
+    <link rel="stylesheet" href="/styles.css?v=9.52" />
+    <script
+      src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"
+      defer
+    ></script>
+    <script src="/app.js?v=9.53" defer></script>
+  </head>
+  <body class="portrait-app">
+    <div id="rotate-gate" class="rotate-gate" hidden>
+      <strong>Portrait only</strong>
+      <span>Keep the phone upright. Tap here to lock.</span>
+    </div>
+
+    <div id="ephemeral-banner" class="ephemeral-banner" hidden>
+      <div class="ephemeral-banner-text">
+        <strong>Temp link — will die again</strong>
+        <span
+          >This tunnel dies when the Cursor agent expires. Deploy once on Render
+          for a permanent URL, and Export backup now.</span
+        >
+      </div>
+      <div class="ephemeral-banner-actions">
+        <a
+          class="ephemeral-deploy"
+          href="https://render.com/deploy?repo=https://github.com/hioncrypto/beatline"
+          target="_blank"
+          rel="noopener noreferrer"
+          >Deploy free</a
+        >
+        <button type="button" id="ephemeral-export" class="ephemeral-export">
+          Export
+        </button>
+        <button type="button" id="ephemeral-dismiss" class="ephemeral-dismiss" aria-label="Dismiss">
+          ✕
+        </button>
+      </div>
+    </div>
+
+    <div class="app-shell">
+      <header class="top">
+      <div class="brand">
+        <span class="mark" aria-hidden="true"></span>
+        <div>
+          <h1>BeatLine</h1>
+          <p class="sub">15-minute BTC · Price to beat</p>
+        </div>
+      </div>
+      <div id="clock" class="clock" aria-live="off">—:—:—</div>
+      <div class="top-actions">
+        <button
+          type="button"
+          id="push-badge"
+          class="push-badge"
+          title="Alerts off"
+          aria-label="Toggle alerts"
+          aria-pressed="false"
+        >
+          <svg class="bell-off" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <path
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.9"
+              stroke-linejoin="round"
+              stroke-linecap="round"
+              d="M12 3.4a5.8 5.8 0 0 0-5.8 5.8v3.2L4.4 15.2V17h15.2v-1.8l-1.8-2.8V9.2A5.8 5.8 0 0 0 12 3.4Z"
+            />
+            <path
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.9"
+              stroke-linecap="round"
+              d="M9.7 17.1a2.3 2.3 0 0 0 4.6 0"
+            />
+            <path
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.1"
+              stroke-linecap="round"
+              d="M4.2 4.2l15.6 15.6"
+            />
+          </svg>
+          <svg class="bell-on" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M12 22a2.2 2.2 0 0 0 2.2-2.2h-4.4A2.2 2.2 0 0 0 12 22Zm7-6.2V11a7 7 0 1 0-14 0v4.8L3 17.8V19h18v-1.2l-2-1.8Z"
+            />
+          </svg>
+          <span class="push-badge-dot" aria-hidden="true"></span>
+        </button>
+        <button
+          type="button"
+          id="menu-btn"
+          class="menu-btn"
+          title="Options"
+          aria-label="Open options"
+          aria-haspopup="dialog"
+          aria-expanded="false"
+          aria-controls="options-sheet"
+        >
+          <span class="menu-dots" aria-hidden="true"></span>
+        </button>
+      </div>
+      <div id="status" class="status" data-state="loading">Connecting…</div>
+    </header>
+      <section id="summary-panel" class="summary-panel" aria-live="polite">
+      <div class="hero-beat">
+        <div class="label" id="target-label">Price to beat</div>
+        <div id="target-value" class="value beat">—</div>
+        <div id="target-meta" class="meta">Waiting for Kalshi…</div>
+      </div>
+
+      <div class="live-row">
+        <div class="live-block">
+          <div class="label">Live now</div>
+          <div id="spot-value" class="value spot">—</div>
+        </div>
+        <div class="live-block live-delta">
+          <div class="label">vs beat</div>
+          <div id="spot-delta" class="spot-delta">—</div>
+        </div>
+        <div class="live-block live-time">
+          <div class="label">Time left</div>
+          <div id="countdown" class="countdown">—:—</div>
+        </div>
+      </div>
+
+      <div id="settle-banner" class="settle-banner" hidden>
+        <div class="settle-title" id="settle-title">Last minute · settling</div>
+        <div id="settle-avg" class="settle-avg">—</div>
+        <div id="settle-meta" class="settle-meta">
+          Kalshi averages the last 60 seconds — not just the final tick.
+        </div>
+      </div>
+
+      <p id="countdown-meta" class="countdown-meta">Until this 15m window ends</p>
+      <p id="bg-status" class="sound-hint" hidden></p>
+      <p id="edge-line" class="edge-line" hidden></p>
+
+      <div id="demo-live" class="demo-live" hidden aria-live="polite">
+        <div class="demo-live-top">
+          <div>
+            <div id="demo-live-kicker" class="demo-live-kicker">Open trade</div>
+            <div id="demo-live-side" class="demo-live-side">—</div>
+          </div>
+          <div id="demo-live-pl" class="demo-live-pl">—</div>
+        </div>
+        <div id="demo-live-pct" class="demo-live-pct">—</div>
+        <button type="button" id="demo-live-close" class="demo-live-close">
+          Close at bid
+        </button>
+        <div id="demo-live-factors" class="demo-live-factors"></div>
+        <div id="demo-live-meta" class="demo-live-meta" hidden>—</div>
+      </div>
+    </section>
+    <div
+      id="chart-resize-top"
+      class="chart-resize chart-resize-top"
+      role="separator"
+      aria-orientation="horizontal"
+      aria-label="Drag up to enlarge the chart and push Price to beat away"
+      title="Drag up to enlarge the chart"
+    >
+      <span class="chart-resize-bar" aria-hidden="true"></span>
+      <span class="chart-resize-label">Chart size</span>
+    </div>
+    <section id="chart-wrap" class="chart-wrap">
+      <div
+        id="timeframe"
+        class="tf-btns"
+        role="group"
+        aria-label="Chart candle size"
+      >
+        <button type="button" class="tf-btn" data-tf="15m" aria-pressed="true">15m</button>
+        <button type="button" class="tf-btn" data-tf="5m" aria-pressed="false">5m</button>
+        <button type="button" class="tf-btn" data-tf="1m" aria-pressed="false">1m</button>
+      </div>
+      <main id="chart" role="img" aria-label="Bitcoin chart with Price to beat line"></main>
+    </section>
+    <div
+      id="chart-resize-bottom"
+      class="chart-resize chart-resize-bottom"
+      role="separator"
+      aria-orientation="horizontal"
+      aria-label="Drag to expand or shrink the chart"
+      title="Drag to expand or shrink the chart"
+    >
+      <span class="chart-resize-bar" aria-hidden="true"></span>
+      <span class="chart-resize-label">Chart size</span>
+    </div>
+
+    <!-- Best Side + Trade size + Market Chance — all always visible; chart shrinks first. -->
+    <section class="trade-stack">
+    <div id="best-side" class="best-side" hidden aria-live="polite">
+      <div class="best-side-kicker">Best side</div>
+      <div id="best-side-label" class="best-side-label">—</div>
+      <div id="best-side-amount" class="best-side-amount">—</div>
+      <div id="best-side-suggest" class="best-side-suggest" hidden>
+        <div class="best-side-suggest-main">
+          <span class="best-side-suggest-kicker">Suggested buy</span>
+          <span id="best-side-suggest-amount" class="best-side-suggest-amount">—</span>
+        </div>
+        <div id="best-side-suggest-meta" class="best-side-suggest-meta">—</div>
+      </div>
+      <div id="best-side-meta" class="best-side-meta">—</div>
+    </div>
+
+    <div id="stake-strip" class="stake-strip" hidden>
+      <div class="roi-heading">
+        <span>Trade size</span>
+        <span id="stake-value" class="stake-value">$50</span>
+      </div>
+      <label class="stake-slider-wrap" for="stake-slider">
+        <input
+          id="stake-slider"
+          class="stake-slider"
+          type="range"
+          min="1"
+          max="100"
+          step="1"
+          value="1"
+          aria-valuemin="1"
+          aria-valuemax="100"
+          aria-valuenow="1"
+          aria-label="Trade size in dollars"
+        />
+        <div class="stake-ends">
+          <span>$1</span>
+          <span>$100</span>
+        </div>
+      </label>
+    </div>
+
+    <section class="trade-panel">
+      <div class="odds-block">
+        <div class="odds-heading">
+          <span>Market chance</span>
+          <span id="odds-hint" class="odds-hint">What traders are pricing</span>
+        </div>
+        <div class="odds-row" id="odds-row" hidden>
+          <div class="odd yes">
+            <span class="odd-label">Above</span>
+            <span id="yes-pct" class="odd-pct">—</span>
+            <span id="yes-book" class="odd-book">—</span>
+          </div>
+          <div class="odd no">
+            <span class="odd-label">Below</span>
+            <span id="no-pct" class="odd-pct">—</span>
+            <span id="no-book" class="odd-book">—</span>
+          </div>
+        </div>
+        <div id="roi-panel" class="roi-panel" hidden>
+          <div class="roi-grid">
+            <div class="roi-card above">
+              <div class="roi-side">Buy Above</div>
+              <div id="roi-above-price" class="roi-price">—</div>
+              <div id="roi-above-summary" class="roi-summary">—</div>
+              <div id="roi-above-detail" class="roi-detail">—</div>
+            </div>
+            <div class="roi-card below">
+              <div class="roi-side">Buy Below</div>
+              <div id="roi-below-price" class="roi-price">—</div>
+              <div id="roi-below-summary" class="roi-summary">—</div>
+              <div id="roi-below-detail" class="roi-detail">—</div>
+            </div>
+          </div>
+          <p class="roi-note">
+            Drag trade size to compare win / cost / ROI. Est. Kalshi taker fee
+            included. Win pays $1/contract · lose = $0.
+          </p>
+        </div>
+      </div>
+    </section>
+    </section>
+
+      <div id="open-pl-bar" class="open-pl-bar" hidden aria-live="polite">
+      <button
+        type="button"
+        id="open-pl-toggle"
+        class="open-pl-handle"
+        aria-expanded="true"
+        aria-controls="open-pl-body"
+        title="Slide trade metrics away"
+      >
+        <span class="open-pl-handle-bar" aria-hidden="true"></span>
+        <span id="open-pl-peek" class="open-pl-peek">Open P/L</span>
+      </button>
+      <div id="open-pl-body" class="open-pl-body">
+        <div class="open-pl-main">
+          <div>
+            <div class="open-pl-kicker">Open trade P/L</div>
+            <div id="open-pl-side" class="open-pl-side">—</div>
+          </div>
+          <div class="open-pl-value-stack">
+            <div id="open-pl-value" class="open-pl-value">—</div>
+            <div id="open-pl-balance" class="open-pl-balance" hidden>—</div>
+            <div id="open-pl-day-pct" class="open-pl-day-pct" hidden>—</div>
+          </div>
+        </div>
+        <div id="open-pl-sub" class="open-pl-sub">—</div>
+        <div class="open-pl-actions">
+          <button type="button" id="open-pl-add" class="open-pl-add">
+            Add to position
+          </button>
+          <button type="button" id="open-pl-close" class="open-pl-close">
+            Close at bid
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <section class="buy-dock" aria-label="Buy">
+      <button type="button" id="dock-buy-above" class="dock-btn above">
+        <span class="dock-label">Buy Above</span>
+        <span id="dock-above-pct" class="dock-pct">—</span>
+      </button>
+      <button type="button" id="dock-buy-best" class="dock-btn best" title="Buy Best Side">
+        <span class="dock-label">Best</span>
+        <span id="dock-best-detail" class="dock-pct">—</span>
+      </button>
+      <button type="button" id="dock-buy-below" class="dock-btn below">
+        <span class="dock-label">Buy Below</span>
+        <span id="dock-below-pct" class="dock-pct">—</span>
+      </button>
+    </section>
+    </div>
+
+    <div id="options-backdrop" class="options-backdrop" hidden></div>
+    <aside
+      id="options-sheet"
+      class="options-sheet"
+      hidden
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="options-title"
+    >
+      <div class="options-head">
+        <h2 id="options-title">Options</h2>
+        <button type="button" id="options-close" class="options-close" aria-label="Close options">
+          ✕
+        </button>
+      </div>
+      <div id="options-body" class="options-body">
+
+      <label class="options-row toggle-row" for="demo-toggle">
+        <span>
+          <strong>Demo mode</strong>
+          <em>Paper trade with live Kalshi factors</em>
+        </span>
+        <input id="demo-toggle" type="checkbox" />
+      </label>
+
+      <div class="options-alerts-row">
+        <div class="options-alerts-text">
+          <strong>Alerts</strong>
+          <em id="alerts-status-line">Checking…</em>
+        </div>
+        <button type="button" id="alerts-test" class="demo-btn ghost">Test</button>
+        <button type="button" id="alerts-enable" class="demo-btn primary">Enable</button>
+      </div>
+
+      <div id="demo-account" class="demo-account" hidden>
+        <div class="demo-balance-block">
+          <div class="demo-label">Account</div>
+          <div id="demo-balance" class="demo-balance">$1,000.00</div>
+          <div id="demo-day-pct" class="demo-day-pct">Day —</div>
+          <div id="demo-pl" class="demo-pl">Session P/L $0.00</div>
+        </div>
+
+        <section class="pl-chart-section" aria-label="Wins and P/L chart">
+          <button
+            type="button"
+            id="pl-chart-toggle"
+            class="pl-chart-toggle"
+            aria-expanded="false"
+            aria-controls="pl-chart-body"
+          >
+            <span>
+              <strong>Wins &amp; P/L chart</strong>
+              <em id="pl-chart-toggle-meta">Collapsed · from your trade log</em>
+            </span>
+            <span id="pl-chart-chevron" class="pl-chart-chevron" aria-hidden="true">▾</span>
+          </button>
+          <div id="pl-chart-body" class="pl-chart-body" hidden>
+            <div id="pl-chart-caption" class="pl-chart-caption">
+              All-time trade log · green win · red loss · scroll/pinch for dates
+            </div>
+            <div class="pl-chart-tools" role="group" aria-label="Chart size and view">
+              <button type="button" id="pl-chart-zoom-out" class="pl-chart-tool" title="Zoom out — see more trades">
+                Zoom out
+              </button>
+              <button type="button" id="pl-chart-zoom-in" class="pl-chart-tool" title="Zoom in — fewer trades">
+                Zoom in
+              </button>
+              <button type="button" id="pl-chart-fit" class="pl-chart-tool" title="Show all trades">
+                Fit all
+              </button>
+              <button type="button" id="pl-chart-shrink" class="pl-chart-tool" title="Shorter chart">
+                Shorter
+              </button>
+              <button type="button" id="pl-chart-grow" class="pl-chart-tool" title="Taller chart">
+                Taller
+              </button>
+            </div>
+            <div id="pl-chart" class="pl-chart" aria-label="Trade history profit and loss chart"></div>
+            <div id="pl-chart-empty" class="pl-chart-empty">
+              Wins/losses will candle here after you close or settle trades.
+            </div>
+            <p class="pl-chart-hint">
+              Pinch with a small move (or tap Zoom in / Zoom out) to expand and
+              contract the trade history fast. Drag to pan. Fit all shows every
+              trade. Your zoom place is remembered when you collapse or reopen
+              Options.
+            </p>
+          </div>
+        </section>
+
+        <div class="demo-start-row">
+          <label for="demo-start">Starting bankroll</label>
+          <div class="demo-start-controls">
+            <input
+              id="demo-start"
+              type="number"
+              min="10"
+              max="100000"
+              step="10"
+              value="1000"
+              inputmode="decimal"
+            />
+            <button type="button" id="demo-reset" class="demo-btn ghost">Reset</button>
+          </div>
+        </div>
+
+        <div class="demo-pos-block">
+          <div class="demo-label">Open position</div>
+          <div id="demo-position" class="demo-position">Flat</div>
+          <div id="demo-mark" class="demo-mark" hidden>
+            <div id="demo-mark-pl" class="demo-mark-pl">—</div>
+            <div id="demo-mark-meta" class="demo-mark-meta">—</div>
+          </div>
+          <button type="button" id="demo-close" class="demo-btn close-trade" hidden>
+            Close trade at bid
+          </button>
+        </div>
+
+        <div class="demo-actions">
+          <button type="button" id="demo-buy-best" class="demo-btn primary">Buy Best</button>
+          <button type="button" id="demo-buy-above" class="demo-btn above">Buy Above</button>
+          <button type="button" id="demo-buy-below" class="demo-btn below">Buy Below</button>
+        </div>
+        <p class="demo-hint">
+          Buy Best / Above / Below opens the slide-to-buy sheet. Same-side buys average in; close at bid or hold to settle.
+        </p>
+        <div id="demo-last" class="demo-last">No trades yet</div>
+      </div>
+
+      <button type="button" id="tutorial-open" class="tutorial-open-btn">
+        How to use BeatLine
+      </button>
+
+      <div class="options-update">
+        <div class="options-update-text">
+          <strong>App version</strong>
+          <em id="app-version-line">Checking…</em>
+        </div>
+        <button type="button" id="app-update" class="demo-btn ghost">
+          Update now
+        </button>
+      </div>
+
+      <section id="strategy-section" class="strategy-section" aria-label="Strategy report">
+        <button
+          type="button"
+          id="strategy-toggle"
+          class="pl-chart-toggle"
+          aria-expanded="true"
+          aria-controls="strategy-body"
+        >
+          <span>
+            <strong>Strategy report</strong>
+            <em>Can you trust Best Side? Wins vs losses</em>
+          </span>
+          <span id="strategy-chevron" class="pl-chart-chevron" aria-hidden="true">▾</span>
+        </button>
+        <div id="strategy-body" class="strategy-body">
+          <div id="strategy-chart-caption" class="strategy-chart-caption">
+            Green = wins · Red = losses · taller = more trades
+          </div>
+          <div id="strategy-bars" class="strategy-bars" aria-label="Wins and losses by source"></div>
+          <div id="strategy-chart-empty" class="strategy-chart-empty" hidden>
+            Close or settle trades to build this chart. Tap <strong>Best</strong> for app suggestions, or Buy Above/Below for your own calls — each close is tagged automatically.
+          </div>
+          <div class="strategy-legend" aria-hidden="true">
+            <span class="strategy-leg win">Wins</span>
+            <span class="strategy-leg loss">Losses</span>
+          </div>
+          <div class="strategy-grid">
+            <div class="strategy-card is-followed">
+              <div class="strategy-card-kicker">Best Side (app)</div>
+              <div id="strategy-followed" class="strategy-card-body">—</div>
+            </div>
+            <div class="strategy-card is-own">
+              <div class="strategy-card-kicker">Your own calls</div>
+              <div id="strategy-own" class="strategy-card-body">—</div>
+            </div>
+            <div class="strategy-card is-all">
+              <div class="strategy-card-kicker">All closes</div>
+              <div id="strategy-all" class="strategy-card-body">—</div>
+            </div>
+          </div>
+          <div id="strategy-missed" class="strategy-missed">Missed suggestions —</div>
+          <div id="strategy-verdict" class="strategy-verdict">
+            Close a few Best Side and own-call trades to compare win rate and P/L.
+          </div>
+          <div id="strategy-today" class="strategy-today">Today —</div>
+          <p class="strategy-hint">
+            How to read: compare the Best Side bars to Your calls. Higher win rate and greener P/L on Best Side means the app’s edge is earning trust. Untagged older closes still count under All closes until new tagged fills build the split.
+          </p>
+        </div>
+      </section>
+
+      <section id="trade-history-section" class="trade-history" aria-label="Trade history">
+        <button
+          type="button"
+          id="trade-history-toggle"
+          class="pl-chart-toggle"
+          aria-expanded="false"
+          aria-controls="trade-history-body"
+        >
+          <span>
+            <strong>Trade history</strong>
+            <em id="trade-history-summary" class="trade-history-summary"
+              >Permanent all-time log</em
+            >
+          </span>
+          <span id="trade-history-chevron" class="pl-chart-chevron" aria-hidden="true">▾</span>
+        </button>
+        <div id="trade-history-body" class="trade-history-body" hidden>
+          <div class="trade-history-backup">
+            <div class="account-share-card">
+              <div class="demo-label">Private account</div>
+              <div id="account-user-id" class="account-user-id">—</div>
+              <p id="account-share-hint" class="account-share-hint">
+                Friends open the same link and get their own private balance &amp; history.
+              </p>
+              <div class="account-share-actions">
+                <button type="button" id="account-copy-link" class="demo-btn primary">
+                  Copy app link
+                </button>
+                <button type="button" id="account-copy-id" class="demo-btn ghost">
+                  Copy account ID
+                </button>
+              </div>
+              <div class="account-restore-row">
+                <input
+                  id="account-restore-id"
+                  type="text"
+                  autocomplete="off"
+                  spellcheck="false"
+                  placeholder="Paste account ID to restore on this phone"
+                />
+                <button type="button" id="account-restore-btn" class="demo-btn ghost">
+                  Restore
+                </button>
+              </div>
+            </div>
+            <button type="button" id="account-export" class="demo-btn ghost">Export backup</button>
+            <button type="button" id="account-import" class="demo-btn ghost">Import backup</button>
+            <input id="account-import-file" type="file" accept="application/json,.json" hidden />
+          </div>
+          <div id="trade-history-list" class="trade-history-list">
+            <div class="trade-history-empty">Buy, add, close, or settle — trades will list here.</div>
+          </div>
+        </div>
+      </section>
+
+      <a
+        class="options-deploy"
+        href="https://render.com/deploy?repo=https://github.com/hioncrypto/beatline"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <strong>Stop the link from expiring</strong>
+        <em>Deploy free on Render — permanent URL (not a Cursor tunnel)</em>
+      </a>
+      </div>
+    </aside>
+    <div id="pull-refresh" class="pull-refresh" aria-hidden="true">
+      <span id="pull-refresh-spinner" class="pull-refresh-spinner"></span>
+      <span id="pull-refresh-label" class="pull-refresh-label">Pull to refresh</span>
+    </div>
+    <div id="buy-backdrop" class="buy-backdrop" hidden></div>
+    <div
+      id="buy-sheet"
+      class="buy-sheet"
+      hidden
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="buy-sheet-title"
+    >
+      <div class="buy-sheet-handle" aria-hidden="true"></div>
+      <div class="buy-sheet-head">
+        <div>
+          <div class="buy-sheet-kicker">Demo order</div>
+          <h2 id="buy-sheet-title" class="buy-sheet-title">Buy Above</h2>
+        </div>
+        <button type="button" id="buy-sheet-x" class="options-close" aria-label="Cancel buy">
+          ✕
+        </button>
+      </div>
+      <div id="buy-sheet-meta" class="buy-sheet-meta">—</div>
+
+      <label class="buy-amount-label" for="buy-amount">
+        Dollar amount ($1–$100)
+        <span id="buy-balance-hint" class="buy-balance-hint"></span>
+      </label>
+      <div class="buy-amount-row">
+        <span class="buy-amount-prefix">$</span>
+        <input
+          id="buy-amount"
+          class="buy-amount-input"
+          type="number"
+          min="1"
+          max="100"
+          step="1"
+          value="1"
+          inputmode="numeric"
+          enterkeyhint="done"
+        />
+      </div>
+      <div id="buy-suggest" class="buy-suggest" hidden>
+        <div class="buy-suggest-text">
+          <div class="buy-suggest-kicker">Suggested size</div>
+          <div id="buy-suggest-amount" class="buy-suggest-amount">—</div>
+          <div id="buy-suggest-meta" class="buy-suggest-meta">—</div>
+        </div>
+        <button type="button" id="buy-suggest-use" class="buy-suggest-use">Use</button>
+      </div>
+      <div class="buy-quick" aria-label="Quick amounts">
+        <button type="button" class="buy-chip" data-amt="1">$1</button>
+        <button type="button" class="buy-chip" data-amt="5">$5</button>
+        <button type="button" class="buy-chip" data-amt="10">$10</button>
+        <button type="button" class="buy-chip" data-amt="25">$25</button>
+        <button type="button" class="buy-chip" data-amt="50">$50</button>
+        <button type="button" class="buy-chip" data-amt="100">$100</button>
+      </div>
+      <div class="buy-range-block">
+        <div class="buy-range-label">Size · drag $1 to $100</div>
+        <input
+          id="buy-range"
+          class="buy-range"
+          type="range"
+          min="1"
+          max="100"
+          step="1"
+          value="1"
+          aria-valuemin="1"
+          aria-valuemax="100"
+          aria-valuenow="1"
+          aria-label="Purchase amount from 1 to 100 dollars"
+        />
+        <div class="buy-range-ends">
+          <span>$1</span>
+          <span id="buy-range-value">$1</span>
+          <span>$100</span>
+        </div>
+      </div>
+      <div id="buy-preview" class="buy-preview">—</div>
+
+      <div
+        id="buy-slide"
+        class="buy-slide"
+        role="slider"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow="0"
+        aria-label="Slide to buy"
+        tabindex="0"
+      >
+        <div id="buy-slide-fill" class="buy-slide-fill"></div>
+        <div id="buy-slide-label" class="buy-slide-label">Slide to buy</div>
+        <div id="buy-slide-thumb" class="buy-slide-thumb" aria-hidden="true">››</div>
+      </div>
+    </div>
+    <div id="tutorial-backdrop" class="tutorial-backdrop" hidden></div>
+    <div
+      id="tutorial"
+      class="tutorial"
+      hidden
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="tutorial-title"
+    >
+      <div class="tutorial-progress">
+        <span id="tutorial-step-num">1</span> / <span id="tutorial-step-total">6</span>
+      </div>
+      <h2 id="tutorial-title" class="tutorial-title">Welcome to BeatLine</h2>
+      <p id="tutorial-body" class="tutorial-body">—</p>
+      <div class="tutorial-actions">
+        <button type="button" id="tutorial-skip" class="tutorial-btn ghost">Skip</button>
+        <button type="button" id="tutorial-next" class="tutorial-btn primary">Next</button>
+      </div>
+    </div>
+    <footer class="foot">
+      <span id="chart-tf-label">Chart · live Kalshi index</span>
+    </footer>
+</body>
+</html>
