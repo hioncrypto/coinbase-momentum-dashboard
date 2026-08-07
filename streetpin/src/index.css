@@ -792,3 +792,235 @@ select {
   font-family: var(--font-body);
   font-size: 0.85rem;
 }
+
+/* ——— Actions, cards, invites, requests ——— */
+
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.btn.compact {
+  padding: 0.55rem 0.85rem;
+  font-size: 0.8rem;
+  border-radius: 10px;
+}
+
+.btn-secondary.dark {
+  background: var(--asphalt);
+  color: var(--lane);
+  border: 2px solid var(--asphalt);
+  box-shadow: 3px 3px 0 var(--spray);
+}
+
+.btn-secondary.dark:hover {
+  background: #1c1c21;
+  border-color: #1c1c21;
+}
+
+.inline-card {
+  padding: 0.9rem 1rem;
+  border-radius: 14px;
+  background: var(--panel-2);
+  border: 2px solid rgba(20, 20, 26, 0.08);
+}
+
+.inline-card h4 {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.card-help {
+  margin: 0 0 0.75rem;
+  font-size: 0.84rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 0.65rem;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.preset-fieldset {
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+
+.preset-fieldset legend {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.4rem;
+}
+
+.filter-row.wrap {
+  flex-wrap: wrap;
+}
+
+.request-status {
+  border-left: 4px solid var(--lane);
+}
+
+.request-status.accepted {
+  border-left-color: var(--spray);
+  background: rgba(0, 214, 176, 0.12);
+}
+
+.request-status strong {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.request-status p {
+  margin: 0 0 0.45rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.approach-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.approach-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  text-align: left;
+  width: 100%;
+  border: 2px solid var(--asphalt);
+  background: var(--asphalt);
+  color: var(--chalk);
+  border-radius: 12px;
+  padding: 0.65rem 0.8rem;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 var(--lane);
+}
+
+.approach-pill.hot {
+  box-shadow: 3px 3px 0 var(--heat);
+}
+
+.approach-pill span {
+  font-size: 0.8rem;
+  color: var(--chalk-dim);
+}
+
+.request-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.request-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  align-items: flex-start;
+  padding: 0.65rem 0.7rem;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 2px solid rgba(20, 20, 26, 0.08);
+}
+
+.request-item > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.request-item span,
+.request-item em {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-style: normal;
+}
+
+.request-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(10, 10, 12, 0.72);
+  display: grid;
+  place-items: center;
+  padding: 1.25rem;
+}
+
+.modal-card {
+  width: min(440px, 100%);
+  background: var(--panel);
+  color: var(--ink);
+  border-radius: 18px;
+  padding: 1.25rem 1.15rem 1.35rem;
+  box-shadow: 6px 6px 0 var(--lane);
+  max-height: min(90dvh, 720px);
+  overflow: auto;
+}
+
+.modal-card h3 {
+  margin: 0.35rem 0 0.5rem;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.modal-kicker {
+  margin-bottom: 0.5rem;
+}
+
+.modal-copy {
+  margin: 0 0 0.85rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.invite-link-box {
+  word-break: break-all;
+  font-size: 0.75rem;
+  background: var(--asphalt);
+  color: var(--lane);
+  padding: 0.75rem 0.85rem;
+  border-radius: 10px;
+  margin-bottom: 0.9rem;
+}
+
+.modal-actions {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.modal-skip {
+  display: block;
+  margin: 0.9rem auto 0;
+  text-align: center;
+}

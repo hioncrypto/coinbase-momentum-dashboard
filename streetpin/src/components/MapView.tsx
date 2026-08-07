@@ -47,18 +47,36 @@ function pinIcon(color: string, live: boolean, selected: boolean) {
   })
 }
 
-function Recenter({
-  center,
-  zoom,
-}: {
-  center: LatLng
-  zoom: number
-}) {
+function requestIcon(active: boolean) {
+  const color = active ? '#ff5a36' : '#ffe566'
+  const size = active ? 42 : 34
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 36 36">
+      <circle cx="18" cy="18" r="14" fill="${color}" stroke="#121214" stroke-width="2"/>
+      <path d="M18 10v10M13 18h10" stroke="#121214" stroke-width="2.5" stroke-linecap="round"/>
+    </svg>`
+  return L.divIcon({
+    className: 'streetpin-marker',
+    html: svg,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -size / 2],
+  })
+}
+
+function Recenter({ center, zoom }: { center: LatLng; zoom: number }) {
   const map = useMap()
   useEffect(() => {
     map.setView([center.lat, center.lng], zoom, { animate: true })
   }, [center.lat, center.lng, zoom, map])
   return null
+}
+
+export interface RequestPin {
+  id: string
+  location: LatLng
+  label: string
+  active?: boolean
 }
 
 interface MapViewProps {
@@ -68,6 +86,7 @@ interface MapViewProps {
   selectedId: string | null
   onSelect: (id: string) => void
   showUser?: boolean
+  requestPins?: RequestPin[]
 }
 
 export function MapView({
@@ -77,6 +96,7 @@ export function MapView({
   selectedId,
   onSelect,
   showUser = true,
+  requestPins = [],
 }: MapViewProps) {
   const icons = useMemo(() => {
     const map = new Map<string, L.DivIcon>()
@@ -134,6 +154,20 @@ export function MapView({
             {v.isLive ? 'Live now' : 'Offline'}
             {' · '}
             {formatDistance(distanceMeters(userPosition, v.location))}
+          </Popup>
+        </Marker>
+      ))}
+
+      {requestPins.map((r) => (
+        <Marker
+          key={`req-${r.id}`}
+          position={[r.location.lat, r.location.lng]}
+          icon={requestIcon(!!r.active)}
+        >
+          <Popup>
+            <strong>{r.label}</strong>
+            <br />
+            Client request
           </Popup>
         </Marker>
       ))}

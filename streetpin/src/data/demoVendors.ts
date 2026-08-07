@@ -14,6 +14,7 @@ export const DEMO_VENDORS: Vendor[] = [
     lastSeen: Date.now(),
     etaHint: 'Rolling Echo Park loop',
     menuHint: 'Lotte pie · soft serve · drinks',
+    aroundHint: 'Afternoons on the Echo Park loop',
     isDemo: true,
   },
   {
@@ -26,6 +27,7 @@ export const DEMO_VENDORS: Vendor[] = [
     lastSeen: Date.now(),
     etaHint: 'Near the park edge',
     menuHint: 'Vanilla · chocolate · swirl',
+    aroundHint: 'Weekends + hot evenings',
     isDemo: true,
   },
   {
@@ -38,6 +40,7 @@ export const DEMO_VENDORS: Vendor[] = [
     lastSeen: Date.now(),
     etaHint: 'Stopped for the lunch rush',
     menuHint: 'Asada · al pastor · agua fresca',
+    aroundHint: 'Lunch rush · weekday corners',
     isDemo: true,
   },
   {
@@ -50,6 +53,7 @@ export const DEMO_VENDORS: Vendor[] = [
     lastSeen: Date.now() - 1000 * 60 * 45,
     etaHint: 'Usually mornings',
     menuHint: 'Latte · cold brew · pastry',
+    aroundHint: 'Mornings near the plaza',
     isDemo: true,
   },
 ]
